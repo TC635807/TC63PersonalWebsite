@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>2026OmniSentryGimbal · 王宇翔</title><meta name="description" content="STM32 哨兵机器人的云台板固件：yaw-pitch 两自由度云台控制，以及与视觉上位机之间的串口通信协议。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/projects/2026-omni-sentry-gimbal/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="2026OmniSentryGimbal · 王宇翔"><meta property="og:description" content="STM32 哨兵机器人的云台板固件：yaw-pitch 两自由度云台控制，以及与视觉上位机之间的串口通信协议。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/projects/2026-omni-sentry-gimbal/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"></head><body><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/" aria-current="page">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><a class="mono" href="/tc63/projects/" style="display:inline-block; margin-top: var(--ak-space-5)">← 全部项目</a><div class="detail"><aside class="detail__meta"><div class="metablock"><span class="k">Year</span><div class="v mono">2026</div></div><div class="metablock"><span class="k">Role</span><div class="v">个人项目</div></div><div class="metablock"><span class="k">Status</span><div class="v"><span class="badge badge--live">已开源</span></div></div><div class="metablock"><span class="k">Award</span><div class="v"><span class="award">2025 / 2026 赛季 RoboMaster 挑战赛 · 重庆赛区二等奖</span></div></div><div class="metablock"><span class="k">Stack</span><div class="tags"><span class="tag">STM32F407</span><span class="tag">FreeRTOS</span><span class="tag">C / C++</span><span class="tag">CMake</span><span class="tag">CAN</span><span class="tag">USB Device</span><span class="tag">BMI088</span><span class="tag">PID</span></div></div><div class="metablock"><span class="k">Links</span><div class="v" style="display:flex; flex-direction:column; gap:6px"><a href="https://github.com/TC635807/2026OmniSentryGimbal" target="_blank" rel="noopener">GitHub ↗</a></div></div><p class="note" style="margin:0">与底盘板固件 2026OmniSentryChassis 配套：两块 C 板通过 CAN 互联，分工见各仓库 README。</p></aside><div><p class="eyebrow">2026 · 个人项目</p><h1>2026OmniSentryGimbal</h1><p class="pj__sub" style="font-size:.95rem">RoboMaster 哨兵 · 云台板固件</p><p class="lead">STM32 哨兵机器人的云台板固件：yaw-pitch 两自由度云台控制，以及与视觉上位机之间的串口通信协议。</p><section style="margin-top: var(--ak-space-6)"><div class="sec-head"><span class="sec-head__idx">01</span><h2>结构概览</h2><span class="sec-head__rule"></span><span class="sec-head__more mono">示意 / 非实拍</span></div><div class="detail__fig cut--md"><svg class="diagram-arch" viewBox="0 0 800 500" role="img" aria-label="2026 全向哨兵云台板固件架构图">
+  <defs>
+    <pattern id="dg-grid-gimbal-arch" width="18" height="18" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#E6E6EC"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="500" fill="url(#dg-grid-gimbal-arch)"/>
+  <text x="24" y="30" class="dg-label">GIMBAL BOARD · 上 C 板</text>
+  <text x="24" y="62" class="dg-title">GIMBAL FIRMWARE</text>
+  <rect x="24" y="72" width="44" height="3" class="dg-accent-fill"/>
+  <text x="776" y="30" class="dg-mono" text-anchor="end">STM32F407IGHx · FreeRTOS / CMSIS-OS v1</text>
+  <text x="776" y="48" class="dg-mono" text-anchor="end">5 已注册 + TestTask 未注册 · 内环 1 kHz</text>
+  <text x="24" y="92" class="dg-label">任务调度 · TaskBase::start() 封装 osThreadCreate，子类实现 run()</text>
+  <path d="M24,100 H254 L266,112 V152 H24 Z" class="dg-node dg-hot"/>
+  <text x="34" y="121" class="dg-sub">GimbalTask</text>
+  <text x="34" y="139" class="dg-mono">栈 2048 · osDelay(1) → 1 ms</text>
+  <path d="M279,100 H509 L521,112 V152 H279 Z" class="dg-node dg-hot"/>
+  <text x="289" y="121" class="dg-sub">FireTask</text>
+  <text x="289" y="139" class="dg-mono">栈 512 · osDelay(1) → 1 ms</text>
+  <path d="M534,100 H764 L776,112 V152 H534 Z" class="dg-node"/>
+  <text x="544" y="121" class="dg-sub">imuTask</text>
+  <text x="544" y="139" class="dg-mono">栈 1024 · 1 kHz（DWT_Delay）</text>
+  <path d="M24,158 H254 L266,170 V210 H24 Z" class="dg-node"/>
+  <text x="34" y="179" class="dg-sub">ControlCenterTask</text>
+  <text x="34" y="197" class="dg-mono">栈 1024 · osDelay(5) → 5 ms</text>
+  <path d="M279,158 H509 L521,170 V210 H279 Z" class="dg-node"/>
+  <text x="289" y="179" class="dg-sub">UsbConnectTask</text>
+  <text x="289" y="197" class="dg-mono">栈 2048 · osDelay(10) + 忙等 5</text>
+  <path d="M534,158 H764 L776,170 V210 H534 Z" class="dg-node"/>
+  <text x="544" y="179" class="dg-sub">TestTask</text>
+  <text x="544" y="197" class="dg-mono">栈 256 · 空 for(;;)（未注册）</text>
+  <text x="24" y="226" class="dg-label">数据流 · BMI088 → FusionAHRS → 双环 PID → CAN → 执行器</text>
+  <path d="M24,234 H189 L201,246 V289 H24 Z" class="dg-node"/>
+  <text x="34" y="255" class="dg-sub">BMI088</text>
+  <text x="34" y="272" class="dg-mono">SPI1 · 恒温 45℃</text>
+  <line x1="203" y1="262" x2="207" y2="262" class="dg-hair"/>
+  <path d="M207,258 L214,262 L207,266 Z" class="dg-accent-fill"/>
+  <path d="M215,234 H380 L392,246 V289 H215 Z" class="dg-node"/>
+  <text x="225" y="255" class="dg-sub">FusionAHRS</text>
+  <text x="225" y="272" class="dg-mono">Mahony + 零偏 EKF</text>
+  <line x1="394" y1="262" x2="398" y2="262" class="dg-hair"/>
+  <path d="M398,258 L405,262 L398,266 Z" class="dg-accent-fill"/>
+  <path d="M406,234 H571 L583,246 V289 H406 Z" class="dg-node"/>
+  <text x="416" y="255" class="dg-sub">角度环 → 速度环</text>
+  <text x="416" y="272" class="dg-mono">yaw 80/2/2→20/0/0.02</text>
+  <line x1="585" y1="262" x2="589" y2="262" class="dg-hair"/>
+  <path d="M589,258 L596,262 L589,266 Z" class="dg-accent-fill"/>
+  <path d="M597,234 H762 L774,246 V289 H597 Z" class="dg-node"/>
+  <text x="607" y="255" class="dg-sub">CAN 电流指令</text>
+  <text x="607" y="272" class="dg-mono">0x1FF yaw · 0x141 LK</text>
+  <path d="M24,296 H222 L234,308 V444 H24 Z" class="dg-panel-strong"/>
+  <text x="36" y="314" class="dg-label">闭环 · 限幅</text>
+  <text x="36" y="332" class="dg-mono">pitch 2.7/2/0.06→40/1/0</text>
+  <text x="36" y="347" class="dg-mono">dt 0.001 s · 跨零/回绕</text>
+  <text x="36" y="362" class="dg-mono">pitch −17° … +20° 限幅</text>
+  <text x="36" y="377" class="dg-mono">摩擦轮 ×2 + 差值 PID</text>
+  <text x="36" y="392" class="dg-mono">拨弹：角度→速度→反转</text>
+  <text x="36" y="407" class="dg-mono">堵转 500 ms · 反转 100 ms</text>
+  <text x="36" y="422" class="dg-mono">hot_17mm ≤ 200 才拨弹</text>
+  <text x="36" y="437" class="dg-mono">yaw 电流限幅 ±50000</text>
+  <path d="M242,296 H502 L514,308 V444 H242 Z" class="dg-panel-strong"/>
+  <text x="254" y="314" class="dg-label">视觉协议 · 通信链路</text>
+  <text x="254" y="332" class="dg-mono">视觉 43B：q[4]+yaw/pitch+弹速+弹量</text>
+  <text x="254" y="347" class="dg-mono">视觉 29B：yaw/pitch+一/二阶导</text>
+  <text x="254" y="362" class="dg-mono">CRC16 小端 · USB CDC 虚拟串口</text>
+  <text x="254" y="377" class="dg-mono">DBUS 18B · USART3 DMA</text>
+  <text x="254" y="392" class="dg-mono">CAN1 0x1FF yaw · LK 0x141</text>
+  <text x="254" y="407" class="dg-mono">CAN2 0x200 摩擦轮 ID1/ID2</text>
+  <text x="254" y="422" class="dg-mono">板间 0x301 RC / 0x302 yaw</text>
+  <text x="254" y="437" class="dg-mono">0x303/0x309 弹速热量←底盘</text>
+  <path d="M522,296 H764 L776,308 V444 H522 Z" class="dg-panel-strong"/>
+  <text x="534" y="314" class="dg-label">总线 · 控制模式</text>
+  <text x="534" y="332" class="dg-mono">ControlTarget ← ControlCenter</text>
+  <text x="534" y="347" class="dg-mono">chassis_vx/vy/wz ← 0x309 wz</text>
+  <text x="534" y="362" class="dg-mono">gimbal_yaw_angle(+single)/pitch</text>
+  <text x="534" y="377" class="dg-mono">friction_ready · feeder_ready</text>
+  <text x="534" y="392" class="dg-mono">control_mode RC/RC_follow/AI</text>
+  <text x="534" y="407" class="dg-mono">s1=1 / 2 / 3 档位切换</text>
+  <text x="534" y="422" class="dg-mono">yaw 前馈 −chassis_wz×1.8</text>
+  <text x="534" y="437" class="dg-mono">emergency_stop 已定义·未接入</text>
+  <text x="24" y="466" class="dg-mono">周期取自各 Task::run() 中 osDelay / DWT_Delay_ms；栈大小为 start(name, stack, prio) 实参</text>
+  <text x="24" y="484" class="dg-mono">出处：Task/Src/*.cpp · Message_Bus/message_bus.h · BSP/Src/bsp_can.cpp · Communication/Inc/usb_protocol.h</text>
+</svg>
+</div></section><div class="prose" style="margin-top: var(--ak-space-6)"><section><h2>云台 ↔ 视觉 串口协议</h2><ul><li>云台 → 视觉（43 字节）：帧头 &#39;S&#39; &#39;P&#39;、mode、姿态四元数 w/x/y/z、yaw 与 yaw_vel、pitch 与 pitch_vel、当前弹速、子弹累计发射次数，末 2 字节 CRC16（覆盖第 0~40 字节）。</li><li>视觉 → 云台（29 字节）：帧头 &#39;S&#39; &#39;P&#39;、mode、期望 yaw / yaw_vel / yaw_acc、期望 pitch / pitch_vel / pitch_acc，末 2 字节 CRC16（覆盖第 0~26 字节）。</li><li>小端序；上位机侧配了同目录的封包生成与解包脚本，CRC 表与初始值写在文档里。</li></ul></section><section><h2>工程组织</h2><ul><li>Algorithm / PID / Message_Bus / Communication / Task / BSP / USB_DEVICE / BMI088 分层，另有 Drivers、Middlewares、Core、Debug_vars。</li><li>STM32CubeMX（.ioc）+ CMake 构建，链接脚本为 STM32F407XX_FLASH.ld。</li></ul></section></div></div></div></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
