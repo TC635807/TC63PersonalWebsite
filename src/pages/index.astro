@@ -1,0 +1,435 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FluidBackground from '../components/FluidBackground.astro';
+import { site } from '../config/site';
+import { url } from '../lib/url';
+import { projects } from '../data/projects';
+import { domains, docsStats, flatUnits } from '../lib/docs';
+import { awards } from '../data/awards';
+import AwardList from '../components/AwardList.astro';
+import AboutIntro from '../components/AboutIntro.astro';
+import hud from '../assets/hero-hud.svg?raw';
+import '../styles/hub.css';
+
+const diagrams = import.meta.glob('../assets/diagrams/*.svg', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+}) as Record<string, string>;
+const figFor = (slug: string) => {
+  const key = Object.keys(diagrams).find((k) => k.endsWith('/' + slug + '.svg'));
+  return key ? diagrams[key] : null;
+};
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const pub = projects.filter((p) => p.statusKind === 'live').length;
+const stack = Array.from(new Set(projects.flatMap((p) => p.tech)));
+const socialCount = site.socials.length + site.contacts.length + (site.email ? 1 : 0);
+const affiliation = [site.school, site.major, site.grade].filter(Boolean).join(' · ');
+const recentUnits = flatUnits
+  .slice()
+  .sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0))
+  .slice(0, 3);
+
+const badgeClass = (kind: string) =>
+  kind === 'live' ? 'badge badge--live' : kind === 'wip' ? 'badge badge--wip' : 'badge badge--private';
+
+const handle = (href: string) => {
+  try {
+    return '@' + new URL(href).pathname.replace(/^\/+/, '');
+  } catch {
+    return href;
+  }
+};
+
+const bootLines = [
+  { k: 'ENV', v: 'ASTRO · 纯静态输出' },
+  { k: 'PRJ', v: pad(projects.length) + ' 个项目 · ' + pad(pub) + ' 个已开源' },
+  { k: 'STK', v: pad(stack.length) + ' 项技术栈索引' },
+  { k: 'GPU', v: 'WEBGL 流体管线 · 就绪' },
+  { k: 'LNK', v: 'GITHUB · ONLINE' },
+];
+
+const tabs = [
+  { id: 'projects', idx: '01', label: '项目', en: 'Projects', meta: pad(projects.length) + ' · ' + pad(pub) + ' OPEN' },
+  { id: 'docs', idx: '02', label: '文档', en: 'Documents', meta: docsStats.units ? pad(docsStats.units) + ' · MD' : 'EMPTY' },
+  { id: 'wip', idx: '03', label: '开发中', en: 'In Dev', meta: 'LOCKED', locked: true },
+  { id: 'about', idx: '04', label: '关于我', en: 'About', meta: pad(awards.length) + ' AWARDS' },
+];
+---
+
+<BaseLayout
+  mode="hub"
+  title="终端"
+  description={site.description}
+>
+  <!-- ── 开机自检（仅 JS 可用时显示：<html class="js-boot"> 由 head 内联脚本加上）── -->
+  <div class="boot" data-boot aria-hidden="true">
+    <div class="boot__inner">
+      <p class="boot__title">{site.name} · Personal Terminal</p>
+      <div class="boot__head">
+        <span class="mono">SYSTEM CHECK</span>
+        <span class="boot__bar"><span data-boot-bar></span></span>
+        <span class="mono" data-boot-pct>000%</span>
+      </div>
+      <div class="boot__lines">
+        {bootLines.map((l) => (
+          <div class="boot__line"><span class="k">{l.k}</span><span class="v">{l.v}</span></div>
+        ))}
+      </div>
+      <p class="boot__hint">点击或按任意键跳过 / SKIP</p>
+    </div>
+  </div>
+
+  <div class="hub" data-hub data-open="">
+    <!-- ── 环境层：蓝图网格 / 扫描线 / 四角框 ───────────────────── -->
+    <div class="hub-bg" aria-hidden="true">
+      <div class="hub-bg__grid"></div>
+      <div class="hub-bg__glow"></div>
+      <div class="hub-bg__axis"></div>
+      <div class="hub-bg__scan"></div>
+    </div>
+
+    <!-- ── 顶栏 ────────────────────────────────────────────────── -->
+    <header class="hub-top">
+      <span class="hub-top__mark mono">{site.name}</span>
+      <span class="hub-top__div" aria-hidden="true"></span>
+      <span class="hub-top__label">Personal Terminal</span>
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker__track">
+          {[...stack, ...stack].map((t) => <span class="ticker__item mono">{t}</span>)}
+        </div>
+      </div>
+      <span class="hub-top__status mono"><i class="led" aria-hidden="true"></i>ONLINE</span>
+      <time class="hub-top__clock mono" data-hub-clock datetime="" aria-hidden="true">--:--:--</time>
+    </header>
+
+    <!-- ── 主舞台 ──────────────────────────────────────────────── -->
+    <div class="hub-stage">
+      <div class="stage-frame" aria-hidden="true">
+        <span class="corner corner--tl"></span><span class="corner corner--tr"></span>
+        <span class="corner corner--bl"></span><span class="corner corner--br"></span>
+        <span class="stage-frame__ticks"></span>
+      </div>
+
+      <!-- 待机视图：身份 + 流体面板 -->
+      <section class="idle" data-view="idle" aria-label={'关于 ' + site.name}>
+        <div class="idle__id">
+          <p class="eyebrow"><span class="tick"></span> PORTFOLIO · 2026</p>
+          <h1 class="idle__name" data-scramble>{site.name}</h1>
+          <p class="idle__tag">{site.tagline}</p>
+          <p class="idle__school mono">{affiliation}</p>
+          <p class="idle__desc">{site.description}</p>
+
+          <div class="idle__meta">
+            <div><div class="v mono">{pad(projects.length)}</div><div class="k">Projects</div></div>
+            <div><div class="v mono">{pad(pub)}</div><div class="k">Open source</div></div>
+            <div><div class="v mono">{pad(stack.length)}</div><div class="k">Tech stack</div></div>
+            <div><div class="v mono">{pad(awards.length)}</div><div class="k">Awards</div></div>
+            <div><div class="v mono">03</div><div class="k">Directions</div></div>
+          </div>
+
+          <div class="idle__actions">
+            <a class="btn btn--primary" href={url('/projects/')}>全部项目</a>
+            <a class="btn" href={url('/about/')}>关于我</a>
+          </div>
+
+          <p class="idle__hint mono" aria-hidden="true">
+            选择下方模块 · <span class="key">1</span>–<span class="key">4</span> 或 <span class="key">↑↓</span>，<span class="key">ESC</span> 返回
+          </p>
+
+          <noscript>
+            <div class="noscript">
+              <p class="mono">JAVASCRIPT 未启用：终端面板不可用，以下为直达链接。</p>
+              <div class="idle__actions">
+                <a class="btn btn--primary" href={url('/projects/')}>全部项目</a>
+                <a class="btn" href={url('/about/')}>关于我</a>
+                {site.socials.map((s) => <a class="btn" href={s.href} target="_blank" rel="me noopener">{s.label} ↗</a>)}
+              </div>
+            </div>
+          </noscript>
+        </div>
+
+        <aside class="ops cut">
+          <FluidBackground />
+          <div class="ops__hud" set:html={hud} />
+          <div class="ops__readout mono" aria-hidden="true">
+            <span>FLUID SIM · MIT</span>
+            <span class="ops__readout-r">HOVER TO STIR</span>
+          </div>
+          <div class="ops__telemetry mono" aria-hidden="true">
+            <span>PRJ {pad(projects.length)}</span><span>REL {pad(pub)}</span><span>STK {pad(stack.length)}</span>
+          </div>
+        </aside>
+      </section>
+
+      <!-- 01 项目 -->
+      <section class="panel" id="panel-projects" role="tabpanel" aria-labelledby="tab-projects" tabindex="-1" hidden>
+        <header class="panel__head">
+          <span class="panel__idx mono">01</span>
+          <h2 class="panel__title">项目</h2>
+          <span class="panel__en mono">Projects</span>
+          <span class="panel__rule" aria-hidden="true"></span>
+          <span class="panel__meta mono">{pad(projects.length)} 个 · {pad(pub)} 个已开源</span>
+          <button type="button" class="panel__close" data-close>
+            关闭 <span class="mono">ESC</span>
+          </button>
+        </header>
+
+        <div class="panel__body" data-scroll tabindex="0">
+          <ol class="plist">
+            {projects.map((p, i) => (
+              <li class="prow">
+                <a class="prow__link" href={url('/projects/' + p.slug + '/')}>
+                  <span class="prow__side">
+                    <span class="prow__idx mono">{pad(i + 1)}</span>
+                    <span class="prow__fig">
+                      {p.cover ? (
+                        <img src={url(p.cover.src)} alt="" loading="lazy" decoding="async" />
+                      ) : figFor(p.slug) ? (
+                        <Fragment set:html={figFor(p.slug)} />
+                      ) : null}
+                    </span>
+                  </span>
+
+                  <span class="prow__body">
+                    <span class="prow__top">
+                      <span class="prow__title">{p.title}</span>
+                      <span class={badgeClass(p.statusKind)}>{p.status}</span>
+                      <span class="prow__year mono">{p.year} · {p.role}</span>
+                    </span>
+                    <span class="prow__sub">{p.subtitle}</span>
+                    <span class="prow__sum">{p.summary}</span>
+                    <span class="prow__tags tags">{p.tech.slice(0, 6).map((t) => <span class="tag">{t}</span>)}</span>
+                  </span>
+
+                  <span class="prow__go mono" aria-hidden="true">详情 →</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <footer class="panel__foot">
+          <a class="btn btn--primary" href={url('/projects/')}>全部项目</a>
+          <a class="btn" href={site.socials[0].href} target="_blank" rel="noopener">{site.socials[0].label} ↗</a>
+          <span class="panel__note mono">每个项目都配了结构示意图与实测指标</span>
+        </footer>
+      </section>
+
+      <!-- 02 文档：内容来自 docs/ 目录，构建期自动扫描 -->
+      <section class="panel" id="panel-docs" role="tabpanel" aria-labelledby="tab-docs" tabindex="-1" hidden>
+        <header class="panel__head">
+          <span class="panel__idx mono">02</span>
+          <h2 class="panel__title">文档</h2>
+          <span class="panel__en mono">Documents</span>
+          <span class="panel__rule" aria-hidden="true"></span>
+          <span class="panel__meta mono">
+            {docsStats.units ? pad(docsStats.domains) + ' 领域 · ' + pad(docsStats.files) + ' 文件' : '尚未录入'}
+          </span>
+          <button type="button" class="panel__close" data-close>
+            关闭 <span class="mono">ESC</span>
+          </button>
+        </header>
+
+        <div class="panel__body" data-scroll tabindex="0">
+          {docsStats.units === 0 ? (
+            <div class="empty">
+              <div class="empty__frame" aria-hidden="true">
+                <span class="empty__code mono">NO DATA</span>
+                <span class="empty__cross"></span>
+              </div>
+              <p class="empty__title">这一格先空着</p>
+              <p class="empty__text">
+                文档区已经搭好了：把 md 放进 <span class="mono">docs/&lt;领域&gt;/&lt;单元&gt;/</span>，
+                构建时会自动扫出目录 —— 不用改配置，也不用注册。<br />
+                一个单元就是一个文件夹，里面的 md 按文件名顺序拼成同一页，图片和 md 放在一起。
+              </p>
+              <ul class="empty__list mono">
+                <li><span>ROOT</span><span>docs/&lt;领域&gt;/&lt;单元&gt;/</span></li>
+                <li><span>FORMAT</span><span>Markdown + 相对路径图片</span></li>
+                <li><span>SUPPORT</span><span>公式 · Mermaid · 代码高亮 · 全文搜索</span></li>
+                <li><span>STATUS</span><span>READY · 等待第一个 md</span></li>
+              </ul>
+            </div>
+          ) : (
+            <>
+              <ol class="dlist">
+                {domains.map((d, i) => (
+                  <li class="drow">
+                    <a class="drow__head drow__head--link" href={d.href}>
+                      <span class="drow__idx mono">{pad(i + 1)}</span>
+                      <span class="drow__title">{d.title}</span>
+                      <span class="drow__tag mono">{pad(d.unitCount)} 单元 · {pad(d.fileCount)} 文件</span>
+                      <span class="drow__more mono">进入 ›</span>
+                    </a>
+                  </li>
+                ))}
+              </ol>
+              {recentUnits.length > 0 && (
+                <>
+                  <p class="dlist__label mono">最近更新</p>
+                  <ol class="dlist">
+                    {recentUnits.map((u, i) => (
+                      <li class="drow">
+                        <a class="drow__head drow__head--link drow__head--sub" href={u.href}>
+                          <span class="drow__idx mono">{pad(i + 1)}</span>
+                          <span class="drow__title">{u.title}</span>
+                          <span class="drow__tag mono">{u.domainTitle}</span>
+                          <span class="drow__more mono">{u.updated || u.count + ' 文件'}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        <footer class="panel__foot">
+          <a class="btn btn--primary" href={url('/docs/')}>打开文档区</a>
+          <span class="panel__note mono">
+            内容源：<span class="mono">docs/</span> 目录 ·
+            {docsStats.files ? '当前 ' + pad(docsStats.files) + ' 个 md' : '等待第一个 md'}
+          </span>
+        </footer>
+      </section>
+
+      <!-- 04 关于我：01 关于 / 02 获奖 / 03 联系方式 —— 和 /about/ 同一套分节排版 -->
+      <section class="panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" tabindex="-1" hidden>
+        <header class="panel__head">
+          <span class="panel__idx mono">04</span>
+          <h2 class="panel__title">关于我</h2>
+          <span class="panel__en mono">About</span>
+          <span class="panel__rule" aria-hidden="true"></span>
+          <span class="panel__meta mono">{pad(awards.length)} 项获奖 · {pad(socialCount)} 个入口</span>
+          <button type="button" class="panel__close" data-close>
+            关闭 <span class="mono">ESC</span>
+          </button>
+        </header>
+
+        <div class="panel__body" data-scroll tabindex="0">
+          <section class="pblock">
+            <div class="sec-head sec-head--panel">
+              <span class="sec-head__idx mono">01</span>
+              <h3>关于</h3>
+              <span class="sec-head__rule" aria-hidden="true"></span>
+            </div>
+            <AboutIntro compact />
+          </section>
+
+          <section class="pblock">
+            <div class="sec-head sec-head--panel">
+              <span class="sec-head__idx mono">02</span>
+              <h3>获奖</h3>
+              <span class="sec-head__rule" aria-hidden="true"></span>
+              <span class="sec-head__more mono">{pad(awards.length)} 项 · 点作品进详情</span>
+            </div>
+            <AwardList compact />
+          </section>
+
+          <section class="pblock">
+            <div class="sec-head sec-head--panel">
+              <span class="sec-head__idx mono">03</span>
+              <h3>联系方式</h3>
+              <span class="sec-head__rule" aria-hidden="true"></span>
+              <span class="sec-head__more mono">{pad(socialCount)} 个入口 · QQ 点一下可选中</span>
+            </div>
+            <p class="lead">想聊机器人、强化学习或者工具链，随时找我 —— 仓库、Issue 或者直接来信都行。</p>
+            <ul class="clist">
+            {site.socials.map((s, i) => (
+              <li>
+                <a class="crow" href={s.href} target="_blank" rel="me noopener">
+                  <span class="crow__idx mono">{pad(i + 1)}</span>
+                  <span class="crow__label">{s.label}</span>
+                  <span class="crow__handle mono">{handle(s.href)}</span>
+                  <span class="crow__go mono" aria-hidden="true">↗</span>
+                </a>
+              </li>
+            ))}
+            {site.contacts.map((c, i) => (
+              <li>
+                <div class="crow crow--static">
+                  <span class="crow__idx mono">{pad(site.socials.length + i + 1)}</span>
+                  <span class="crow__label">{c.label}</span>
+                  <span class="crow__handle mono">{c.value}</span>
+                  <span class="crow__go mono" aria-hidden="true">·</span>
+                </div>
+              </li>
+            ))}
+            {site.email ? (
+              <li>
+                <a class="crow" href={'mailto:' + site.email}>
+                  <span class="crow__idx mono">{pad(site.socials.length + site.contacts.length + 1)}</span>
+                  <span class="crow__label">Email</span>
+                  <span class="crow__handle mono">{site.email}</span>
+                  <span class="crow__go mono" aria-hidden="true">↗</span>
+                </a>
+              </li>
+            ) : null}
+          </ul>
+
+            <div class="cnote">
+              <div class="cnote__k mono">SIGNAL</div>
+              <p class="cnote__v">
+                目前主要在做机器人控制与强化学习；如果你也在做类似的东西，欢迎直接开 Issue 或者在仓库里找我。
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <footer class="panel__foot">
+          <a class="btn btn--primary" href={url('/about/')}>完整关于页</a>
+          <a class="btn" href={site.socials[0].href} target="_blank" rel="me noopener">{site.socials[0].label} ↗</a>
+          <span class="panel__note mono">
+            内容源：<span class="mono">site.ts</span> + <span class="mono">awards.ts</span>
+          </span>
+        </footer>
+      </section>
+    </div>
+
+    <!-- ── 底部四个模块 ────────────────────────────────────────── -->
+    <nav class="tabs" role="tablist" aria-label="主模块" data-tabs>
+      {tabs.map((t, i) => (
+        <button
+          type="button"
+          class={t.locked ? 'tab tab--locked' : 'tab'}
+          id={'tab-' + t.id}
+          role="tab"
+          aria-selected="false"
+          aria-label={t.label}
+          aria-controls={t.locked ? undefined : 'panel-' + t.id}
+          aria-disabled={t.locked ? 'true' : undefined}
+          tabindex={i === 0 ? 0 : -1}
+          data-tab={t.id}
+          data-locked={t.locked ? '' : undefined}
+        >
+          <span class="tab__idx mono">{t.idx}</span>
+          <span class="tab__main">
+            <span class="tab__label" data-scramble-tab>{t.label}</span>
+            <span class="tab__en mono">{t.en}</span>
+          </span>
+          <span class="tab__go" aria-hidden="true">›</span>
+          <span class="tab__meta mono">{t.meta}</span>
+          <span class="tab__caret" aria-hidden="true"></span>
+        </button>
+      ))}
+    </nav>
+
+    <div class="hub-foot">
+      <span class="mono">© {new Date().getFullYear()} {site.name}</span>
+      <span class="hub-foot__hazard" aria-hidden="true"></span>
+      <span class="mono hub-foot__credit">
+        流体 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a>
+      </span>
+    </div>
+
+    <div class="toast mono" data-toast role="status" aria-live="polite"></div>
+  </div>
+</BaseLayout>
+
+<script>
+  import { initHub } from '../scripts/hub.js';
+  initHub();
+</script>

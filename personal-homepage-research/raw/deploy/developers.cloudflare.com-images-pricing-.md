@@ -1,0 +1,50 @@
+原始 URL: https://developers.cloudflare.com/images/pricing/
+抓取日期: 2026-10-05
+tier: browser
+
+---
+
+By default, all users are on the Images Free plan. The Free plan includes access to the transformations feature, which lets you optimize images stored outside of Images, like in R2.
+The Paid plan allows transformations, as well as access to storage in Images.
+Pricing is dependent on which features you use. The table below shows which metrics are used for each use case.
+| Use case | Metrics | Availability | 
+|---|---|---|
+| Optimize images stored outside of Images | Images Transformed | Free and Paid plans | 
+| Optimize images that are stored in Cloudflare Images | Images Stored, Images Delivered | Only Paid plans | 
+On the Free plan, you can request up to 5,000 unique transformations each month for free.
+Once you exceed 5,000 unique transformations:
+- Existing transformations in cache will continue to be served as expected.
+- New transformations will return a 9422 error. If your source image is from the same domain where the transformation is served, then you can use theonerror parameter to redirect to the original image.
+- You will not be charged for exceeding the limits in the Free plan.
+To request more than 5,000 unique transformations each month, you can purchase an Images Paid plan.
+When you purchase an Images Paid plan, you can choose your own storage or add storage in Images.
+| Metric | Pricing | 
+|---|---|
+| Images Transformed | First 5,000 unique transformations included + $0.50 / 1,000 unique transformations / month | 
+| Images Stored | $5 / 100,000 images stored / month | 
+| Images Delivered | $1 / 100,000 images delivered / month | 
+If you optimize an image stored outside of Images, then you will be billed only for Images Transformed.
+Images Stored and Images Delivered apply only to images that are stored in your Images bucket. When you optimize a hosted image through the image delivery URL, then this counts toward Images Delivered — not Images Transformed. However, if you optimize a hosted image through the Images binding, then this counts toward Images Transformed.
+A unique transformation is a request to transform an original image based on a set of supported parameters. This metric is used when using the Images binding or optimizing images that are stored outside of Images.
+For example, if you transform thumbnail.jpg as 100x100, then this counts as one unique transformation. If you transform the same thumbnail.jpg as 200x200, then this counts as a separate unique transformation.
+You are billed on the number of unique transformations that are requested within each calendar month. Repeat requests for the same transformation within the same month are counted only once for that month. Calls to the Images binding's .info() method are not billed.
+The format parameter counts as only one billable transformation, even if multiple copies of an image are served. In other words, if width=100,format=auto/thumbnail.jpg is served to some users as AVIF and to others as WebP, then this counts as one unique transformation instead of two.
+If you serve 2,000 remote images in five different sizes each month, then this results in 10,000 unique transformations. Your estimated cost for the month would be:
+| | Usage | Included | Billable quantity | Price | 
+|---|---|---|---|---|
+| Transformations | 10,000 unique transformations 1 | 5,000 | 5,000 | $2.50 2 | 
+If you use R2 for storage then your estimated monthly costs will be the sum of your monthly Images costs and monthly R2 costs.
+For example, if you upload 5,000 images to R2 with an average size of 5 MB, and serve 2,000 of those images in five different sizes, then your estimated cost for the month would be:
+| | Usage | Included | Billable quantity | Price | 
+|---|---|---|---|---|
+| Storage | 25 GB 3 | 10 GB | 15 GB | $0.22 4 | 
+| Class A operations | 5,000 writes 5 | 1 million | 0 | $0.00 6 | 
+| Class B operations | 10,000 reads 7 | 10 million | 0 | $0.00 8 | 
+| Transformations | 10,000 unique transformations 9 | 5,000 | 5,000 | $2.50 10 | 
+| Total | | | | $2.72 | 
+Storage in Images is available only with an Images Paid plan. You can purchase storage in increments of $5 for every 100,000 images stored per month.
+You can create predefined variants to specify how an image should be resized, such as thumbnail as 100x100 and hero as 1600x500.
+Only uploaded images count toward Images Stored; defining variants will not impact your storage limit.
+For images that are stored in Images, you will incur $1 for every 100,000 images delivered per month. This metric does not include transformed images that are stored in remote sources.
+Every image requested by the browser counts as one billable request.
+A retail website has a product page that uses Images to serve 10 images. If the page was visited 10,000 times this month, then this results in 100,000 images delivered — or $1.00 in billable usage.

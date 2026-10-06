@@ -1,0 +1,75 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import DocsToc from '../../../components/DocsToc.astro';
+import { domains, docComponents, neighbours } from '../../../lib/docs';
+import { url } from '../../../lib/url';
+
+export function getStaticPaths() {
+  return domains.flatMap((d) =>
+    d.units.map((u) => ({ params: { domain: d.slug, unit: u.slug }, props: { unit: u, domain: d } })),
+  );
+}
+
+const { unit, domain } = Astro.props;
+const { prev, next } = neighbours(unit);
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<DocsLayout
+  title={unit.title + ' · ' + domain.title}
+  description={unit.summary || unit.title}
+  crumbs={[{ label: '文档', href: url('/docs/') }, { label: domain.title, href: domain.href }, { label: unit.title }]}
+  railTitle={unit.title}
+  railCount={pad(unit.count) + ' 文件'}
+  reading
+>
+  <DocsToc slot="rail" unit={unit} />
+
+  <article class="unit">
+    <header class="unit__head">
+      <div class="unit__kicker">
+        <span class="violet">{domain.title}</span>
+        <span class="dot" aria-hidden="true">·</span>
+        <span>{unit.count} 个文件</span>
+        {unit.updated ? <><span class="dot" aria-hidden="true">·</span><span>更新 {unit.updated}</span></> : null}
+        {unit.tags.length > 0 ? <><span class="dot" aria-hidden="true">·</span><span>{unit.tags.join(' / ')}</span></> : null}
+      </div>
+      <h1 class="docs__title">{unit.title}</h1>
+      {unit.summary ? <p class="docs__lead">{unit.summary}</p> : null}
+    </header>
+
+    {unit.files.map((f, fi) => {
+      const Comp = docComponents[f.path];
+      return (
+        <section class="dfile" id={f.anchor} data-file={f.name}>
+          <div class="dfile__head">
+            <span class="dfile__idx">FILE {pad(fi + 1)}</span>
+            <span class="dfile__name">{f.name}</span>
+            <span class="dfile__rule" aria-hidden="true"></span>
+            <span class="dfile__src">docs/{domain.slug}/{unit.slug}/{f.name}.md</span>
+          </div>
+          <div class="dfile__body">
+            <Comp />
+          </div>
+        </section>
+      );
+    })}
+
+    <nav class="unitnav" aria-label="相邻单元">
+      {prev ? (
+        <a href={prev.href}>
+          <span class="k">← 上一篇</span>
+          <span class="t">{prev.title}</span>
+          <span class="d">{prev.domainTitle} · {prev.count} 个文件</span>
+        </a>
+      ) : <span class="unitnav__pad" aria-hidden="true"></span>}
+      {next ? (
+        <a class="next" href={next.href}>
+          <span class="k">下一篇 →</span>
+          <span class="t">{next.title}</span>
+          <span class="d">{next.domainTitle} · {next.count} 个文件</span>
+        </a>
+      ) : <span class="unitnav__pad" aria-hidden="true"></span>}
+    </nav>
+  </article>
+</DocsLayout>

@@ -1,0 +1,147 @@
+---
+import '@yunyoujun/ak-ui/tokens.css';
+import '@fontsource/oswald/400.css';
+import '@fontsource/oswald/500.css';
+import '@fontsource/oswald/600.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '../styles/global.css';
+import { site } from '../config/site';
+import { url } from '../lib/url';
+
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+  /** page = 常规子页（左侧竖栏 + 页脚）；hub = 首页单屏终端（无竖栏、无滚动） */
+  mode?: 'page' | 'hub';
+  /** 追加到 <body> 的类名，例如文档区的 'is-docs'（对应 docs.css 里的作用域） */
+  bodyClass?: string;
+}
+const { title, description = site.description, ogImage = url('/og.png'), mode = 'page', bodyClass } = Astro.props;
+const isHub = mode === 'hub';
+const pageTitle = title ? title + ' · ' + site.name : site.name + ' · ' + site.tagline;
+const canonical = new URL(Astro.url.pathname, site.url).href;
+const ogImageUrl = new URL(ogImage, site.url).href;
+const path = Astro.url.pathname;
+const year = new Date().getFullYear();
+// 子路径部署时首页 href 是 /tc63/，不能再用 '/' 当判据，否则每个页面都会点亮"终端"
+const home = url('/');
+const isActive = (href: string) => (href === home ? path === home : path.startsWith(href));
+---
+<!doctype html>
+<html lang={site.locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={url('/favicon.svg')} />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#ffffff" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={site.name} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:alt" content={'社交分享卡片：' + site.name + ' —— ' + site.tagline} />
+    <meta property="og:locale" content="zh_CN" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    {isHub && (
+      <script is:inline>
+        // 首页自检浮层的开关：在 body 解析前决定，避免"先闪一帧完整页面再盖上遮罩"
+        // 关 JS / 减少动效 / 本次会话已看过 → 不加 js-boot，浮层永不出现（CSS 默认 display:none）
+        (function () {
+          try {
+            var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var seen = false;
+            try { seen = sessionStorage.getItem('hub-boot') === '1'; } catch (e) {}
+            if (!seen && !reduce) {
+              document.documentElement.classList.add('js-boot');
+              try { sessionStorage.setItem('hub-boot', '1'); } catch (e) {}
+              // 兜底：万一交互脚本挂了，6 秒后强制撤掉遮罩
+              setTimeout(function () {
+                document.documentElement.classList.remove('js-boot');
+              }, 6000);
+            }
+          } catch (e) {}
+        })();
+      </script>
+    )}
+  </head>
+  <body class={[isHub ? 'is-hub' : null, bodyClass].filter(Boolean).join(' ') || undefined}>
+    <a class="skip" href="#main">跳到主要内容</a>
+
+    {isHub ? (
+      <main id="main">
+        <slot />
+      </main>
+    ) : (
+      <>
+        <header class="rail">
+          <a class="rail__mark" href={url('/')} aria-label={'回到首页 · ' + site.name}>
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5" />
+              <path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)" />
+              <line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5" />
+            </svg>
+          </a>
+
+          <nav class="rail__nav" aria-label="主导航">
+            {site.nav.map((item) => (
+              <a href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>{item.label}</a>
+            ))}
+          </nav>
+
+          <span class="rail__foot">© {year} {site.name}</span>
+        </header>
+
+        <main id="main">
+          <div class="shell">
+            <slot />
+          </div>
+        </main>
+
+        <footer class="foot">
+          <div class="shell foot__in">
+            <span class="mono">{site.name} · {site.tagline}</span>
+            {site.socials.map((s) => (
+              <a href={s.href} target="_blank" rel="me noopener">{s.label}</a>
+            ))}
+            <span class="mono" style="margin-inline-start:auto">
+              流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a>
+            </span>
+          </div>
+        </footer>
+      </>
+    )}
+
+    {!isHub && (
+      <script>
+        // 轻量入场动效：只有 JS 可用时才先隐藏，保证无脚本环境内容照常可见
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!reduceMotion && 'IntersectionObserver' in window) {
+          const targets = Array.from(
+            document.querySelectorAll('.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *'),
+          );
+          targets.forEach((el) => el.classList.add('reveal-ready'));
+          const io = new IntersectionObserver(
+            (entries) => {
+              entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add('reveal-in');
+                  io.unobserve(entry.target);
+                }
+              });
+            },
+            { rootMargin: '0px 0px -8% 0px', threshold: 0.04 },
+          );
+          targets.forEach((el) => io.observe(el));
+        }
+      </script>
+    )}
+  </body>
+</html>

@@ -1,0 +1,211 @@
+URL: https://danluu.com/
+抓取日期: 2026-10-05
+标题: 
+
+---
+
+- xx/xxPatreon posts
+- 09/26There's no point at which turning your brain off will work
+- 09/26How well do agents use test and verification techniques?
+- 09/26Ed Zitron's AI prediction track record
+- 08/26Bug blindness
+- 08/26There's no reason for software to be slow anymore
+- 08/26The benchmarkpocalypse
+- 08/26How does programming language affect token efficiency and correctness?
+- 07/26Bad benchmarks and evals: Senior SWE-Bench, napkin math, and winter tires
+- 07/26Agentic test processes, LLM benchmarks, and other notes on agentic coding from Galapagos Island
+- 10/24Steve Ballmer was an underrated CEO
+- 08/24How good can you be at Codenames without knowing any words?
+- 06/24A discussion of discussions on AI bias
+- 05/24What the FTC got wrong in the Google antitrust investigation
+- 03/24How web bloat impacts users with slow devices
+- 02/24Diseconomies of scale in fraud, spam, support, and moderation
+- 02/24Why it's impossible to agree on what's allowed
+- 01/24Notes on Cruise's pedestrian accident
+- 01/24Why do people post on [bad platform] instead of [good platform]?
+- 12/23How bad are search results? Let's compare Google, Bing, Marginalia, Kagi, Mwmbl, and ChatGPT
+- 09/22Futurist prediction methods and accuracy
+- 04/22In defense of simple architectures
+- 03/22Why is it so hard to buy things that work well?
+- 02/22Misidentifying talent
+- 02/22A decade of major cache incidents at Twitter
+- 02/22Cocktail party ideas
+- 12/21The container throttling problem
+- 12/21Some thoughts on writing
+- 12/21Some latency measurement pitfalls
+- 11/21Major errors on this blog (and their corrections)
+- 11/21Individuals matter
+- 11/21Culture matters
+- 10/21Willingness to look stupid
+- 10/21What to learn
+- 10/21Some reasons to work on productivity and velocity
+- 09/21The value of in-house expertise
+- 08/21Measurement, benchmarking, and data analysis are underrated
+- 12/20Against essential and accidental complexity
+- 06/20How do cars do in out-of-sample crash testing?
+- 05/20A simple way to get more value from tracing
+- 05/20A simple way to get more value from metrics
+- 03/20How (some) good corporate engineering blogs are written
+- 03/20The growth of command line options, 1979-Present
+- 02/20Suspicious discontinuities
+- 02/2095%-ile isn't that good
+- 01/20Algorithms interviews: theory vs. practice
+- 07/19Files are fraught with peril
+- 02/19Randomized trial on gender in Overwatch
+- 12/17Computer latency: 1977-2017
+- 11/17How good are decisions? Evaluating decision quality in domains where evaluation is easy
+- 11/17How out of date are Android devices?
+- 11/17UI backwards compatibility
+- 10/17Filesystem error handling
+- 10/17Keyboard latency
+- 08/17Branch prediction
+- 08/17Sattolo's algorithm
+- 07/17Terminal latency
+- 06/17The widely cited studies on mouse vs. keyboard efficiency are completely bogus
+- 06/17Startup options v. cash
+- 02/17How web bloat impacts users with slow connections
+- 10/16HN comments are underrated
+- 10/16Programming book recommendations and anti-recommendations
+- 10/16Hiring and the market for lemons
+- 10/16I could do that in a weekend!
+- 09/16Is dev compensation bimodal?
+- 09/16How I learned to program
+- 08/16Notes on concurrency bugs
+- 04/16Some programming blogs to consider reading
+- 04/16Google SRE book
+- 03/16We only hire the trendiest
+- 01/16Sampling v. tracing
+- 01/16We saw some really bad Intel CPU bugs in 2015 and we should expect to see more in the future
+- 12/15Normalization of deviance
+- 12/15Big companies v. startups
+- 12/15Files are hard
+- 11/15Why use ECC?
+- 11/15What's worked in Computer Science: 1999 v. 2015
+- 11/15Infinite disk
+- 10/15Why Intel added cache partitioning
+- 09/15Slowlock
+- 08/15Steve Yegge's prediction record
+- 08/15Reading postmortems
+- 05/15Slashdot and Sourceforge
+- 05/15The googlebot monopoly
+- 05/15A defense of boring languages
+- 05/15Advantages of monorepos
+- 05/15We used to build steel mills near cheap power. Now that's where we build datacenters
+- 03/15Reading citations is easier than most people think
+- 03/15Given that we spend little effort on testing, how should we test software?
+- 03/15What happens when you load a URL?
+- 03/15Goodhearting IQ, cholesterol, and tail latency
+- 02/15AI doesn't have to be very good to displace humans
+- 02/15CPU backdoors
+- 01/15Blog monetization
+- 01/15What's new in CPUs since the 80s?
+- 12/14A review of the Julia language
+- 12/14Integer overflow checking cost
+- 12/14Malloc tutorial
+- 12/14Markets, discrimination, and "lowering the bar"
+- 11/14TF-IDF linux commits
+- 11/14Everything is broken
+- 11/14Speeding up this site by 50x
+- 11/14How often is the build broken?
+- 11/14Literature review on the benefits of static types
+- 11/14CLWB and PCOMMIT
+- 11/14Caches: LRU v. random
+- 11/14Testing v. informal reasoning
+- 10/14Assembly v. intrinsics
+- 04/14Data-driven bug finding
+- 03/14Editing binaries
+- 03/14That bogus gender gap article
+- 03/14That time Oracle tried to have a professor fired for benchmarking their database
+- 02/14Why don't schools teach debugging?
+- 01/14Do programmers need math?
+- 01/14Data alignment and caches
+- 12/13PCA is not a panacea
+- 11/13Why hardware development is hard
+- 10/13How to discourage open source contributions
+- 10/13Randomize HN
+- 09/13Writing safe Verilog
+- 09/13Verilog is weird ↑ Public posts
+ ↓Patreon posts
+- 06/26Exercises in benchmarking, evals, and experimental design, part 6
+- 03/26Learning a bit about building game AIs
+- 01/26Exercises in benchmarking and experimental design, part 5
+- 12/25Useless information about poker chips
+- 11/25How earthquake safe are Vancouver condos?
+- 04/25Exercises in benchmarking and experimental design, part 4
+- 03/25The review-industrial complex (and the analyst newsletter industrial complex)
+- 12/24Exercises in benchmarking and experimental design, part 3
+- 11/24Some comments on moving to Canada
+- 10/24Concussions and modern medicine
+- 09/24The utter dominance of U.S. tech
+- 07/24Exercises in benchmarking and experimental design, part 2
+- 07/24What's wrong with Crockford's DEC64 type?
+- 06/24Exercises in benchmarking, part 1 of N
+- 06/24A lot of things have actually improved quite a bit, or how the monthly "everything sucks" rant is wrong (draft?)
+- 06/24The cost of housing construction in Vancouver
+- 05/24Greedy landlords, lazy athletes, and other simple moral explanations
+- 04/24How long before formal methods are widely used in software engineering?
+- 04/24Programmer moneyball in practice
+- 03/24Notes on the 2012 FTC staff memo on a potential Google antitrust case (draft)
+- 03/24How many people want low quality search results?
+- 02/24Reports of Microsoft's death are greatly exaggerated
+- 01/24Brotli and other compression curiosities
+- 01/24Why do people post on [bad platform] instead of [good platform]? (draft)
+- 12/23How good are decisions, Elo edition
+- 11/23Richsplaining
+- 11/22Big company layoff stories
+- 10/22A cloud migration story from a car company
+- 09/22How do commenters coordinate their independent "obviously" wrong answers?
+- 08/22Against epistemic learned helplessness
+- 08/22"You just have to be right, don't you?"
+- 04/22Stories of source code loss
+- 02/22Pop analogies / pop explanations about IQ
+- 02/22Some ironic rebuttals
+- 02/22Doing good engineering with bad mental models
+- 01/22The backlash against doing work (no, no that one)
+- 12/21My style vs. monetization
+- 12/21Phrases that mean their opposite
+- 11/21Cost of living adjustments and location-based pay
+- 11/21Writing down the most obvious things
+- 08/21On Alan Kay's claim that computers would be 1000x faster if we listened to him
+- 07/21Some reasons to measure (draft)
+- 03/21What to learn? (draft)
+- 01/21The glorification of elite teams
+- 09/20What does it mean that some Google execs think they gave away the farm with k8s?
+- 07/20You'd have to be very smart to come up with that
+- 06/20Reactions to the NYT's potential doxxing of Scott Alexander
+- 06/20Why are you still working?
+- 05/20Blog posts I'm not publishing
+- 02/20Another case against taking startup employee equity
+- 12/19Working at an ad supported company (or not)
+- 11/19Startup vs. big company compensation in practice
+- 09/19We're just like a tech company
+- 08/19Buying a house as an investment
+- 07/19Kyle Petty on Danica Patrick
+- 06/19The "production ready" / "beta" duality
+- 06/19Files, the talk
+- 06/19A surprising thing (to me) about bay area groupthink
+- 05/19Baseball scouting reports
+- 05/19"Caisson", the company
+- 04/19Interviews in practice, part 2
+- 04/19A puzzle about prestige
+- 03/19Dustin Curtis and Donald Knuth
+- 02/19Algorithms interviews in practice
+- 12/18What's so bad about JIRA?
+- 11/18The fallacy of corporate intent
+- 10/18Willful ignorance in management
+- 09/18What's up with Google's Spanner SLA?
+- 08/18What's going on with Qualcomm's server team?
+- 06/18Why is Bridge declining?
+- 05/18Online games after a 20 year break
+- 03/18On being in it for the money
+- 02/18We can move as fast as any startup
+- 01/18Linus's rants
+- 01/18Internet comments
+- 12/17Information asymmetry plus monopsony hiring power
+- 11/17Concision vs. pre-emptive nitpicking defenses
+- 10/17An unintended consequence of company propoganda
+- 08/17What do interview questions actually measure?
+- 07/17Bootcamp vs. College
+- 07/17Attrition
+- 06/17Relative vs. absolute
+- 06/17Patreon "blog"

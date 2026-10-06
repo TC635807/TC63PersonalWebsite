@@ -1,0 +1,119 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import DocsTree from '../../components/DocsTree.astro';
+import { domains, docsStats, flatUnits } from '../../lib/docs';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+const recent = flatUnits
+  .filter((u) => u.updated)
+  .sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0))
+  .slice(0, 6);
+---
+
+<DocsLayout
+  title="文档"
+  description="按「领域 / 单元 / 文件」组织的文档区，内容直接来自 docs/ 目录。"
+  crumbs={[{ label: '文档' }]}
+  railTitle="全部文档"
+  railCount={pad(domains.length) + ' 领域'}
+>
+  {domains.length > 0 ? (
+    <DocsTree slot="rail" />
+  ) : (
+    <>
+      <div slot="rail" class="railbox__head">
+        <span class="railbox__k">Index</span>
+        <span class="railbox__n">00 领域</span>
+      </div>
+      <p slot="rail" class="tree__empty">
+        目录树还是空的。新建 <span class="mono">docs/&lt;领域&gt;/&lt;单元&gt;/</span> 并把 md 放进去，
+        这里就会出现领域与单元的导航。
+      </p>
+    </>
+  )}
+
+  <p class="docs__eyebrow">Documents</p>
+  <h1 class="docs__title">文档</h1>
+  <p class="docs__lead">
+    三级结构：<b>领域</b> → <b>单元</b> → <b>文件</b>。一个单元就是一个文件夹，文件夹里的 md 按文件名顺序拼成同一页，
+    图片和 md 放在一起。目录结构本身就是索引 —— 增删改文件夹，这里跟着变，不需要改任何配置。
+  </p>
+
+  <div class="docs__meta">
+    <span><b>{pad(docsStats.domains)}</b> 个领域</span>
+    <span class="dot" aria-hidden="true">/</span>
+    <span><b>{pad(docsStats.units)}</b> 个单元</span>
+    <span class="dot" aria-hidden="true">/</span>
+    <span><b>{pad(docsStats.files)}</b> 个文件</span>
+    {docsStats.updated ? <><span class="dot" aria-hidden="true">/</span><span>最近更新 {docsStats.updated}</span></> : null}
+  </div>
+
+  {domains.length === 0 ? (
+    <div class="dempty">
+      <span class="dempty__code">NO DATA</span>
+      <h2 class="dempty__title">还没有内容，但框架已经就位</h2>
+      <p>
+        往 <span class="mono">docs/</span> 里放 md 就会自动出现在这里。目录长这样：
+      </p>
+      <pre>{'docs/\n├─ 领域名/            ← 第一级：领域\n│  ├─ 单元名/          ← 第二级：单元（一个文件夹）\n│  │  ├─ 01-第一个文件.md\n│  │  ├─ 02-第二个文件.md\n│  │  └─ 插图.png       ← 图片和 md 放同一个文件夹\n│  └─ 另一个单元/\n└─ 另一个领域/'}</pre>
+      <p>
+        每个 md 开头可以写一段可选的 frontmatter（不写也能正常渲染）：
+      </p>
+      <pre>{'---\ntitle: 显示标题      # 默认取第一个一级标题，再默认取文件名\norder: 1            # 排序；默认按文件名的数字前缀 01- 02-\nsummary: 一句话摘要   # 显示在单元列表里\ntags: [笔记, 踩坑]\nupdated: 2026-10-07\ndraft: false       # true 则本站不显示\n---'}</pre>
+      <p class="mono" style="color:var(--ink-3); font-size:.72rem">
+        以 <b>_</b> 或 <b>.</b> 开头的文件/文件夹会被忽略 —— <span class="mono">docs/_template/</span> 就是靠这个隐藏的模板。
+      </p>
+    </div>
+  ) : (
+    <>
+      <div class="dgrid">
+        {domains.map((d, di) => (
+          <a class="dcard" href={d.href}>
+            <span class="dcard__top">
+              <span class="dcard__idx">{pad(di + 1)}</span>
+              <span class="dcard__title">{d.title}</span>
+            </span>
+            <span class="dcard__stats">
+              <span>{pad(d.unitCount)} 单元</span>
+              <span>{pad(d.fileCount)} 文件</span>
+              {d.updated ? <span>{d.updated}</span> : null}
+            </span>
+            <ul class="dcard__units">
+              {d.units.slice(0, 4).map((u, ui) => (
+                <li>
+                  <span class="n">{pad(ui + 1)}</span>
+                  <span>{u.title}</span>
+                </li>
+              ))}
+              {d.units.length > 4 ? <li class="dcard__more">还有 {d.units.length - 4} 个单元 →</li> : null}
+            </ul>
+          </a>
+        ))}
+      </div>
+
+      {recent.length > 0 ? (
+        <section>
+          <div class="dlist__head">
+            <span>最近更新</span>
+            <span>{pad(recent.length)} 条</span>
+          </div>
+          <ol class="dlist">
+            {recent.map((u, i) => (
+              <li class="drow">
+                <a class="drow__link" href={u.href}>
+                  <span class="drow__idx">{pad(i + 1)}</span>
+                  <span class="drow__main">
+                    <span class="drow__title">{u.title}</span>
+                    <span class="drow__sum">{u.domainTitle} · {u.count} 个文件{u.summary ? ' · ' + u.summary : ''}</span>
+                  </span>
+                  <span class="drow__side"><span>{u.updated}</span><span class="go" aria-hidden="true">→</span></span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+    </>
+  )}
+</DocsLayout>

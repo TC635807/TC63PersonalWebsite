@@ -1,0 +1,134 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { projects } from '../../data/projects';
+import { url } from '../../lib/url';
+
+export function getStaticPaths() {
+  return projects.map((p) => ({ params: { slug: p.slug }, props: { project: p } }));
+}
+
+const { project } = Astro.props;
+
+const diagrams = import.meta.glob('../../assets/diagrams/*.svg', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+}) as Record<string, string>;
+const figKey = Object.keys(diagrams).find((k) => k.endsWith('/' + project.slug + '.svg'));
+const fig = figKey ? diagrams[figKey] : null;
+
+const gallery = project.gallery ?? [];
+const hasGallery = gallery.length > 0;
+const hasMetrics = !!project.metrics && project.metrics.length > 0;
+
+// 小节编号按"实际展示的先后"算，不是装饰性序号
+const blocks: string[] = [];
+if (hasGallery) blocks.push('images');
+if (fig) blocks.push('structure');
+if (hasMetrics) blocks.push('metrics');
+const idx = (name: string) => String(blocks.indexOf(name) + 1).padStart(2, '0');
+
+const badgeClass =
+  project.statusKind === 'live'
+    ? 'badge badge--live'
+    : project.statusKind === 'wip'
+      ? 'badge badge--wip'
+      : 'badge badge--private';
+
+const wideCount = gallery.filter((g) => g.wide).length;
+---
+<BaseLayout title={project.title} description={project.summary}>
+  <a class="mono" href={url('/projects/')} style="display:inline-block; margin-top: var(--ak-space-5)">← 全部项目</a>
+
+  <div class="detail">
+    <aside class="detail__meta">
+      <div class="metablock"><span class="k">Year</span><div class="v mono">{project.year}</div></div>
+      <div class="metablock"><span class="k">Role</span><div class="v">{project.role}</div></div>
+      <div class="metablock"><span class="k">Status</span><div class="v"><span class={badgeClass}>{project.status}</span></div></div>
+      {project.award ? (
+        <div class="metablock"><span class="k">Award</span><div class="v"><span class="award">{project.award}</span></div></div>
+      ) : null}
+      <div class="metablock">
+        <span class="k">Stack</span>
+        <div class="tags">{project.tech.map((t) => <span class="tag">{t}</span>)}</div>
+      </div>
+      {project.links.length > 0 && (
+        <div class="metablock">
+          <span class="k">Links</span>
+          <div class="v" style="display:flex; flex-direction:column; gap:6px">
+            {project.links.map((l) => <a href={l.href} target="_blank" rel="noopener">{l.label} ↗</a>)}
+          </div>
+        </div>
+      )}
+      {project.note ? <p class="note" style="margin:0">{project.note}</p> : null}
+    </aside>
+
+    <div>
+      <p class="eyebrow">{project.year} · {project.role}</p>
+      <h1>{project.title}</h1>
+      <p class="pj__sub" style="font-size:.95rem">{project.subtitle}</p>
+      <p class="lead">{project.summary}</p>
+
+      {hasGallery && (
+        <section style="margin-top: var(--ak-space-6)">
+          <div class="sec-head">
+            <span class="sec-head__idx">{idx('images')}</span>
+            <h2>真实图片</h2>
+            <span class="sec-head__rule"></span>
+            <span class="sec-head__more mono">{gallery.length} 张</span>
+          </div>
+          <div class="gallery">
+            {gallery.map((g) => (
+              <figure class={g.wide ? 'is-wide' : undefined}>
+                <img src={url(g.src)} alt={g.alt} loading="lazy" decoding="async" />
+                {g.caption ? <figcaption>{g.caption}</figcaption> : null}
+              </figure>
+            ))}
+          </div>
+          {wideCount > 0 ? <p class="gallery-hint">宽幅图可左右拖动查看全序列</p> : null}
+        </section>
+      )}
+
+      {fig && (
+        <section style="margin-top: var(--ak-space-6)">
+          <div class="sec-head">
+            <span class="sec-head__idx">{idx('structure')}</span>
+            <h2>结构概览</h2>
+            <span class="sec-head__rule"></span>
+            <span class="sec-head__more mono">示意 / 非实拍</span>
+          </div>
+          <div class="detail__fig cut--md" set:html={fig} />
+        </section>
+      )}
+
+      {hasMetrics && (
+        <section style="margin-top: var(--ak-space-6)">
+          <div class="sec-head">
+            <span class="sec-head__idx">{idx('metrics')}</span>
+            <h2>关键数据</h2>
+            <span class="sec-head__rule"></span>
+            <span class="sec-head__more mono">README 实测</span>
+          </div>
+          <div class="metrics">
+            {project.metrics!.map((m) => (
+              <div class="metric">
+                <div class="v">{m.value}</div>
+                <div class="k">{m.label}</div>
+                {m.note ? <div class="n">{m.note}</div> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div class="prose" style="margin-top: var(--ak-space-6)">
+        {project.sections.map((s) => (
+          <section>
+            <h2>{s.heading}</h2>
+            <ul>{s.items.map((it) => <li>{it}</li>)}</ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  </div>
+</BaseLayout>

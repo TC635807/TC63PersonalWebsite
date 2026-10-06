@@ -1,0 +1,119 @@
+---
+import BaseLayout from './BaseLayout.astro';
+// KaTeX 的排版 CSS（公式由 rehype-katex 在构建期渲染成 HTML，这份样式负责把它摆正）
+import 'katex/dist/katex.min.css';
+import '../styles/docs.css';
+import { docsStats } from '../lib/docs';
+import { url } from '../lib/url';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** 面包屑：最后一项不写 href 就是当前页 */
+  crumbs?: { label: string; href?: string }[];
+  /** 窄屏折叠按钮上的标题 */
+  railTitle?: string;
+  railCount?: string;
+  /** 单元正文页：挂上阅读进度条 */
+  reading?: boolean;
+}
+
+const { title, description, crumbs = [], railTitle = '全部文档', railCount = '', reading = false } = Astro.props;
+const stats = docsStats;
+---
+
+<BaseLayout mode="page" title={title} description={description} bodyClass="is-docs">
+  {reading ? <div class="docprogress" data-progress aria-hidden="true"></div> : null}
+
+  <header class="docbar" data-docbar>
+    <div class="docbar__in">
+      <a class="docbar__mark" href={url('/docs/')} aria-label="回到文档区首页">
+        <b aria-hidden="true"></b>
+        <span>文档区</span>
+      </a>
+
+      <nav class="docbar__crumb" aria-label="位置">
+        {crumbs.map((c, i) => (
+          <>
+            {i > 0 ? <span class="sep" aria-hidden="true">/</span> : null}
+            {c.href ? <a href={c.href}>{c.label}</a> : <span class="now">{c.label}</span>}
+          </>
+        ))}
+      </nav>
+
+      <span class="docbar__spacer"></span>
+
+      <button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog">
+        <span aria-hidden="true">⌕</span>
+        <span>搜索文档</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+    </div>
+  </header>
+
+  <div class="docs" data-docs>
+    <aside class="docs__rail">
+      <button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail">
+        <b>{railTitle}</b>
+        {railCount ? <span>{railCount}</span> : null}
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <div class="railbox" id="doc-rail" data-railbox>
+        <slot name="rail" />
+      </div>
+    </aside>
+
+    <div class="docs__main">
+      <slot />
+    </div>
+  </div>
+
+  <!-- 搜索浮层：索引在 /docs/search-index.json，第一次打开才拉取 -->
+  <div class="dsearch" data-search data-index={url('/docs/search-index.json')} hidden>
+    <div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel>
+      <div class="dsearch__bar">
+        <span class="k" aria-hidden="true">Find</span>
+        <input
+          class="dsearch__input"
+          type="search"
+          name="q"
+          placeholder="输入关键词：标题、正文、代码都搜"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="搜索关键词"
+          data-search-input
+        />
+        <span class="dsearch__esc" aria-hidden="true">ESC</span>
+      </div>
+      <div class="dsearch__hint">
+        <span><b>↑ ↓</b> 选择</span>
+        <span><b>Enter</b> 打开</span>
+        <span><b>ESC</b> 关闭</span>
+        <span data-search-count aria-live="polite">共 {stats.files} 个文件</span>
+      </div>
+      <ul class="dsearch__results" data-search-results></ul>
+      <div class="dsearch__foot">
+        <span>索引来自 docs/ 目录，构建期生成</span>
+        <span data-search-state></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片 / 图表灯箱：图片走 img，mermaid 图走 media（克隆 svg） -->
+  <div class="dlightbox" data-lightbox hidden>
+    <div class="dlightbox__tools">
+      <button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button>
+      <button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button>
+    </div>
+    <figure class="dlightbox__fig">
+      <div class="dlightbox__media" data-lightbox-media></div>
+      <img alt="" data-lightbox-img />
+      <figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption>
+    </figure>
+  </div>
+
+  <script>
+    import { initDocs } from '../scripts/docs.js';
+    initDocs();
+  </script>
+</BaseLayout>

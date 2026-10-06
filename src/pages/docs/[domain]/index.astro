@@ -1,0 +1,84 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro';
+import DocsTree from '../../../components/DocsTree.astro';
+import { domains } from '../../../lib/docs';
+import { url } from '../../../lib/url';
+
+export function getStaticPaths() {
+  const sorted = domains;
+  return sorted.map((d, i) => ({
+    params: { domain: d.slug },
+    props: { domain: d, prev: sorted[i - 1] ?? null, next: sorted[i + 1] ?? null },
+  }));
+}
+
+const { domain, prev, next } = Astro.props;
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<DocsLayout
+  title={domain.title}
+  description={domain.units[0]?.summary ?? domain.title + ' · 文档'}
+  crumbs={[{ label: '文档', href: url('/docs/') }, { label: domain.title }]}
+  railTitle="全部文档"
+  railCount={pad(domain.unitCount) + ' 单元'}
+>
+  <DocsTree slot="rail" domain={domain.slug} />
+
+  <p class="docs__eyebrow">Domain {pad(domains.findIndex((d) => d.slug === domain.slug) + 1)}</p>
+  <h1 class="docs__title">{domain.title}</h1>
+  <p class="docs__lead">这一领域的全部单元。每个单元一页，页面里的多个 md 按文件名顺序拼接。</p>
+  <div class="docs__meta">
+    <span><b>{pad(domain.unitCount)}</b> 个单元</span>
+    <span class="dot" aria-hidden="true">/</span>
+    <span><b>{pad(domain.fileCount)}</b> 个文件</span>
+    {domain.updated ? <><span class="dot" aria-hidden="true">/</span><span>最近更新 {domain.updated}</span></> : null}
+  </div>
+
+  <div class="dlist__head" style="margin-top:22px">
+    <span>Unit / 单元</span>
+    <span>点击进入</span>
+  </div>
+  <ol class="dlist">
+    {domain.units.map((u, i) => (
+      <li class="drow">
+        <a class="drow__link" href={u.href}>
+          <span class="drow__idx">{pad(i + 1)}</span>
+          <span class="drow__main">
+            <span class="drow__title">{u.title}</span>
+            <span class="drow__sum">{u.summary || u.files.map((f) => f.title).join(' · ')}</span>
+            {u.toc.some((t) => t.headings.length) ? (
+              <span class="drow__heads">
+                {u.toc.flatMap((t) => t.headings.filter((h) => h.depth === 2)).slice(0, 6).map((h) => (
+                  <span>{h.text}</span>
+                ))}
+              </span>
+            ) : null}
+          </span>
+          <span class="drow__side">
+            <span>{pad(u.count)} 文件</span>
+            {u.updated ? <span>{u.updated}</span> : null}
+            <span class="go" aria-hidden="true">→</span>
+          </span>
+        </a>
+      </li>
+    ))}
+  </ol>
+
+  <nav class="unitnav" aria-label="相邻领域">
+    {prev ? (
+      <a href={prev.href}>
+        <span class="k">← 上一个领域</span>
+        <span class="t">{prev.title}</span>
+        <span class="d">{pad(prev.unitCount)} 个单元</span>
+      </a>
+    ) : <span class="unitnav__pad" aria-hidden="true"></span>}
+    {next ? (
+      <a class="next" href={next.href}>
+        <span class="k">下一个领域 →</span>
+        <span class="t">{next.title}</span>
+        <span class="d">{pad(next.unitCount)} 个单元</span>
+      </a>
+    ) : <span class="unitnav__pad" aria-hidden="true"></span>}
+  </nav>
+</DocsLayout>
