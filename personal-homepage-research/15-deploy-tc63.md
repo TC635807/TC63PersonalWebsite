@@ -90,12 +90,52 @@ location ^~ /tc63/ {
 
 权限：`chmod o+x /home/tc63`（让 `www-data` 能穿过家目录）+ `chmod -R o+rX /home/tc63/www`。
 
-## 4. 日常更新
+## 4. 改成 git 流程（2026-10-07 晚）
+
+### 为什么要改
+
+rsync 直传要每次输密码、也没留下版本历史。换成：**本地构建 → push main → 服务器 git pull**。
+
+```
+本地                                  服务器（43.136.78.68）
+─────                                 ──────────────────────
+npm run build                         ~/site              ← 仓库克隆（git clone --depth=1）
+git add -A && git commit               └─ dist/            ← 构建产物（提交进 main）
+git push origin main                    ~/www/tc63        → 软链到 ~/site/dist
+ssh 跑 ~/site/update.sh               nginx root /home/tc63/www（配置不用再动）
+```
+
+关键取舍：**`dist/` 提交进 main**（所以 `.gitignore` 里 deliberately 不忽略它）。
+好处是服务器零依赖 —— 不用装 400MB node_modules，也不用在这台 1.9G 内存、还跑着 KnowledgeDiver 的机器上构建；
+构建失败只发生在本地，线上永远不会被半成品覆盖。
+
+代价：仓库每次部署会多几 MB 历史。真嫌大可以以后改 GitHub Actions（见 §6）。
+
+### 服务器侧一次性动作
+
+1. `git clone --depth=1 https://github.com/TC635807/TC63PersonalWebsite.git ~/site`（public 仓库，匿名拉取即可，不需要凭据）
+2. `~/site/update.sh`：
+   ```bash
+   git pull --ff-only origin main
+   chmod o+x "$HOME" "$(dirname "$0")"; chmod -R o+rX dist
+   ```
+3. `rm -rf ~/www/tc63 && ln -s /home/tc63/site/dist ~/www/tc63` —— 于是 `git pull` 完就生效，不需要拷贝
+4. 本机公钥写进 `~/.ssh/authorized_keys`（`deploy.sh` 因此不用再输密码；不想要就删掉那一行）
+
+### 日常更新
 
 ```bash
-./deploy.sh              # 构建 + rsync + 修权限
-./deploy.sh --no-build   # 只上传 dist/
+./deploy.sh              # 构建 → 提交（源码 + dist）→ push main → 服务器 git pull
+./deploy.sh --no-build   # 跳过构建
+./deploy.sh --dry        # 只构建，不提交
 ```
+
+### 本机 ssh 的一个坑
+
+`/etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf` 的属主/权限不对，`ssh` 会直接报
+`Bad owner or permissions` 罢工（git push 也一样）。绕法是 `ssh -F /dev/null`：
+本仓库已设 `git config core.sshCommand "ssh -F /dev/null …"`，`deploy.sh` 里的 ssh 也带了这个参数。
+根治：`sudo chown root:root /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf && sudo chmod 644 …`。
 
 ## 5. 验证
 

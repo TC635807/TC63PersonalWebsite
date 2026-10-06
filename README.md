@@ -140,21 +140,22 @@ docs/
 
 ## 部署
 
-### 现状：https://knowledgediver.cloud/tc63/
+### 现状：https://knowledgediver.cloud/tc63/（git 流程）
 
-`astro.config.mjs` 里 `site: 'https://knowledgediver.cloud'` + `base: '/tc63'`，
-文件放在服务器的 `/home/tc63/www/tc63/`，由 nginx 的 `location ^~ /tc63/` 提供（域名根是 KnowledgeDiver，没动）。
-
-```bash
-./deploy.sh              # 构建 + rsync 上传 + 修权限
-./deploy.sh --no-build   # 只上传 dist/
-```
-
-服务器侧**一次性**配置（需要 root，因为 nginx 配置在 `/etc/nginx`）：
+仓库：[TC635807/TC63PersonalWebsite](https://github.com/TC635807/TC63PersonalWebsite)（public，`main` 里**源码 + 构建产物**）
 
 ```bash
-sudo bash /home/tc63/www/enable-tc63.sh
+./deploy.sh              # 构建 → 提交（源码 + dist）→ push main → 服务器 git pull
+./deploy.sh --no-build   # 跳过构建（dist 已是想要的产物）
+./deploy.sh --dry        # 只构建，不提交
 ```
+
+流程：**本地构建**（所以服务器不需要 node / node_modules）→ `dist/` 一起进 `main` →
+服务器 `~/site`（仓库克隆）跑 `~/site/update.sh`：`git pull` + 修权限；
+nginx 的 `root /home/tc63/www` 配上符号链接 `~/www/tc63 → ~/site/dist`，所以 **nginx 配置不用再动**。
+
+`astro.config.mjs` 里 `site: 'https://knowledgediver.cloud'` + `base: process.env.SITE_BASE ?? '/tc63'`：
+默认发服务器（`/tc63`），给 `SITE_BASE=/TC63PersonalWebsite` 构建则发 GitHub Pages（`.github/workflows/deploy.yml` 已按这个设好）。
 
 完整记录见调研文档 [15-deploy-tc63.md](personal-homepage-research/15-deploy-tc63.md)。
 
