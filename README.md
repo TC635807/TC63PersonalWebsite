@@ -144,15 +144,24 @@ docs/
 
 仓库：[TC635807/TC63PersonalWebsite](https://github.com/TC635807/TC63PersonalWebsite)（public，`main` 里**源码 + 构建产物**）
 
+**本地这一侧**（只跟 GitHub 打交道，不碰服务器）：
+
 ```bash
-./deploy.sh              # 构建 → 提交（源码 + dist）→ push main → 服务器 git pull
+./deploy.sh              # 构建 → 提交（源码 + dist）→ push main
 ./deploy.sh --no-build   # 跳过构建（dist 已是想要的产物）
 ./deploy.sh --dry        # 只构建，不提交
 ```
 
-流程：**本地构建**（所以服务器不需要 node / node_modules）→ `dist/` 一起进 `main` →
-服务器 `~/site`（仓库克隆）跑 `~/site/update.sh`：`git pull` + 修权限；
-nginx 的 `root /home/tc63/www` 配上符号链接 `~/www/tc63 → ~/site/dist`，所以 **nginx 配置不用再动**。
+**服务器那一侧**（登录上去自己拉，本地脚本不会替你连服务器）：
+
+```bash
+ssh tc63@43.136.78.68
+~/update-tc63.sh         # = cd ~/site && git pull && 修权限
+```
+
+分工：**本地构建**（所以服务器不需要 node / node_modules）→ `dist/` 一起进 `main` →
+服务器 `~/site` 拉取后，nginx 的 `root /home/tc63/www` 通过符号链接 `~/www/tc63 → ~/site/dist` 直接生效，
+**nginx 配置不用再动**。
 
 `astro.config.mjs` 里 `site: 'https://knowledgediver.cloud'` + `base: process.env.SITE_BASE ?? '/tc63'`：
 默认发服务器（`/tc63`），给 `SITE_BASE=/TC63PersonalWebsite` 构建则发 GitHub Pages（`.github/workflows/deploy.yml` 已按这个设好）。

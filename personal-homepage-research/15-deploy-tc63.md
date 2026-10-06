@@ -97,13 +97,20 @@ location ^~ /tc63/ {
 rsync 直传要每次输密码、也没留下版本历史。换成：**本地构建 → push main → 服务器 git pull**。
 
 ```
-本地                                  服务器（43.136.78.68）
-─────                                 ──────────────────────
-npm run build                         ~/site              ← 仓库克隆（git clone --depth=1）
-git add -A && git commit               └─ dist/            ← 构建产物（提交进 main）
-git push origin main                    ~/www/tc63        → 软链到 ~/site/dist
-ssh 跑 ~/site/update.sh               nginx root /home/tc63/www（配置不用再动）
+本地（只跟 GitHub 打交道）              服务器（43.136.78.68，自己登录后拉）
+─────────────────────────             ──────────────────────────────
+npm run build                         ssh tc63@43.136.78.68
+git add -A && git commit              ~/update-tc63.sh    → cd ~/site && git pull && 修权限
+git push origin main                  ~/site              ← 仓库克隆（git clone --depth=1）
+                                        └─ dist/          ← 构建产物（提交进 main）
+                                          ~/www/tc63      → 软链到 ~/site/dist
+                                      nginx root /home/tc63/www（配置不用再动）
 ```
+
+**两侧不绑定**：`deploy.sh` 里没有 ssh，本地机器不会去连服务器；服务器也不需要认识本地机器
+（拉的是公开仓库，匿名 HTTPS 就够）。一开始为了让 `deploy.sh` 免密登录，我在服务器装过一次本机公钥，
+按用户要求**已经删掉**（`authorized_keys` 现在是空文件），本地那套 askpass/wrapper 脚本也一并清理了。
+所以现在是"本地推代码 → 你自己登录服务器拉"两步，各自独立。
 
 关键取舍：**`dist/` 提交进 main**（所以 `.gitignore` 里 deliberately 不忽略它）。
 好处是服务器零依赖 —— 不用装 400MB node_modules，也不用在这台 1.9G 内存、还跑着 KnowledgeDiver 的机器上构建；
@@ -120,21 +127,25 @@ ssh 跑 ~/site/update.sh               nginx root /home/tc63/www（配置不用�
    chmod o+x "$HOME" "$(dirname "$0")"; chmod -R o+rX dist
    ```
 3. `rm -rf ~/www/tc63 && ln -s /home/tc63/site/dist ~/www/tc63` —— 于是 `git pull` 完就生效，不需要拷贝
-4. 本机公钥写进 `~/.ssh/authorized_keys`（`deploy.sh` 因此不用再输密码；不想要就删掉那一行）
+4. 更新脚本放在**仓库外面**（`~/update-tc63.sh`），避免 `git pull` 的目录语义把它带偏，也让 `git status` 干净
 
-### 日常更新
+### 日常更新（两步，各自独立）
 
 ```bash
-./deploy.sh              # 构建 → 提交（源码 + dist）→ push main → 服务器 git pull
+# 本地
+./deploy.sh              # 构建 → 提交（源码 + dist）→ push main
 ./deploy.sh --no-build   # 跳过构建
 ./deploy.sh --dry        # 只构建，不提交
+
+# 服务器（自己登录上去）
+~/update-tc63.sh         # cd ~/site && git pull --ff-only && chmod -R o+rX dist
 ```
 
-### 本机 ssh 的一个坑
+### 本机 ssh 的一个坑（只影响 GitHub 推送）
 
 `/etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf` 的属主/权限不对，`ssh` 会直接报
-`Bad owner or permissions` 罢工（git push 也一样）。绕法是 `ssh -F /dev/null`：
-本仓库已设 `git config core.sshCommand "ssh -F /dev/null …"`，`deploy.sh` 里的 ssh 也带了这个参数。
+`Bad owner or permissions` 罢工（`git push` 也一样）。绕法是 `ssh -F /dev/null`：
+本仓库已设 `git config core.sshCommand "ssh -F /dev/null …"`。
 根治：`sudo chown root:root /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf && sudo chmod 644 …`。
 
 ## 5. 验证
