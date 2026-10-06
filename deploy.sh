@@ -1,24 +1,22 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 部署个人主页到 https://knowledgediver.cloud/tc63/
+# 个人主页 · 本地这一侧：构建 + 提交 + push
 #
-#   ./deploy.sh              # 构建 → 提交（源码 + dist）→ push main → 服务器 git pull
-#   ./deploy.sh --no-build   # 跳过构建（dist 已是想要的产物时）
+#   ./deploy.sh              # 构建 → 提交（源码 + dist）→ push main
+#   ./deploy.sh --no-build   # 跳过构建（dist 已是想要的产物）
 #   ./deploy.sh --dry        # 只构建，不提交/不推送
 #
-# 工作方式（2026-10-07 起改成 git 流程）：
-#   · 本地构建，dist/ 一起进 main —— 服务器因此不需要 node / node_modules
-#   · 服务器 ~/site 是仓库克隆，~/www/tc63 是指向 ~/site/dist 的软链 → nginx 配置不用动
-#   · 服务器侧只跑 ~/site/update.sh：git pull + 修权限（本脚本自动 ssh 执行）
+# 这个脚本**只跟 GitHub 打交道，不碰服务器**。
+# 服务器那一侧要你自己登录上去执行（一行命令）：
 #
-# 可用环境变量覆盖：DEPLOY_HOST
+#     ssh tc63@43.136.78.68
+#     ~/update-tc63.sh          # = cd ~/site && git pull && 修权限
+#
+# 分工：
+#   · 本地构建，dist/ 一起进 main —— 服务器因此不需要 node / node_modules
+#   · 服务器 ~/site 是仓库克隆，~/www/tc63 是指向 ~/site/dist 的软链（nginx 配置不用动）
 # ============================================================================
 set -euo pipefail
-
-HOST="${DEPLOY_HOST:-tc63@43.136.78.68}"
-# 本机 /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf 权限异常会让 ssh 直接罢工；
-# -F /dev/null 跳过系统配置（默认身份 ~/.ssh/id_ed25519 仍生效）
-SSH="ssh -F /dev/null -o StrictHostKeyChecking=accept-new"
 
 MODE="${1:-}"
 cd "$(dirname "$0")"
@@ -50,8 +48,7 @@ fi
 echo "==> push main"
 git push origin main
 
-echo "==> 服务器更新（git pull）"
-$SSH "$HOST" 'bash ~/update-tc63.sh'
-
 echo
-echo "==> 完成： https://knowledgediver.cloud/tc63/"
+echo "==> 本地这边做完了。要上线，登录服务器跑一行："
+echo "    ssh tc63@43.136.78.68 '~/update-tc63.sh'"
+echo "    （或在服务器上直接执行 ~/update-tc63.sh）"
