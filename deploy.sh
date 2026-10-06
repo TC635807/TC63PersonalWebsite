@@ -51,7 +51,7 @@ echo "==> push main"
 git push origin main
 
 echo "==> 服务器更新（git pull）"
-$SSH "$HOST" 'bash ~/site/update.sh'
+$SSH "$HOST" 'bash ~/update-tc63.sh'
 
 echo
 echo "==> 完成： https://knowledgediver.cloud/tc63/"
