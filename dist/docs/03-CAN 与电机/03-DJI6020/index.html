@@ -1,0 +1,1501 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>DJI6020 · CAN 与电机 · 王宇翔</title><meta name="description" content="GM6020 电压控制帧 0x1FF 与 0x2FF 的槽位分配、反馈帧 ID 的推导规则，以及 0x1FF 与 M3508 电流帧同号复用时如何区分，逐项对着两块板的 bsp_can.cpp 核对。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/03-DJI6020/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="DJI6020 · CAN 与电机 · 王宇翔"><meta property="og:description" content="GM6020 电压控制帧 0x1FF 与 0x2FF 的槽位分配、反馈帧 ID 的推导规则，以及 0x1FF 与 M3508 电流帧同号复用时如何区分，逐项对着两块板的 bsp_can.cpp 核对。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/03-DJI6020/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/">CAN 与电机</a><span class="sep" aria-hidden="true">/</span><span class="now">DJI6020</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>DJI6020</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>报文帧格式与 ID 分配</span></a><ul class="toc__heads"><li><a href="#1-概念一帧驱动四个电机" data-depth="2" data-heading-j="0">1. 概念：一帧驱动四个电机</a></li><li><a href="#2-机制槽位字节序与反馈-id" data-depth="2" data-heading-j="1">2. 机制：槽位、字节序与反馈 ID</a></li><li><a href="#21-下行帧的槽位打包" data-depth="3" data-heading-j="2">2.1 下行帧的槽位打包</a></li><li><a href="#22-反馈帧的标识符规则" data-depth="3" data-heading-j="3">2.2 反馈帧的标识符规则</a></li><li><a href="#23-下行路径与上行路径" data-depth="3" data-heading-j="4">2.3 下行路径与上行路径</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="5">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="6">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="7">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="10">6. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="11">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>反馈报文解析</span></a><ul class="toc__heads"><li><a href="#1-概念一帧七个字段" data-depth="2" data-heading-j="0">1. 概念：一帧七个字段</a></li><li><a href="#2-机制大端还原与量纲" data-depth="2" data-heading-j="1">2. 机制：大端还原与量纲</a></li><li><a href="#21-大端还原" data-depth="3" data-heading-j="2">2.1 大端还原</a></li><li><a href="#22-机械角与转速的量纲" data-depth="3" data-heading-j="3">2.2 机械角与转速的量纲</a></li><li><a href="#23-中断内的解析流程" data-depth="3" data-heading-j="4">2.3 中断内的解析流程</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="5">3. 落到本项目</a></li><li><a href="#31-结构体定义" data-depth="3" data-heading-j="6">3.1 结构体定义</a></li><li><a href="#32-解析位置" data-depth="3" data-heading-j="7">3.2 解析位置</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="8">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="9">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="12">6. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>角度环控制</span></a><ul class="toc__heads"><li><a href="#1-概念外环算目标速度内环算输出" data-depth="2" data-heading-j="0">1. 概念：外环算目标速度，内环算输出</a></li><li><a href="#2-机制" data-depth="2" data-heading-j="1">2. 机制</a></li><li><a href="#21-pidbase-的计算流程" data-depth="3" data-heading-j="2">2.1 PidBase 的计算流程</a></li><li><a href="#22-三个计算变体" data-depth="3" data-heading-j="3">2.2 三个计算变体</a></li><li><a href="#23-相位展开" data-depth="3" data-heading-j="4">2.3 相位展开</a></li><li><a href="#24-三处应用的结构" data-depth="3" data-heading-j="5">2.4 三处应用的结构</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="6">3. 落到本项目</a></li><li><a href="#31-拨盘电机唯一走编码器角度环的一路" data-depth="3" data-heading-j="7">3.1 拨盘电机：唯一走编码器角度环的一路</a></li><li><a href="#32-拨盘的三阶段状态机" data-depth="3" data-heading-j="8">3.2 拨盘的三阶段状态机</a></li><li><a href="#33-yaw-轴角度环走姿态角不走进编码器" data-depth="3" data-heading-j="9">3.3 yaw 轴：角度环走姿态角，不走进编码器</a></li><li><a href="#34-没有被调用的封装" data-depth="3" data-heading-j="10">3.4 没有被调用的封装</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="11">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="12">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="13">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="14">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="15">6. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="16">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>零点与多圈角度</span></a><ul class="toc__heads"><li><a href="#1-概念三种零点与两种圈" data-depth="2" data-heading-j="0">1. 概念：三种零点与两种圈</a></li><li><a href="#2-机制" data-depth="2" data-heading-j="1">2. 机制</a></li><li><a href="#21-单圈计数拼成累计角度" data-depth="3" data-heading-j="2">2.1 单圈计数拼成累计角度</a></li><li><a href="#22-过零判定的三种情形" data-depth="3" data-heading-j="3">2.2 过零判定的三种情形</a></li><li><a href="#23-三种零点的来源" data-depth="3" data-heading-j="4">2.3 三种零点的来源</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="5">3. 落到本项目</a></li><li><a href="#31-云台板算了但没用" data-depth="3" data-heading-j="6">3.1 云台板：算了但没用</a></li><li><a href="#32-底盘板16-位累计角度与-3100-偏移" data-depth="3" data-heading-j="7">3.2 底盘板：16 位累计角度与 3100 偏移</a></li><li><a href="#33-上电时序" data-depth="3" data-heading-j="8">3.3 上电时序</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="9">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="10">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="13">6. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查顺序</span></a><ul class="toc__heads"><li><a href="#1-概念故障的五类归属" data-depth="2" data-heading-j="0">1. 概念：故障的五类归属</a></li><li><a href="#2-机制排查顺序" data-depth="2" data-heading-j="1">2. 机制：排查顺序</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-0x1ff-的双系列复用" data-depth="3" data-heading-j="3">3.1 0x1FF 的双系列复用</a></li><li><a href="#32-量纲与范围的四个数量级" data-depth="3" data-heading-j="4">3.2 量纲与范围的四个数量级</a></li><li><a href="#33-时序与并发" data-depth="3" data-heading-j="5">3.3 时序与并发</a></li><li><a href="#34-波特率依赖-apb1" data-depth="3" data-heading-j="6">3.4 波特率依赖 APB1</a></li><li><a href="#35-两处未初始化的字节" data-depth="3" data-heading-j="7">3.5 两处未初始化的字节</a></li><li><a href="#36-看起来在用的死代码" data-depth="3" data-heading-j="8">3.6 看起来在用的死代码</a></li><li><a href="#4-待核实清单" data-depth="2" data-heading-j="9">4. 待核实清单</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="10">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="13">6. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">CAN 与电机</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>CAN / GM6020 / DJI / 帧格式 / 511 / 反馈解析 / 编码器 / 中断</span></div><h1 class="docs__title">DJI6020</h1><p class="docs__lead">GM6020 电压控制帧 0x1FF 与 0x2FF 的槽位分配、反馈帧 ID 的推导规则，以及 0x1FF 与 M3508 电流帧同号复用时如何区分，逐项对着两块板的 bsp_can.cpp 核对。</p></header><section class="dfile" id="file-1" data-file="01-报文帧格式与ID"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-报文帧格式与ID</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/03-DJI6020/01-报文帧格式与ID.md</span></div><div class="dfile__body"><h1 id="报文帧格式与-id-分配">报文帧格式与 ID 分配</h1>
+<h2 id="1-概念一帧驱动四个电机">1. 概念：一帧驱动四个电机</h2>
+<p>GM6020 是 DJI 的直驱云台电机，电调与主控之间只有两条报文：一条下行控制帧，一条上行反馈帧。下行帧把 8 字节数据区切成 4 个 16 位槽位，每个槽位对应一台电机，因此一条报文最多同时给同一组的四台电机下达指令。反馈帧则是每台电机各发各的，一台一帧。</p>
+<p>两条报文的标识都放在 11 位<strong>标准标识符</strong>（Standard Identifier）里，数据长度固定 8 字节，不需要远程帧（Remote Frame）和扩展帧。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方向</th><th>标识符</th><th>承载内容</th><th>数据长度</th></tr></thead><tbody><tr><td>下行</td><td>0x1FF</td><td>GM6020 电机 ID 1 到 4</td><td>8 字节，4 个槽位</td></tr><tr><td>下行</td><td>0x2FF</td><td>GM6020 电机 ID 5 到 7</td><td>8 字节，前 3 个槽位有效</td></tr><tr><td>上行</td><td>0x204 加 ID</td><td>单台电机反馈</td><td>8 字节，7 个字段加 1 字节保留</td></tr><tr><td>下行</td><td>0x200</td><td>M3508 与 M2006 电机 ID 1 到 4</td><td>8 字节，4 个槽位</td></tr><tr><td>下行</td><td>0x1FF</td><td>M3508 与 M2006 电机 ID 5 到 8</td><td>8 字节，4 个槽位</td></tr></tbody></table>
+<p>表格最后两行给出一个前提：0x1FF 同时属于两个电机系列。对 GM6020 它是 ID 1 到 4 的电压指令，对 M3508 它是 ID 5 到 8 的电流指令。只看标识符无法判断总线上是谁，必须结合反馈帧的标识符一起看。</p>
+<h2 id="2-机制槽位字节序与反馈-id">2. 机制：槽位、字节序与反馈 ID</h2>
+<h3 id="21-下行帧的槽位打包">2.1 下行帧的槽位打包</h3>
+<p>每个槽位是一个有符号 16 位量，先发高字节。以槽位 1 为例，发送端要做的事只有两件：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">uint8_t</span><span style="color:#E36209"> TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">8</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> motor1 </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">;</span><span style="color:#6A737D">      /* 高字节 */</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> motor1;</span><span style="color:#6A737D">           /* 低字节 */</span></span></code></pre>
+<p>四台电机的顺序固定为槽位 1 对应组内 ID 最小的一台，之后依次递增。GM6020 的电压指令被电调解释为输出端电压占空比，有符号，正负对应两个转向。</p>
+<h3 id="22-反馈帧的标识符规则">2.2 反馈帧的标识符规则</h3>
+<p>反馈帧的标识符由电机自身的 ID 决定：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>StdId</mtext><mo>=</mo><mn>0</mn><mi>x</mi><mn>204</mn><mo>+</mo><mtext>ID</mtext></mrow><annotation encoding="application/x-tex">\text{StdId} = 0x204 + \text{ID}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">StdId</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">204</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">ID</span></span></span></span></span></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>电机 ID</th><th>反馈标识符</th><th>0x1FF 槽位</th><th>0x2FF 槽位</th></tr></thead><tbody><tr><td>1</td><td>0x205</td><td>1</td><td>不适用</td></tr><tr><td>2</td><td>0x206</td><td>2</td><td>不适用</td></tr><tr><td>3</td><td>0x207</td><td>3</td><td>不适用</td></tr><tr><td>4</td><td>0x208</td><td>4</td><td>不适用</td></tr><tr><td>5</td><td>0x209</td><td>不适用</td><td>1</td></tr><tr><td>6</td><td>0x20A</td><td>不适用</td><td>2</td></tr><tr><td>7</td><td>0x20B</td><td>不适用</td><td>3</td></tr></tbody></table>
+<p>对照 M3508 的反馈标识符 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mi>x</mi><mn>200</mn><mo>+</mo><mtext>ID</mtext></mrow><annotation encoding="application/x-tex">0x200 + \text{ID}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">200</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">ID</span></span></span></span></span>，两个系列在 0x205 到 0x208 这一段完全重合。区分手段只有两个：该电机实际响应哪条下行帧，以及电机外壳上的 ID 拨码。</p>
+<h3 id="23-下行路径与上行路径">2.3 下行路径与上行路径</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["控制任务&#x3C;br/>GimbalTask 与 FireTask"] --> B["bsp_can1_djimotorcmdfive2eight&#x3C;br/>StdId 等于 0x1FF"]
+    A2["ControlCenterTask"] --> B
+    B --> C["TxData 拆成 4 个槽位&#x3C;br/>每槽 2 字节 高字节在前"]
+    C --> D["HAL_CAN_AddTxMessage&#x3C;br/>选择一个空发送邮箱"]
+    D --> E["CAN1 收发器"]
+    E --> F1["槽位 1 的电机"]
+    E --> F2["槽位 2 的电机"]
+    E --> F3["槽位 3 的电机"]
+    E --> F4["槽位 4 的电机"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant M as GM6020 电调
+    participant B as CAN1 总线
+    participant I as CAN1_RX0 中断
+    participant R as motor_5 结构体
+    participant T as 控制任务
+    M->>B: 反馈帧 StdId 等于 0x205 DLC 等于 8
+    B->>I: RF0R 的 FMP0 非零 触发中断
+    I->>I: HAL_CAN_GetRxMessage 取一帧
+    I->>R: 写入 rotor_angle 与 rotor_speed 等字段
+    Note over I,R: 写入发生在中断上下文 没有加锁
+    T->>R: 周期性读取</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<p>下行帧的封装在 <code>BSP/Src/bsp_can.cpp</code>，两块板各有一份同名实现：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>函数</th><th>标识符</th><th>槽位填充</th><th>源文件位置</th></tr></thead><tbody><tr><td><code>BSP_CAN1_DJIMotorCmdFive2Eight</code></td><td>0x1FF</td><td>参数 5 到 8 依次入槽 1 到 4</td><td>云台板 :168-192</td></tr><tr><td><code>BSP_CAN1_DJIMotorCmdNine2Eleven</code></td><td>0x2FF</td><td>参数 9 到 11 依次入槽 1 到 3</td><td>云台板 :217-239</td></tr><tr><td><code>BSP_CAN1_DJIMotorCmdFive2Eight</code></td><td>0x1FF</td><td>同上</td><td>底盘板 :141-187</td></tr><tr><td><code>BSP_CAN2_DJIMotorCmdNine2Eleven</code></td><td>0x2FF</td><td>同上</td><td>底盘板 :189-211</td></tr></tbody></table>
+<p>函数名里的 5 到 8 与 9 到 11 是本工程自己的全局电机编号，与 GM6020 的组内 ID 相差 4：编号 5 到 8 对应 GM6020 组内的 ID 1 到 4，编号 9 到 11 对应组内的 ID 5 到 7。云台板的调用点在 <code>Task/Src/ControlCenterTask.cpp</code> 的第 133 行：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6F42C1">bsp_can1_djimotorcmdfive2eight</span><span style="color:#24292E">(yaw_current_out, control_output_motor_3, </span><span style="color:#005CC5">0</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">);</span></span></code></pre>
+<p>第一个实参是 yaw 电机的电压指令，进入 0x1FF 的槽位 1；第二个实参是拨盘电机的指令，进入槽位 2。这两个实参的反馈帧分别是 0x205 与 0x206，在 <code>BSP/Src/bsp_can.cpp</code> 的接收回调里各自更新 <code>motor_5</code> 与 <code>motor_6</code>（云台板 :620-640）。</p>
+<p>底盘板只用 0x205 这一路，变量名为 <code>yaw_motor_5</code>（底盘板 <code>BSP/Src/bsp_can.cpp</code> :629-638），用途是把 yaw 关节的编码器值换算成底盘跟随角度，见本单元第 4 篇。</p>
+<p>位时序在 <code>Core/Src/can.c</code> 里，CAN1 与 CAN2 参数相同：<code>Prescaler</code> 等于 2、<code>TimeSeg1</code> 为 <code>CAN_BS1_15TQ</code>、<code>TimeSeg2</code> 为 <code>CAN_BS2_5TQ</code>、<code>SyncJumpWidth</code> 为 <code>CAN_SJW_1TQ</code>（云台板 :42-46 与 :74-78）。在 APB1 等于 42 MHz 时，</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mtext>bit</mtext></msub><mo>=</mo><mfrac><mrow><mn>42</mn><mtext> MHz</mtext></mrow><mrow><mn>2</mn><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mn>15</mn><mo>+</mo><mn>5</mn><mo stretchy="false">)</mo></mrow></mfrac><mo>=</mo><mn>1</mn><mtext> Mbps</mtext></mrow><annotation encoding="application/x-tex">f_{\text{bit}} = \frac{42\ \text{MHz}}{2 \times (1 + 15 + 5)} = 1\ \text{Mbps}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">bit</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3923em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mbin mtight">×</span><span class="mopen mtight">(</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mtight">15</span><span class="mbin mtight">+</span><span class="mord mtight">5</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">42</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">Mbps</span></span></span></span></span></p>
+<p>这条计算依赖 APB1 的实际频率。工作记录里那次 CAN 全体失效就是时钟树被改动后 APB1 变成 36 MHz 导致的（<code>工作记录/can通信波特率问题.md</code>，该文件记录的实测波特率 857142 Hz 正好对应 36 MHz 的假设）。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>检查手段</th></tr></thead><tbody><tr><td>电机不响应，但发送返回 HAL_OK</td><td>0x1FF 发给了 M3508 组的 ID 5 到 8，或 GM6020 的 ID 不在 1 到 4</td><td>核对电机拨码与反馈帧标识符</td></tr><tr><td>收到 0x205 却按 M3508 的量纲解释转速</td><td>两个系列的反馈帧在 0x205 到 0x208 同号</td><td>看该电机响应 0x200 还是 0x1FF</td></tr><tr><td>槽位 4 的电机不动</td><td>0x2FF 只有 3 个有效槽位，第 4 槽在本工程里没有赋值</td><td>检查调用点是否把第 4 个参数当成可用电机</td></tr><tr><td>一台上电后满速转</td><td>电压指令的量纲与范围按 M3508 电流值给出</td><td>见第 5 篇的限幅一节</td></tr></tbody></table>
+<p>0x2FF 的第 3 槽之后还有 2 字节，本工程的实现里没有给这两个字节赋值，而 <code>DLC</code> 仍然是 8（云台板 :207-212，底盘板 :202-207）。发送出去的是栈上的残留值，接收端按 3 个槽位解释时不受影响，用逻辑分析仪抓包会看到两个随机字节。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>GM6020 的下行帧是 4 槽位广播，一帧最多带 4 台电机，槽位与组内 ID 一一对应。</li>
+<li>反馈帧标识符为 0x204 加 ID，与 M3508 的 0x200 加 ID 在 0x205 到 0x208 段重合，区分依据是响应哪条下行帧。</li>
+<li>0x1FF 在本工程承载 GM6020 的电压指令，函数名里的 5 到 8 是工程内电机编号。</li>
+<li>位时序四项参数决定波特率，1 Mbps 的结论建立在 APB1 等于 42 MHz 之上。</li>
+<li>下行与上行都以大端组织 16 位量，解析端的高低字节顺序必须与发送端一致。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程的做法</th><th>代价与收益</th></tr></thead><tbody><tr><td>标识符方案</td><td>只使用 11 位标准帧</td><td>报文短，代价是 0x1FF 与 M3508 复用，需要额外约定区分</td></tr><tr><td>槽位复用</td><td>一条报文带 4 台电机</td><td>总线负载低，代价是单台电机的刷新率与同组其他电机绑定</td></tr><tr><td>0x2FF 的字节数</td><td>只填 3 个槽位但 DLC 仍为 8</td><td>兼容既有接收端，代价是发送 2 字节未初始化数据</td></tr><tr><td>反馈解析位置</td><td>在中断回调里直接解析</td><td>时延低，代价是结构体跨上下文访问没有同步，见第 5 篇</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出 GM6020 电机 ID 4 的反馈帧标识符，并说明它在 0x1FF 里占哪个槽位。</li>
+<li>总线上抓到一帧 0x205，数据为 <code>00 10 00 00 FF FF 37 00</code>，写出各字段的含义，并说明判断这台电机属于哪个系列还需要什么信息。</li>
+<li>若 APB1 被配置为 36 MHz，保持其余参数不变，计算实际波特率与偏差比例。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>在不改变函数名的前提下，把 <code>BSP_CAN1_DJIMotorCmdNine2Eleven</code> 的 <code>DLC</code> 改为 6，说明这样改动对既有接收电调与总线抓包的影响。</li>
+<li>设计一个上电自检函数：依次向 0x1FF 的槽位 1 到 4 发送零电压，统计 200 ms 内收到的 0x205 到 0x208 与 0x201 到 0x208 反馈帧，输出一张槽位与电机系列的对应表。说明这比人工核对拨码可靠在哪里。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>0x1FF 与 0x2FF 下行帧封装（:116-140、:194-216）、接收回调（:590-715）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>yaw 与拨盘指令的发送点（:133）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>CAN1 与 CAN2 位时序（:42-46、:74-78）、中断优先级 5（:125-128、:158-161）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>底盘板同号下行帧封装（:141-211）、0x205 解析（:629-638）</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>时钟树改动导致波特率不符的排查过程</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-反馈报文解析"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-反馈报文解析</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/03-DJI6020/02-反馈报文解析.md</span></div><div class="dfile__body"><h1 id="反馈报文解析">反馈报文解析</h1>
+<h2 id="1-概念一帧七个字段">1. 概念：一帧七个字段</h2>
+<p>GM6020 每隔一段时间主动上报一帧反馈，标识符为 0x204 加 ID，数据长度固定 8 字节。8 字节里装了 4 个量：转子的<strong>机械角</strong>（Mechanical Angle）、转子的转速、<strong>转矩电流</strong>（Torque Current）、温度，最后 1 字节留空。主控端要做的事是把这 8 字节按固定偏移还原成结构体字段。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字节偏移</th><th>字段</th><th>位宽</th><th>有无符号</th><th>量纲</th></tr></thead><tbody><tr><td>0 到 1</td><td>机械角</td><td>16 位</td><td>无符号，实际取值 0 到 8191</td><td>编码器计数，8192 计数为 1 圈</td></tr><tr><td>2 到 3</td><td>转速</td><td>16 位</td><td>有符号</td><td>转每分钟，代码未做换算</td></tr><tr><td>4 到 5</td><td>转矩电流</td><td>16 位</td><td>有符号</td><td>原始值，代码未做换算</td></tr><tr><td>6</td><td>温度</td><td>8 位</td><td>代码按有符号存放</td><td>摄氏度</td></tr><tr><td>7</td><td>保留</td><td>8 位</td><td>不适用</td><td>全工程没有读取</td></tr></tbody></table>
+<p>表中“代码未做换算”两行需要交代清楚：结构体里存的是报文原始值，任何物理量的换算都要在读取处自行完成。</p>
+<h2 id="2-机制大端还原与量纲">2. 机制：大端还原与量纲</h2>
+<h3 id="21-大端还原">2.1 大端还原</h3>
+<p>四个字段的解析方式一致，都是先取高字节：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">motor_5.rotor_angle    </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ((</span><span style="color:#E36209">RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">|</span><span style="color:#E36209"> RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">1</span><span style="color:#24292E">]);</span></span>
+<span class="line"><span style="color:#24292E">motor_5.rotor_speed    </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ((</span><span style="color:#E36209">RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">|</span><span style="color:#E36209"> RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">3</span><span style="color:#24292E">]);</span></span>
+<span class="line"><span style="color:#24292E">motor_5.torque_current </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ((</span><span style="color:#E36209">RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">4</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">|</span><span style="color:#E36209"> RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">5</span><span style="color:#24292E">]);</span></span>
+<span class="line"><span style="color:#24292E">motor_5.temp           </span><span style="color:#D73A49">=</span><span style="color:#E36209">   RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">6</span><span style="color:#24292E">];</span></span></code></pre>
+<p>赋值目标决定符号性。机械角落在 <code>int16_t</code> 上，0 到 8191 落在正区间，符号位不会被触发。转速与转矩电流是有符号量，赋值给 <code>int16_t</code> 时负数会被正确保留，这里的写法没有问题。</p>
+<h3 id="22-机械角与转速的量纲">2.2 机械角与转速的量纲</h3>
+<p>机械角是转子相对电机自身零点的单圈位置，一圈对应 8192 个计数：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>θ</mi><mo>=</mo><mfrac><mtext>rotor_angle</mtext><mn>8192</mn></mfrac><mo>×</mo><msup><mn>360</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">\theta = \frac{\text{rotor\_angle}}{8192} \times 360^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3581em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0131em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8192</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.527em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">rotor_angle</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6741em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span></p>
+<p>底盘板把计数换成弧度时用的就是这个比例（底盘板 <code>Task/Src/ControlCenterTask.cpp</code> :101）：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>θ</mi><mo>=</mo><mi mathvariant="normal">Δ</mi><mtext>counts</mtext><mo>×</mo><mfrac><mrow><mn>2</mn><mi>π</mi></mrow><mn>8192</mn></mfrac></mrow><annotation encoding="application/x-tex">\Delta\theta = \Delta\text{counts} \times \frac{2\pi}{8192}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord">Δ</span><span class="mord text"><span class="mord">counts</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8192</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">π</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>转速字段的量纲由厂商给出，本工程的代码直接把它当转每分钟使用：摩擦轮速度环的目标值 5800 与拨盘速度目标 4500 都直接写进以该字段为反馈的 PID 里（云台板 <code>Task/Src/FireTask.cpp</code> :105 与 :174）。</p>
+<h3 id="23-中断内的解析流程">2.3 中断内的解析流程</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["CAN1 或 CAN2 收到一帧"] --> B["HAL_CAN_RxFifo0MsgPendingCallback"]
+    B --> C{"hcan 指向哪个外设"}
+    C -- "CAN2" --> D["switch StdId 处理 0x201 到 0x204"]
+    C -- "CAN1" --> E["switch StdId 处理 0x205 0x206 0x181 0x303 等"]
+    E --> F["按大端还原 4 个字段"]
+    F --> G["写入全局结构体 motor_5 或 motor_6"]
+    G --> H["0x205 与 0x206 额外调用 update_motor_total_angle"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant ESC as GM6020 电调
+    participant ISR as CAN1_RX0 中断 优先级 5
+    participant M as 全局结构体 DJI_motor_info
+    participant G as GimbalTask 优先级 3
+    ESC->>ISR: 0x205 报文 周期由电调决定
+    ISR->>ISR: HAL_CAN_GetRxMessage 取出一帧
+    ISR->>M: 逐个字段赋值 一次写 2 字节
+    Note over ISR,M: 四个字段分四次写入 没有一次性提交
+    G->>M: 读取 rotor_angle 与 rotor_speed
+    Note over G,M: 可能读到新角配旧速的组合</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-结构体定义">3.1 结构体定义</h3>
+<p>云台板与底盘板的 <code>DJI_motor_info</code> 同名，字段基本一致，只有累计角度一项的位宽不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>云台板</th><th>底盘板</th></tr></thead><tbody><tr><td><code>rotor_angle</code></td><td><code>int16_t</code></td><td><code>int16_t</code></td></tr><tr><td><code>rotor_speed</code></td><td><code>int16_t</code></td><td><code>int16_t</code></td></tr><tr><td><code>torque_current</code></td><td><code>int16_t</code></td><td><code>int16_t</code></td></tr><tr><td><code>temp</code></td><td><code>int8_t</code></td><td><code>int8_t</code></td></tr><tr><td><code>total_angle</code></td><td><code>int32_t</code></td><td><code>int16_t</code></td></tr></tbody></table>
+<p>位宽的差异直接决定了累计角度的可用范围，第 4 篇会用一次完整的推导说明后果。</p>
+<h3 id="32-解析位置">3.2 解析位置</h3>
+<p>两块板的解析都在 <code>HAL_CAN_RxFifo0MsgPendingCallback</code> 里，位置与标识符如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>板</th><th>标识符</th><th>变量</th><th>位置</th></tr></thead><tbody><tr><td>云台板</td><td>0x205</td><td><code>motor_5</code></td><td><code>BSP/Src/bsp_can.cpp</code> :631-640</td></tr><tr><td>云台板</td><td>0x206</td><td><code>motor_6</code></td><td><code>BSP/Src/bsp_can.cpp</code> :620-629</td></tr><tr><td>底盘板</td><td>0x205</td><td><code>yaw_motor_5</code></td><td><code>BSP/Src/bsp_can.cpp</code> :629-638</td></tr></tbody></table>
+<p>云台板的 0x205 分支在赋值之后多调用了一次 <code>update_motor_total_angle</code>（云台板 :636），底盘板同样（底盘板 :634）。这次调用的产物是 <code>total_angle</code>，把单圈计数拼成连续计数。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>可能原因</th><th>检查手段</th></tr></thead><tbody><tr><td>温度显示为负数</td><td><code>temp</code> 是 <code>int8_t</code>，原始字节大于 127 时变成负值</td><td>调试器里同时看原始 <code>RxData[6]</code> 与结构体字段</td></tr><tr><td>电流值比实际大几个数量级</td><td>结构体里是原始值，直接用安培解释</td><td>除以手册给出的换算系数后再比较</td></tr><tr><td>角度在同一圈内跳动</td><td>解析时高字节与低字节顺序写反</td><td>对比原始报文与结构体字段</td></tr><tr><td>转速符号与转向相反</td><td>电调安装方向与车体坐标系不一致</td><td>在读取处取反并记录，改动只放在一处</td></tr><tr><td>读到新角度配旧转速</td><td>中断逐字段写入，任务在两次写入之间读取</td><td>需要一致快照时用临界区包住整段读取</td></tr></tbody></table>
+<p>温度字段还有一个使用上的细节：结构体声明为 <code>int8_t</code>，代码只把它当数值存放，没有任何地方做范围校验或过温保护。查询结构体的全部引用只能找到赋值（云台板 :604、:611、:624、:635、:647 等），没有读取点。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>反馈帧固定 8 字节、4 个量，偏移与位宽在厂商手册里写死，解析端只做高低字节拼接。</li>
+<li>机械角是 0 到 8191 的单圈计数，8192 计数为一圈，超过一圈的信息需要自行累加。</li>
+<li>转速与转矩电流在结构体里保存为原始值，量纲换算由读取处负责，本工程在转速上直接按转每分钟使用。</li>
+<li>解析发生在 CAN 接收中断里，结构体字段逐个写入，任务侧读到的是非原子快照。</li>
+<li>第 8 字节在本工程中从未被读取，报文长度也没有校验，长度大于 8 或小于 8 的帧同样会走到这个解析分支。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程的做法</th><th>代价与收益</th></tr></thead><tbody><tr><td>解析位置</td><td>中断回调内直接解析并写全局量</td><td>时延最小，代价是任务侧读取没有一致性保证</td></tr><tr><td>量纲折算</td><td>保存原始值，读取处各自解释</td><td>结构体简单通用，代价是同一物理量在多处的换算系数可能不一致</td></tr><tr><td>字段位宽</td><td>云台板累计角度用 32 位，底盘板用 16 位</td><td>底盘板省 2 字节，代价是累计角度约 8 圈即回绕</td></tr><tr><td>时间戳</td><td>不记录接收时刻</td><td>零开销，代价是无法区分数据是新帧还是上电时的残留</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>一帧 0x205 的数据为 <code>00 10 FF FE 00 64 32 00</code>，逐个字段写出解析结果与对应物理量。</li>
+<li>机械角为 4096 时，转子相对电机零点转过多少度；若一圈之后机械角回到 0，<code>total_angle</code> 应当是多少。</li>
+<li>说明为什么 <code>rotor_angle</code> 用 <code>int16_t</code> 存放不会出问题，而 <code>total_angle</code> 用 <code>int16_t</code> 存放会。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>给反馈解析加一个一致性方案：要求任务侧读到的四个字段来自同一帧，且不显著增加中断驻留时间。给出实现与中断驻留时间的估算。</li>
+<li>设计一个掉线检测：以 0x205 的到达间隔为判据，超过阈值就把对应电机的输出置零。说明阈值应该依据什么确定，以及在本工程里把这段逻辑放在中断还是任务里更合适。</li>
+<li>把温度字段改成带量纲的浮点成员并加入过温降额，要求保持既有字段名与位宽不变，说明改动的兼容性影响。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/bsp_can.h</code></td><td><code>DJI_motor_info</code> 定义（:10-20）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>接收回调与 0x205 解析（:590-715）、0x206 分支（:620-629）、0x205 分支（:631-640）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/FireTask.cpp</code></td><td>转速原始值的直接使用（:105、:174）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>底盘板接收回调与 0x205 解析（:583-689）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>计数到弧度的换算（:100-101）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-角度环控制"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-角度环控制</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/03-DJI6020/03-角度环控制.md</span></div><div class="dfile__body"><h1 id="角度环控制">角度环控制</h1>
+<h2 id="1-概念外环算目标速度内环算输出">1. 概念：外环算目标速度，内环算输出</h2>
+<p>把电机停在一个指定角度上，最小可用的结构是两级<strong>串级控制</strong>（Cascade Control）：外环比较目标角度与当前角度，输出一个速度目标；内环比较目标速度与当前速度，输出电机指令。外环管位置，内环管阻尼与跟随速度，两级各自限幅。</p>
+<p>本工程的 <code>AnglePID</code> 就是外环，继承自 <code>PidBase</code>，比基类多一个函数 <code>handleZeroCross</code>。它有两个入口：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>入口</th><th>输入量纲</th><th>用途</th></tr></thead><tbody><tr><td><code>calculate</code></td><td>编码器计数，周期 8192</td><td>电机自身角度环</td></tr><tr><td><code>Calculate_angle</code></td><td>度，周期 360</td><td>姿态角角度环</td></tr></tbody></table>
+<p>两个入口对应两种不同的“圈”概念。编码器的 8192 计数是一圈，姿态角的 360 度是一圈，都需要把反馈折算到目标附近才能算出正确的误差。</p>
+<h2 id="2-机制">2. 机制</h2>
+<h3 id="21-pidbase-的计算流程">2.1 PidBase 的计算流程</h3>
+<p><code>PidBase::Calculate</code> 的顺序是：算误差、算微分、算比例加微分、条件积分、输出限幅。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> actual;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> ((prevTarget </span><span style="color:#D73A49">*</span><span style="color:#24292E"> target) </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 0.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">) { integral </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">; }</span><span style="color:#6A737D">   /* 目标反向时清积分 */</span></span>
+<span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> derivative </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">-</span><span style="color:#24292E"> prevError) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> dt;</span></span>
+<span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> output </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Kp </span><span style="color:#D73A49">*</span><span style="color:#24292E"> error </span><span style="color:#D73A49">+</span><span style="color:#24292E"> Kd </span><span style="color:#D73A49">*</span><span style="color:#24292E"> derivative;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (output </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> maxOutput </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> output </span><span style="color:#D73A49">></span><span style="color:#D73A49"> -</span><span style="color:#24292E">maxOutput) {</span><span style="color:#6A737D">          /* 只在未饱和时积分 */</span></span>
+<span class="line"><span style="color:#24292E">    integral </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> Ki </span><span style="color:#D73A49">*</span><span style="color:#24292E"> error </span><span style="color:#D73A49">*</span><span style="color:#24292E"> dt;</span></span>
+<span class="line"><span style="color:#24292E">    integral </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> clamp</span><span style="color:#24292E">(integral, </span><span style="color:#D73A49">-</span><span style="color:#24292E">maxIntegral, maxIntegral);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#24292E">output </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> integral;</span></span>
+<span class="line"><span style="color:#24292E">output </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> clamp</span><span style="color:#24292E">(output, </span><span style="color:#D73A49">-</span><span style="color:#24292E">maxOutput, maxOutput);</span></span></code></pre>
+<p>条件积分是这里的核心取舍：输出一旦撞上限幅就不再累积积分，避免积分项在饱和期间持续增长。代价是饱和期间的有效增益下降，回到线性区时的跟随会慢一点。</p>
+<h3 id="22-三个计算变体">2.2 三个计算变体</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>函数</th><th>积分策略</th><th>回绕处理</th><th>本工程用在哪</th></tr></thead><tbody><tr><td><code>Calculate</code></td><td>条件积分</td><td>无</td><td>拨盘角度环经过 <code>handleZeroCross</code> 后调用</td></tr><tr><td><code>Calculate_angle</code></td><td>条件积分，目标穿越 ±90 度时清积分</td><td>反馈归一到目标加减 180 度内</td><td>yaw 角度环</td></tr><tr><td><code>Calculate_with</code></td><td>总是积分，只做积分限幅</td><td>无</td><td>pitch 角度环</td></tr></tbody></table>
+<p><code>Calculate_angle</code> 的归一化写法与最短路径选择是同一件事：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> normalized_actual </span><span style="color:#D73A49">=</span><span style="color:#24292E"> actual;</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> (normalized_actual </span><span style="color:#D73A49">-</span><span style="color:#24292E"> target </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 180.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">)  normalized_actual </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 360.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> (normalized_actual </span><span style="color:#D73A49">-</span><span style="color:#24292E"> target </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">180.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">) normalized_actual </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 360.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span></code></pre>
+<h3 id="23-相位展开">2.3 相位展开</h3>
+<p><code>handleZeroCross</code> 的作用是把单圈计数展开成目标的最近等价表示，注释里称为 Phase Unwrapping（相位展开）。两块板都实现了同名函数，写法不同：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* 云台板：循环迭代，直到误差落在正负 4096 之内 */</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 4096</span><span style="color:#24292E">)  { current </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">; error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> current; }</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">4096</span><span style="color:#24292E">) { current </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">; error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> current; }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">/* 底盘板：只调整一次 */</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 4096</span><span style="color:#24292E">)       { current </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">; }</span></span>
+<span class="line"><span style="color:#D73A49">else</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">4096</span><span style="color:#24292E">) { current </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">; }</span></span></code></pre>
+<p>单次调整的版本在目标与反馈相差超过一圈时会算错误差，循环版本的代价是迭代次数不受限，目标与反馈差距越大迭代越多。</p>
+<h3 id="24-三处应用的结构">2.4 三处应用的结构</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    subgraph Y["yaw 轴 云台板"]
+        Y1["目标角 yaw_little_rad&#x3C;br/>由 setYawTarget 取最短路径"] --> Y2["YawAnglePID.Calculate_angle&#x3C;br/>Kp 80 Ki 2 Kd 2 输出限幅 20000"]
+        Y2 --> Y3["目标角速度"]
+        Y3 --> Y4["YawSpeedPID.Calculate&#x3C;br/>反馈是 gyro 的 z 轴"]
+        Y4 --> Y5["clamp 到正负 50000&#x3C;br/>减去 chassis_wz 乘 1.8"]
+    end
+    subgraph S["拨盘 云台板"]
+        S1["目标计数 feeder_target_angle"] --> S2["AnglePID.calculate&#x3C;br/>先 handleZeroCross 再 Calculate"]
+        S2 --> S3["速度目标"]
+        S3 --> S4["SpeedPID.Calculate&#x3C;br/>反馈是 motor_6.rotor_speed"]
+    end
+    subgraph P["pitch 轴 云台板"]
+        P1["目标角 gimbal_pitch_angle"] --> P2["PitchAnglePID.Calculate_with&#x3C;br/>总是积分"]
+        P2 --> P3["目标角速度"]
+        P3 --> P4["PitchSpeedPID.Calculate&#x3C;br/>反馈是 gyro 的 y 轴"]
+    end
+    Y5 --> OUT["control_output 或 yaw_current_out"]
+    S4 --> OUT
+    P4 --> OUT</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-拨盘电机唯一走编码器角度环的一路">3.1 拨盘电机：唯一走编码器角度环的一路</h3>
+<p>拨盘电机是 0x1FF 槽位 2 上的电机，反馈帧 0x206，变量名 <code>motor_6</code>。它的角度环实例在 <code>Task/Src/FireTask.cpp</code> 第 36 行：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6F42C1">AnglePID</span><span style="color:#6F42C1"> motor_SUPPLY_ANGLE_PID</span><span style="color:#24292E">(</span><span style="color:#005CC5">5.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.5</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">5000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">3000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span></code></pre>
+<p>五个实参依次是 <code>Kp</code>、<code>Ki</code>、<code>Kd</code>、<code>maxOutput</code>、<code>maxIntegral</code>。外环调用在 :142：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">int32_t</span><span style="color:#24292E"> speed_target </span><span style="color:#D73A49">=</span><span style="color:#24292E"> motor_SUPPLY_ANGLE_PID.</span><span style="color:#6F42C1">calculate</span><span style="color:#24292E">(</span></span>
+<span class="line"><span style="color:#24292E">        feeder_target_angle, motor_6.total_angle, </span><span style="color:#005CC5">0.01</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span></code></pre>
+<p>反馈是累计计数 <code>total_angle</code>，所以 <code>handleZeroCross</code> 用 8192 作周期展开是匹配的。内环在 :153：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">control_output_motor_3 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> motor_SUPPLY_PID.</span><span style="color:#6F42C1">Calculate</span><span style="color:#24292E">(speed_target, motor_6.rotor_speed, </span><span style="color:#005CC5">0.01</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span></code></pre>
+<p>外环输出经过 <code>int16_t</code> 截断，限幅 5000 落在范围内。</p>
+<h3 id="32-拨盘的三阶段状态机">3.2 拨盘的三阶段状态机</h3>
+<p>角度环只负责发射周期里的第一个阶段，之后交给速度环，堵转时再反转：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 停止
+    停止 --> 角度环: feeder_ready 上升沿&#x3C;br/>feeder_target_angle 加上 4000
+    角度环 --> 速度环: 误差落在正负 5000 内
+    角度环 --> 速度环: 超过 200 ms 未到位
+    速度环 --> 反转: 转速低于 1000 持续 500 ms
+    反转 --> 速度环: 反转 100 ms 结束
+    速度环 --> 停止: feeder_ready 回落
+    角度环 --> 停止: feeder_ready 回落</pre></div>
+<h3 id="33-yaw-轴角度环走姿态角不走进编码器">3.3 yaw 轴：角度环走姿态角，不走进编码器</h3>
+<p>yaw 电机的反馈帧是 0x205，但它的角度环没有使用编码器计数。目标角由 <code>setYawTarget</code> 生成（<code>Task/Src/GimbalTask.cpp</code> :108-112），把输入折算到当前角的加减 180 度内；外环用 <code>Calculate_angle</code> 比较目标与 IMU 的 yaw（:65-69），内环反馈是陀螺仪 z 轴（:76-80）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> yaw_target_speed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> YawAnglePID.</span><span style="color:#6F42C1">Calculate_angle</span><span style="color:#24292E">(yaw_little_rad, yaw, dt);</span></span>
+<span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> yaw_current </span><span style="color:#D73A49">=</span><span style="color:#24292E"> YawSpeedPID.</span><span style="color:#6F42C1">Calculate</span><span style="color:#24292E">(yaw_target_speed, gyro[</span><span style="color:#005CC5">2</span><span style="color:#24292E">], dt);</span></span>
+<span class="line"><span style="color:#24292E">yaw_current_out </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">int16_t</span><span style="color:#24292E">)</span><span style="color:#6F42C1">clamp</span><span style="color:#24292E">(yaw_current, </span><span style="color:#D73A49">-</span><span style="color:#005CC5">50000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">50000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span></code></pre>
+<p>这条链路里存在两处量纲问题，第 4 节单独列出。命令的发送不在本任务，而在 <code>Task/Src/ControlCenterTask.cpp</code> :131-133：先减去底盘角速度前馈，再以 200 Hz 的节奏调用 0x1FF 帧。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant G as GimbalTask 周期 1 ms
+    participant C as ControlCenterTask 周期 5 ms
+    participant B as CAN1 总线
+    participant M as motor_5 结构体
+    participant I as CAN1_RX0 中断
+    G->>G: 角度环算出目标角速度
+    G->>G: 速度环算出 yaw_current_out
+    Note over G: 这 5 ms 内算出 5 次 只有最后一次被取出
+    C->>C: yaw_current_out 减去 chassis_wz 乘 1.8
+    C->>B: 0x1FF 槽位 1 写入电压指令
+    B->>I: 电调反馈 0x205 到达
+    I->>M: 更新 rotor_angle 与 total_angle
+    M->>G: 下一轮读取</pre></div>
+<h3 id="34-没有被调用的封装">3.4 没有被调用的封装</h3>
+<p>两块板的 <code>PID/Src/angle_pid.cpp</code> 里都有一个静态实例与一对 C 封装：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> AnglePID </span><span style="color:#6F42C1">angle_pid</span><span style="color:#24292E">(</span><span style="color:#005CC5">15.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.8</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.08</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">5000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">5000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#D73A49">int16_t</span><span style="color:#6F42C1"> angle_pid_calculate</span><span style="color:#24292E">(</span><span style="color:#D73A49">int32_t</span><span style="color:#E36209"> target</span><span style="color:#24292E">, </span><span style="color:#D73A49">int32_t</span><span style="color:#E36209"> actual_angle</span><span style="color:#24292E">, </span><span style="color:#D73A49">float</span><span style="color:#E36209"> dt</span><span style="color:#24292E">);</span></span></code></pre>
+<p>全工程搜索 <code>angle_pid_calculate</code> 只有定义与声明，没有调用点。实际在用的只有类成员函数。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>检查手段</th></tr></thead><tbody><tr><td>积分几乎不工作、微分作用偏小</td><td><code>dt</code> 写成 0.01，实际循环周期约 1 ms</td><td>对比任务里的 <code>osDelay</code> 与传给 PID 的 <code>dt</code></td></tr><tr><td>yaw 内环长期贴住输出上限</td><td>目标按度每秒给出、反馈是弧度每秒，数值相差 57 倍，误差几乎恒为同号</td><td>统一量纲或在读取处乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>180</mn><mi mathvariant="normal">/</mi><mi>π</mi></mrow><annotation encoding="application/x-tex">180/\pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">180/</span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span></span></span></span></td></tr><tr><td>目标与反馈不同基准，稳定后总差一个常数</td><td>目标由 <code>yaw_out</code> 基准生成，反馈用了未减零点的 <code>yaw</code></td><td>两者用同一个零点</td></tr><tr><td>目标与反馈差出几圈</td><td>底盘板单次调整的 <code>handleZeroCross</code> 展开不彻底</td><td>改用循环版本或先把目标归一</td></tr><tr><td>积分清零过于频繁</td><td>目标反向判定用的是 <code>prevTarget * target &#x3C; 0</code></td><td>观察目标在零点附近抖动时的输出</td></tr></tbody></table>
+<p>关于第二行，量纲的来源可以直接核对：陀螺仪量程配置为 2000 dps，换算系数写成 <code>0.00106526443603169529841533860381f</code>（<code>BMI088/BMI088config.h</code> :233），这个数值等于 0.061 乘以 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>π</mi><mi mathvariant="normal">/</mi><mn>180</mn></mrow><annotation encoding="application/x-tex">\pi/180</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="mord">/180</span></span></span></span>，因此 <code>gyro</code> 数组的量纲是弧度每秒。而 <code>yaw</code> 与 <code>pitch</code> 在 <code>Task/Src/ImuTask.cpp</code> :63-65 由四元数转出时已乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>180</mn><mi mathvariant="normal">/</mi><mi>π</mi></mrow><annotation encoding="application/x-tex">180/\pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">180/</span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span></span></span></span>，是度。外环 <code>Kp</code> 为 80，针对的是度制误差，内环拿到的却是弧度制反馈。角度环输出的目标角速度量级可达 20000，而陀螺仪以弧度每秒计时通常只有几十，误差项长期偏正，速度环的输出会贴住限幅。</p>
+<p>关于限幅，<code>clamp</code> 的上限写成 50000，而 GM6020 电压指令的取值区间按厂商手册为正负 30000，本仓库内没有手册文件，这一条标注为待核实。若手册区间正确，超过 30000 的部分由电调自行解释或钳位。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>AnglePID</code> 在 <code>PidBase</code> 之上只加了相位展开，误差计算与限幅逻辑全部继承。</li>
+<li>条件积分的判据是输出是否饱和，饱和期间不累积积分，代价是回到线性区时跟随偏慢。</li>
+<li>编码器角度环的周期是 8192 计数，姿态角角度环的周期是 360 度，两者用不同的入口函数。</li>
+<li>拨盘电机是本工程唯一走编码器角度环的一路，外环输出速度目标、内环输出电流，中间经过 16 位截断。</li>
+<li>yaw 与 pitch 的角度环反馈来自姿态解算，与电机编码器无关；0x205 的反馈在云台板只写入结构体，没有参与控制。</li>
+<li>两块板的 <code>handleZeroCross</code> 实现不同，云台板循环展开，底盘板只展开一次。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程的做法</th><th>代价与收益</th></tr></thead><tbody><tr><td>外环反馈来源</td><td>yaw 与 pitch 用姿态解算，拨盘用编码器</td><td>姿态角不受机械间隙影响，代价是编码器多圈信息被闲置</td></tr><tr><td>积分策略</td><td>条件积分与恒积分两种并存</td><td>拨盘与 yaw 抗饱和，pitch 保底消除静差，代价是三处参数不能互相照搬</td></tr><tr><td>相位展开</td><td>云台板循环，底盘板单次</td><td>云台板适应大偏差，代价是迭代次数不受限；底盘板实现简单，代价是超一圈失效</td></tr><tr><td>输出限幅</td><td>角度环 5000 到 20000，yaw 末级 50000</td><td>分级限幅便于定位饱和环节，代价是末级数值超出手册区间</td></tr><tr><td>C 封装</td><td>保留但不再调用</td><td>接口仍在，代价是搜索函数名时会误认为它是活跃路径</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>已知 <code>Kp = 80</code>、<code>Kd = 2</code>、<code>dt = 0.001</code>，误差为 3 度且上一周期误差为 2 度，计算 <code>Calculate_angle</code> 的比例与微分两项。</li>
+<li>说明 <code>handleZeroCross</code> 在目标为 100、反馈为 8000 时，两块板的返回值分别是多少。</li>
+<li>拨盘外环的 <code>Ki</code> 为 0.5，<code>dt</code> 为 0.01，误差恒为 200，计算 10 个循环后的积分项，并说明积分限幅是否会生效。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>把 FireTask 传给 PID 的 <code>dt</code> 改成与循环周期一致，说明需要同步修改哪些参数才能保持原有整定效果。</li>
+<li>用一次实测替代推算：在 yaw 环上分别以度每秒与弧度每秒解释 <code>gyro[2]</code>，给出两种情况下末级输出的数量级，并设计一个区分它们的实验。</li>
+<li>给拨盘的三阶段状态机补一个“卡死”状态：连续三次反转仍无法脱困时停机并置错误标志，要求不改变既有阶段的编号，说明新增状态与现有超时判定的交互。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/PidBase.h</code></td><td><code>Calculate</code>（:29-61）、<code>Calculate_angle</code>（:63-97）、<code>Calculate_with</code>（:99-127）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/angle_pid.cpp</code></td><td><code>calculate</code> 与 <code>handleZeroCross</code>（:7-30）、未使用的 C 封装（:33-43）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>yaw 角度环与速度环（:31-32、:61-83）、pitch 角度环（:34-37、:89-102）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/FireTask.cpp</code></td><td>拨盘角度环与速度环（:36-39、:142-153）、三阶段状态机（:129-196）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>角速度前馈与 0x1FF 发送（:131-133）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>四元数转欧拉角（:63-69）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/BMI088config.h</code></td><td>陀螺仪换算系数（:233）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/PID/Src/angle_pid.cpp</code></td><td>底盘板单次展开版本（:14-22）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-零点与多圈角度"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-零点与多圈角度</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/03-DJI6020/04-零点与多圈角度.md</span></div><div class="dfile__body"><h1 id="零点与多圈角度">零点与多圈角度</h1>
+<h2 id="1-概念三种零点与两种圈">1. 概念：三种零点与两种圈</h2>
+<p>处理电机角度时，同一个“角度”至少对应三种量：<strong>机械角</strong>（Mechanical Angle）、<strong>累计角度</strong>（Multi-turn Angle）与姿态零点，混用会得到差一个常数的结果。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>名称</th><th>定义位置</th><th>取值范围</th><th>断电是否保留</th></tr></thead><tbody><tr><td>单圈机械角</td><td>电调内部，随电机转动</td><td>0 到 8191</td><td>保留，由转子位置决定</td></tr><tr><td>累计角度</td><td>主控每次收到反馈时更新</td><td>由圈数与单圈值拼出</td><td>不保留，上电重新开始</td></tr><tr><td>姿态零点</td><td>姿态解算内部，上电后第一次采样确定</td><td>相对值</td><td>不保留</td></tr></tbody></table>
+<p>“一圈”也有两种周期：编码器的一圈是 8192 计数，姿态角的一圈是 360 度。第 3 篇讲过角度环的两个入口，这一篇处理的是这些零点从哪来、多圈怎么拼、拼出来能存多少。</p>
+<h2 id="2-机制">2. 机制</h2>
+<h3 id="21-单圈计数拼成累计角度">2.1 单圈计数拼成累计角度</h3>
+<p>拼接函数 <code>update_motor_total_angle</code> 只有三段逻辑：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> update_motor_total_angle</span><span style="color:#24292E">(DJI_motor_info</span><span style="color:#D73A49">*</span><span style="color:#E36209"> motor</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint16_t</span><span style="color:#E36209"> new_ecd</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">motor->inited) {</span><span style="color:#6A737D">                       /* 首次收到反馈 */</span></span>
+<span class="line"><span style="color:#24292E">        motor->last_angle  </span><span style="color:#D73A49">=</span><span style="color:#24292E"> new_ecd;</span></span>
+<span class="line"><span style="color:#24292E">        motor->round_count </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">        motor->total_angle </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">int32_t</span><span style="color:#24292E">)new_ecd;</span></span>
+<span class="line"><span style="color:#24292E">        motor->inited </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#D73A49">    int32_t</span><span style="color:#24292E"> diff </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">int32_t</span><span style="color:#24292E">)new_ecd </span><span style="color:#D73A49">-</span><span style="color:#24292E"> (</span><span style="color:#D73A49">int32_t</span><span style="color:#24292E">)motor->last_angle;</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (diff </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 4096</span><span style="color:#24292E">)       { motor->round_count</span><span style="color:#D73A49">--</span><span style="color:#24292E">; }</span><span style="color:#6A737D">   /* 反向跨过零点 */</span></span>
+<span class="line"><span style="color:#D73A49">    else</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> (diff </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">4096</span><span style="color:#24292E">) { motor->round_count</span><span style="color:#D73A49">++</span><span style="color:#24292E">; }</span><span style="color:#6A737D">   /* 正向跨过零点 */</span></span>
+<span class="line"><span style="color:#24292E">    motor->total_angle </span><span style="color:#D73A49">=</span><span style="color:#24292E"> motor->round_count </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 8192</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> (</span><span style="color:#D73A49">int32_t</span><span style="color:#24292E">)new_ecd;</span></span>
+<span class="line"><span style="color:#24292E">    motor->last_angle  </span><span style="color:#D73A49">=</span><span style="color:#24292E"> new_ecd;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>判据是相邻两次反馈的计数差是否超过半圈。判据成立的前提是采样间隔内转子转过的角度小于半圈，否则会被误判成跨圈。把这个条件写成公式：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mi>max</mi><mo>⁡</mo></msub><mo>=</mo><mfrac><mrow><mn>4096</mn><mo>×</mo><mn>60</mn></mrow><mrow><mn>8192</mn><mo>×</mo><mi>T</mi></mrow></mfrac><mo>=</mo><mfrac><mn>30</mn><mi>T</mi></mfrac></mrow><annotation encoding="application/x-tex">n_{\max} = \frac{4096 \times 60}{8192 \times T} = \frac{30}{T}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2484em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8192</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4096</span><span class="mbin mtight">×</span><span class="mord mtight">60</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">30</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span> 是反馈帧的到达间隔，单位秒。取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mo>=</mo><mn>1</mn><mtext> ms</mtext></mrow><annotation encoding="application/x-tex">T = 1\ \text{ms}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span></span></span></span> 时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mi>max</mi><mo>⁡</mo></msub></mrow><annotation encoding="application/x-tex">n_{\max}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 为 30000 转每分钟，远高于直驱电机与减速电机的实际转速上限，判据是安全的。本仓库里找不到反馈周期的明确定义，这一条标注为待实测。</p>
+<h3 id="22-过零判定的三种情形">2.2 过零判定的三种情形</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 首次
+    首次 --> 正常: 记录 last_angle 与 total_angle&#x3C;br/>round_count 置 0
+    正常 --> 正向跨零: 差值小于负 4096&#x3C;br/>round_count 加一
+    正常 --> 反向跨零: 差值大于正 4096&#x3C;br/>round_count 减一
+    正常 --> 正常: 差值落在正负 4096 内
+    正向跨零 --> 正常: total_angle 等于 round_count 乘 8192 加新计数
+    反向跨零 --> 正常: 同上</pre></div>
+<p>用两个具体数值可以验证方向。上一帧计数 8000、本帧 200，差值为负 7800，判为正向跨零，圈数加一，累计角度为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>8192</mn><mo>+</mo><mn>200</mn></mrow><annotation encoding="application/x-tex">8192 + 200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">8192</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span>。上一帧 200、本帧 8000，差值为正 7800，判为反向跨零，圈数减一，累计角度为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>8192</mn><mo>+</mo><mn>8000</mn></mrow><annotation encoding="application/x-tex">-8192 + 8000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">8192</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8000</span></span></span></span>。代码的方向正确，而注释写的是“向上跨过 0 点，round_count 增加”，与代码相反。以代码为准。</p>
+<h3 id="23-三种零点的来源">2.3 三种零点的来源</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["上电"] --> B["电机侧 首次收到反馈帧"]
+    B --> B1["inited 置 1&#x3C;br/>total_angle 等于该帧单圈计数&#x3C;br/>零点就是上电时的转子位置"]
+    A --> C["姿态侧 第一次姿态解算"]
+    C --> C1["yaw_zero 等于当次 yaw&#x3C;br/>之后 yaw_out 等于 yaw 减 yaw_zero"]
+    A --> D["底盘侧 控制任务启动后延时 100 ms"]
+    D --> D1["Init_yaw_counts 等于当时的 total_angle&#x3C;br/>再减去硬编码的 3100 计数"]
+    B1 --> E["三个零点互不相关"]
+    C1 --> E
+    D1 --> E</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-云台板算了但没用">3.1 云台板：算了但没用</h3>
+<p>云台板的 <code>DJI_motor_info</code> 里 <code>total_angle</code> 是 <code>int32_t</code>，只有 0x205 与 0x206 两路会调用拼接函数（<code>BSP/Src/bsp_can.cpp</code> :625、:636）。其中 <code>motor_5</code> 的 <code>total_angle</code> 在写入之后没有任何读取点，唯一可能用到它的那一行被注释掉了（<code>Task/Src/GimbalTask.cpp</code> :74）。实际在用的是 <code>motor_6.total_angle</code>，作为拨盘角度环的反馈（<code>Task/Src/FireTask.cpp</code> :142、:119、:192）。</p>
+<p>yaw 轴的零点走的是姿态解算这一路（<code>Task/Src/ImuTask.cpp</code> :22-26、:70-77）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E">(first_run) { yaw_zero </span><span style="color:#D73A49">=</span><span style="color:#24292E"> yaw; first_run </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> false</span><span style="color:#24292E">; }</span></span>
+<span class="line"><span style="color:#24292E">yaw_out </span><span style="color:#D73A49">=</span><span style="color:#24292E"> yaw </span><span style="color:#D73A49">-</span><span style="color:#24292E"> yaw_zero;</span></span></code></pre>
+<p>累计总角度曾经有一个实现，最终被注释掉（<code>Task/Src/ImuTask.cpp</code> :79-96），<code>gimbal_yaw_total</code> 变量停留在 0 并保留声明（:21、<code>Task/Src/GimbalTask.cpp</code> :13）。</p>
+<h3 id="32-底盘板16-位累计角度与-3100-偏移">3.2 底盘板：16 位累计角度与 3100 偏移</h3>
+<p>底盘板的结构体里 <code>total_angle</code> 是 <code>int16_t</code>（<code>BSP/Inc/bsp_can.h</code> :17），而拼接表达式是 <code>round_count * 8192 + new_ecd</code>。赋值时高 16 位被截掉，等价于对 65536 取模后再按有符号解释：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>total_angle</mtext><mo>∈</mo><mo stretchy="false">[</mo><mo>−</mo><mn>32768</mn><mo separator="true">,</mo><mtext> </mtext><mn>32767</mn><mo stretchy="false">]</mo><mo>⇒</mo><mi mathvariant="normal">∣</mi><mtext>圈数</mtext><mi mathvariant="normal">∣</mi><mo>≤</mo><mfrac><mn>32767</mn><mn>8192</mn></mfrac><mo>≈</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">\text{total\_angle} \in [-32768,\ 32767] \Rightarrow |\text{圈数}| \le \frac{32767}{8192} \approx 4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">total_angle</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">32768</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">32767</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord text"><span class="mord cjk_fallback">圈数</span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8192</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32767</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></p>
+<p>底盘跟随角度依赖这个值。控制任务启动后延时 100 ms 再取初值（<code>Task/Src/ControlCenterTask.cpp</code> :56-58）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">Init_yaw_counts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> yaw_motor_5.total_angle;</span></span>
+<span class="line"><span style="color:#24292E">Init_yaw_angle  </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (Init_yaw_counts </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 3100</span><span style="color:#24292E">) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (</span><span style="color:#005CC5">2.0</span><span style="color:#D73A49">f</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 3.1415927</span><span style="color:#D73A49">f</span><span style="color:#D73A49"> /</span><span style="color:#005CC5"> 8192.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span></code></pre>
+<p>此后每个周期用初值减去当前读数得到相对角（:100-101），再参与底盘与云台坐标系的旋转补偿（:116-117）：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>θ</mi><mo>=</mo><mo stretchy="false">(</mo><mtext>Init_yaw_counts</mtext><mo>−</mo><mtext>total_angle</mtext><mo stretchy="false">)</mo><mo>×</mo><mfrac><mrow><mn>2</mn><mi>π</mi></mrow><mn>8192</mn></mfrac></mrow><annotation encoding="application/x-tex">\Delta\theta = (\text{Init\_yaw\_counts} - \text{total\_angle}) \times \frac{2\pi}{8192}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mopen">(</span><span class="mord text"><span class="mord">Init_yaw_counts</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">total_angle</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8192</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">π</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3100</mn></mrow><annotation encoding="application/x-tex">3100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3100</span></span></span></span> 是硬编码的机械零位偏移，代码与仓库文档里都没有说明它的来源，标注为待核实。</p>
+<p>底盘板还有一处只用单圈值的换算（<code>Task/Src/UsbConnectTask.cpp</code> :177、:248-251）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">only_yaw.yaw </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> mapToAngle</span><span style="color:#24292E">(yaw_motor_5.rotor_angle) </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 180</span><span style="color:#24292E">;</span><span style="color:#6A737D">   /* 系数 180/4096 */</span></span></code></pre>
+<p><code>rotor_angle</code> 取 0 到 8191，乘以 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>180</mn><mi mathvariant="normal">/</mi><mn>4096</mn></mrow><annotation encoding="application/x-tex">180/4096</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">180/4096</span></span></span></span> 得到 0 到 360 度，减去 180 后落在正负 180 度内，这是把单圈计数直接映射成罗盘角的做法。</p>
+<h3 id="33-上电时序">3.3 上电时序</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant P as 上电
+    participant I as ImuTask 1 ms
+    participant C as ControlCenterTask 5 ms
+    participant R as CAN1_RX0 中断
+    participant M as yaw_motor_5
+    P->>R: 电机开始上报 0x205
+    R->>M: 首次反馈把 inited 置 1 total_angle 等于当次单圈计数
+    P->>I: 首次姿态解算完成 记录 yaw_zero
+    P->>C: 任务启动 延时 100 ms
+    C->>M: 读取 total_angle 作为 Init_yaw_counts
+    Note over C,M: 此时的转子位置就是底盘坐标系的参考位置</pre></div>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>可能原因</th><th>检查手段</th></tr></thead><tbody><tr><td>上电位置不同，跟随角差一个常数</td><td>首次反馈决定累计角度原点</td><td>记录首次反馈时的单圈计数</td></tr><tr><td>转过多圈后跟随角突然跳变</td><td>底盘板 16 位累计角度回绕，约正负 4 圈</td><td>调试器里同时看 <code>round_count</code> 与 <code>total_angle</code></td></tr><tr><td>累计角度增长方向与转向相反</td><td>注释与代码方向相反时按注释修改</td><td>以 <code>round_count</code> 的实际增减为准</td></tr><tr><td>断电重启后绝对角度丢失</td><td>累计角度只用内存保存</td><td>需要绝对角度时增加上电回零动作</td></tr><tr><td>电机停转后角度仍在缓慢变化</td><td>没有接收超时判定，中断不再来则字段保持旧值</td><td>加时间戳或计数判据</td></tr><tr><td>姿态零点与机械零点混用</td><td>两个零点在不同任务里各自确定</td><td>统一到同一参考系后再比较</td></tr></tbody></table>
+<p>判据的阈值还需要单独看。半圈判据假设两次反馈之间不会转过 4096 个计数，一旦反馈因总线错误长时间中断，恢复后的第一帧差值可能超过半圈，此时会多算或少算一圈，而代码里没有任何补偿。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>单圈机械角由电调给出，累计角度由主控用半圈判据自行拼接，两者的零点不同。</li>
+<li>半圈判据的安全上限是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mi>max</mi><mo>⁡</mo></msub><mo>=</mo><mn>30</mn><mi mathvariant="normal">/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">n_{\max} = 30/T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">30/</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span>，在 1 ms 反馈间隔下为 30000 转每分钟。</li>
+<li>首次反馈把累计角度的原点定在上电时的转子位置，因此绝对角度在上电之间没有可比性。</li>
+<li>底盘板的累计角度是 16 位，可用范围约正负 4 圈，超出后回绕。</li>
+<li>姿态零点由上电后第一次姿态解算确定，与编码器零点无关，云台板的 yaw 环只用前者。</li>
+<li>云台板把 <code>motor_5.total_angle</code> 算了出来却没有使用，拨盘电机是唯一使用累计计数的角度环。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程的做法</th><th>代价与收益</th></tr></thead><tbody><tr><td>累计角度位宽</td><td>云台板 32 位，底盘板 16 位</td><td>底盘板省内存，代价是超过 4 圈即回绕</td></tr><tr><td>零点确定时机</td><td>首次反馈与首次姿态解算各自确定</td><td>无需上电回零，代价是三个零点互不相关</td></tr><tr><td>过零判据</td><td>固定 4096 计数阈值</td><td>实现简单，代价是长间隔丢帧后可能误判</td></tr><tr><td>机械零位</td><td>硬编码 3100 计数</td><td>改动一处即可调整，代价是含义只能从数值猜</td></tr><tr><td>单圈映射</td><td>单圈计数乘 180/4096 再减 180</td><td>直接得到罗盘角，代价是丢失多圈信息</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>上一帧计数为 100，本帧为 8100，写出 <code>round_count</code> 的增减、<code>total_angle</code> 的值，并判断转子转向。</li>
+<li>反馈周期为 2 ms，计算半圈判据允许的最大转速；若电机以 6000 转每分钟运行，判据是否会误判。</li>
+<li>底盘板 <code>round_count</code> 为 5、单圈计数为 1000 时，写出表达式结果与截断后的 <code>total_angle</code>，并说明与真实累计角度差多少。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>把 <code>total_angle</code> 改成 32 位，说明需要同步修改哪些类型、初始化与比较表达式，并给出一次跨越 4 圈的验证方案。</li>
+<li>设计一个上电回零流程：让 yaw 关节在限速下缓慢转到机械限位，把该位置的计数写入非易失存储，之后每次上电用它恢复绝对零点。说明断电发生在回零过程中的处理办法。</li>
+<li>用 4096 之外的阈值做一个对比实验：给定反馈丢帧时长与转速，推导最优阈值，并说明为什么本工程用固定阈值仍可接受。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td><code>update_motor_total_angle</code>（:559-587）、0x205 与 0x206 的调用点（:625、:636）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/bsp_can.h</code></td><td>云台板 <code>DJI_motor_info</code>（:10-20）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td><code>yaw_zero</code> 与 <code>yaw_out</code>（:22-26、:70-77）、被注释的总角度累加（:79-96）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>未使用的 <code>motor_5</code> 速度换算（:74）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/FireTask.cpp</code></td><td>拨盘以累计计数为目标与反馈（:119、:142、:192）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Inc/bsp_can.h</code></td><td>底盘板 16 位 <code>total_angle</code>（:17）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>底盘板拼接函数与 0x205 调用（:552-580、:634）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td><code>Init_yaw_counts</code> 与 3100 偏移（:56-58）、相对角与旋转补偿（:100-101、:116-117）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp</code></td><td>单圈计数映射为罗盘角（:177、:248-251）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查顺序"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查顺序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/03-DJI6020/05-易错点与排查顺序.md</span></div><div class="dfile__body"><h1 id="易错点与排查顺序">易错点与排查顺序</h1>
+<h2 id="1-概念故障的五类归属">1. 概念：故障的五类归属</h2>
+<p>同一条“电机不动”的现象，根因可能落在完全不同的层次。把 GM6020 相关的故障归成五类，可以让排查顺序固定下来，避免在 PID 参数上反复试。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类别</th><th>典型表现</th><th>主要证据来源</th></tr></thead><tbody><tr><td>报文与 ID</td><td>发送返回 HAL_OK，电机完全不响应</td><td>逻辑分析仪抓包、电机拨码</td></tr><tr><td>解析与量纲</td><td>数值量级明显不符，符号与转向相反</td><td>原始报文与结构体字段对照</td></tr><tr><td>零点与多圈</td><td>上电后角度偏差固定，转多圈后跳变</td><td><code>total_angle</code> 与 <code>round_count</code></td></tr><tr><td>控制与限幅</td><td>响应迟钝、饱和、抖动</td><td>PID 参数与限幅链</td></tr><tr><td>时序与并发</td><td>偶发错值，随负载变化</td><td>中断优先级、读写上下文</td></tr></tbody></table>
+<h2 id="2-机制排查顺序">2. 机制：排查顺序</h2>
+<p>顺序按“便宜且常见”排在前面，每一步都能排除一整类可能：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["电机不动或表现异常"] --> B{"发送返回值是 HAL_OK 吗"}
+    B -- "否" --> B1["查邮箱是否占满&#x3C;br/>看 TSR 的 TME 位"]
+    B -- "是" --> C{"总线上有报文吗"}
+    C -- "否" --> C1["查 GPIO 复用与收发器&#x3C;br/>查 CAN_MODE 与 HAL_CAN_Start"]
+    C -- "有" --> D{"反馈帧存在吗"}
+    D -- "否" --> D1["查过滤器组与 FilterBank&#x3C;br/>CAN2 的过滤器要用 hcan1 配置"]
+    D -- "有" --> E{"反馈的标识符是预期的吗"}
+    E -- "否" --> E1["查电机拨码&#x3C;br/>0x1FF 同时属于两个电机系列"]
+    E -- "是" --> F{"数值量级对吗"}
+    F -- "否" --> F1["核对字节序与量纲&#x3C;br/>转速按转每分钟 角度按 8192 计数"]
+    F -- "是" --> G{"角度基准对吗"}
+    G -- "否" --> G1["查首次反馈位置&#x3C;br/>查 3100 偏移与 yaw_zero"]
+    G -- "是" --> H["进入 PID 与限幅排查"]</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-0x1ff-的双系列复用">3.1 0x1FF 的双系列复用</h3>
+<p>这是唯一一个“发送成功但电机不动”的常见根因。0x1FF 既承载 GM6020 的 ID 1 到 4 电压指令，也承载 M3508 的 ID 5 到 8 电流指令。云台板的调用把 yaw 与拨盘两台电机的指令放进同一条 0x1FF（<code>Task/Src/ControlCenterTask.cpp</code> :133），前提是这两台电机确实按 GM6020 的 ID 规则拨码。</p>
+<p>仓库文档与代码在这一点上给出的信息不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>材料</th><th>说法</th></tr></thead><tbody><tr><td><code>项目概述.md</code> :8-9</td><td>GM6020 的 ID 1 到 4 用 0x1FF，5 到 8 用 0x2FF</td></tr><tr><td><code>项目概述.md</code> :12</td><td>yaw 电机是 6020 电机 ID2，拨弹盘是 3508 电机 ID2</td></tr><tr><td>代码</td><td>0x1FF 槽位 1 的指令对应 0x205 反馈的电机，槽位 2 对应 0x206</td></tr></tbody></table>
+<p>0x205 与 0x206 按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mi>x</mi><mn>204</mn><mo>+</mo><mtext>ID</mtext></mrow><annotation encoding="application/x-tex">0x204 + \text{ID}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">204</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">ID</span></span></span></span></span> 分别对应 ID 1 与 ID 2。文档写 yaw 为 ID2，代码把 yaw 的反馈接在 0x205 上，两者矛盾。这一条列出为待核实，需要用电机拨码或一次上电抓包确认。</p>
+<h3 id="32-量纲与范围的四个数量级">3.2 量纲与范围的四个数量级</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant P as 角度环 输出目标角速度
+    participant S as 速度环 反馈 gyro 为 rad/s
+    participant L as 末级 clamp 到正负 50000
+    participant C as 0x1FF 槽位 1
+    P->>S: 目标按度每秒设计
+    Note over P,S: 同一个角速度 按度每秒的数值是弧度每秒的 57.3 倍
+    S->>L: 速度环输出
+    L->>C: 电压指令
+    Note over C: 手册区间按正负 30000 待核实</pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>代码里的数字</th><th>实际含义</th><th>偏差</th></tr></thead><tbody><tr><td>yaw 角度环 <code>Kp</code></td><td>80</td><td>每度误差的增益</td><td>目标数值按度每秒，比弧度每秒的反馈大 57 倍</td></tr><tr><td>yaw 末级 <code>clamp</code></td><td>正负 50000</td><td>电压指令</td><td>超过手册区间，具体行为待核实</td></tr><tr><td>拨盘速度环目标</td><td>4500</td><td>转每分钟</td><td>直驱电机达不到该转速</td></tr><tr><td>拨盘角度增量</td><td>4000 计数</td><td>约 0.49 圈转子</td><td>减速电机对应的输出轴角很小</td></tr></tbody></table>
+<p>第三行与第四行一起指向一个推论：0x206 这一路电机的转速反馈单位与减速比更接近齿轮减速电机，而云台 yaw 才是直驱的 6020。代码里没有写明型号，这一条标注为推断。</p>
+<h3 id="33-时序与并发">3.3 时序与并发</h3>
+<p>接收回调在 CAN1_RX0 中断里，优先级 5（<code>Core/Src/can.c</code> :125-128），而读取这些结构体的控制任务优先级为 <code>osPriorityNormal</code>。中断只做一次 <code>HAL_CAN_GetRxMessage</code>，随后逐个字段赋值，任务可能在这中间读取：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+    A["中断 写入 rotor_angle"] --> B["任务 读取 rotor_angle"]
+    B --> C["中断 写入 rotor_speed"]
+    C --> D["任务 读取 rotor_speed"]
+    D --> E["任务拿到跨两帧的组合值"]</pre></div>
+<p>结构体没有声明为 <code>volatile</code>，四个字段分四次写入。单字段是 16 位对齐访问，读到的值不会出现半个，组合却可能跨帧。需要一致快照时，用 <code>taskENTER_CRITICAL</code> 包住整段读取，或者把解析搬到任务里。</p>
+<h3 id="34-波特率依赖-apb1">3.4 波特率依赖 APB1</h3>
+<p>工作记录里的那次故障链条是完整的：时钟树被改动，APB1 从 42 MHz 变为 36 MHz，位时序参数不变，实际波特率从 1 Mbps 变成 857142 Hz，总线无 ACK，CAN 进入错误状态并锁定，之后全部发送失败（<code>工作记录/can通信波特率问题.md</code> :27-47）。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mtext>bit</mtext></msub><mo>=</mo><mfrac><msub><mi>f</mi><mtext>APB1</mtext></msub><mrow><mtext>Prescaler</mtext><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mtext>BS1</mtext><mo>+</mo><mtext>BS2</mtext><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{\text{bit}} = \frac{f_{\text{APB1}}}{\text{Prescaler} \times (1 + \text{BS1} + \text{BS2})}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">bit</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4522em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Prescaler</span></span><span class="mbin mtight">×</span><span class="mopen mtight">(</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord text mtight"><span class="mord mtight">BS1</span></span><span class="mbin mtight">+</span><span class="mord text mtight"><span class="mord mtight">BS2</span></span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">APB1</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>观察点</th><th>位置</th><th>含义</th></tr></thead><tbody><tr><td><code>ErrorCode</code></td><td><code>hcan1</code> 或 <code>hcan2</code> 句柄</td><td>低 32 位含 <code>HAL_CAN_ERROR_NOT_STARTED</code></td></tr><tr><td><code>MSR</code></td><td>CAN 外设寄存器</td><td>错误中断挂起位</td></tr><tr><td><code>TSR</code></td><td>CAN 外设寄存器</td><td>发送邮箱占用与请求状态</td></tr><tr><td><code>ESR</code></td><td>CAN 外设寄存器</td><td>上一次协议错误的类型与节点状态</td></tr></tbody></table>
+<h3 id="35-两处未初始化的字节">3.5 两处未初始化的字节</h3>
+<p><code>BSP_CAN1_DJIMotorCmdNine2Eleven</code> 只给前 6 字节赋值，第 7、8 字节保持栈上的残留值，而 <code>DLC</code> 是 8（云台板 <code>BSP/Src/bsp_can.cpp</code> :207-212，底盘板 :202-207）。接收端按 3 个槽位解释时不受影响，但抓包与总线错误统计会把它算作有效载荷。</p>
+<h3 id="36-看起来在用的死代码">3.6 看起来在用的死代码</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>符号</th><th>状态</th><th>误判后果</th></tr></thead><tbody><tr><td><code>angle_pid_calculate</code></td><td>只有定义与声明</td><td>以为改这里的参数能生效</td></tr><tr><td><code>angle_pid</code> 静态实例</td><td>只有定义</td><td>同上</td></tr><tr><td><code>motor_5.total_angle</code></td><td>写入后无读取</td><td>以为 yaw 用了编码器多圈角度</td></tr><tr><td><code>gimbal_yaw_total</code></td><td>声明为 0，累加代码被注释</td><td>以为存在姿态总角度</td></tr></tbody></table>
+<h2 id="4-待核实清单">4. 待核实清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>事项</th><th>现状</th><th>核实方式</th></tr></thead><tbody><tr><td>反馈帧到达周期</td><td>本仓库没有定义，此处按 1 ms 估算</td><td>在接收回调里计数并计时</td></tr><tr><td>yaw 电机的实际 ID</td><td>代码用 0x205，文档写 ID2</td><td>读拨码或上电抓包</td></tr><tr><td>0x206 一路的电机型号</td><td>代码未写明，转速目标指向减速电机</td><td>读拨码与外壳标识</td></tr><tr><td>GM6020 电压指令区间</td><td>代码限幅正负 50000，手册值未在仓库中</td><td>查厂商手册 PDF</td></tr><tr><td>3100 机械零位的来源</td><td>硬编码，无注释</td><td>询问作者或实测零点</td></tr><tr><td>拨盘 <code>dt</code> 取值</td><td>写 0.01，循环周期约 1 ms</td><td>比对整定结果与实测周期</td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>排查顺序按 时钟与位时序、GPIO 与收发器、过滤器、中断与回调、报文与 ID、量纲、零点、PID 逐层推进，前一层不通过时后面全是噪声。</li>
+<li>0x1FF 的双系列复用是“发送成功但电机不动”的首要嫌疑，区分依据是反馈标识符与拨码。</li>
+<li>量纲问题在 yaw 环上有两个独立来源：陀螺仪按弧度每秒输出，末级限幅按手册应小于 50000。</li>
+<li>半圈判据在 16 位累计角度上会回绕，约正负 4 圈；长间隔丢帧会让判据误判一圈。</li>
+<li>中断逐字段写全局结构体，任务侧读到跨帧组合；单字段访问本身是原子的。</li>
+<li>波特率由 APB1 与三个<strong>位时序</strong>（Bit Timing）参数共同决定，时钟树改动会让这组参数失效。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>排查手段</th><th>成本</th><th>能定位的范围</th></tr></thead><tbody><tr><td>调试器看 CAN 寄存器与 ErrorCode</td><td>低</td><td>外设状态与错误类型</td></tr><tr><td>逻辑分析仪抓包</td><td>中</td><td>报文是否存在、ID 与数据是否符合预期</td></tr><tr><td>中断里加计数器与时间戳</td><td>低</td><td>掉线、到达周期、丢帧</td></tr><tr><td>把解析搬到任务</td><td>中</td><td>消除跨上下文写，便于下断点</td></tr><tr><td>统一量纲与限幅</td><td>中</td><td>消除数量级与饱和类问题</td></tr><tr><td>电机拨码核对</td><td>低</td><td>确认 0x1FF 组内身份</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>按第 2 节的决策树，写出“发送返回 HAL_OK、总线抓包有 0x1FF、但收不到 0x205”时的三个检查点。</li>
+<li>已知目标角速度按度每秒设计、反馈是弧度每秒，计算等效增益的偏差倍数。</li>
+<li>底盘板累计角度从正 32767 越过 32768 后读到什么值，对应真实圈数的偏差是多少。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>写一个掉线与量纲自检任务：周期读取四个 0x205 类电机的字段，检测 (a) 反馈间隔是否超过阈值，(b) 转速绝对值是否超出该型号的物理上限，输出一份状态表并说明两类检测的误报来源。</li>
+<li>把接收回调整体改造为“只入队、任务解析”，说明这样改动之后第 3.3 节的跨帧组合问题是否消失，以及新增的内存与中断驻留时间。</li>
+<li>针对待核实清单里的五项，设计一次台架实验，用一次上电采集把所有项都定下来，并给出数据记录表格的字段。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>0x1FF 发送点与角速度前馈（:131-133）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>yaw 角度环、速度环与末级限幅（:31-32、:65-83）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>0x2FF 未初始化字节（:207-212）、接收回调（:590-715）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/angle_pid.cpp</code></td><td>未被调用的 C 封装（:33-43）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>姿态零点与被注释的总角度累加（:22-26、:79-96）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>中断优先级 5 与位时序（:42-46、:125-128）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/项目概述.md</code></td><td>电机编号与接线描述（:5-13）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Inc/bsp_can.h</code></td><td>16 位 <code>total_angle</code>（:17）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>0x2FF 未初始化字节（:202-207）</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>波特率故障的现象与寄存器证据</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/02-DJI3508/"><span class="k">← 上一篇</span><span class="t">DJI3508</span><span class="d">CAN 与电机 · 5 个文件</span></a><a class="next" href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/04-LK%E7%94%B5%E6%9C%BA/"><span class="k">下一篇 →</span><span class="t">LK电机</span><span class="d">CAN 与电机 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

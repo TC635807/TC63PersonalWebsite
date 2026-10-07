@@ -1,0 +1,2138 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>CubeMX · STM32 与 HAL · 王宇翔</title><meta name="description" content="CubeMX 配置文件 .ioc 的键值分组、一次生成写出的全部产物、配置键与生成代码行的对应关系，以及 cmake/stm32cubemx 如何被根 CMakeLists 接入，全部对照云台与底盘两块哨兵板固件。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/05-CubeMX/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="CubeMX · STM32 与 HAL · 王宇翔"><meta property="og:description" content="CubeMX 配置文件 .ioc 的键值分组、一次生成写出的全部产物、配置键与生成代码行的对应关系，以及 cmake/stm32cubemx 如何被根 CMakeLists 接入，全部对照云台与底盘两块哨兵板固件。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/05-CubeMX/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/">STM32 与 HAL</a><span class="sep" aria-hidden="true">/</span><span class="now">CubeMX</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>CubeMX</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>.ioc 文件与工程生成</span></a><ul class="toc__heads"><li><a href="#1-配置源与生成物分离" data-depth="2" data-heading-j="0">1. 配置源与生成物分离</a></li><li><a href="#2-ioc-的键值结构" data-depth="2" data-heading-j="1">2. .ioc 的键值结构</a></li><li><a href="#3-一次生成写出哪些文件" data-depth="2" data-heading-j="2">3. 一次生成写出哪些文件</a></li><li><a href="#4-从-ioc-键到代码行" data-depth="2" data-heading-j="3">4. 从 .ioc 键到代码行</a></li><li><a href="#5-cmakestm32cubemx-的接入方式" data-depth="2" data-heading-j="4">5. cmake/stm32cubemx 的接入方式</a></li><li><a href="#6-易错点" data-depth="2" data-heading-j="5">6. 易错点</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="6">7. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="9">8. 练习</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>USER CODE 区与手写代码保护</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-各文件的标记数量" data-depth="2" data-heading-j="1">2. 各文件的标记数量</a></li><li><a href="#3-落到本项目标记区里实际放了什么" data-depth="2" data-heading-j="2">3. 落到本项目：标记区里实际放了什么</a></li><li><a href="#31-mainc" data-depth="3" data-heading-j="3">3.1 main.c</a></li><li><a href="#32-stm32f4xx_itc" data-depth="3" data-heading-j="4">3.2 stm32f4xx_it.c</a></li><li><a href="#33-usbd_cdc_ifc" data-depth="3" data-heading-j="5">3.3 usbd_cdc_if.c</a></li><li><a href="#34-freertosconfigh" data-depth="3" data-heading-j="6">3.4 FreeRTOSConfig.h</a></li><li><a href="#4-区域命名规则" data-depth="2" data-heading-j="7">4. 区域命名规则</a></li><li><a href="#5-易错点" data-depth="2" data-heading-j="8">5. 易错点</a></li><li><a href="#51-结束标记名被写坏" data-depth="3" data-heading-j="9">5.1 结束标记名被写坏</a></li><li><a href="#52-代码写在标记外" data-depth="3" data-heading-j="10">5.2 代码写在标记外</a></li><li><a href="#53-标记区内不是安全区" data-depth="3" data-heading-j="11">5.3 标记区内不是安全区</a></li><li><a href="#54-三个没有保护的源文件" data-depth="3" data-heading-j="12">5.4 三个没有保护的源文件</a></li><li><a href="#6-小结" data-depth="2" data-heading-j="13">6. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="14">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="15">设计权衡</a></li><li><a href="#7-练习" data-depth="2" data-heading-j="16">7. 练习</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>重新生成的正确姿势</span></a><ul class="toc__heads"><li><a href="#1-生成器的四个行为开关" data-depth="2" data-heading-j="0">1. 生成器的四个行为开关</a></li><li><a href="#2-逐步操作" data-depth="2" data-heading-j="1">2. 逐步操作</a></li><li><a href="#3-cmakepresets-与-build-目录" data-depth="2" data-heading-j="2">3. CMakePresets 与 build 目录</a></li><li><a href="#4-两套工具链" data-depth="2" data-heading-j="3">4. 两套工具链</a></li><li><a href="#5-工作记录里的一次构建故障" data-depth="2" data-heading-j="4">5. 工作记录里的一次构建故障</a></li><li><a href="#6-易错点" data-depth="2" data-heading-j="5">6. 易错点</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="6">7. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="9">8. 练习</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>常见易错点</span></a><ul class="toc__heads"><li><a href="#1-crchpp-的出处核实" data-depth="2" data-heading-j="0">1. crc.hpp 的出处核实</a></li><li><a href="#2-hse_value-的传播路径" data-depth="2" data-heading-j="1">2. HSE_VALUE 的传播路径</a></li><li><a href="#3-时钟树改动打掉-can-波特率" data-depth="2" data-heading-j="2">3. 时钟树改动打掉 CAN 波特率</a></li><li><a href="#4-中断优先级写在生成文件里" data-depth="2" data-heading-j="3">4. 中断优先级写在生成文件里</a></li><li><a href="#5-user-code-结束标记被写坏" data-depth="2" data-heading-j="4">5. USER CODE 结束标记被写坏</a></li><li><a href="#6-引脚定义不都在-mainh-里" data-depth="2" data-heading-j="5">6. 引脚定义不都在 main.h 里</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="6">7. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="9">8. 练习</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>本项目 CubeMX 配置清单</span></a><ul class="toc__heads"><li><a href="#1-芯片与工程" data-depth="2" data-heading-j="0">1. 芯片与工程</a></li><li><a href="#2-启用的-ip" data-depth="2" data-heading-j="1">2. 启用的 IP</a></li><li><a href="#3-时钟树" data-depth="2" data-heading-j="2">3. 时钟树</a></li><li><a href="#4-中断配置" data-depth="2" data-heading-j="3">4. 中断配置</a></li><li><a href="#5-dma-分配" data-depth="2" data-heading-j="4">5. DMA 分配</a></li><li><a href="#6-外设参数" data-depth="2" data-heading-j="5">6. 外设参数</a></li><li><a href="#7-引脚分配" data-depth="2" data-heading-j="6">7. 引脚分配</a></li><li><a href="#8-freertos-配置" data-depth="2" data-heading-j="7">8. FreeRTOS 配置</a></li><li><a href="#9-两块板的差异" data-depth="2" data-heading-j="8">9. 两块板的差异</a></li><li><a href="#10-生成产物与标记数" data-depth="2" data-heading-j="9">10. 生成产物与标记数</a></li><li><a href="#11-小结" data-depth="2" data-heading-j="10">11. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#12-练习" data-depth="2" data-heading-j="13">12. 练习</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">STM32 与 HAL</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>CubeMX / ioc / CMake / 代码生成 / 哨兵固件 / USER CODE / 手写代码 / CMakePresets</span></div><h1 class="docs__title">CubeMX</h1><p class="docs__lead">CubeMX 配置文件 .ioc 的键值分组、一次生成写出的全部产物、配置键与生成代码行的对应关系，以及 cmake/stm32cubemx 如何被根 CMakeLists 接入，全部对照云台与底盘两块哨兵板固件。</p></header><section class="dfile" id="file-1" data-file="01-ioc文件与工程生成"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-ioc文件与工程生成</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/05-CubeMX/01-ioc文件与工程生成.md</span></div><div class="dfile__body"><h1 id="ioc-文件与工程生成">.ioc 文件与工程生成</h1>
+<p>云台板（<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>）与底盘板（<code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）各有一份同名的 CubeMX 配置文件 <code>2026sentriomeni.ioc</code>，分别是 461 行与 467 行。这份文件里没有一行可执行代码，却决定了全部外设的初始化参数与中断优先级。</p>
+<p>工作记录 <code>工作记录/精通stm32/第一章.md:40-58</code> 记录了 CubeMX 的三个面板：IP 树管外设启停，时钟树管频率以及由频率派生的波特率，PCC 是功耗计算器。</p>
+<blockquote>
+<p>源码索引（固件路径相对于各自仓库根目录）</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>2026sentriomeni.ioc</code></td><td>全部配置键值，461 行（云台）/ 467 行（底盘）</td></tr><tr><td><code>.mxproject</code></td><td>上一次生成的文件清单缓存，两块板内容完全相同</td></tr><tr><td><code>Core/Inc</code>、<code>Core/Src</code></td><td>外设初始化与应用骨架，12 个头文件与 16 个源文件</td></tr><tr><td><code>cmake/stm32cubemx/CMakeLists.txt</code></td><td>生成产物的文件清单，每次生成重写（148 行）</td></tr><tr><td><code>CMakeLists.txt</code></td><td>工程入口与手写源文件列表，只生成一次（163 行）</td></tr><tr><td><code>CMakePresets.json</code>、<code>cmake/gcc-arm-none-eabi.cmake</code>、<code>cmake/starm-clang.cmake</code></td><td>构建预设与两套工具链文件</td></tr></tbody></table>
+<h2 id="1-配置源与生成物分离">1. 配置源与生成物分离</h2>
+<p>CubeMX 作为代码生成器（code generator），数据流是单向的：<code>.ioc</code> 是输入，源码是输出，生成器不读也不改手写文件。两侧的交界是 <strong>USER CODE</strong> 标记围出的区域，标记之外的内容每次生成都会按模板重写。</p>
+<p>三类文件在重新生成时的行为完全不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类别</th><th>例子</th><th>维护者</th><th>重新生成时的行为</th></tr></thead><tbody><tr><td>配置源</td><td><code>2026sentriomeni.ioc</code></td><td>人工，通过 CubeMX 图形界面写回</td><td>只作为输入读取</td></tr><tr><td>生成物</td><td><code>Core/Src/can.c</code>、<code>cmake/stm32cubemx/CMakeLists.txt</code></td><td>CubeMX</td><td>覆盖，USER CODE 区内的文本保留</td></tr><tr><td>手写代码</td><td><code>BSP/Src/bsp_can.cpp</code>、<code>Task/Src/*.cpp</code></td><td>人工</td><td>完全不动</td></tr></tbody></table>
+<p>生成器版本记录在配置文件里：<code>MxCube.Version=6.16.1</code>（<code>2026sentriomeni.ioc:217</code>）与 <code>MxDb.Version=DB.6.0.161</code>（<code>:218</code>），固件包是 <code>STM32Cube FW_F4 V1.28.3</code>（<code>:338</code>）。版本号决定了生成代码的模板形态，两块板用的是同一个版本。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["2026sentriomeni.ioc&#x3C;br/>461 行 INI 键值"] --> B["CubeMX 6.16.1&#x3C;br/>MxDb DB.6.0.161"]
+    B --> C["Core/Inc 与 Core/Src&#x3C;br/>外设初始化与应用入口"]
+    B --> D["Drivers 与 Middlewares&#x3C;br/>HAL 与 FreeRTOS 与 USB 库"]
+    B --> E["USB_DEVICE&#x3C;br/>CDC 类与描述符"]
+    B --> F["cmake/stm32cubemx/CMakeLists.txt&#x3C;br/>每次重写"]
+    B --> G["CMakeLists.txt 与 CMakePresets.json&#x3C;br/>只生成一次"]
+    B --> H[".mxproject&#x3C;br/>上次生成的文件清单"]
+    C --> I["main.c 依次调用 MX_xxx_Init"]
+    F --> J["根 CMakeLists add_subdirectory 引入"]
+    G --> J
+    J --> K["stm32cubemx 接口库&#x3C;br/>提供头文件路径与宏"]</pre></div>
+<h2 id="2-ioc-的键值结构">2. .ioc 的键值结构</h2>
+<p>文件首行是 <code>#MicroXplorer Configuration settings - do not modify</code>，正文是 <code>key=value</code> 逐行排列，没有节标题，靠键名前缀区分归属的 IP。带冒号的取值用反斜杠转义，NVIC 那一组就是这种写法。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>前缀</th><th>内容</th><th>云台示例</th></tr></thead><tbody><tr><td><code>Mcu.</code></td><td>芯片型号、封装、引脚清单、启用的 IP</td><td><code>Mcu.CPN=STM32F407IGH6</code>（<code>:159</code>）、<code>Mcu.PinsNb=33</code>（<code>:213</code>）、<code>Mcu.IPNb=16</code>（<code>:177</code>）</td></tr><tr><td><code>RCC.</code></td><td>时钟树与派生频率</td><td><code>RCC.PLLM=6</code>（<code>:383</code>）、<code>RCC.APB1Freq_Value=42000000</code>（<code>:364</code>）、<code>RCC.HSE_VALUE=12000000</code>（<code>:375</code>）</td></tr><tr><td><code>NVIC.</code></td><td>中断使能与抢占优先级</td><td><code>NVIC.CAN1_RX0_IRQn=true\:5\:0\:...</code>（<code>:220</code>）、<code>NVIC.PriorityGroup=NVIC_PRIORITYGROUP_4</code>（<code>:236</code>）</td></tr><tr><td><code>Dma.</code></td><td>DMA 请求、流与通道</td><td><code>Dma.USART3_RX.2.Instance=DMA1_Stream1</code>（<code>:63</code>）、<code>Dma.USART6_TX.1.Mode=DMA_CIRCULAR</code>（<code>:86</code>）</td></tr><tr><td>IP 名</td><td>该外设的全部参数</td><td><code>CAN1.Prescaler=2</code>（<code>:15</code>）、<code>TIM10.Period=4999</code>（<code>:423</code>）、<code>USART3.Parity=PARITY_EVEN</code>（<code>:432</code>）</td></tr><tr><td><code>FREERTOS.</code></td><td>内核裁剪与内存配置</td><td><code>FREERTOS.configTICK_RATE_HZ=1000</code>（<code>:127</code>）、<code>FREERTOS.configMINIMAL_STACK_SIZE=256</code>（<code>:124</code>）</td></tr><tr><td><code>ProjectManager.</code></td><td>生成器行为与目标工具链</td><td><code>ProjectManager.TargetToolchain=CMake</code>（<code>:355</code>）、<code>ProjectManager.KeepUserCode=true</code>（<code>:343</code>）</td></tr><tr><td><code>PCC.</code></td><td>功耗计算器输入</td><td><code>PCC.Temperature=25</code>（<code>:298</code>）、<code>PCC.Vdd=3.3</code>（<code>:299</code>）</td></tr><tr><td><code>CAD.</code></td><td>原理图导出视图状态</td><td>云台为空值（<code>:2-4</code>），底盘为 <code>CAD.pinconfig=Dual</code></td></tr></tbody></table>
+<p><code>Mcu.Pin0</code> 到 <code>Mcu.Pin32</code> 是引脚的枚举清单（<code>:180-213</code>）。新增一个引脚会让它后面的编号整体后移，底盘板因为多出 PA10，引脚列表从 <code>Mcu.Pin15</code> 开始就与云台错位。两块板的 <code>.ioc</code> 做 diff 时，引脚区的噪声主要来自这个编号规律，需要对照的字段是每行的 <code>*.Signal=</code> 与 <code>*.Mode=</code>。</p>
+<h2 id="3-一次生成写出哪些文件">3. 一次生成写出哪些文件</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>产物</th><th>内容</th><th>重新生成时</th></tr></thead><tbody><tr><td><code>Core/Inc/</code>（12 个）</td><td><code>main.h</code>、各外设头、<code>FreeRTOSConfig.h</code>、<code>stm32f4xx_hal_conf.h</code></td><td>覆盖，USER CODE 区保留</td></tr><tr><td><code>Core/Src/</code>（16 个）</td><td><code>main.c</code>、<code>gpio.c</code>、<code>can.c</code> 等初始化文件，以及 <code>stm32f4xx_it.c</code></td><td>覆盖；<code>syscalls.c</code>、<code>sysmem.c</code>、<code>system_stm32f4xx.c</code> 里没有 USER CODE 标记，整文件重写</td></tr><tr><td><code>Drivers/CMSIS</code>、<code>Drivers/STM32F4xx_HAL_Driver</code></td><td>全部 HAL 与 CMSIS 源码</td><td>整目录复制</td></tr><tr><td><code>Middlewares/Third_Party/FreeRTOS</code></td><td>内核、CMSIS-RTOS 包装层、<code>heap_4.c</code></td><td>整目录复制；<code>heap_4.c</code> 会被覆盖，因为 <code>FREERTOS.copyHeapFile=1</code>（<code>:146</code>）</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library</code></td><td>USB 设备栈与 CDC 类</td><td>整目录复制</td></tr><tr><td><code>USB_DEVICE/App</code>、<code>USB_DEVICE/Target</code></td><td>描述符、接口实现、<code>usbd_conf.c</code></td><td>覆盖，USER CODE 区保留</td></tr><tr><td><code>startup_stm32f407xx.s</code>、<code>STM32F407XX_FLASH.ld</code></td><td>启动文件与链接脚本</td><td>整文件复制</td></tr><tr><td><code>cmake/stm32cubemx/CMakeLists.txt</code></td><td>生成物的文件清单与三个 OBJECT 库</td><td>每次重写</td></tr><tr><td><code>CMakeLists.txt</code>、<code>CMakePresets.json</code>、<code>cmake/*.cmake</code></td><td>工程入口、构建预设、工具链文件</td><td>首次生成后保留用户修改，见 <a href="03-%E9%87%8D%E6%96%B0%E7%94%9F%E6%88%90%E7%9A%84%E6%AD%A3%E7%A1%AE%E5%A7%BF%E5%8A%BF.md">03-重新生成的正确姿势.md</a></td></tr><tr><td><code>.mxproject</code></td><td><code>[PreviousLibFiles]</code>、<code>[PreviousUsedCMakes]</code>、<code>[PreviousGenFiles]</code> 三段</td><td>每次重写</td></tr></tbody></table>
+<p><code>.mxproject</code> 只记录上一次生成写过的文件清单与头文件路径（<code>[PreviousGenFiles]</code> 段里的 <code>HeaderFiles#0=..\Core\Inc\gpio.h</code> 这类条目），不包含任何外设参数。云台与底盘的 <code>.mxproject</code> 逐字节相同，而两份 <code>.ioc</code> 有二十多处差异，这也说明它不是配置备份。</p>
+<h2 id="4-从-ioc-键到代码行">4. 从 .ioc 键到代码行</h2>
+<p>生成关系是逐键直译的，抽查几条：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>.ioc 键（云台）</th><th>生成位置</th></tr></thead><tbody><tr><td><code>CAN1.Prescaler=2</code>（<code>:15</code>）</td><td><code>Core/Src/can.c:42</code> <code>hcan1.Init.Prescaler = 2;</code></td></tr><tr><td><code>CAN1.BS1=CAN_BS1_15TQ</code>（<code>:7</code>）</td><td><code>Core/Src/can.c:45</code> <code>hcan1.Init.TimeSeg1 = CAN_BS1_15TQ;</code></td></tr><tr><td><code>NVIC.CAN1_RX0_IRQn</code> 的第二段数值 5（<code>:220</code>）</td><td><code>Core/Src/can.c:125</code> <code>HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 5, 0);</code></td></tr><tr><td><code>Dma.USART6_TX.1.Mode=DMA_CIRCULAR</code>（<code>:86</code>）</td><td><code>Core/Src/usart.c:251</code> <code>hdma_usart6_tx.Init.Mode = DMA_CIRCULAR;</code></td></tr><tr><td><code>RCC.PLLM=6</code>、<code>RCC.PLLN=168</code>（<code>:383-384</code>）</td><td><code>Core/Src/main.c:170-171</code></td></tr><tr><td><code>TIM10.Period=4999</code>（<code>:423</code>）</td><td><code>Core/Src/tim.c:45</code></td></tr><tr><td><code>USART3.Parity=PARITY_EVEN</code>（<code>:432</code>）</td><td><code>Core/Src/usart.c:79</code></td></tr><tr><td><code>PA0-WKUP.GPIO_Label=KEY</code>（<code>:250</code>）</td><td><code>Core/Inc/main.h:60-61</code> 的 <code>KEY_Pin</code> 与 <code>KEY_GPIO_Port</code></td></tr><tr><td><code>FREERTOS.configMINIMAL_STACK_SIZE=256</code>（<code>:124</code>）</td><td><code>Core/Inc/FreeRTOSConfig.h:66</code></td></tr></tbody></table>
+<p><code>main.h</code> 只承接带 <code>GPIO_Label</code> 的引脚，云台这边只有 PA0 有标签，所以头文件里只多出 <code>KEY_Pin</code> 一条。PA4、PB0、PG6、PH11、PG3 这些引脚没有标签，它们的模式与上下拉写在 <code>Core/Src/gpio.c:56-106</code> 与 <code>Core/Src/stm32f4xx_hal_msp.c</code> 里，看配置时不能只翻 <code>main.h</code>。</p>
+<p><code>ProjectManager.functionlistsort</code>（<code>:360</code>）记录初始化函数的排列，<code>main.c</code> 里 <code>MX_GPIO_Init()</code> 到 <code>MX_CRC_Init()</code> 的顺序与它一致（<code>Core/Src/main.c:110-120</code>）。两块板的 <code>main.c</code> 这一段逐行相同，都以 <code>MX_CRC_Init()</code> 结尾；而 <code>MX_USB_DEVICE_Init()</code> 不在这段生成代码里，两块板都写在 <code>USER CODE BEGIN 2</code> 区内（云台 <code>Core/Src/main.c:122</code>，底盘 <code>Core/Src/main.c:125</code>）。配置里唯一标 <code>HAL-false</code> 的两条是 <code>SystemClock_Config</code> 与 <code>MX_USB_DEVICE_Init</code>，其余 11 条都是 <code>HAL-true</code>，与它们不出现在这段生成代码里这一现象一致；字段的确切含义未从生成器源码验证。</p>
+<h2 id="5-cmakestm32cubemx-的接入方式">5. cmake/stm32cubemx 的接入方式</h2>
+<p>根 <code>CMakeLists.txt:103</code> 用 <code>add_subdirectory(cmake/stm32cubemx)</code> 把生成部分拉进来，剩下三件事都在被引入的文件里完成：</p>
+<ol>
+<li><code>add_library(stm32cubemx INTERFACE)</code>（<code>cmake/stm32cubemx/CMakeLists.txt:113</code>）承载 12 条头文件路径与三个宏 <code>USE_HAL_DRIVER</code>、<code>STM32F407xx</code>、<code>$&#x3C;$&#x3C;CONFIG:Debug>:DEBUG></code>（<code>:5-9</code>）；</li>
+<li>三个 OBJECT 库 <code>STM32_Drivers</code>、<code>USB_Device_Library</code>、<code>FreeRTOS</code> 分别编译 HAL、USB 设备栈与内核（<code>:118-131</code>）；</li>
+<li><code>MX_Application_Src</code> 里的 20 个源文件直接挂到可执行目标上（<code>:134</code>）。</li>
+</ol>
+<p>根 <code>CMakeLists.txt</code> 里那份手写源文件清单（<code>:34-100</code>）由生成器维护不到，新增一个 <code>.cpp</code> 需要同时改 <code>add_executable</code> 与 <code>target_include_directories</code>。生成的 <code>stm32cubemx</code> 目标只负责 HAL 一侧的头文件路径，<code>Task/Inc</code>、<code>BSP/Inc</code> 这些目录来自根文件（<code>:128-148</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+    A["根 CMakeLists.txt&#x3C;br/>add_subdirectory"] --> B["cmake/stm32cubemx/CMakeLists.txt"]
+    B --> C["stm32cubemx INTERFACE 库&#x3C;br/>头文件路径加三个宏"]
+    B --> D["STM32_Drivers OBJECT 库"]
+    B --> E["USB_Device_Library OBJECT 库"]
+    B --> F["FreeRTOS OBJECT 库"]
+    B --> G["MX_Application_Src 20 个文件&#x3C;br/>直接加入可执行目标"]
+    C --> H["sentriomeni2026 可执行文件"]
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+    I["根 CMakeLists 的手写源文件列表&#x3C;br/>PID 与 BSP 与 Task 等"] --> H</pre></div>
+<h2 id="6-易错点">6. 易错点</h2>
+<ul>
+<li><code>cmake/stm32cubemx/CMakeLists.txt</code> 每次生成都会被重写。手写源文件只能加在根 <code>CMakeLists.txt</code> 里，加在生成文件里会丢。</li>
+<li><code>.mxproject</code> 与 <code>.ioc</code> 的内容差异很大，前者不含配置项。判断某外设的参数应当读 <code>.ioc</code> 或生成代码，而不是读 <code>.mxproject</code>。</li>
+<li><code>Mcu.Pin*</code> 的编号会随引脚增减整体平移，引脚区的 diff 需要逐行看 <code>Signal</code>，不能按行号对照。</li>
+<li><code>Core/Src</code> 里有三个文件没有任何 USER CODE 标记：<code>syscalls.c</code>、<code>sysmem.c</code>、<code>system_stm32f4xx.c</code>。对它们的修改在下次生成时全部丢失。</li>
+</ul>
+<h2 id="7-小结">7. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>.ioc</code> 是唯一的配置源，按前缀分组：<code>Mcu.</code> 管芯片与引脚，<code>RCC.</code> 管时钟，<code>NVIC.</code> 管中断，<code>Dma.</code> 管 DMA，IP 名管各自参数，<code>FREERTOS.</code> 管内核，<code>ProjectManager.</code> 管生成器行为。</li>
+<li>生成是单向覆盖，只有 USER CODE 标记围出的文本保留。</li>
+<li><code>cmake/stm32cubemx/CMakeLists.txt</code> 与根 <code>CMakeLists.txt</code> 的职责不同：前者是生成物的清单，后者是工程入口与手写源文件清单。</li>
+<li><code>.mxproject</code> 是上一次生成的文件清单缓存，两块板内容相同，不含配置。</li>
+<li>配置键到代码行是一一对应的，排查参数时可以直接从 <code>.ioc</code> 行跳到 <code>Core/Src</code> 的对应行。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选的</th><th>代价与收益</th></tr></thead><tbody><tr><td>生成器目标工具链</td><td><code>TargetToolchain=CMake</code>（<code>:355</code>）</td><td>用 CMake 与 Ninja 构建，便于在 VS Code 与 CLion 里共用；代价是生成产物里多两套工具链文件需要理解</td></tr><tr><td>代码耦合方式</td><td><code>CoupleFile=true</code>（<code>:333</code>）</td><td><code>.c</code> 与 <code>.h</code> 成对生成，结构整齐；代价是文件数量翻倍</td></tr><tr><td>重新生成前备份</td><td><code>BackupPrevious=false</code>（<code>:329</code>）</td><td>生成目录干净；代价是生成瞬间的覆盖不可回退，只能靠版本控制</td></tr><tr><td>手写代码保护</td><td><code>KeepUserCode=true</code>（<code>:343</code>）</td><td>USER CODE 区内容跨生成保留；代价是把代码写在区外就会静默丢失</td></tr><tr><td>heap_4.c 归属</td><td><code>copyHeapFile=1</code>（<code>:146</code>）</td><td>内核源码随工程走，不依赖外部路径；代价是任何对 <code>heap_4.c</code> 的改动都会被覆盖</td></tr></tbody></table>
+<h2 id="8-练习">8. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>在 <code>2026sentriomeni.ioc</code> 里找出使能 CAN1 的全部键，并指出哪一个决定了收发 FIFO 的中断优先级。</li>
+<li>说明 <code>Mcu.PinsNb=33</code> 与 <code>Mcu.Pin0</code> 到 <code>Mcu.Pin32</code> 的关系，并判断能否直接把 <code>Mcu.PinsNb</code> 改成 20。</li>
+<li>从 <code>.ioc</code> 读出 TIM10 的预分频与周期值，再在 <code>Core/Src/tim.c</code> 里找到对应行，写出 PWM 频率的表达式。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>云台与底盘两份 <code>.ioc</code> 中，列出除 <code>FREERTOS.configMINIMAL_STACK_SIZE</code> 与 <code>FREERTOS.Tasks01</code> 之外的全部差异，并判断每一条差异属于哪一类：功能配置、视图状态、文件编号。</li>
+<li>在根 <code>CMakeLists.txt</code> 里新增一个 <code>Chassis/Src/GimbalAssist.cpp</code>，写出需要修改的两处，并说明为什么不能只改 <code>cmake/stm32cubemx/CMakeLists.txt</code>。</li>
+<li>假设把 <code>ProjectManager.KeepUserCode</code> 改成 <code>false</code> 后重新生成，列出会丢失的具体内容（至少举出 <code>main.c</code>、<code>stm32f4xx_it.c</code>、<code>USB_DEVICE/App/usbd_cdc_if.c</code> 各一处），并说明为什么这个开关不适合在调试阶段切换。</li>
+</ol></div></section><section class="dfile" id="file-2" data-file="02-USER_CODE区与手写代码保护"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-USER_CODE区与手写代码保护</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/05-CubeMX/02-USER_CODE区与手写代码保护.md</span></div><div class="dfile__body"><h1 id="user-code-区与手写代码保护">USER CODE 区与手写代码保护</h1>
+<p>CubeMX 每次生成都会按模板重写 <code>Core</code> 与 <code>USB_DEVICE</code> 下的文件。手写代码能活下来，靠的是模板里预置的一对注释标记。这套机制简单，代价是规则的边界很硬：标记之外的一切都会被覆盖，标记名写错就失去保护。</p>
+<blockquote>
+<p>源码索引（固件路径相对于各自仓库根目录）</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/main.c</code></td><td>区域数最多、手写内容最多的生成文件</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>中断服务函数，50 对标记</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>内核配置，5 对标记</td></tr><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td>USB 接收回调，16 对标记</td></tr><tr><td><code>Core/Src/syscalls.c</code>、<code>Core/Src/sysmem.c</code>、<code>Core/Src/system_stm32f4xx.c</code></td><td>完全没有标记的三个文件</td></tr></tbody></table>
+<h2 id="1-概念">1. 概念</h2>
+<p>生成文件里散落着成对的注释标记（marker）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USER CODE BEGIN 2 */</span></span>
+<span class="line"><span style="color:#6F42C1">MX_USB_DEVICE_Init</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#6F42C1">BSP_CAN_Init</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#6F42C1">BSP_DWT_Init</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#6A737D">/* USER CODE END 2 */</span></span></code></pre>
+<p>生成器重新生成文件时的处理顺序是：读入旧文件、按标记名把每对标记之间的文本抓出来、用新模板覆盖文件、再把抓出来的文本填回同名标记之间。标记名由模板决定，例如 <code>main.c</code> 里的 <code>Includes</code>、<code>PD</code>、<code>PFP</code>、<code>0</code>、<code>1</code>、<code>Init</code>、<code>SysInit</code>、<code>2</code>、<code>WHILE</code>、<code>3</code>，<code>usbd_cdc_if.c</code> 里的 <code>INCLUDE</code>、<code>PV</code>、<code>PRIVATE_TYPES</code>、<code>5</code>、<code>6</code>、<code>7</code>、<code>13</code>。数字型名称出现在函数体内部，例如 <code>USER CODE BEGIN 3</code> 落在 <code>while (1)</code> 的花括号里。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["旧文件 Core/Src/main.c"] --> B["按标记名扫描&#x3C;br/>USER CODE BEGIN 名称"]
+    B --> C["抓取每对标记之间的文本&#x3C;br/>Includes 与 Init 与 2 等"]
+    C --> D["套用 .ioc 对应的新模板&#x3C;br/>生成器重写整文件"]
+    D --> E["按名称回填抓到的文本"]
+    E --> F["新文件&#x3C;br/>标记外内容是新的，标记内是旧的"]
+    G["标记名写错或缺失"] --> H["无法配对&#x3C;br/>该段文本被当作模板外内容"]
+    H --> D</pre></div>
+<h2 id="2-各文件的标记数量">2. 各文件的标记数量</h2>
+<p>云台板（<code>2026OmniSentryGimbal</code>）生成文件里的标记对数：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>BEGIN</th><th>END</th><th>手写内容</th></tr></thead><tbody><tr><td><code>Core/Src/main.c</code></td><td>19</td><td>18</td><td>自定义回调、BSP 初始化、UART 注册</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>50</td><td>50</td><td>USART3 中断里插入一次调用</td></tr><tr><td><code>Core/Src/usart.c</code></td><td>24</td><td>24</td><td>无（全部为空）</td></tr><tr><td><code>Core/Src/can.c</code></td><td>17</td><td>17</td><td>无</td></tr><tr><td><code>Core/Src/freertos.c</code></td><td>17</td><td>17</td><td>队列与任务创建</td></tr><tr><td><code>Core/Src/tim.c</code></td><td>12</td><td>12</td><td>无</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>5</td><td>5</td><td><code>configASSERT</code> 定义</td></tr><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td>16</td><td>16</td><td>接收回调、接收队列的 extern 声明</td></tr><tr><td><code>Core/Src/syscalls.c</code>、<code>Core/Src/sysmem.c</code>、<code>Core/Src/system_stm32f4xx.c</code></td><td>0</td><td>0</td><td>无保护，整文件重写</td></tr></tbody></table>
+<p>标记数量与手写内容没有关系。<code>usart.c</code> 的 24 对标记全是空的，因为外设参数由 <code>.ioc</code> 生成，不需要人工补充；<code>main.c</code> 只有 19 对，但手写代码集中在这里。判断一份生成文件有没有被改过，看标记内的内容比看行数可靠。</p>
+<h2 id="3-落到本项目标记区里实际放了什么">3. 落到本项目：标记区里实际放了什么</h2>
+<h3 id="31-mainc">3.1 main.c</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>区域</th><th>位置</th><th>内容</th></tr></thead><tbody><tr><td><code>Includes</code></td><td><code>Core/Src/main.c:33-39</code></td><td><code>bsp_dwt.h</code>、<code>bsp_can.h</code>、<code>usart_dma.h</code>、<code>dbus.h</code></td></tr><tr><td><code>0</code></td><td><code>Core/Src/main.c:70-78</code></td><td>遥控器回调 <code>MyUartCallbackFun()</code>，内部调用 <code>DBUS_Decode()</code></td></tr><tr><td><code>Init</code></td><td><code>Core/Src/main.c:97-99</code></td><td>空，且结束标记名被写坏，见第 5 节</td></tr><tr><td><code>SysInit</code></td><td><code>Core/Src/main.c:104-107</code></td><td>空</td></tr><tr><td><code>2</code></td><td><code>Core/Src/main.c:121-128</code></td><td><code>MX_USB_DEVICE_Init()</code>、<code>BSP_CAN_Init()</code>、<code>BSP_DWT_Init()</code>、<code>Uart_Init(&#x26;huart3, MyUartCallbackFun)</code></td></tr><tr><td><code>3</code></td><td><code>Core/Src/main.c:144-146</code></td><td>空，位于 <code>while (1)</code> 内</td></tr><tr><td><code>Error_Handler_Debug</code></td><td><code>Core/Src/main.c:226-232</code></td><td>关中断加死循环</td></tr></tbody></table>
+<p><code>Init</code> 与 <code>2</code> 两个区域的位置不同：<code>Init</code> 在 <code>HAL_Init()</code> 之后、<code>SystemClock_Config()</code> 之前，<code>2</code> 在所有 <code>MX_xxx_Init()</code> 之后。把 BSP 初始化写进 <code>Init</code> 会拿到一个时钟还没配好的系统，本工程把它放在 <code>2</code>。</p>
+<h3 id="32-stm32f4xx_itc">3.2 stm32f4xx_it.c</h3>
+<p>唯一一处手写代码在 USART3 中断入口（<code>Core/Src/stm32f4xx_it.c:249-251</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> USART3_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#6A737D">  /* USER CODE BEGIN USART3_IRQn 0 */</span></span>
+<span class="line"><span style="color:#6F42C1">  Uart_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">huart3);</span></span>
+<span class="line"><span style="color:#6A737D">  /* USER CODE END USART3_IRQn 0 */</span></span>
+<span class="line"><span style="color:#6F42C1">  HAL_UART_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">huart3);</span></span>
+<span class="line"><span style="color:#24292E">  ...</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>区域 0 在 HAL 处理之前，区域 1 在其后。DBUS 的 DMA 空闲检测放在 HAL 之前，先记下长度再让 HAL 去清标志。</p>
+<h3 id="33-usbd_cdc_ifc">3.3 usbd_cdc_if.c</h3>
+<p>两处手写内容分别放在头部的两个区域里：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USER CODE BEGIN INCLUDE */</span></span>
+<span class="line"><span style="color:#D73A49">#include</span><span style="color:#032F62"> "../../Task/Inc/UsbConnectTask.h"</span><span style="color:#6A737D">  // 包含USB数据接收函数声明</span></span>
+<span class="line"><span style="color:#6A737D">/* USER CODE END INCLUDE */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">/* USER CODE BEGIN PV */</span></span>
+<span class="line"><span style="color:#6A737D">/* Private variables ---------------------------------------------------------*/</span></span>
+<span class="line"><span style="color:#D73A49">extern</span><span style="color:#005CC5"> QueueHandle_t</span><span style="color:#24292E"> usbRxQueue;</span></span>
+<span class="line"><span style="color:#6A737D">/* USER CODE END PV */</span></span></code></pre>
+<p>这里用的是相对路径 <code>../../Task/Inc/...</code>（<code>USB_DEVICE/App/usbd_cdc_if.c:25</code>），因为生成的 <code>stm32cubemx</code> 接口库只提供 HAL 与 FreeRTOS 一侧的头文件路径，<code>Task/Inc</code> 来自根 <code>CMakeLists.txt</code>。放在标记区内的这条 include 可以跨生成保留，但依赖目录层级，移动文件时要一起改。</p>
+<h3 id="34-freertosconfigh">3.4 FreeRTOSConfig.h</h3>
+<p>五个区域里只有一个填了内容（<code>Core/Inc/FreeRTOSConfig.h:121-123</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USER CODE BEGIN 1 */</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configASSERT</span><span style="color:#24292E">( </span><span style="color:#E36209">x</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">if</span><span style="color:#24292E"> ((x) </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">) {</span><span style="color:#6F42C1">taskDISABLE_INTERRUPTS</span><span style="color:#24292E">(); </span><span style="color:#D73A49">for</span><span style="color:#24292E">( ;; );}</span></span>
+<span class="line"><span style="color:#6A737D">/* USER CODE END 1 */</span></span></code></pre>
+<p>内核配置数值本身由 <code>.ioc</code> 的 <code>FREERTOS.*</code> 键生成，例如 <code>configTICK_RATE_HZ=1000</code>（<code>2026sentriomeni.ioc:127</code>）对应 <code>Core/Inc/FreeRTOSConfig.h:64</code> 的宏；而 <code>configASSERT</code> 不在 CubeMX 的配置面板里，只能写在标记区。两块板的这份文件逐行相同，只差 <code>configMINIMAL_STACK_SIZE</code>（云台 256、底盘 512）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant Dev as 开发者
+    participant IO as 2026sentriomeni.ioc
+    participant Gen as CubeMX 生成器
+    participant MC as Core/Src/main.c
+    Dev->>IO: 改配置 例如打开一个新外设
+    Gen->>MC: 读旧文件 按标记名抓取文本
+    Note over Gen: Includes 与 0 与 2 三区被保留
+    Dev->>IO: 只提供配置 不参与重写
+    Gen->>MC: 套用新模板并回填三区文本
+    Note over MC: MX_xxx_Init 列表更新 手写回调仍在
+    Dev->>MC: 在标记外补一行代码
+    Gen->>MC: 下次生成整段重写 该行丢失</pre></div>
+<h2 id="4-区域命名规则">4. 区域命名规则</h2>
+<p>模板里出现的名称分三类，用途不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型</th><th>例子</th><th>出现位置</th></tr></thead><tbody><tr><td>文件级段落</td><td><code>Header</code>、<code>Includes</code>、<code>PTD</code>、<code>PD</code>、<code>PM</code>、<code>PV</code>、<code>PFP</code>、<code>EV</code></td><td>文件顶部或函数声明之前</td></tr><tr><td>函数体分段</td><td><code>Init</code>、<code>SysInit</code>、<code>2</code>、<code>WHILE</code>、<code>3</code>、<code>4</code>、<code>6</code></td><td><code>main()</code> 与各回调函数内部</td></tr><tr><td>回调与 MSP</td><td><code>CAN1_MspInit</code>、<code>USB_OTG_FS_MspInit</code>、<code>Error_Handler_Debug</code>、<code>Callback 0</code></td><td>对应外设或回调函数内部</td></tr><tr><td>USB 专用</td><td><code>INCLUDE</code>、<code>PRIVATE_TYPES</code>、<code>PRIVATE_DEFINES</code>、<code>PRIVATE_VARIABLES</code>、<code>EXPORTED_VARIABLES</code>、<code>5</code> 到 <code>7</code>、<code>13</code></td><td><code>USB_DEVICE/App</code> 下的文件</td></tr></tbody></table>
+<p>名称只对同一文件内的模板有意义。把 <code>main.c</code> 的 <code>USER CODE BEGIN Includes</code> 抄到 <code>can.c</code> 里不会报错，但 <code>can.c</code> 的模板里没有这个名字，也就不会被回填。</p>
+<h2 id="5-易错点">5. 易错点</h2>
+<h3 id="51-结束标记名被写坏">5.1 结束标记名被写坏</h3>
+<p>云台 <code>Core/Src/main.c</code> 的 <code>Init</code> 区结束标记写成了 <code>/* USER CODE _angleEND Init */</code>（<code>Core/Src/main.c:99</code>），正确的写法是 <code>/* USER CODE END Init */</code>。结果是全文件 <code>USER CODE BEGIN</code> 出现 19 次、<code>USER CODE END</code> 出现 18 次，<code>Init</code> 这一对无法配对。底盘板同一位置是正确的（<code>Core/Src/main.c:102</code>）。</p>
+<p>这行是人工编辑留下的，git 历史里最早出现在提交 <code>88f2774</code>（自喵修复，尝试解决usb断连中）。当前 <code>Init</code> 区内没有内容，所以没有造成损失；一旦往里写代码，就会落在生成器的标记表之外，重新生成时被覆盖。生成器对这种不成对标记的具体回退行为没有从生成器源码验证。</p>
+<h3 id="52-代码写在标记外">5.2 代码写在标记外</h3>
+<p>生成文件的标记外部分包括函数签名、<code>MX_xxx_Init()</code> 的调用列表、外设参数赋值、<code>HAL_NVIC_SetPriority()</code> 调用。在这些位置手改参数，重新生成会被 <code>.ioc</code> 里的值覆盖。要改外设参数，改 <code>.ioc</code>；要改中断优先级，改 <code>.ioc</code> 的 NVIC 面板。</p>
+<h3 id="53-标记区内不是安全区">5.3 标记区内不是安全区</h3>
+<p>标记区能被保留，但不能保证能编译。区域内的代码引用了外部头文件或函数时，生成器只搬文本，不搬声明。<code>usbd_cdc_if.c</code> 的 <code>INCLUDE</code> 区用的是相对路径，一旦从 <code>USB_DEVICE/App</code> 之外引用这段代码就会失效。</p>
+<h3 id="54-三个没有保护的源文件">5.4 三个没有保护的源文件</h3>
+<p><code>Core/Src/syscalls.c</code>、<code>Core/Src/sysmem.c</code>、<code>Core/Src/system_stm32f4xx.c</code> 里连 <code>Header</code> 区都没有，整个文件由模板决定。<code>syscalls.c</code> 里带了 <code>#if defined(__PICOLIBC__)</code> 的分支（<code>Core/Src/syscalls.c:180-245</code>），这是生成器为 STARM 工具链准备的，不要在这三个文件里加自己的实现。</p>
+<h2 id="6-小结">6. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>保护机制是一对同名的注释标记，生成器按名称抓取与回填，名称由模板固定。</li>
+<li>标记数量与手写内容无关：<code>usart.c</code> 有 24 对全空，<code>main.c</code> 有 19 对承载了全部 BSP 初始化。</li>
+<li>区域的位置有语义：<code>Init</code> 在时钟配置之前，<code>2</code> 在所有外设初始化之后，<code>stm32f4xx_it.c</code> 的区域 0 在 HAL 处理之前。</li>
+<li>三个文件完全没有标记，整文件重写。</li>
+<li>标记名写错不会报错，只会静默失去保护。云台 <code>main.c:99</code> 是一处现存实例。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选的</th><th>代价与收益</th></tr></thead><tbody><tr><td>保护方式</td><td>注释标记成对包裹</td><td>生成器与手写代码可共存于一个文件；代价是标记名写错不会报警</td></tr><tr><td>手写代码归属</td><td>BSP 与 Task 放在独立目录，不进生成文件</td><td>结构清晰、可移植；代价是生成文件里仍必须保留少量桥接代码（<code>main.c</code> 的 <code>2</code> 区、<code>stm32f4xx_it.c</code> 的 <code>0</code> 区）</td></tr><tr><td>桥接代码位置</td><td><code>main.c</code> 的 <code>2</code> 区</td><td>与生成的初始化列表相邻；代价是每次生成都会重排这段前后的代码，diff 需要逐行看</td></tr><tr><td><code>configASSERT</code> 位置</td><td><code>FreeRTOSConfig.h</code> 的 <code>1</code> 区</td><td>不依赖 <code>.ioc</code> 支持；代价是无法从 CubeMX 面板看到它</td></tr></tbody></table>
+<h2 id="7-练习">7. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>数出 <code>Core/Src/main.c</code> 里所有 <code>USER CODE BEGIN</code> 的名称，并指出哪两个区域位于 <code>while (1)</code> 内部。</li>
+<li><code>Core/Src/usart.c</code> 有 24 对标记但内容全空。说明为什么外设参数不需要写在标记区里。</li>
+<li>判断 <code>USB_DEVICE/App/usbd_cdc_if.c</code> 的 <code>INCLUDE</code> 区里那条相对路径在删掉根 <code>CMakeLists.txt</code> 的 <code>Task/Inc</code> 之后是否还能编译，并说明原因。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>把 <code>Core/Src/main.c:99</code> 的 <code>_angleEND</code> 改回 <code>END</code>，再在 <code>Init</code> 区内加一行 <code>volatile uint32_t probe = 0;</code>，说明为什么这一行放在 <code>Init</code> 区而不是 <code>2</code> 区。</li>
+<li>设计一个检查脚本思路：用 <code>USER CODE BEGIN</code> 与 <code>USER CODE END</code> 的出现次数与名称配对情况，找出所有写坏标记的文件。写出判定规则，并说明它对 <code>main.c:144-146</code> 这种 BEGIN 与 END 顺序颠倒的写法是否成立。</li>
+<li>假设要把云台的自定义回调 <code>MyUartCallbackFun()</code> 移到 <code>Communication/Src/dbus.cpp</code> 里，列出需要改动的生成文件区域与手写文件，并说明为什么这样改能让 <code>main.c</code> 的 <code>0</code> 区变空。</li>
+</ol></div></section><section class="dfile" id="file-3" data-file="03-重新生成的正确姿势"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-重新生成的正确姿势</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/05-CubeMX/03-重新生成的正确姿势.md</span></div><div class="dfile__body"><h1 id="重新生成的正确姿势">重新生成的正确姿势</h1>
+<p>重新生成（regenerate）指把 <code>.ioc</code> 里的配置重新铺成源码。它同时做两件事：用新模板覆盖生成文件，把 USER CODE 区里的旧文本填回去。第二件事只在标记名匹配时成立，所以生成前的仓库状态决定了这次操作是可控还是不可控。</p>
+<blockquote>
+<p>源码索引（固件路径相对于各自仓库根目录）</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>2026sentriomeni.ioc</code></td><td>生成器行为开关与目标工具链</td></tr><tr><td><code>CMakePresets.json</code></td><td>两个配置预设与两个构建预设</td></tr><tr><td><code>cmake/gcc-arm-none-eabi.cmake</code></td><td>默认工具链文件</td></tr><tr><td><code>cmake/starm-clang.cmake</code></td><td>另一套工具链文件，当前未被预设引用</td></tr><tr><td><code>cmake/stm32cubemx/CMakeLists.txt</code></td><td>生成物的文件清单，每次重写</td></tr><tr><td><code>build/Debug</code>、<code>build/Release</code></td><td>预设实际使用的两个构建目录</td></tr></tbody></table>
+<h2 id="1-生成器的四个行为开关">1. 生成器的四个行为开关</h2>
+<p><code>.ioc</code> 的 <code>ProjectManager.</code> 前缀下面有一组控制生成行为的键，两块板取值相同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>键</th><th>取值</th><th>作用</th></tr></thead><tbody><tr><td><code>KeepUserCode</code></td><td><code>true</code>（<code>2026sentriomeni.ioc:343</code>）</td><td>保留 USER CODE 区内容</td></tr><tr><td><code>DeletePrevious</code></td><td><code>true</code>（<code>:336</code>）</td><td>生成前删除上一次写出的文件</td></tr><tr><td><code>BackupPrevious</code></td><td><code>false</code>（<code>:329</code>）</td><td>不生成备份</td></tr><tr><td><code>CoupleFile</code></td><td><code>true</code>（<code>:333</code>）</td><td><code>.c</code> 与 <code>.h</code> 成对生成</td></tr><tr><td><code>MainLocation</code></td><td><code>Core/Src</code>（<code>:346</code>）</td><td><code>main.c</code> 的落点</td></tr><tr><td><code>FirmwarePackage</code></td><td><code>STM32Cube FW_F4 V1.28.3</code>（<code>:338</code>）</td><td>HAL 固件包版本</td></tr><tr><td><code>TargetToolchain</code></td><td><code>CMake</code>（<code>:355</code>）</td><td>生成 CMake 工程</td></tr><tr><td><code>CompilerLinker</code></td><td><code>GCC</code>（<code>:330</code>）</td><td>编译器与链接器族</td></tr></tbody></table>
+<p><code>DeletePrevious</code> 与 <code>BackupPrevious</code> 的组合是这次操作风险的主要来源：删除在前、无备份在后。关掉一个外设会让对应的 <code>Core/Src/xxx.c</code> 被删除，仓库里若没有提交记录就无法恢复。因此生成前先提交，是这套配置下唯一有效的保护手段。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["步骤 1 停掉调试会话与构建"] --> B["步骤 2 在工作区确认 .ioc 已保存"]
+    B --> C["步骤 3 提交当前改动&#x3C;br/>git status 干净"]
+    C --> D["步骤 4 在 CubeMX 改配置并 Generate Code"]
+    D --> E["步骤 5 git diff --stat"]
+    E --> F{"差异是否都在预期内"}
+    F -- "否" --> G["git checkout 回退&#x3C;br/>重查 .ioc 改动"]
+    G --> D
+    F -- "是" --> H["步骤 6 检查 USER CODE 区是否完整"]
+    H --> I["步骤 7 cmake --preset Debug 与 构建"]
+    I --> J["步骤 8 烧录验证"]</pre></div>
+<h2 id="2-逐步操作">2. 逐步操作</h2>
+<p>第 3 步与第 5 步的具体命令（在固件仓库根目录执行）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># 生成前：确认工作区干净，并记下当前提交</span></span>
+<span class="line"><span style="color:#6F42C1">git</span><span style="color:#032F62"> status</span><span style="color:#005CC5"> --short</span></span>
+<span class="line"><span style="color:#6F42C1">git</span><span style="color:#032F62"> rev-parse</span><span style="color:#005CC5"> --short</span><span style="color:#032F62"> HEAD</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 生成后：先看规模，再看内容</span></span>
+<span class="line"><span style="color:#6F42C1">git</span><span style="color:#032F62"> diff</span><span style="color:#005CC5"> --stat</span></span>
+<span class="line"><span style="color:#6F42C1">git</span><span style="color:#032F62"> diff</span><span style="color:#005CC5"> --</span><span style="color:#032F62"> Core/Src/main.c</span><span style="color:#032F62"> Core/Inc/FreeRTOSConfig.h</span></span></code></pre>
+<p><code>git diff --stat</code> 先看哪些文件被改。正常的一次配置改动通常只影响两三个文件；如果 <code>Core/Src</code> 下十几个文件同时变动，多半是固件包版本或工具链设置被动了，需要先回退再查。</p>
+<p>第 6 步的检查对象是两类内容：手写代码是否还在（<code>Core/Src/main.c:121-128</code> 的 BSP 初始化、<code>stm32f4xx_it.c:249-251</code> 的 <code>Uart_IRQHandler</code> 调用、<code>USB_DEVICE/App/usbd_cdc_if.c:24-26</code> 的 include），以及 <code>ProjectManager.functionlistsort</code>（<code>.ioc:360</code>）变化导致的 <code>MX_xxx_Init()</code> 调用顺序调整。</p>
+<p>第 7 步用预设构建（在仓库根目录执行）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">cmake</span><span style="color:#005CC5"> --preset</span><span style="color:#032F62"> Debug</span></span>
+<span class="line"><span style="color:#6F42C1">cmake</span><span style="color:#005CC5"> --build</span><span style="color:#005CC5"> --preset</span><span style="color:#032F62"> Debug</span></span></code></pre>
+<h2 id="3-cmakepresets-与-build-目录">3. CMakePresets 与 build 目录</h2>
+<p><code>CMakePresets.json</code> 里有三个配置预设（configure preset）与两个构建预设（build preset），<code>default</code> 是隐藏的基础预设：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>预设</th><th>继承</th><th>关键字段</th></tr></thead><tbody><tr><td><code>default</code></td><td>无（<code>hidden: true</code>）</td><td><code>generator: Ninja</code>、<code>binaryDir: ${sourceDir}/build/${presetName}</code>、<code>toolchainFile: ${sourceDir}/cmake/gcc-arm-none-eabi.cmake</code></td></tr><tr><td><code>Debug</code></td><td><code>default</code></td><td><code>CMAKE_BUILD_TYPE=Debug</code></td></tr><tr><td><code>Release</code></td><td><code>default</code></td><td><code>CMAKE_BUILD_TYPE=Release</code></td></tr></tbody></table>
+<p>因为 <code>binaryDir</code> 里带了 <code>${presetName}</code>，两个配置分别落在 <code>build/Debug</code> 与 <code>build/Release</code>。仓库里这两个目录的 <code>CMakeCache.txt</code> 记录了实际使用的工具链：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>构建目录</th><th>生成器</th><th>编译器</th><th>构建类型</th></tr></thead><tbody><tr><td><code>build/Debug</code></td><td><code>Ninja</code></td><td>工具链文件 <code>cmake/gcc-arm-none-eabi.cmake</code></td><td><code>Debug</code></td></tr><tr><td><code>build/Release</code></td><td><code>Ninja</code></td><td>工具链文件 <code>cmake/gcc-arm-none-eabi.cmake</code></td><td><code>Release</code></td></tr><tr><td><code>build/</code></td><td><code>Unix Makefiles</code></td><td><code>/usr/bin/cc</code></td><td>空</td></tr></tbody></table>
+<p>两个缓存的 <code>CMAKE_MAKE_PROGRAM</code> 指向不同的 Ninja：<code>build/Debug</code> 是 <code>/usr/bin/ninja</code>，<code>build/Release</code> 是 STM32Cube 扩展包里的 <code>ninja/1.13.2+st.1/bin/ninja</code>，说明这两个目录并非同一次配置产生。</p>
+<p><code>build/</code> 顶层那份缓存是早期直接运行 <code>cmake .</code> 留下的，用的是主机编译器，与当前预设无关。云台仓库里还有一个 <code>build_test/</code>，里面是 Visual Studio 的 <code>.sln</code> 与 <code>.vcxproj</code>，属于另一次生成器尝试。这两个目录不要当成有效构建结果，删掉不影响预设流程。</p>
+<p>根 <code>CMakeLists.txt:24</code> 打开了 <code>CMAKE_EXPORT_COMPILE_COMMANDS</code>，编译命令表落在对应的构建目录里。<code>.clangd</code> 指向 <code>CompilationDatabase: build/Debug</code>，因此 Debug 预设至少要成功配置过一次，编辑器里的跳转和诊断才准。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["CMakePresets.json"] --> B["default 隐藏预设&#x3C;br/>Ninja 加 toolchainFile"]
+    B --> C["Debug 预设&#x3C;br/>binaryDir build/Debug"]
+    B --> D["Release 预设&#x3C;br/>binaryDir build/Release"]
+    C --> E["build/Debug/CMakeCache.txt&#x3C;br/>CMAKE_BUILD_TYPE=Debug"]
+    D --> F["build/Release/CMakeCache.txt&#x3C;br/>CMAKE_BUILD_TYPE=Release"]
+    E --> G["compile_commands.json&#x3C;br/>.clangd 的输入"]
+    H["build/ 顶层缓存&#x3C;br/>Unix Makefiles 加 /usr/bin/cc"] --> I["与预设无关的历史产物"]
+    J["build_test/&#x3C;br/>Visual Studio 工程文件"] --> I</pre></div>
+<h2 id="4-两套工具链">4. 两套工具链</h2>
+<p><code>cmake/</code> 下有两个工具链（toolchain）文件，当前只有 gcc 那一个被 <code>CMakePresets.json</code> 引用：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th><code>gcc-arm-none-eabi.cmake</code></th><th><code>starm-clang.cmake</code></th></tr></thead><tbody><tr><td>编译器前缀</td><td><code>arm-none-eabi-</code></td><td><code>starm-</code></td></tr><tr><td>编译器</td><td><code>gcc</code> / <code>g++</code></td><td><code>clang</code> / <code>clang++</code></td></tr><tr><td>目标参数</td><td><code>-mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard</code></td><td>同上</td></tr><tr><td>Debug 优化</td><td><code>-O0 -g3</code></td><td><code>-Og -g3</code></td></tr><tr><td>Release 优化</td><td><code>-Os -g0</code></td><td><code>-Oz -g0</code></td></tr><tr><td>C++ 限制</td><td><code>-fno-rtti -fno-exceptions -fno-threadsafe-statics</code></td><td>同上</td></tr><tr><td>链接参数</td><td><code>--specs=nano.specs</code>、<code>-T STM32F407XX_FLASH.ld</code>、<code>--gc-sections</code>、<code>--print-memory-usage</code></td><td><code>-lcrt0-hosted -z norelro</code>、<code>-T STM32F407XX_FLASH.ld</code>、<code>-z noexecstack</code></td></tr><tr><td>库配置</td><td><code>TOOLCHAIN_LINK_LIBRARIES=m</code></td><td><code>STARM_TOOLCHAIN_CONFIG=STARM_PICOLIBC</code></td></tr></tbody></table>
+<p><code>starm-clang.cmake</code> 里 <code>STARM_TOOLCHAIN_CONFIG</code> 有三个可选值：<code>STARM_HYBRID</code> 用 clang 编译加 GNU 链接器，<code>STARM_NEWLIB</code> 用 newlib 的 C 库，<code>STARM_PICOLIBC</code> 用 picolibc。当前取第三个（<code>cmake/starm-clang.cmake:28</code>），链接参数里的 <code>-lcrt0-hosted</code> 就是 picolibc 的启动代码。</p>
+<p>生成代码对两套工具链都做了准备：<code>Core/Src/syscalls.c:180-245</code> 是 <code>#if defined(__PICOLIBC__)</code> 分支，里面是给 picolibc 用的 <code>starm_putc</code> 与 <code>starm_getc</code>。切到 starm-clang 不需要改 C 文件，只需要把预设里的 <code>toolchainFile</code> 指过去。</p>
+<p>编辑器一侧的配置在 <code>.vscode/settings.json</code> 里（当前是工作区未提交的改动）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>取值</th></tr></thead><tbody><tr><td><code>cmake.cmakePath</code></td><td><code>cube-cmake</code></td></tr><tr><td><code>cmake.configureArgs</code></td><td><code>-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja</code>、<code>-DCMAKE_COMMAND=cube-cmake</code></td></tr><tr><td><code>cmake.environmentVariables.PATH</code></td><td>STM32Cube 扩展包里的 <code>gnu-tools-for-stm32/14.3.1+st.2/bin</code>、<code>ninja/1.13.2+st.1/bin</code>、<code>stlink-gdbserver/7.13.0+st.3/bin</code></td></tr><tr><td><code>stm32cube-ide-clangd.path</code></td><td><code>cube</code>（即 <code>starm-clangd</code>），<code>--query-driver</code> 指向 <code>arm-none-eabi-gcc</code> 与 <code>arm-none-eabi-g++</code></td></tr></tbody></table>
+<p>也就是说，编译实际由 GCC 14.3.1 完成，语言服务由 starm-clangd 通过 GCC 的编译命令表提供。</p>
+<h2 id="5-工作记录里的一次构建故障">5. 工作记录里的一次构建故障</h2>
+<p><code>工作记录/Cloin如何使用调试服务器而非OpenOCD烧录stm32.md:65-79</code> 记录了 CubeMX 6.15 之后在 CLion 里的一个现象：编译时报出与“简单项目或测试”相关的错误，解决办法是在 CMake 选项里显式指定</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#24292E">-DCMAKE_TOOLCHAIN_FILE</span><span style="color:#D73A49">=</span><span style="color:#032F62">./cmake/gcc-arm-none-eabi.cmake</span></span></code></pre>
+<p>本工程的 <code>CMakePresets.json</code> 已经在 <code>default</code> 预设里通过 <code>toolchainFile</code> 填了同一个文件，所以走预设流程不会遇到这个问题。用 CLion 直接打开工程而绕过预设时，需要手工补上这一条。</p>
+<h2 id="6-易错点">6. 易错点</h2>
+<ul>
+<li>生成前不提交。<code>DeletePrevious=true</code> 加 <code>BackupPrevious=false</code>，生成的删除动作没有回退路径。</li>
+<li>只看 <code>git diff</code> 的总行数，不看具体文件。一次正常的配置改动应集中在少数文件，<code>Core/Src</code> 全量变动通常意味着固件包或工具链被换过。</li>
+<li>把 <code>build/</code> 顶层或 <code>build_test/</code> 当成有效构建目录。它们不是预设产出的，配置参数与工具链都不同。</li>
+<li>在 starm-clang 与 gcc 之间切换时只改预设不改清理。两个工具链的目标文件不通用，切换后需要删掉对应构建目录重新配置。</li>
+<li>用 CLion 打开工程后仍以为预设生效。CLion 自己维护一套 CMake 配置，工具链文件要手工指定。</li>
+</ul>
+<h2 id="7-小结">7. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>重新生成等于模板覆盖加标记回填，回填只在标记名匹配时发生。</li>
+<li><code>.ioc</code> 里 <code>ProjectManager.</code> 一组键决定行为，其中 <code>DeletePrevious=true</code> 与 <code>BackupPrevious=false</code> 要求生成前必须有干净提交。</li>
+<li><code>CMakePresets.json</code> 的 <code>binaryDir</code> 带 <code>${presetName}</code>，Debug 与 Release 落在两个目录；<code>.clangd</code> 读的是 <code>build/Debug</code>。</li>
+<li>工程带两套工具链文件，预设只引用 gcc 那一套；starm-clang 与 gcc 的目标文件不能混用。</li>
+<li>生成后的验证顺序是先看 <code>git diff --stat</code> 的规模，再看 USER CODE 区是否完整，最后构建。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选的</th><th>代价与收益</th></tr></thead><tbody><tr><td>生成前备份</td><td>关（<code>BackupPrevious=false</code>）</td><td>目录干净、不产生副本；代价是覆盖与删除只能靠版本控制兜底</td></tr><tr><td>构建预设</td><td>只做 Debug 与 Release 两个</td><td>配置简单；代价是没有专门的 <code>RelWithDebInfo</code>，发布版调试信息为 <code>-g0</code></td></tr><tr><td>工具链选择</td><td>预设固定 GCC</td><td>与 STM32Cube 扩展包自带工具链一致；代价是 starm-clang 文件存在但无人维护，容易失效</td></tr><tr><td>语言服务</td><td>starm-clangd 读 GCC 的编译命令表</td><td>不改构建即可获得诊断；代价是两者对扩展语法的支持不完全一致</td></tr><tr><td>构建目录</td><td>预设目录加历史遗留目录并存</td><td>历史构建结果可直接复用；代价是 <code>build/</code> 与 <code>build_test/</code> 容易误认为是当前配置</td></tr></tbody></table>
+<h2 id="8-练习">8. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>由 <code>CMakePresets.json</code> 写出 <code>Debug</code> 预设的完整配置命令，并说明 <code>binaryDir</code> 展开后的绝对路径。</li>
+<li>说明 <code>ProjectManager.DeletePrevious=true</code> 时，把 <code>.ioc</code> 里的 I2C3 关掉后重新生成会发生什么。</li>
+<li>从两份工具链文件里找出 Debug 与 Release 的优化级别差异，并判断哪一套更适合调试会浮点运算的控制代码。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>在现有预设基础上新增一个使用 <code>cmake/starm-clang.cmake</code> 的 <code>DebugStarm</code> 预设，要求构建目录不与现有两个冲突，并说明切换后为什么要先删掉旧目录。</li>
+<li>设计一次“只改中断优先级”的重新生成流程：从 <code>.ioc</code> 的哪一行改起、生成后要 diff 哪几个文件、验证哪些生成行，写出完整步骤。</li>
+<li>假设一次生成后 <code>Core/Src/usart.c</code> 里的 DMA 模式从 <code>DMA_CIRCULAR</code> 变成了 <code>DMA_NORMAL</code>，而 <code>.ioc</code> 显示 <code>Dma.USART3_RX.2.Mode=DMA_CIRCULAR</code>。列出三种可能的原因与各自的核对手段。</li>
+</ol></div></section><section class="dfile" id="file-4" data-file="04-常见易错点"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-常见易错点</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/05-CubeMX/04-常见易错点.md</span></div><div class="dfile__body"><h1 id="常见易错点">常见易错点</h1>
+<p>这一节集中处理六类问题，每一条都给出云台或底盘固件里的实际证据，并标出哪些结论是核实的、哪些是推测。涉及外设参数的原始值都来自 <code>2026sentriomeni.ioc</code>。</p>
+<blockquote>
+<p>源码索引（固件路径相对于各自仓库根目录）</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>2026sentriomeni.ioc</code></td><td>配置源，含 <code>RCC.</code>、<code>NVIC.</code>、<code>CAN1.</code>、<code>CRC</code> 相关键</td></tr><tr><td><code>Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>HSE_VALUE</code> 的定义处</td></tr><tr><td><code>Core/Src/main.c</code></td><td>USB 初始化位置、<code>USER CODE</code> 标记</td></tr><tr><td><code>Core/Src/can.c</code>、<code>dma.c</code>、<code>usart.c</code>、<code>tim.c</code></td><td>中断优先级写入点</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>USB OTG 中断优先级写入点</td></tr><tr><td><code>云台串口协议.md</code></td><td>上位机 CRC 代码示例的所在文件</td></tr></tbody></table>
+<h2 id="1-crchpp-的出处核实">1. crc.hpp 的出处核实</h2>
+<p>先给结论：<code>2026sentriomeni.ioc</code> 里没有 <code>#include</code> 语句。<code>.ioc</code> 是键值文件，全文不含 <code>#</code> 开头的预处理指令，唯一以 <code>#</code> 开头的行是第一行注释 <code>#MicroXplorer Configuration settings - do not modify</code>。在整个云台与底盘仓库里检索 <code>crc.hpp</code>，只有一处命中：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* 云台串口协议.md:51，上位机 crc 生成及检验源码一节 */</span></span>
+<span class="line"><span style="color:#D73A49">#include</span><span style="color:#032F62"> "crc.hpp"</span></span></code></pre>
+<p>该文件是飞书文档导出的协议说明，<code>crc.hpp</code> 属于上位机侧的 C++ 示例，与固件的生成流程无关。</p>
+<p>容易与它混淆的是固件里真实存在的两套 CRC：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>对象</th><th>位置</th><th>来源</th></tr></thead><tbody><tr><td>HAL 的 CRC 外设</td><td><code>Core/Src/crc.c</code>、<code>Core/Inc/crc.h</code></td><td>由 <code>.ioc</code> 的 <code>Mcu.IP2=CRC</code>（<code>:169</code>）生成，<code>main.c:23</code> 自动 <code>#include "crc.h"</code></td></tr><tr><td>工程自带的校验算法</td><td><code>Algorithm/Inc/CRC8.h</code>、<code>Algorithm/Inc/CRC16.h</code></td><td>人工编写，编译进可执行文件</td></tr></tbody></table>
+<p>HAL 的 CRC 外设在本工程里只完成初始化：<code>hcrc</code> 只出现在 <code>Core/Src/crc.c</code> 内部（<code>:27</code>、<code>:40-41</code>、<code>:51</code>、<code>:67</code>），全工程没有任何 <code>HAL_CRC_Calculate()</code> 或 <code>HAL_CRC_Accumulate()</code> 调用。协议里的校验走 <code>Algorithm</code> 目录下的查表实现。保留这个外设的代价是 <code>STM32_Drivers</code> 里多编译一个 <code>stm32f4xx_hal_crc.c</code>（<code>cmake/stm32cubemx/CMakeLists.txt:73</code>），收益是暂时没有。</p>
+<h2 id="2-hse_value-的传播路径">2. HSE_VALUE 的传播路径</h2>
+<p><code>HSE_VALUE</code> 在 <code>.ioc</code> 里是 <code>RCC.HSE_VALUE=12000000</code>（<code>2026sentriomeni.ioc:375</code>），生成后落在 <code>Core/Inc/stm32f4xx_hal_conf.h:98-100</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#if</span><span style="color:#D73A49"> !defined</span><span style="color:#24292E">  (</span><span style="color:#6F42C1">HSE_VALUE</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">  #define</span><span style="color:#6F42C1"> HSE_VALUE</span><span style="color:#005CC5">    12000000</span><span style="color:#D73A49">U</span><span style="color:#6A737D"> /*!&#x3C; Value of the External oscillator in Hz */</span></span>
+<span class="line"><span style="color:#D73A49">#endif</span><span style="color:#6A737D"> /* HSE_VALUE */</span></span></code></pre>
+<p><code>#if !defined</code> 的存在意味着它允许被编译宏覆盖，本工程的编译宏里没有 <code>HSE_VALUE</code>（<code>cmake/stm32cubemx/CMakeLists.txt:5-9</code> 只有 <code>USE_HAL_DRIVER</code>、<code>STM32F407xx</code>、<code>DEBUG</code>），所以 12 MHz 来自头文件。两块板一致，云台首次提交（<code>6492d5b</code>）时就是 12000000。</p>
+<p>这个值参与三处计算，改错会同时出问题：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>使用方</th><th>依赖方式</th></tr></thead><tbody><tr><td><code>SystemClock_Config()</code></td><td><code>PLLM=6</code> 按 HSE 分频得到 2 MHz 的 VCO 输入（<code>Core/Src/main.c:166-173</code>）</td></tr><tr><td><code>HAL_RCC_GetHCLKFreq()</code> 一族</td><td>由 HSE 与 PLL 参数反推总线频率，DWT 延时与波特率计算都基于它</td></tr><tr><td><code>RCC.RTCHSEDivFreq_Value=6000000</code>（<code>.ioc:388</code>）</td><td>12 MHz 的一半，时钟树面板里的派生值</td></tr></tbody></table>
+<p>云台与底盘的实际配置是 HSE 12 MHz 经 <code>PLLM=6</code>、<code>PLLN=168</code>、<code>PLLP=2</code> 得到 168 MHz，APB1 除以 4 得 42 MHz，APB2 除以 2 得 84 MHz。若把 <code>.ioc</code> 里的 <code>HSE_VALUE</code> 改成 8 MHz 后重新生成，HAL 会按 8 MHz 反推 SYSCLK，而实际晶振仍是 12 MHz，所有由 <code>HAL_RCC_GetPCLK1Freq()</code> 派生的波特率都会偏低三分之一。</p>
+<h2 id="3-时钟树改动打掉-can-波特率">3. 时钟树改动打掉 CAN 波特率</h2>
+<p>工作记录 <code>工作记录/can通信波特率问题.md</code> 完整记录了一次故障：底盘 CAN1 与 CAN2 全部无法收发，第一次发送返回 <code>HAL_OK</code>，之后返回 <code>HAL_ERROR</code>，<code>hcan2.ErrorCode</code> 为 <code>0x00200000</code>（<code>HAL_CAN_ERROR_NOT_STARTED</code>），<code>MSR</code> 为 <code>0x0C08</code>（错误中断挂起）。代码层排查全部正常，根因是该记录给出的结论：时钟树配置被改动，导致波特率计算错误。</p>
+<p>CAN 位时间（bit time）的计算方式是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo><mo>×</mo><mfrac><mn>1</mn><msub><mi>f</mi><mrow><mi>A</mi><mi>P</mi><mi>B</mi><mn>1</mn></mrow></msub></mfrac></mrow><annotation encoding="application/x-tex">t_{bit} = Prescaler \times (1 + BS1 + BS2) \times \frac{1}{f_{APB1}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">esc</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal" style="margin-right:0.0278em;">er</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">2</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.3262em;vertical-align:-0.4811em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>当前配置是 <code>Prescaler=2</code>、<code>BS1=CAN_BS1_15TQ</code>、<code>BS2=CAN_BS2_5TQ</code>、<code>SJW=CAN_SJW_1TQ</code>（<code>.ioc:7-8,15,17</code>），APB1 为 42 MHz，于是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mn>2</mn><mo>×</mo><mn>21</mn><mo>×</mo><mfrac><mn>1</mn><mrow><mn>42</mn><mtext> MHz</mtext></mrow></mfrac><mo>=</mo><mn>1</mn><mtext> </mtext><mi>μ</mi><mtext>s</mtext><mspace width="1em"></mspace><mo>⇒</mo><mspace width="1em"></mspace><mn>1</mn><mtext> Mbps</mtext></mrow><annotation encoding="application/x-tex">t_{bit} = 2 \times 21 \times \frac{1}{42\ \text{MHz}} = 1\ \mu\text{s} \quad \Rightarrow \quad 1\ \text{Mbps}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">21</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">42</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord mathnormal">μ</span><span class="mord text"><span class="mord">s</span></span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">Mbps</span></span></span></span></span></p>
+<p><code>.ioc</code> 自己算出的两个派生值可以交叉验证：<code>CAN1.CalculateTimeQuantum=47.61904761904762</code>（<code>:11</code>）等于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mn>2</mn><mrow><mn>42</mn><mtext> MHz</mtext></mrow></mfrac><mo>=</mo><mn>47.619</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">\frac{2}{42\ \text{MHz}} = 47.619\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">42</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">47.619</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span>，一个位时间 21 个 TQ 即 <code>CAN1.CalculateTimeBit=1000</code>（<code>:10</code>，单位 ns）。</p>
+<p>记录里给出的 <code>857142 Hz</code> 反推回来是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>A</mi><mi>P</mi><mi>B</mi><mn>1</mn></mrow></msub><mo>=</mo><mn>857142</mn><mo>×</mo><mn>42</mn><mo>=</mo><mn>36</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{APB1} = 857142 \times 42 = 36\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">857142</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">42</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">36</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>，即当时 APB1 不是 42 MHz。波特率不匹配时，CAN 帧得不到 ACK，节点进入错误状态并锁定，于是出现“首次发送进邮箱、后续全部失败”的现象。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["CubeMX 时钟树面板&#x3C;br/>改了一个分频比"] --> B["RCC.APB1Freq_Value&#x3C;br/>写入 2026sentriomeni.ioc"]
+    B --> C["生成 Core/Src/main.c&#x3C;br/>SystemClock_Config 的 APB1CLKDivider"]
+    C --> D["HAL_RCC_GetPCLK1Freq 返回值变化"]
+    D --> E["can.c 里的 Prescaler 与 BS1 与 BS2 未变"]
+    E --> F["实际位时间偏离 1 微秒"]
+    F --> G["总线上无 ACK"]
+    G --> H["MSR 与 TSR 报错&#x3C;br/>hcan ErrorCode 指向未启动"]
+    I["排查方向"] --> J["先核对 .ioc 的 APB1Freq_Value&#x3C;br/>再量总线波形"]</pre></div>
+<h2 id="4-中断优先级写在生成文件里">4. 中断优先级写在生成文件里</h2>
+<p>本工程的中断优先级全部落在生成代码里，没有一处写在手写文件中：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>中断</th><th>写入位置</th></tr></thead><tbody><tr><td><code>CAN1_RX0</code>、<code>CAN1_RX1</code>、<code>CAN2_RX0</code>、<code>CAN2_RX1</code></td><td><code>Core/Src/can.c:125-128</code>、<code>:158-161</code></td></tr><tr><td>五个 DMA 流</td><td><code>Core/Src/dma.c:48-61</code></td></tr><tr><td><code>USART3</code>、<code>USART6</code></td><td><code>Core/Src/usart.c:198-199</code>、<code>:262-263</code></td></tr><tr><td><code>TIM1_UP_TIM10</code></td><td><code>Core/Src/tim.c:83-84</code></td></tr><tr><td><code>OTG_FS</code></td><td><code>USB_DEVICE/Target/usbd_conf.c:94-95</code></td></tr><tr><td><code>PendSV</code></td><td><code>Core/Src/stm32f4xx_hal_msp.c:75</code></td></tr><tr><td><code>TIM2</code></td><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c:100</code>，取 <code>HAL_InitTick()</code> 的入参</td></tr></tbody></table>
+<p>这些行都在标记之外，重新生成时按 <code>.ioc</code> 的 <code>NVIC.*</code> 键重写。外设中断的数值统一是 5，与 <code>FREERTOS.configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY=5</code>（<code>.ioc:120</code>，生成到 <code>Core/Inc/FreeRTOSConfig.h:110</code>）一致；优先级组是 <code>NVIC.PriorityGroup=NVIC_PRIORITYGROUP_4</code>（<code>.ioc:236</code>），四个位全部用于抢占优先级（preemption priority），所以 5 这个数值在编码后仍表示抢占优先级 5。</p>
+<p><code>PendSV</code> 与 <code>SysTick</code> 的配置有个例外。<code>.ioc</code> 里两者都是 15（<code>:235</code>、<code>:241</code>），而 FreeRTOS 的移植层在 <code>xPortStartScheduler()</code> 里会再写一次优先级寄存器（<code>Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c:362-363</code>），写入值来自 <code>configKERNEL_INTERRUPT_PRIORITY</code>（<code>Core/Inc/FreeRTOSConfig.h:114</code>，即 <code>configLIBRARY_LOWEST_INTERRUPT_PRIORITY=15</code> 左移 4 位）。因此这两行的作用是在调度器启动之前维持一个较弱的优先级设定，把 <code>.ioc</code> 里它们的值改小，在调度器启动后不生效。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+    A["2026sentriomeni.ioc 的 NVIC 段"] --> B["NVIC.CAN1_RX0_IRQn=5"]
+    A --> C["NVIC.USART3_IRQn=5"]
+    A --> D["NVIC.DMA1_Stream1_IRQn=5"]
+    A --> E["NVIC.TIM1_UP_TIM10_IRQn=5"]
+    A --> F["NVIC.OTG_FS_IRQn=5"]
+    A --> G["NVIC.PriorityGroup=NVIC_PRIORITYGROUP_4"]
+    B --> H["Core/Src/can.c 与 dma.c 与 usart.c 与 tim.c 与 usbd_conf.c&#x3C;br/>HAL_NVIC_SetPriority 调用"]
+    C --> H
+    D --> H
+    E --> H
+    F --> H
+    G --> I["HAL_Init 阶段写入 SCB AIRCR&#x3C;br/>四位全为抢占优先级"]
+    J["手改这些生成行"] --> K["下次生成被 .ioc 覆盖"]</pre></div>
+<h2 id="5-user-code-结束标记被写坏">5. USER CODE 结束标记被写坏</h2>
+<p>云台 <code>Core/Src/main.c</code> 里有一行 <code>/* USER CODE _angleEND Init */</code>（<code>:99</code>），与模板要求的 <code>/* USER CODE END Init */</code> 不同。全文件统计为 <code>USER CODE BEGIN</code> 19 次、<code>USER CODE END</code> 18 次，唯一不成对的就是 <code>Init</code> 区。底盘同一位置是正常写法（<code>Core/Src/main.c:102</code>）。</p>
+<p>git 检索这一行最早出现在提交 <code>88f2774</code>（自喵修复，尝试解决usb断连中）。当前 <code>Init</code> 区内没有内容，未造成损失。生成器对不成对标记的具体处理方式没有从生成器源码验证，可确认的是名称与模板不一致时无法配对。</p>
+<p>对比两块板的写法可以看出这类损坏很难靠肉眼发现：两个文件在编辑器里看起来都是规整的注释行，只有把 <code>USER CODE BEGIN</code> 与 <code>USER CODE END</code> 按名称做配对检查才会暴露。</p>
+<h2 id="6-引脚定义不都在-mainh-里">6. 引脚定义不都在 main.h 里</h2>
+<p>云台的 <code>Core/Inc/main.h</code> 只定义了一个引脚：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/main.h:60-61 */</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> KEY_Pin</span><span style="color:#24292E"> GPIO_PIN_0</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> KEY_GPIO_Port</span><span style="color:#24292E"> GPIOA</span></span></code></pre>
+<p>PA4、PB0、PG6、PH11 是普通输出，PG3 是上升沿中断，它们的模式、上下拉与初始电平都直接写在 <code>Core/Src/gpio.c</code> 里，没有对应的宏：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>引脚</th><th>配置</th><th>位置</th></tr></thead><tbody><tr><td>PA4</td><td>推挽输出，初始置位</td><td><code>Core/Src/gpio.c:63</code>、<code>:94-99</code></td></tr><tr><td>PB0</td><td>推挽输出，初始置位</td><td><code>Core/Src/gpio.c:66</code>、<code>:101-106</code></td></tr><tr><td>PG6、PH11</td><td>推挽输出，初始复位</td><td><code>Core/Src/gpio.c:57-60</code>、<code>:68-73</code>、<code>:81-86</code></td></tr><tr><td>PG3</td><td>上升沿中断，上拉</td><td><code>Core/Src/gpio.c:75-79</code></td></tr><tr><td>PA0</td><td>上升沿加下降沿中断，上拉</td><td><code>Core/Src/gpio.c:88-92</code>，宏来自 <code>main.h</code></td></tr></tbody></table>
+<p>可观察到的一致性是只有带 <code>GPIO_Label</code> 的引脚会生成 <code>*_Pin</code> 宏，<code>.ioc</code> 里只有 <code>PA0-WKUP.GPIO_Label=KEY</code>（<code>:250</code>）这一条；这条规则的完整定义未从生成器源码验证。查引脚配置时先看 <code>gpio.c</code>，再看 <code>stm32f4xx_hal_msp.c</code>，<code>main.h</code> 只能提供其中一个。</p>
+<h2 id="7-小结">7. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>.ioc</code> 是键值文件，不含预处理指令；<code>crc.hpp</code> 来自 <code>云台串口协议.md</code> 的上位机示例，与生成流程无关。</li>
+<li>HAL 的 CRC 外设由 <code>.ioc</code> 使能并生成 <code>crc.c</code>，本工程没有调用它的任何计算函数，校验走 <code>Algorithm/Inc/CRC16.h</code>。</li>
+<li><code>HSE_VALUE</code> 定义在 <code>stm32f4xx_hal_conf.h</code>，被 <code>#if !defined</code> 包住；改动它会同时影响系统时钟反推与全部派生波特率。</li>
+<li>CAN 位时间是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><msub><mi>f</mi><mrow><mi>A</mi><mi>P</mi><mi>B</mi><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">t_{bit} = Prescaler \times (1+BS1+BS2)/f_{APB1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">esc</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal" style="margin-right:0.0278em;">er</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">2</span><span class="mclose">)</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，当前配置给出 1 Mbps；总线波特率不匹配的典型现象是首次发送成功、随后错误状态锁定。</li>
+<li>外设中断优先级写在生成文件里，改优先级要改 <code>.ioc</code> 的 NVIC 段；<code>PendSV</code> 与 <code>SysTick</code> 的数值在调度器启动后由移植层覆盖。</li>
+<li>手写代码只能放在 USER CODE 区，标记名写错会静默失去保护。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选的</th><th>代价与收益</th></tr></thead><tbody><tr><td>CRC 实现</td><td>不用 HAL 外设，用 <code>Algorithm</code> 下的查表实现</td><td>校验逻辑与协议完全对应；代价是 <code>.ioc</code> 里多一个空转的 CRC 外设与一份 HAL 源文件</td></tr><tr><td>HSE 取值来源</td><td>写在 <code>.ioc</code> 并生成到头文件</td><td>单一来源、可追溯；代价是头文件里的 12 MHz 与实物晶振的一致性只能靠人工保证</td></tr><tr><td>中断优先级来源</td><td>全部由 <code>.ioc</code> 生成</td><td>与外设配置同源，便于统一检查；代价是无法在代码里随手微调</td></tr><tr><td>引脚宏</td><td>只给带标签的引脚生成宏</td><td><code>main.h</code> 干净；代价是查引脚配置要跨 <code>gpio.c</code> 与 <code>stm32f4xx_hal_msp.c</code></td></tr><tr><td>USER CODE 保护</td><td>依赖注释标记</td><td>不引入额外工具；代价是标记损坏不会报错，只能靠配对检查发现</td></tr></tbody></table>
+<h2 id="8-练习">8. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>由 <code>.ioc</code> 里的 <code>CAN1.Prescaler</code>、<code>CAN1.BS1</code>、<code>CAN1.BS2</code> 与 <code>RCC.APB1Freq_Value</code> 计算 CAN1 的位时间与波特率，并与 <code>CAN1.CalculateBaudRate</code> 对照。</li>
+<li>说明把 <code>CAN1.BS1</code> 从 <code>CAN_BS1_15TQ</code> 改成 <code>CAN_BS1_13TQ</code> 后波特率变成多少，以及需要同时改哪个值才能保持 1 Mbps。</li>
+<li>列出 <code>Core/Src/main.c</code> 里所有位于生成区的中断优先级调用，并指出它们在哪个文件里被配置。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>已知 <code>hcan2.ErrorCode</code> 为 <code>0x00200000</code>、<code>MSR</code> 为 <code>0x0C08</code>。写出从这两个值到“时钟树被改动”的推理链，并给出两条能排除纯硬件故障的验证手段。</li>
+<li>把 <code>HSE_VALUE</code> 从 12000000 改成 8000000，重新生成后不修改其他任何配置。分析 <code>SystemCoreClock</code>、DWT 延时、CAN1 波特率、USART3 波特率四项的结果，并说明哪一项会先暴露问题。</li>
+<li>设计一个在生成后自动运行的配对检查：读 <code>Core/Src</code> 与 <code>Core/Inc</code> 下所有文件，按名称配对 <code>USER CODE BEGIN</code> 与 <code>USER CODE END</code>，输出不成对的位置。要求说明为什么检查要按文件而不是按目录进行。</li>
+</ol></div></section><section class="dfile" id="file-5" data-file="05-本项目CubeMX配置清单"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-本项目CubeMX配置清单</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/05-CubeMX/05-本项目CubeMX配置清单.md</span></div><div class="dfile__body"><h1 id="本项目-cubemx-配置清单">本项目 CubeMX 配置清单</h1>
+<p>两份配置文件的文件名相同，芯片型号相同，外设集合相同，差异集中在少量参数上。这一节把 <code>2026sentriomeni.ioc</code> 里的全部有效配置整理成表，便于和生成代码或实物接线对照。</p>
+<blockquote>
+<p>源码索引（固件路径相对于各自仓库根目录）</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>2026sentriomeni.ioc</code></td><td>云台 461 行、底盘 467 行，配置来源</td></tr><tr><td><code>Core/Src/main.c</code></td><td><code>SystemClock_Config()</code> 与 <code>MX_xxx_Init()</code> 调用顺序</td></tr><tr><td><code>Core/Src/gpio.c</code>、<code>Core/Src/stm32f4xx_hal_msp.c</code></td><td>引脚模式与外设引脚复用</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>内核配置的生成结果</td></tr><tr><td><code>Core/Src/freertos.c</code></td><td><code>defaultTask</code> 的优先级与栈</td></tr></tbody></table>
+<h2 id="1-芯片与工程">1. 芯片与工程</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>键</th><th>取值</th><th>位置</th></tr></thead><tbody><tr><td><code>Mcu.CPN</code></td><td><code>STM32F407IGH6</code></td><td><code>.ioc:159</code></td></tr><tr><td><code>Mcu.Package</code></td><td><code>UFBGA176</code></td><td><code>.ioc:179</code></td></tr><tr><td><code>Mcu.UserName</code></td><td><code>STM32F407IGHx</code></td><td><code>.ioc:216</code></td></tr><tr><td><code>Mcu.PinsNb</code>、<code>Mcu.IPNb</code></td><td>33、16（底盘 34、16）</td><td><code>.ioc:213</code>、<code>:177</code></td></tr><tr><td><code>Mcu.ThirdPartyNb</code></td><td>0</td><td><code>.ioc:214</code></td></tr><tr><td><code>MxCube.Version</code>、<code>MxDb.Version</code></td><td>6.16.1、DB.6.0.161</td><td><code>.ioc:217-218</code></td></tr><tr><td><code>File.Version</code></td><td>6</td><td><code>.ioc:147</code></td></tr><tr><td><code>ProjectManager.FirmwarePackage</code></td><td><code>STM32Cube FW_F4 V1.28.3</code></td><td><code>.ioc:338</code></td></tr><tr><td><code>ProjectManager.TargetToolchain</code></td><td><code>CMake</code></td><td><code>.ioc:355</code></td></tr><tr><td><code>ProjectManager.MainLocation</code></td><td><code>Core/Src</code></td><td><code>.ioc:346</code></td></tr><tr><td><code>ProjectManager.StackSize</code>、<code>HeapSize</code></td><td><code>0x400</code>、<code>0x200</code></td><td><code>.ioc:354</code>、<code>:342</code></td></tr><tr><td><code>board</code>、<code>rtos.0.ip</code></td><td><code>custom</code>、<code>FREERTOS</code></td><td><code>.ioc:460-461</code></td></tr></tbody></table>
+<h2 id="2-启用的-ip">2. 启用的 IP</h2>
+<p><code>Mcu.IP0</code> 到 <code>Mcu.IP15</code>（<code>.ioc:161-176</code>）共 16 项，两块板完全一致：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>IP</th><th>类别</th><th>关键参数</th></tr></thead><tbody><tr><td><code>RCC</code></td><td>时钟</td><td>HSE 12 MHz，PLL 到 168 MHz</td></tr><tr><td><code>SYS</code></td><td>系统</td><td>时基 <code>TIM2</code>，SWD 两线</td></tr><tr><td><code>NVIC</code></td><td>中断</td><td>优先级组 4，外设中断统一 5</td></tr><tr><td><code>DMA</code></td><td>DMA</td><td>5 个请求</td></tr><tr><td><code>CAN1</code>、<code>CAN2</code></td><td>通信</td><td>1 Mbps，正常模式</td></tr><tr><td><code>USART1</code></td><td>通信</td><td>115200，8N1</td></tr><tr><td><code>USART3</code></td><td>通信</td><td>100000，8E1，仅接收</td></tr><tr><td><code>USART6</code></td><td>通信</td><td>115200，8N1，收发</td></tr><tr><td><code>SPI1</code></td><td>通信</td><td>主机，模式 3，1.3125 Mbps</td></tr><tr><td><code>I2C3</code></td><td>通信</td><td>400 kHz，7 位地址</td></tr><tr><td><code>TIM10</code></td><td>定时器</td><td>PWM1，50 Hz 级周期</td></tr><tr><td><code>CRC</code></td><td>校验</td><td>仅初始化，未被调用</td></tr><tr><td><code>FREERTOS</code></td><td>内核</td><td>CMSIS-RTOS V1 封装</td></tr><tr><td><code>USB_OTG_FS</code>、<code>USB_DEVICE</code></td><td>通信</td><td>设备模式，CDC 类</td></tr></tbody></table>
+<p>GPIO 不在 <code>Mcu.IPn</code> 列表里，只要有引脚被配置，就会生成 <code>Core/Inc/gpio.h</code> 与 <code>Core/Src/gpio.c</code>。<code>NVIC</code>、<code>RCC</code>、<code>SYS</code> 同样属于配置项。</p>
+<h2 id="3-时钟树">3. 时钟树</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>取值</th><th>位置</th></tr></thead><tbody><tr><td>HSE</td><td>12 MHz</td><td><code>.ioc:375</code></td></tr><tr><td><code>PLLM</code>、<code>PLLN</code>、<code>PLLQ</code></td><td>6、168、7</td><td><code>.ioc:383-385</code></td></tr><tr><td>PLLP</td><td>2（生成代码为 <code>RCC_PLLP_DIV2</code>）</td><td><code>Core/Src/main.c:172</code></td></tr><tr><td>SYSCLK、HCLK</td><td>168 MHz</td><td><code>.ioc:389</code>、<code>:374</code></td></tr><tr><td>APB1 分频与频率</td><td><code>RCC_HCLK_DIV4</code>、42 MHz</td><td><code>.ioc:363-364</code></td></tr><tr><td>APB2 分频与频率</td><td><code>RCC_HCLK_DIV2</code>、84 MHz</td><td><code>.ioc:366-367</code></td></tr><tr><td>APB1 定时器时钟</td><td>84 MHz</td><td><code>.ioc:365</code></td></tr><tr><td>APB2 定时器时钟</td><td>168 MHz</td><td><code>.ioc:368</code></td></tr><tr><td>48 MHz 时钟（USB）</td><td>48 MHz，由 <code>PLLQ=7</code> 得到</td><td><code>.ioc:361</code>、<code>:386</code></td></tr><tr><td>Flash 等待周期</td><td><code>FLASH_LATENCY_5</code></td><td><code>.ioc:372</code></td></tr></tbody></table>
+<p>派生关系是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>S</mi><mi>Y</mi><mi>S</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mo>=</mo><mfrac><mrow><mn>12</mn><mtext> MHz</mtext></mrow><mn>6</mn></mfrac><mo>×</mo><mn>168</mn><mo>÷</mo><mn>2</mn><mo>=</mo><mn>168</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{SYSCLK} = \frac{12\ \text{MHz}}{6} \times 168 \div 2 = 168\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">Y</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">12</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">168</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">÷</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">168</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>，APB1 定时器时钟为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>42</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>84</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">42 \times 2 = 84\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">42</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">84</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>，APB2 定时器时钟为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84</mn><mo>×</mo><mn>2</mn><mo>=</mo><mn>168</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">84 \times 2 = 168\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">84</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">168</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>。CAN 挂在 APB1 上，用 42 MHz 计算位时间。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["HSE 12 MHz&#x3C;br/>PH0 与 PH1 外部晶振"] --> B["PLLM=6 分频&#x3C;br/>VCO 输入 2 MHz"]
+    B --> C["PLLN=168 倍频&#x3C;br/>VCO 输出 336 MHz"]
+    C --> D["PLLP=2 分频&#x3C;br/>SYSCLK 168 MHz"]
+    C --> E["PLLQ=7 分频&#x3C;br/>48 MHz 供 USB"]
+    D --> F["AHB 不分频&#x3C;br/>HCLK 168 MHz"]
+    F --> G["APB1 除 4&#x3C;br/>PCLK1 42 MHz"]
+    F --> H["APB2 除 2&#x3C;br/>PCLK2 84 MHz"]
+    G --> I["CAN1 与 CAN2 位时间基准"]
+    G --> J["APB1 定时器时钟 84 MHz&#x3C;br/>TIM2 时基与 TIM10"]
+    H --> K["APB2 定时器时钟 168 MHz"]</pre></div>
+<h2 id="4-中断配置">4. 中断配置</h2>
+<p><code>NVIC</code> 段（<code>.ioc:219-248</code>）里与固件相关的是外设条目，数值段的第一项是抢占优先级：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>中断</th><th>优先级</th><th>位置</th></tr></thead><tbody><tr><td><code>CAN1_RX0</code>、<code>CAN1_RX1</code>、<code>CAN2_RX0</code>、<code>CAN2_RX1</code></td><td>5</td><td><code>.ioc:220-223</code></td></tr><tr><td><code>DMA1_Stream1</code>、<code>DMA2_Stream1</code>、<code>DMA2_Stream2</code>、<code>DMA2_Stream3</code>、<code>DMA2_Stream6</code></td><td>5</td><td><code>.ioc:224-228</code></td></tr><tr><td><code>OTG_FS</code></td><td>5</td><td><code>.ioc:234</code></td></tr><tr><td><code>TIM1_UP_TIM10</code></td><td>5</td><td><code>.ioc:242</code></td></tr><tr><td><code>USART3</code>、<code>USART6</code></td><td>5</td><td><code>.ioc:246-247</code></td></tr><tr><td><code>TIM2</code>（HAL 时基）</td><td>15</td><td><code>.ioc:243</code></td></tr><tr><td><code>PendSV</code>、<code>SysTick</code></td><td>15</td><td><code>.ioc:235</code>、<code>:241</code></td></tr><tr><td><code>HardFault</code> 与 <code>MemManage</code> 与 <code>BusFault</code> 与 <code>UsageFault</code> 与 <code>SVCall</code></td><td>0</td><td><code>.ioc:231-233</code>、<code>:237</code>、<code>:248</code></td></tr></tbody></table>
+<p>其余开关：<code>NVIC.PriorityGroup=NVIC_PRIORITYGROUP_4</code>（<code>:236</code>）、<code>NVIC.TimeBase=TIM2_IRQn</code>（<code>:244</code>）、<code>NVIC.TimeBaseIP=TIM2</code>（<code>:245</code>）、<code>NVIC.ForceEnableDMAVector=true</code>（<code>:230</code>）。最后一项保证五个 DMA 流的中断向量被强制使能，否则生成代码可能只使能外设而不使能向量。</p>
+<h2 id="5-dma-分配">5. DMA 分配</h2>
+<p><code>Dma.RequestsNb=5</code>（<code>.ioc:40</code>），每个请求对应一个流：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>请求</th><th>流与通道</th><th>方向</th><th>模式</th><th>优先级</th></tr></thead><tbody><tr><td><code>USART6_RX</code></td><td><code>DMA2_Stream1</code> 通道 5</td><td>外设到内存</td><td><code>NORMAL</code></td><td><code>HIGH</code></td></tr><tr><td><code>USART6_TX</code></td><td><code>DMA2_Stream6</code> 通道 5</td><td>内存到外设</td><td><code>CIRCULAR</code></td><td><code>HIGH</code></td></tr><tr><td><code>USART3_RX</code></td><td><code>DMA1_Stream1</code> 通道 4</td><td>外设到内存</td><td><code>CIRCULAR</code></td><td><code>HIGH</code></td></tr><tr><td><code>SPI1_RX</code></td><td><code>DMA2_Stream2</code> 通道 3</td><td>外设到内存</td><td><code>NORMAL</code></td><td><code>VERY_HIGH</code></td></tr><tr><td><code>SPI1_TX</code></td><td><code>DMA2_Stream3</code> 通道 3</td><td>内存到外设</td><td><code>NORMAL</code></td><td><code>HIGH</code></td></tr></tbody></table>
+<p>USART3 与 USART6_TX 用循环模式，前者服务 DBUS 遥控器的连续接收，后者持续发送视觉数据；SPI1 的一对用普通模式，每次读寄存器重新启动。</p>
+<h2 id="6-外设参数">6. 外设参数</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>外设</th><th>参数</th><th>位置</th></tr></thead><tbody><tr><td>CAN1 / CAN2</td><td><code>Prescaler=2</code>、<code>BS1=15TQ</code>、<code>BS2=5TQ</code>、<code>SJW=1TQ</code>、<code>Mode=NORMAL</code>、<code>NART=ENABLE</code>、<code>ABOM=ENABLE</code></td><td><code>.ioc:5-19</code>、<code>:20-34</code></td></tr><tr><td>USART1</td><td>115200、8 位、无校验、收发</td><td><code>Core/Src/usart.c:46-51</code></td></tr><tr><td>USART3</td><td>100000、8 位、偶校验、仅接收</td><td><code>.ioc:428-435</code></td></tr><tr><td>USART6</td><td>115200、8 位、无校验、收发</td><td><code>.ioc:436-443</code></td></tr><tr><td>SPI1</td><td>主机、8 位、<code>POLARITY_HIGH</code>、<code>PHASE_2EDGE</code>、软件 NSS、<code>PRESCALER_64</code></td><td><code>.ioc:401-413</code></td></tr><tr><td>I2C3</td><td>400 kHz、<code>DUTYCYCLE_2</code>、7 位地址、<code>OwnAddress=0</code></td><td><code>.ioc:149-157</code></td></tr><tr><td>TIM10</td><td><code>Prescaler=0</code>、<code>Period=4999</code>、<code>PWM1</code>、<code>Pulse=0</code>、通道 1</td><td><code>.ioc:414-425</code></td></tr><tr><td>CRC</td><td>只调用 <code>MX_CRC_Init()</code></td><td><code>.ioc:450-451</code></td></tr><tr><td>USB_DEVICE</td><td>CDC 类，全速</td><td><code>.ioc:444-447</code></td></tr></tbody></table>
+<p>TIM10 的计数时钟是 APB2 定时器时钟 168 MHz，<code>Prescaler=0</code> 时计数频率 168 MHz，<code>Period=4999</code> 时更新频率</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>W</mi><mi>M</mi></mrow></msub><mo>=</mo><mfrac><mrow><mn>168</mn><mtext> MHz</mtext></mrow><mrow><mo stretchy="false">(</mo><mn>0</mn><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>×</mo><mo stretchy="false">(</mo><mn>4999</mn><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></mfrac><mo>=</mo><mn>33.6</mn><mtext> kHz</mtext></mrow><annotation encoding="application/x-tex">f_{PWM} = \frac{168\ \text{MHz}}{(0+1) \times (4999+1)} = 33.6\ \text{kHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">W</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3923em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mtight">0</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mbin mtight">×</span><span class="mopen mtight">(</span><span class="mord mtight">4999</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">33.6</span><span class="mspace"> </span><span class="mord text"><span class="mord">kHz</span></span></span></span></span></p>
+<p><code>Pulse=0</code> 表示初始占空比（duty cycle）为 0，实际占空比由运行期写 <code>__HAL_TIM_SET_COMPARE()</code> 决定。</p>
+<h2 id="7-引脚分配">7. 引脚分配</h2>
+<p>云台板 33 项引脚，其中 5 项是虚拟引脚（virtual pin，<code>VP_</code> 前缀，表示外设与中间件的连接关系，不对应物理管脚）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>外设</th><th>引脚</th><th>位置</th></tr></thead><tbody><tr><td>CAN1</td><td>PD0 <code>CAN1_RX</code>、PD1 <code>CAN1_TX</code></td><td><code>.ioc:300-305</code></td></tr><tr><td>CAN2</td><td>PB5 <code>CAN2_RX</code>、PB6 <code>CAN2_TX</code></td><td><code>.ioc:279-284</code></td></tr><tr><td>USART1</td><td>PA9 <code>USART1_TX</code>、PB7 <code>USART1_RX</code></td><td><code>.ioc:269-270</code>、<code>:285-286</code></td></tr><tr><td>USART3</td><td>PC10 <code>USART3_TX</code>、PC11 <code>USART3_RX</code></td><td><code>.ioc:287-290</code></td></tr><tr><td>USART6</td><td>PG14 <code>USART6_TX</code>、PG9 <code>USART6_RX</code></td><td><code>.ioc:308-309</code>、<code>:316-317</code></td></tr><tr><td>SPI1</td><td>PB3 <code>SCK</code>、PB4 <code>MISO</code>、PA7 <code>MOSI</code></td><td><code>.ioc:275-278</code>、<code>:267-268</code></td></tr><tr><td>I2C3</td><td>PH7 <code>SCL</code>、PC9 <code>SDA</code></td><td><code>.ioc:324-325</code>、<code>:291-292</code></td></tr><tr><td>TIM10</td><td>PF6 <code>TIM10_CH1</code></td><td><code>.ioc:306-307</code></td></tr><tr><td>USB OTG FS</td><td>PA11 <code>DM</code>、PA12 <code>DP</code></td><td><code>.ioc:255-258</code></td></tr><tr><td>SWD</td><td>PA13 <code>SWDIO</code>、PA14 <code>SWCLK</code></td><td><code>.ioc:259-262</code></td></tr><tr><td>外部中断</td><td>PA0 <code>KEY</code>、PG3 <code>GPXTI3</code></td><td><code>.ioc:249-254</code>、<code>:310-313</code></td></tr><tr><td>普通输出</td><td>PA4、PB0、PG6、PH11</td><td><code>.ioc:263-266</code>、<code>:271-274</code>、<code>:314-315</code>、<code>:322-323</code></td></tr><tr><td>晶振</td><td>PH0、PH1</td><td><code>.ioc:318-321</code></td></tr></tbody></table>
+<p>5 项虚拟引脚的名称分别是 <code>VP_CRC_VS_CRC</code>、<code>VP_FREERTOS_VS_CMSIS_V1</code>、<code>VP_SYS_VS_tim2</code>、<code>VP_TIM10_VS_ClockSourceINT</code>、<code>VP_USB_DEVICE_VS_USB_DEVICE_CDC_FS</code>。<code>VP_SYS_VS_tim2</code> 就是 HAL 时基选 TIM2 的记录，它决定了会生成 <code>Core/Src/stm32f4xx_hal_timebase_tim.c</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+    subgraph BUS1["APB1 外设"]
+        C1["CAN1&#x3C;br/>PD0 与 PD1"]
+        C2["CAN2&#x3C;br/>PB5 与 PB6"]
+        T2["TIM2&#x3C;br/>HAL 1ms 时基"]
+    end
+    subgraph BUS2["APB2 外设"]
+        U1["USART1&#x3C;br/>PA9 与 PB7"]
+        U6["USART6&#x3C;br/>PG14 与 PG9"]
+        S1["SPI1&#x3C;br/>PB3 与 PB4 与 PA7"]
+        T10["TIM10&#x3C;br/>PF6 PWM"]
+    end
+    subgraph BUS3["APB1 通信"]
+        U3["USART3&#x3C;br/>PC10 与 PC11"]
+        I3["I2C3&#x3C;br/>PH7 与 PC9"]
+    end
+    D5["DMA1_Stream1&#x3C;br/>USART3_RX 循环"] --> U3
+    D2["DMA2_Stream1 与 Stream6&#x3C;br/>USART6_RX 与 TX"] --> U6
+    D3["DMA2_Stream2 与 Stream3&#x3C;br/>SPI1_RX 与 TX"] --> S1
+    U3 --> DBUS["DBUS 遥控器"]
+    U6 --> VISION["视觉小电脑"]
+    S1 --> IMU["BMI088"]
+    C1 --> MOTOR1["电机 CAN1 总线"]
+    C2 --> MOTOR2["电机 CAN2 总线"]
+    USB["USB_OTG_FS&#x3C;br/>PA11 与 PA12"] --> PC["上位机"]</pre></div>
+<h2 id="8-freertos-配置">8. FreeRTOS 配置</h2>
+<p><code>FREERTOS.</code> 前缀下的键（<code>.ioc:91-146</code>）生成到 <code>Core/Inc/FreeRTOSConfig.h</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>键</th><th>云台</th><th>底盘</th><th>生成位置</th></tr></thead><tbody><tr><td><code>HEAP_NUMBER</code>、<code>MEMORY_ALLOCATION</code></td><td>4、2</td><td>同</td><td><code>heap_4.c</code> 与动态分配</td></tr><tr><td><code>configTOTAL_HEAP_SIZE</code></td><td>40960</td><td>同</td><td><code>FreeRTOSConfig.h:67</code></td></tr><tr><td><code>configTICK_RATE_HZ</code></td><td>1000</td><td>同</td><td><code>FreeRTOSConfig.h:64</code></td></tr><tr><td><code>configMAX_PRIORITIES</code></td><td>7</td><td>同</td><td><code>FreeRTOSConfig.h:65</code></td></tr><tr><td><code>configMINIMAL_STACK_SIZE</code></td><td>256</td><td>512</td><td><code>FreeRTOSConfig.h:66</code></td></tr><tr><td><code>configLIBRARY_LOWEST_INTERRUPT_PRIORITY</code></td><td>15</td><td>同</td><td><code>FreeRTOSConfig.h:104</code></td></tr><tr><td><code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code></td><td>5</td><td>同</td><td><code>FreeRTOSConfig.h:110</code></td></tr><tr><td><code>configUSE_MUTEXES</code>、<code>configUSE_TASK_NOTIFICATIONS</code></td><td>1、1</td><td>同</td><td>内核功能开关</td></tr><tr><td><code>INCLUDE_vTaskDelayUntil</code></td><td>0</td><td>同</td><td>无严格周期延时</td></tr><tr><td><code>configUSE_TRACE_FACILITY</code>、<code>configCHECK_FOR_STACK_OVERFLOW</code></td><td>0、0</td><td>同</td><td>无任务列表与栈检查</td></tr><tr><td><code>Tasks01</code></td><td><code>defaultTask,0,256</code></td><td><code>defaultTask,-3,512</code></td><td><code>Core/Src/freertos.c</code></td></tr></tbody></table>
+<p><code>Tasks01</code> 的第二段是优先级，第三段是栈字数。云台生成 <code>osPriorityNormal</code> 与 256 words（<code>Core/Src/freertos.c:123</code>），底盘生成 <code>osPriorityIdle</code> 与 512 words（<code>Core/Src/freertos.c:121</code>）。</p>
+<h2 id="9-两块板的差异">9. 两块板的差异</h2>
+<p>两份 <code>.ioc</code> 的全部差异如下，其余内容逐行相同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>差异</th><th>云台</th><th>底盘</th><th>归属</th></tr></thead><tbody><tr><td><code>CAD.formats</code>、<code>CAD.pinconfig</code>、<code>CAD.provider</code></td><td>空、空、空</td><td><code>[]</code>、<code>Dual</code>、<code>Component Search Engine</code></td><td>视图状态</td></tr><tr><td><code>FREERTOS.Tasks01</code></td><td><code>defaultTask,0,256</code></td><td><code>defaultTask,-3,512</code></td><td>功能配置</td></tr><tr><td><code>FREERTOS.configMINIMAL_STACK_SIZE</code></td><td>256</td><td>512</td><td>功能配置</td></tr><tr><td>引脚数量</td><td>33</td><td>34（多 PA10）</td><td>功能配置</td></tr><tr><td>PA10 用途</td><td>未使用</td><td><code>USB_OTG_FS_ID</code></td><td>功能配置</td></tr><tr><td><code>NVIC.OTG_FS_IRQn</code> 的一个布尔段</td><td><code>true</code></td><td><code>false</code></td><td>字段含义未验证</td></tr><tr><td><code>NVIC.SysTick_IRQn</code> 的一个布尔段</td><td><code>false</code></td><td><code>true</code></td><td>字段含义未验证</td></tr><tr><td><code>ProjectManager.functionlistsort</code></td><td>USB 在 13、CRC 在 12</td><td>USB 在 12、CRC 在 13</td><td>生成顺序记录</td></tr><tr><td><code>USB_DEVICE</code> 描述符</td><td>默认</td><td><code>PID=202</code>、<code>shaobing_chassis</code>、<code>Virtual ComPort</code></td><td>功能配置</td></tr><tr><td>其余 <code>Mcu.Pin*</code> 编号</td><td>从 <code>Mcu.Pin15</code> 起</td><td>整体后移一位</td><td>编号</td></tr></tbody></table>
+<p><code>USB_DEVICE</code> 的三条描述符键落在 <code>USB_DEVICE/App/usbd_desc.c:67-69</code> 的宏上，是两块板枚举出不同设备名与 PID 的原因。</p>
+<h2 id="10-生成产物与标记数">10. 生成产物与标记数</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>行数</th><th>USER CODE 标记对</th><th>手写内容</th></tr></thead><tbody><tr><td><code>Core/Src/main.c</code></td><td>249</td><td>19 与 18（不成对）</td><td>回调与 BSP 初始化</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>372</td><td>50</td><td>USART3 中断一处调用</td></tr><tr><td><code>Core/Src/usart.c</code></td><td>344</td><td>24</td><td>无</td></tr><tr><td><code>Core/Src/can.c</code></td><td>224</td><td>17</td><td>无</td></tr><tr><td><code>Core/Src/freertos.c</code></td><td>162</td><td>17</td><td>队列与任务创建</td></tr><tr><td><code>Core/Src/tim.c</code></td><td>139</td><td>12</td><td>无</td></tr><tr><td><code>Core/Src/gpio.c</code></td><td>112</td><td>4</td><td>无</td></tr><tr><td><code>Core/Src/dma.c</code></td><td>68</td><td>4</td><td>无</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>139</td><td>5</td><td><code>configASSERT</code></td></tr><tr><td><code>Core/Inc/main.h</code></td><td>71</td><td>7</td><td>无</td></tr><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td>350</td><td>16</td><td>接收回调与队列声明</td></tr><tr><td><code>Core/Src/syscalls.c</code></td><td>245</td><td>0</td><td>无保护</td></tr></tbody></table>
+<p><code>osPriorityIdle</code> 与 <code>osPriorityNormal</code> 之外，两块板的默认任务差异还体现在栈字数上，这一点与 <code>configMINIMAL_STACK_SIZE</code> 同向变化，都指向底盘板留了更多余量。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant M as main
+    participant H as HAL 与 SystemClock_Config
+    participant P as 生成的 MX_xxx_Init
+    participant U as USER CODE 2 区
+    participant F as FreeRTOS
+    M->>H: HAL_Init 与 TIM2 时基
+    M->>U: USER CODE Init 区 当前为空
+    M->>H: SystemClock_Config 到 168 MHz
+    M->>P: MX_GPIO_Init 到 MX_CRC_Init 共 11 个
+    M->>U: MX_USB_DEVICE_Init 与 BSP 与 DWT 与 Uart_Init
+    M->>F: MX_FREERTOS_Init 创建队列与任务
+    M->>F: osKernelStart 移交调度器
+    Note over U: 这段顺序由 .ioc 的 functionlistsort 决定</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 与配置一致 : 一次生成完成
+    与配置一致 --> 标记外被改 : 手工修改生成区
+    与配置一致 --> 标记内被改 : 在 USER CODE 区加代码
+    标记外被改 --> 与配置一致 : 重新生成 覆盖
+    标记内被改 --> 保持手写内容 : 重新生成 回填
+    保持手写内容 --> 标记内被改 : 继续在区内修改
+    标记外被改 --> 与配置偏差累积 : 长期不重新生成
+    与配置偏差累积 --> 与配置一致 : 提交并重新生成</pre></div>
+<h2 id="11-小结">11. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>两块板同芯片、同封装、同 16 个 IP、同时钟树，全部差异集中在 FreeRTOS 栈大小、默认任务优先级、一个引脚、USB 描述符与若干视图字段上。</li>
+<li>CAN 位时间由 APB1 的 42 MHz 决定，<code>Prescaler=2</code> 与 21 个 TQ 给出 1 Mbps。</li>
+<li>外设中断统一 5，<code>PendSV</code>、<code>SysTick</code> 与 HAL 时基 <code>TIM2</code> 为 15，与 FreeRTOS 的规则一致。</li>
+<li>5 个 DMA 请求里，USART3_RX 与 USART6_TX 用循环模式，SPI1 的两个流用普通模式。</li>
+<li><code>VP_SYS_VS_tim2</code> 这条虚拟引脚决定生成 <code>stm32f4xx_hal_timebase_tim.c</code>，是 HAL 用 TIM2 而不是 SysTick 作时基的记录。</li>
+<li><code>.ioc</code> 里只有 <code>PA0-WKUP</code> 带 <code>GPIO_Label</code>，因此 <code>main.h</code> 只有 <code>KEY_Pin</code> 一个引脚宏。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选的</th><th>代价与收益</th></tr></thead><tbody><tr><td>CAN 速率</td><td>1 Mbps</td><td>匹配 DJI 电机与底盘总线；代价是总线长度与终端电阻要求更严</td></tr><tr><td>HAL 时基</td><td>独立 TIM2</td><td>与内核 SysTick 分离；代价是多占一个定时器与一个中断</td></tr><tr><td>外设中断优先级</td><td>统一 5</td><td>满足 FreeRTOS 的中断安全调用门槛；代价是无法用优先级区分实时性</td></tr><tr><td>SPI1 速度</td><td><code>PRESCALER_64</code>，1.3125 Mbps</td><td>与 BMI088 的时序余量充足；代价是 IMU 采样频率上限受限</td></tr><tr><td>DMA 模式</td><td>通信接收用循环，SPI 用普通</td><td>循环模式省去重复启动；代价是需要空闲中断配合确定帧边界</td></tr><tr><td>默认任务</td><td>云台 Normal 加 256 words，底盘 Idle 加 512 words</td><td>底盘给初始化留足栈；代价是两块板行为不完全一致</td></tr><tr><td>CRC 外设</td><td>使能但不使用</td><td>保留了硬件校验的选项；代价是多编译一份 HAL 源文件</td></tr></tbody></table>
+<h2 id="12-练习">12. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>由 <code>RCC.APB1Freq_Value</code> 与 <code>TIM10</code> 的两个参数计算 TIM10 的 PWM 频率，并说明它挂在 APB1 还是 APB2 的定时器时钟上。</li>
+<li>列出 5 个 DMA 请求的流与通道，并指出哪些是循环模式。</li>
+<li>说明 <code>Mcu.PinsNb</code> 从 33 变成 34 时，<code>.ioc</code> 里哪几行会变化，为什么这些变化会让 diff 难以阅读。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>已知底盘 <code>defaultTask</code> 的优先级是 <code>osPriorityIdle</code>、栈 512 words。分析它与 <code>MX_USB_DEVICE_Init()</code> 放在 <code>USER CODE 2</code> 区这一安排之间的关系，并说明为什么这块板把默认任务降到最低优先级仍然能完成初始化。</li>
+<li>把云台的 <code>configTOTAL_HEAP_SIZE</code> 从 40960 改成 20480，列出会受影响的任务与队列，并说明如何在不烧录的情况下先估算是否够用。</li>
+<li>从两份 <code>.ioc</code> 的差异表里挑出会导致两块板行为不同的全部条目，并为每一条给出一个可验证的现象。</li>
+</ol></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/04-DWT%E8%AE%A1%E6%97%B6%E4%B8%8E%E5%9C%A8%E7%BA%BF%E8%A7%82%E6%B5%8B/"><span class="k">← 上一篇</span><span class="t">DWT计时与在线观测</span><span class="d">STM32 与 HAL · 5 个文件</span></a><a class="next" href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/01-CAN%E5%A4%96%E8%AE%BE%E4%B8%8E%E8%BF%87%E6%BB%A4%E5%99%A8/"><span class="k">下一篇 →</span><span class="t">CAN外设与过滤器</span><span class="d">CAN 与电机 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

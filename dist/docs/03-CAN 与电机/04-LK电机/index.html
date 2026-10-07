@@ -1,0 +1,914 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>LK电机 · CAN 与电机 · 王宇翔</title><meta name="description" content="LK（瓴控）电机的 CAN 标准帧结构、0x140 加电机 ID 的寻址方式、命令字分类，以及本工程两块板上 StdId 0x141 的发送与接收分派源码位置"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/04-LK%E7%94%B5%E6%9C%BA/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="LK电机 · CAN 与电机 · 王宇翔"><meta property="og:description" content="LK（瓴控）电机的 CAN 标准帧结构、0x140 加电机 ID 的寻址方式、命令字分类，以及本工程两块板上 StdId 0x141 的发送与接收分派源码位置"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/04-LK%E7%94%B5%E6%9C%BA/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/">CAN 与电机</a><span class="sep" aria-hidden="true">/</span><span class="now">LK电机</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>LK电机</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>LK 协议与 0x141</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-协议" data-depth="2" data-heading-j="1">2. 协议</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="5">6. 练习</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>位置、速度与力矩模式</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-单位换算" data-depth="2" data-heading-j="1">2. 单位换算</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="5">6. 练习</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>多圈角度与零点标定</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-协议" data-depth="2" data-heading-j="1">2. 协议</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="5">6. 练习</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>本项目应用</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-控制链路" data-depth="2" data-heading-j="1">2. 控制链路</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="5">6. 练习</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-排查顺序" data-depth="2" data-heading-j="1">2. 排查顺序</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="5">6. 练习</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">CAN 与电机</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>CAN / LK电机 / 瓴控 / 321 / 命令字 / 哨兵固件 / 力矩环 / 速度环</span></div><h1 class="docs__title">LK电机</h1><p class="docs__lead">LK（瓴控）电机的 CAN 标准帧结构、0x140 加电机 ID 的寻址方式、命令字分类，以及本工程两块板上 StdId 0x141 的发送与接收分派源码位置</p></header><section class="dfile" id="file-1" data-file="01-LK协议与0x141"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-LK协议与0x141</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/04-LK电机/01-LK协议与0x141.md</span></div><div class="dfile__body"><h1 id="lk-协议与-0x141">LK 协议与 0x141</h1>
+<blockquote>
+<p>云台板路径为 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板路径为 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。下文相对路径都相对于这两个根目录。</p>
+</blockquote>
+<h2 id="1-概念">1. 概念</h2>
+<p>LK 电机（LK Motor，上海瓴控）把驱动器、编码器与减速器集成在一个壳体里，主控只用一条 CAN 总线就能下发目标并读取状态。通信使用标准数据帧，不带扩展标识符，数据段固定 8 字节。寻址规则只有一条：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>StdId</mtext><mo>=</mo><mrow><mn>0</mn><mi mathvariant="normal">x</mi><mn>140</mn></mrow><mo>+</mo><mtext>电机 ID</mtext></mrow><annotation encoding="application/x-tex">\text{StdId} = \mathrm{0x140} + \text{电机 ID}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">StdId</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord"><span class="mord mathrm">0x140</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">电机</span><span class="mord"> ID</span></span></span></span></span></p>
+<p>电机 ID 在 1 到 32 之间，ID 取 1 时 StdId 为 0x141。这条规则使 LK 报文落在 0x141 到 0x160 这一段，与 DJI 的 0x200、0x1FF、0x2FF 以及达妙电机使用的 ID 段互不重叠。</p>
+<p>8 个字节分两部分：字节 0 是<strong>命令字</strong>（command byte），字节 1 到 7 是参数区，参数区含义随命令字变化。同一个 StdId 上既有主机发往电机的命令帧，也有电机返回的反馈帧，方向不同。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  ID["电机 ID 1 到 32"] --> SID["StdId = 0x140 + ID&#x3C;br/>ID1 时为 0x141"]
+  SID --> F["标准数据帧 DLC 8"]
+  F --> CB["字节 0 命令字"]
+  F --> P["字节 1 到 7 参数区"]</pre></div>
+<h2 id="2-协议">2. 协议</h2>
+<p>命令字按功能分四组。状态控制组改变工作状态，运动控制组写入目标，参数读取组请求回读，标定组改写编码器基准。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>分组</th><th>命令字</th><th>含义</th><th>参数区</th></tr></thead><tbody><tr><td>状态控制</td><td>0x80</td><td>关机，清除圈数与上一条命令</td><td>无</td></tr><tr><td>状态控制</td><td>0x88</td><td>运行（使能）</td><td>无</td></tr><tr><td>状态控制</td><td>0x81</td><td>停止，保留当前状态</td><td>无</td></tr><tr><td>运动控制</td><td>0xA1</td><td>力矩环</td><td>字节 4-5 为 int16 电流</td></tr><tr><td>运动控制</td><td>0xA2</td><td>速度环</td><td>字节 2-3 前馈电流，字节 4-7 为 int32 速度</td></tr><tr><td>运动控制</td><td>0xA3</td><td>多圈位置环</td><td>字节 4-7 为 int32 角度</td></tr><tr><td>运动控制</td><td>0xA4</td><td>多圈位置环加限速</td><td>字节 2-3 限速，字节 4-7 角度</td></tr><tr><td>运动控制</td><td>0xA5</td><td>单圈位置环</td><td>字节 1 转向，字节 4-7 角度</td></tr><tr><td>运动控制</td><td>0xA6</td><td>单圈位置环加限速</td><td>字节 1 转向，字节 2-3 限速，字节 4-7 角度</td></tr><tr><td>运动控制</td><td>0xA7</td><td>增量位置环</td><td>字节 4-7 为 int32 角度增量</td></tr><tr><td>运动控制</td><td>0xA8</td><td>增量位置环加限速</td><td>字节 2-3 限速，字节 4-7 角度增量</td></tr><tr><td>参数读取</td><td>0x90</td><td>读编码器值、原始值与偏移</td><td>无</td></tr><tr><td>参数读取</td><td>0x92</td><td>读多圈角度</td><td>无</td></tr><tr><td>参数读取</td><td>0x94</td><td>读单圈角度</td><td>无</td></tr><tr><td>参数读取</td><td>0x9A</td><td>读状态 1：温度、电压、电流、状态、错误</td><td>无</td></tr><tr><td>参数读取</td><td>0x9C</td><td>读状态 2：温度、iq、速度、编码器</td><td>无</td></tr><tr><td>参数读取</td><td>0x9D</td><td>读状态 3：三相电流</td><td>无</td></tr><tr><td>标定</td><td>0x19</td><td>把当前位置设为零点</td><td>无</td></tr><tr><td>标定</td><td>0x95</td><td>把当前位置设为指定多圈角</td><td>字节 4-7 角度</td></tr><tr><td>参数读写</td><td>0xC0 / 0xC1</td><td>读 / 写控制参数</td><td>见手册</td></tr></tbody></table>
+<p>一帧命令对应一帧反馈，收发时序以 ID1 的使能与力矩下发为例：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant H as 主控
+  participant M as LK电机ID1
+  H->>M: 0x141 0x88 00 00 00 00 00 00 00
+  M-->>H: 状态帧
+  H->>M: 0x141 0xA1 00 00 00 iqL iqH 00 00
+  M-->>H: 反馈 温度 iq 速度 位置
+  H->>M: 0x141 0x9C 00 00 00 00 00 00 00
+  M-->>H: 状态2帧</pre></div>
+<p>反馈帧的 StdId，常见约定与命令帧同为 0x140 加电机 ID。本工程云台板的接收分派写在 0x181（见第 3 节），与这条约定相差 0x40，改动总线或更换电机前要先确认当前电机的实际反馈 ID。</p>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<p>两块板的 LK 命令函数都把 StdId 写死为 0x141，句柄都是 hcan1。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>板</th><th>文件</th><th>函数</th><th>命令字</th><th>行号</th></tr></thead><tbody><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKMotorCloseCmd</code></td><td>0x80</td><td><code>:335-352</code></td></tr><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKMotorStartCmd</code></td><td>0x88</td><td><code>:355-372</code></td></tr><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKMotorTorqueCmd</code></td><td>0xA1</td><td><code>:375-396</code></td></tr><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKMotorVelocityCmd</code></td><td>0xA2</td><td><code>:399-424</code></td></tr><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKMotorIncrePosCmd</code></td><td>0xA7</td><td><code>:427-452</code></td></tr><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKMotorIncrePosVelRestrictCmd</code></td><td>0xA8</td><td><code>:455-481</code></td></tr><tr><td>云台板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td><code>BSP_CAN1_LKReadStatus2</code></td><td>0x9C</td><td><code>:483-497</code></td></tr><tr><td>底盘板</td><td><code>BSP/Src/bsp_can.cpp</code></td><td>前六项同名函数，无 0x9C</td><td>0x80 到 0xA8</td><td><code>:308-459</code></td></tr></tbody></table>
+<p>取 StdId 的写法（云台板 <code>bsp_can.cpp:342-345</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">TxHeader.StdId </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">141</span><span style="color:#24292E">;</span><span style="color:#6A737D"> //标准标识符</span></span>
+<span class="line"><span style="color:#24292E">TxHeader.IDE </span><span style="color:#D73A49">=</span><span style="color:#24292E"> CAN_ID_STD;</span></span>
+<span class="line"><span style="color:#24292E">TxHeader.RTR </span><span style="color:#D73A49">=</span><span style="color:#24292E"> CAN_RTR_DATA;</span></span>
+<span class="line"><span style="color:#24292E">TxHeader.DLC </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">;</span></span></code></pre>
+<p>反馈分派在云台板 <code>BSP/Src/bsp_can.cpp:643</code>，位于 CAN1 分支内：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">case </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">181</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#D73A49">    switch</span><span style="color:#24292E"> (</span><span style="color:#E36209">RxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">0</span><span style="color:#24292E">]) {</span></span>
+<span class="line"><span style="color:#D73A49">        case</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">A1</span><span style="color:#24292E">: {</span><span style="color:#6A737D"> /* 温度 iq 速度 位置 */</span><span style="color:#24292E"> }</span></span>
+<span class="line"><span style="color:#D73A49">        case</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">A2</span><span style="color:#24292E">: {</span><span style="color:#6A737D"> /* 同上 */</span><span style="color:#24292E"> }</span></span>
+<span class="line"><span style="color:#D73A49">        case</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">A7</span><span style="color:#24292E">: { </span><span style="color:#D73A49">break</span><span style="color:#24292E">; }</span></span>
+<span class="line"><span style="color:#D73A49">        case</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">A8</span><span style="color:#24292E">: { </span><span style="color:#D73A49">break</span><span style="color:#24292E">; }</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span></code></pre>
+<p>函数名带 <code>CAN1</code>，句柄也确实是 <code>hcan1</code>（<code>:351</code>、<code>:371</code>、<code>:395</code> 等）。云台板 CAN1 上还挂着 yaw（GM6020，0x1FF 第 1 槽位、反馈 0x205；代码按 M3508 的编号习惯记作 ID5、变量名 <code>motor_5</code>）与拨弹盘（M3508，ID6、反馈 0x206），帧头分别是 0x1FF 与 0x141。过滤器为全接收（<code>BSP/Src/bsp_can.cpp:62-86</code>），三种报文都进同一个 FIFO0 回调，靠 StdId 分派。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+<ul>
+<li>0x141 只对应电机 ID 1。ID 改成 2 之后命令帧要写 0x142，电机不会响应 0x141。</li>
+<li>发送用 0x141、接收分派用 0x181，两个值不同。只按命令 ID 去 <code>switch</code> 反馈会让 <code>LK_motor_1</code> 恒为 0。</li>
+<li>命名里的 <code>CAN1</code> 指代码里的 hcan1，与接插件丝印不一定是同一编号。改线时对着 <code>Core/Src/can.c</code> 的 GPIO 复用确认。</li>
+<li>0x80 关机之后电机不再执行运动命令，恢复控制前需要重新发一次 0x88。</li>
+</ul>
+<h2 id="5-小结">5. 小结</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>帧类型</td><td>CAN 标准数据帧，DLC 8</td></tr><tr><td>寻址</td><td>StdId = 0x140 + 电机 ID</td></tr><tr><td>ID1 命令 StdId</td><td>0x141</td></tr><tr><td>命令字位置</td><td>字节 0</td></tr><tr><td>参数区</td><td>字节 1 到 7</td></tr><tr><td>本工程发送句柄</td><td>hcan1</td></tr><tr><td>本工程接收分派</td><td>0x181，云台板 CAN1 分支</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<ol>
+<li>电机 ID 设为 3，写出使能命令的 StdId 与 8 个数据字节。</li>
+<li>从 <code>BSP_CAN1_LKMotorTorqueCmd</code> 找出电流写入哪两个字节，判断字节序。</li>
+<li>把 LK 电机从 CAN1 移到 CAN2，列出需要改动的句柄与过滤器位置。</li>
+<li>说明 0x1FF 与 0x141 能在云台板 CAN1 共存而不误解析的原因。</li>
+</ol></div></section><section class="dfile" id="file-2" data-file="02-位置速度与力矩模式"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-位置速度与力矩模式</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/04-LK电机/02-位置速度与力矩模式.md</span></div><div class="dfile__body"><h1 id="位置速度与力矩模式">位置、速度与力矩模式</h1>
+<h2 id="1-概念">1. 概念</h2>
+<p>LK 电机内部有电流环、速度环和位置环三套闭环，主控选一组参数下发即可，不需要额外切换模式。收到 0xA1 按力矩执行，收到 0xA2 按速度执行，收到 0xA3 到 0xA8 按位置执行。</p>
+<p>三套闭环的输入量与单位：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>命令字</th><th>闭环</th><th>输入类型</th><th>单位</th></tr></thead><tbody><tr><td>0xA1</td><td>力矩（电流）</td><td>int16</td><td>iq，量程见第 2 节</td></tr><tr><td>0xA2</td><td>速度</td><td>int32</td><td>0.01 dps/LSB</td></tr><tr><td>0xA3 / 0xA4</td><td>位置（多圈）</td><td>int32</td><td>0.01 °/LSB</td></tr><tr><td>0xA5 / 0xA6</td><td>位置（单圈）</td><td>int32</td><td>0.01 °/LSB</td></tr><tr><td>0xA7 / 0xA8</td><td>位置（增量）</td><td>int32</td><td>0.01 °/LSB</td></tr></tbody></table>
+<p>多圈位置是绝对角，跨零后继续累计；单圈位置只在 0 到 360° 内定位；增量位置相对当前位置偏移。</p>
+<p>运动命令的反馈帧采用统一布局，全部小端：字节 0 回显命令字，字节 1 温度，字节 2-3 iq，字节 4-5 速度，字节 6-7 位置或编码器值。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  CMD{"命令字"} -->|"0xA1"| T["力矩环&#x3C;br/>字节4-5 int16 iq"]
+  CMD -->|"0xA2"| V["速度环&#x3C;br/>字节2-3 前馈电流&#x3C;br/>字节4-7 int32 速度"]
+  CMD -->|"0xA3 0xA4"| P1["多圈位置&#x3C;br/>字节4-7 int32 绝对角"]
+  CMD -->|"0xA5 0xA6"| P2["单圈位置&#x3C;br/>字节1 转向&#x3C;br/>字节4-7 int32 单圈角"]
+  CMD -->|"0xA7 0xA8"| P3["增量位置&#x3C;br/>字节2-3 限速&#x3C;br/>字节4-7 int32 增量"]
+  CMD -->|"0x9A 0x9C 0x9D"| R["状态读取"]</pre></div>
+<h2 id="2-单位换算">2. 单位换算</h2>
+<p>力矩命令的输入是 iq。MF 系列满量程 2048 对应 ±16.5 A，MG 系列满量程 2048 对应 ±33 A：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mrow><mi>I</mi><mo separator="true">,</mo><mtext>MF</mtext></mrow></msub><mo>=</mo><mfrac><mn>16.5</mn><mn>2048</mn></mfrac><mo>=</mo><mfrac><mn>33</mn><mn>4096</mn></mfrac><mtext> A/LSB</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>k</mi><mrow><mi>I</mi><mo separator="true">,</mo><mtext>MG</mtext></mrow></msub><mo>=</mo><mfrac><mn>33</mn><mn>2048</mn></mfrac><mo>=</mo><mfrac><mn>66</mn><mn>4096</mn></mfrac><mtext> A/LSB</mtext></mrow><annotation encoding="application/x-tex">k_{I,\text{MF}} = \frac{16.5}{2048} = \frac{33}{4096}\ \text{A/LSB}, \qquad k_{I,\text{MG}} = \frac{33}{2048} = \frac{66}{4096}\ \text{A/LSB}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mpunct mtight">,</span><span class="mord text mtight"><span class="mord mtight">MF</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2048</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">16.5</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4096</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">33</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace"> </span><span class="mord text"><span class="mord">A/LSB</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mpunct mtight">,</span><span class="mord text mtight"><span class="mord mtight">MG</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2048</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">33</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4096</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">66</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace"> </span><span class="mord text"><span class="mord">A/LSB</span></span></span></span></span></p>
+<p>由目标电流反推 iq：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>iq</mtext><mo>=</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mrow><mo fence="true">(</mo><mfrac><mi>I</mi><msub><mi>k</mi><mi>I</mi></msub></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\text{iq} = \mathrm{round}\left(\frac{I}{k_I}\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8623em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">iq</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="mord"><span class="mord mathrm">round</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.0315em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4453em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span></span></span></span></p>
+<p>速度命令与速度反馈的单位不同。0xA2 的字节 4-7 是 int32，单位 0.01 dps/LSB；反馈字节 4-5 是 int16，单位 1 dps/LSB。两者相差 100 倍：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mtext>cmd</mtext></msub><mo>=</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo stretchy="false">(</mo><mn>100</mn><mo>⋅</mo><msub><mi>v</mi><mtext>deg/s</mtext></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>v</mi><mtext>fb,deg/s</mtext></msub><mo>=</mo><msub><mi>v</mi><mtext>raw</mtext></msub></mrow><annotation encoding="application/x-tex">v_{\text{cmd}} = \mathrm{round}(100 \cdot v_{\text{deg/s}}), \qquad v_{\text{fb,deg/s}} = v_{\text{raw}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">cmd</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">round</span></span><span class="mopen">(</span><span class="mord">100</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1052em;vertical-align:-0.3552em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.5198em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">deg/s</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.5198em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">fb,deg/s</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">raw</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>位置命令字节 4-7 是 int32，单位 0.01 °/LSB，一圈为 36000：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mtext>deg</mtext></msub><mo>=</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo stretchy="false">(</mo><mn>100</mn><mo>⋅</mo><msub><mi>θ</mi><mtext>deg</mtext></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">n_{\text{deg}} = \mathrm{round}(100 \cdot \theta_{\text{deg}})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">deg</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">round</span></span><span class="mopen">(</span><span class="mord">100</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">deg</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></p>
+<p>限速参数出现在 0xA4、0xA6、0xA8 的字节 2-3，无符号 16 位，单位 1 dps/LSB。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant H as 主控
+  participant M as LK电机
+  H->>M: 0xA1 00 00 00 iqL iqH 00 00
+  M-->>H: 0xA1 温度 iq 速度 位置
+  H->>M: 0xA2 00 00 00 v0 v1 v2 v3
+  M-->>H: 0xA2 温度 iq 速度 位置
+  H->>M: 0xA8 00 限L 限H 增量0 增量1 增量2 增量3
+  M-->>H: 0xA8 温度 iq 速度 位置</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<p>云台板 <code>BSP/Src/bsp_can.cpp</code> 三种模式的写入方式：力矩命令把 int16 放在字节 4-5（<code>:386-393</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">A1</span><span style="color:#24292E">;</span><span style="color:#6A737D">   // 命令字：转矩控制</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">3</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">4</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> current </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FF</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">5</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (current </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FF</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">6</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#E36209">TxData</span><span style="color:#24292E">[</span><span style="color:#005CC5">7</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">;</span></span></code></pre>
+<p>速度命令（<code>:412-420</code>）与增量位置命令（<code>:440-448</code>）把 int32 拆成低到高四字节。增量位置限速命令（<code>:468-477</code>）把 velocity 放在字节 2-3，degree 放在字节 4-7。底盘板同名前六项函数写法一致（<code>BSP/Src/bsp_can.cpp:348-459</code>）。</p>
+<p>本工程实际用到两种模式：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>用途</th><th>函数</th><th>命令字</th><th>调用点</th><th>周期</th></tr></thead><tbody><tr><td>pitch 力矩下发</td><td><code>bsp_can1_lkmotortorquecmd</code></td><td>0xA1</td><td><code>Task/Src/ControlCenterTask.cpp:134</code></td><td>5 ms（<code>:137</code>）</td></tr><tr><td>读取状态 2</td><td><code>bsp_can1_lkreadstatus2</code></td><td>0x9C</td><td><code>Task/Src/GimbalTask.cpp:87</code></td><td>1 ms（<code>:104</code>）</td></tr></tbody></table>
+<p>pitch 指令来自 GimbalTask 的速度环，限幅后写入 <code>pitch_current_out</code>（<code>GimbalTask.cpp:102</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">pitch_current_out </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">int16_t</span><span style="color:#24292E">)</span><span style="color:#6F42C1">clamp</span><span style="color:#24292E">(pitch_current, </span><span style="color:#D73A49">-</span><span style="color:#005CC5">30000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">, </span><span style="color:#005CC5">30000.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span></code></pre>
+<p>参考实现给出的 MF/MG 系列 iq 输入范围是 ±2048，本工程限幅到 ±30000。这条限幅保护的是 int16 的表示范围，不保证落在电机认可的量程内，换电机型号时要按手册核对。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+<ul>
+<li>速度命令单位 0.01 dps/LSB，速度反馈单位 1 dps/LSB。把反馈值直接回灌给命令会放大 100 倍。</li>
+<li>0xA7 是增量位置。每发一帧都在当前位置上叠加，周期性写同一个值等同于持续转动。</li>
+<li>0xA3 与 0xA5 都在字节 4-7 写角度，区别在多圈与单圈语义，不在报文长度。</li>
+<li>int32 参数一律小端，先写低字节；0xA1 的电流是 int16，只占两个字节。</li>
+<li>力矩限幅按 int16 上限设置，可能超过电机认可的 iq 量程，超出部分的行为要按具体型号确认。</li>
+</ul>
+<h2 id="5-小结">5. 小结</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th>命令字</th><th>参数位置</th><th>单位</th></tr></thead><tbody><tr><td>力矩</td><td>0xA1</td><td>字节 4-5，int16</td><td>iq，量程按型号</td></tr><tr><td>速度</td><td>0xA2</td><td>字节 4-7，int32</td><td>0.01 dps/LSB</td></tr><tr><td>多圈位置</td><td>0xA3 / 0xA4</td><td>字节 4-7，int32</td><td>0.01 °/LSB</td></tr><tr><td>单圈位置</td><td>0xA5 / 0xA6</td><td>字节 4-7，int32</td><td>0.01 °/LSB</td></tr><tr><td>增量位置</td><td>0xA7 / 0xA8</td><td>字节 4-7，int32</td><td>0.01 °/LSB</td></tr><tr><td>限速</td><td>0xA4 / 0xA6 / 0xA8</td><td>字节 2-3，uint16</td><td>1 dps/LSB</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<ol>
+<li>目标速度 720 deg/s，写出 0xA2 命令字节 4-7 的四个字节。</li>
+<li>目标多圈角 -90°，写出 0xA3 命令的 8 个字节。</li>
+<li>说明为什么速度命令与速度反馈的单位不相等，回灌会差多少。</li>
+<li>从 <code>BSP_CAN1_LKMotorIncrePosVelRestrictCmd</code> 找出限速值占用的字节。</li>
+</ol></div></section><section class="dfile" id="file-3" data-file="03-多圈角度与零点标定"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-多圈角度与零点标定</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/04-LK电机/03-多圈角度与零点标定.md</span></div><div class="dfile__body"><h1 id="多圈角度与零点标定">多圈角度与零点标定</h1>
+<h2 id="1-概念">1. 概念</h2>
+<p>编码器给出的是单圈内的绝对角度，多圈角度在此基础上累加圈数。LK 电机把两者分成不同命令读取：</p>
+<ul>
+<li><strong>单圈角度</strong>（single-turn angle）范围 0 到 35999，单位 0.01°，对应 0 到 359.99°。</li>
+<li><strong>多圈角度</strong>（multi-turn angle）是有符号数，单位 0.01°，跨过 0° 后继续累计，可以为负。</li>
+<li><strong>零点</strong>决定单圈角度 0 位置对应的机械位置。</li>
+</ul>
+<p>三者的关系：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mtext>multi</mtext></msub><mo>=</mo><mi>N</mi><mo>⋅</mo><mn>36000</mn><mo>+</mo><msub><mi>θ</mi><mtext>single</mtext></msub><mo separator="true">,</mo><mspace width="2em"></mspace><mi>N</mi><mo>∈</mo><mi mathvariant="double-struck">Z</mi></mrow><annotation encoding="application/x-tex">\theta_{\text{multi}} = N \cdot 36000 + \theta_{\text{single}}, \qquad N \in \mathbb{Z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">multi</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">36000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">single</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6889em;"></span><span class="mord mathbb">Z</span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mtext>single,LSB</mtext></msub><mo>=</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">d</mi></mrow><mo stretchy="false">(</mo><mn>100</mn><mo>⋅</mo><msub><mi>θ</mi><mi>deg</mi><mo>⁡</mo></msub><mo stretchy="false">)</mo><mtext> </mtext><mo lspace="0.22em" rspace="0.22em"><mrow><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mo><mtext> </mtext><mn>36000</mn></mrow><annotation encoding="application/x-tex">\theta_{\text{single,LSB}} = \mathrm{round}(100 \cdot \theta_{\deg}) \bmod 36000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">single,LSB</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">round</span></span><span class="mopen">(</span><span class="mord">100</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">d</span><span class="mtight">e</span><span class="mtight" style="margin-right:0.0139em;">g</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin"><span class="mord"><span class="mord mathrm">mod</span></span></span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">36000</span></span></span></span></p>
+<h2 id="2-协议">2. 协议</h2>
+<p>读取与标定命令：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>命令字</th><th>名称</th><th>数据布局</th></tr></thead><tbody><tr><td>0x92</td><td>读多圈角度</td><td>字节 1-7 拼成 7 字节小端有符号数</td></tr><tr><td>0x94</td><td>读单圈角度</td><td>字节 4-7 拼成 uint32，0 到 35999</td></tr><tr><td>0x90</td><td>读编码器</td><td>字节 2-3 编码器值，字节 4-5 原始值，字节 6-7 偏移</td></tr><tr><td>0x19</td><td>设零点</td><td>把当前位置写为零点</td></tr><tr><td>0x95</td><td>设当前位置为指定多圈角</td><td>字节 4-7 目标角</td></tr></tbody></table>
+<p>多圈角用 7 字节而不是 4 字节，是为了覆盖大圈数。单圈角返回在字节 4-7，与多圈角的字节 1-7 不同。</p>
+<p>零点标定流程：先把轴转到期望的机械基准，再发 0x19，最后读 0x92 校验。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["上电，0x94 读单圈角"] --> B{"轴在机械基准"}
+  B -->|"否"| C["把轴转到基准位置"]
+  C --> D["0x19 设零点"]
+  B -->|"是"| D
+  D --> E["0x92 读多圈角"]
+  E --> F{"读数在 0 附近"}
+  F -->|"否"| C
+  F -->|"是"| G["标定完成"]</pre></div>
+<p>读取时序：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant H as 主控
+  participant M as LK电机
+  H->>M: 0x141 0x92 00 00 00 00 00 00 00
+  M-->>H: 多圈角，字节1-7
+  H->>M: 0x141 0x94 00 00 00 00 00 00 00
+  M-->>H: 单圈角，字节4-7
+  H->>M: 0x141 0x90 00 00 00 00 00 00 00
+  M-->>H: 编码器值 原始值 偏移
+  H->>M: 0x141 0x19 00 00 00 00 00 00 00
+  M-->>H: 标定响应</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<p>LK 反馈结构只有四个字段（云台板 <code>BSP/Inc/bsp_can.h:40-45</code>，底盘板同）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">//瓴控系列电机反馈信息</span></span>
+<span class="line"><span style="color:#D73A49">typedef</span><span style="color:#D73A49"> struct</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">    uint16_t</span><span style="color:#24292E"> rotor_angle;</span><span style="color:#6A737D">      // 电机转子角度</span></span>
+<span class="line"><span style="color:#D73A49">    int16_t</span><span style="color:#24292E"> rotor_speed;</span><span style="color:#6A737D">      // 电机转子速度</span></span>
+<span class="line"><span style="color:#D73A49">    int16_t</span><span style="color:#24292E"> torque_current;</span><span style="color:#6A737D">   // 电机转矩电流</span></span>
+<span class="line"><span style="color:#D73A49">    int8_t</span><span style="color:#24292E">  temp;</span><span style="color:#6A737D">             // 电机温度</span></span>
+<span class="line"><span style="color:#24292E">} LK_motor_info;</span></span></code></pre>
+<p>对比 DJI 的结构（<code>BSP/Inc/bsp_can.h:10-20</code>）多出 <code>last_angle</code>、<code>total_angle</code>、<code>round_count</code>、<code>inited</code> 四个累计相关字段。工程没有为 LK 提供等价字段，也没有调用多圈或单圈读取命令，0x92、0x94、0x90、0x19、0x95 在两块板的 <code>bsp_can.cpp</code> 里都不存在。</p>
+<p>反馈解析只取单帧 <code>rotor_angle</code>（云台板 <code>BSP/Src/bsp_can.cpp:643-671</code>），不累计圈数。工程内有一段过零计数逻辑 <code>update_motor_total_angle</code>（云台板 <code>:559-587</code>，底盘板 <code>:552-580</code>），它按 8192 编码器分辨率、半圈 4096 做跨圈判断（<code>:567-573</code>），只服务 DJI 电机，yaw 与拨弹盘调用它（云台板 <code>:625</code>、<code>:636</code>），LK 分支没有调用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  E["编码器"] --> M["0x92 多圈角&#x3C;br/>7字节 0.01度"]
+  E --> S["0x94 单圈角&#x3C;br/>0到35999"]
+  E --> R["0x90 编码器值/原始值/偏移"]
+  Z["0x19 设零点"] --> E
+  M --> K["LK_motor_info&#x3C;br/>只有 rotor_angle"]
+  S --> K</pre></div>
+<h2 id="4-易错点">4. 易错点</h2>
+<ul>
+<li>0x19 会改写驱动器的编码器偏移并保存，参考实现提示频繁调用会影响驱动器寿命，只在需要时执行一次。</li>
+<li>多圈角断电后是否保持取决于型号与保存设置，不能默认跨上电连续。</li>
+<li>单圈角在字节 4-7，多圈角在字节 1-7。把单圈角当多圈角解析会得到错误的大数。</li>
+<li>复用 DJI 的过零计数逻辑处理 LK 反馈得到错误圈数：DJI 一圈 8192 计数，LK 角度单位是 0.01°，一圈 36000。</li>
+<li><code>LK_motor_info.rotor_angle</code> 是 uint16，直接存 0.01° 位置时 65535 对应 655.35°，负角会回绕。</li>
+</ul>
+<h2 id="5-小结">5. 小结</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>单圈角度</th><th>多圈角度</th></tr></thead><tbody><tr><td>命令字</td><td>0x94</td><td>0x92</td></tr><tr><td>数据位置</td><td>字节 4-7，uint32</td><td>字节 1-7，有符号</td></tr><tr><td>范围</td><td>0 到 35999</td><td>有符号，累计圈数</td></tr><tr><td>单位</td><td>0.01 °/LSB</td><td>0.01 °/LSB</td></tr><tr><td>本工程使用</td><td>无</td><td>无</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<ol>
+<li>单圈角读数为 12345，多圈角读数为 12345，判断此时轴在什么位置。</li>
+<li>轴已转过 3 圈又 90°，写出 0x92 应返回的数值。</li>
+<li>说明为什么不能把 <code>update_motor_total_angle</code> 直接套用到 LK 的 <code>rotor_angle</code>。</li>
+<li>列出零点标定后应当校验的两个读数。</li>
+</ol></div></section><section class="dfile" id="file-4" data-file="04-本项目应用"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-本项目应用</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/04-LK电机/04-本项目应用.md</span></div><div class="dfile__body"><h1 id="本项目应用">本项目应用</h1>
+<blockquote>
+<p>云台板路径为 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板路径为 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。下文相对路径都相对于这两个根目录。</p>
+</blockquote>
+<h2 id="1-概念">1. 概念</h2>
+<p>俯仰轴 pitch 使用 LK 电机，接在云台板 CAN1 上，与 yaw 电机（GM6020，0x1FF 第 1 槽位、反馈 0x205；代码按 M3508 编号习惯记作 ID5）和拨弹盘电机（M3508，ID6）共用一条总线。云台板 CAN2 挂两个摩擦轮。底盘板不参与 pitch 控制。</p>
+<h2 id="2-控制链路">2. 控制链路</h2>
+<p>上电时 ControlCenterTask 发一次使能。之后 GimbalTask 以 1 ms 为周期读状态 2，用 IMU 的 pitch 与 gyro[1] 跑角度外环和速度内环，结果写入全局变量。ControlCenterTask 以 5 ms 为周期把该变量通过力矩命令下发。反馈帧在 FIFO0 回调的 CAN1 分支里解析。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  IMU["ImuTask&#x3C;br/>pitch 与 gyro[1]"] --> G["GimbalTask 1ms&#x3C;br/>角度环加速度环"]
+  G --> OUT["pitch_current_out"]
+  G -.->|"0x9C"| LK["LK 电机 CAN1"]
+  OUT --> CC["ControlCenterTask 5ms"]
+  CC -->|"0xA1"| LK
+  LK -->|"状态帧"| RX["FIFO0 回调 CAN1 分支"]
+  RX --> ST["LK_motor_1"]</pre></div>
+<p>一个 CAN1 周期内的报文顺序：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant GT as GimbalTask 1ms
+  participant CC as ControlCenterTask 5ms
+  participant M as LK电机ID1
+  participant Y as yaw与拨盘
+  GT->>M: 0x141 0x9C 读状态2
+  M-->>GT: 0x181 状态2帧
+  GT-->>CC: 写全局 pitch_current_out
+  CC->>M: 0x141 0xA1 力矩
+  M-->>CC: 状态帧
+  CC->>Y: 0x1FF yaw与拨盘</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>文件与行号</th><th>内容</th></tr></thead><tbody><tr><td>反馈结构</td><td><code>BSP/Inc/bsp_can.h:40-45</code></td><td>rotor_angle、rotor_speed、torque_current、temp</td></tr><tr><td>全局实例</td><td><code>BSP/Src/bsp_can.cpp:27</code></td><td><code>LK_motor_info LK_motor_1;</code></td></tr><tr><td>接口声明</td><td><code>BSP/Inc/bsp_can.h:81-88</code></td><td>七个 LK 发送函数</td></tr><tr><td>使能</td><td><code>Task/Src/ControlCenterTask.cpp:36</code></td><td><code>bsp_can1_lkmotorstartcmd()</code></td></tr><tr><td>力矩下发</td><td><code>Task/Src/ControlCenterTask.cpp:134</code></td><td><code>bsp_can1_lkmotortorquecmd(pitch_current_out)</code></td></tr><tr><td>下发周期</td><td><code>Task/Src/ControlCenterTask.cpp:137</code></td><td><code>osDelay(5)</code></td></tr><tr><td>状态 2 读取</td><td><code>Task/Src/GimbalTask.cpp:87</code></td><td><code>bsp_can1_lkreadstatus2()</code></td></tr><tr><td>速度环</td><td><code>Task/Src/GimbalTask.cpp:96-102</code></td><td><code>PitchSpeedPID</code> 到 <code>pitch_current_out</code></td></tr><tr><td>读取周期</td><td><code>Task/Src/GimbalTask.cpp:104</code></td><td><code>osDelay(1)</code></td></tr><tr><td>反馈分派</td><td><code>BSP/Src/bsp_can.cpp:643-671</code></td><td><code>case 0x181</code></td></tr><tr><td>命令帧 StdId</td><td><code>BSP/Src/bsp_can.cpp:342</code> 等</td><td>0x141，句柄 hcan1</td></tr><tr><td>CAN1 中断</td><td><code>Core/Src/can.c:125-128</code></td><td>CAN1_RX0 与 RX1，抢占优先级 5</td></tr></tbody></table>
+<p>中断优先级：CAN1_RX0 与 RX1 的抢占优先级是 5（<code>Core/Src/can.c:125</code>、<code>:127</code>），HAL 时基 TIM2 的 <code>TICK_INT_PRIORITY</code> 是 15（<code>Core/Inc/stm32f4xx_hal_conf.h:151</code>），FreeRTOS 的 <code>configLIBRARY_LOWEST_INTERRUPT_PRIORITY</code> 也是 15（<code>Core/Inc/FreeRTOSConfig.h:104</code>）。抢占值越小优先级越高，CAN 中断可以先于时基与 PendSV 执行。FreeRTOS 的 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code> 为 5（<code>Core/Inc/FreeRTOSConfig.h:110</code>），CAN 中断正好处在可以调用 FromISR 接口的边界上。</p>
+<p><code>LK_motor_1</code> 在云台板被两个任务引用：<code>Task/Src/GimbalTask.cpp:22</code> 与 <code>Task/Src/FireTask.cpp:17</code>。当前 pitch 速度环的反馈用的是 gyro[1]（<code>GimbalTask.cpp:98</code>），<code>LK_motor_1.rotor_speed</code> 没有被闭环使用。</p>
+<p>底盘板的情况不同。<code>BSP/Src/bsp_can.cpp:308-459</code> 有同名前六项 LK 命令函数与 C 接口封装（<code>:733-755</code>），句柄同样是 hcan1，但没有 0x9C 读取函数。全工程没有任何调用点，<code>Chassis/Src/Motor.cpp</code> 只有 3 行注释，<code>Chassis/Inc/Motor.h</code> 为空。底盘板的 RX 回调（<code>:583-689</code>）只有 CAN2 的 0x201 到 0x204 与 CAN1 的 0x205、0x301、0x302、0x401、0x501，没有 0x181 分支。底盘板 CAN2 实挂四个轮子，CAN1 挂 yaw 与板间报文。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+<ul>
+<li>函数名带 <code>CAN1</code>，句柄也是 hcan1。pitch 与 yaw、拨弹盘共用总线，任一帧阻塞都会增加另外两轴的延迟。</li>
+<li>反馈分派值 0x181 与发送值 0x141 不同，换电机或改 ID 时要同时改两处。</li>
+<li><code>LK_motor_1</code> 被 GimbalTask 与 FireTask 引用，但 pitch 速度环用的是 gyro[1]。改闭环前先确认取的是哪一路反馈。</li>
+<li>0x9C 返回的末两字节与运动反馈的末两字节语义不同，混用会得到不同的位置量。</li>
+<li>底盘板的 LK 函数没有调用点。照抄其接口以为底盘板在控制 pitch，会把排查方向带偏。</li>
+</ul>
+<h2 id="5-小结">5. 小结</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>云台板</th><th>底盘板</th></tr></thead><tbody><tr><td>LK 命令函数</td><td>0x80、0x88、0xA1、0xA2、0xA7、0xA8、0x9C</td><td>0x80、0x88、0xA1、0xA2、0xA7、0xA8</td></tr><tr><td>命令帧 StdId</td><td>0x141</td><td>0x141</td></tr><tr><td>句柄</td><td>hcan1</td><td>hcan1</td></tr><tr><td>反馈分派</td><td>0x181，CAN1 分支</td><td>无</td></tr><tr><td>调用点</td><td>ControlCenterTask、GimbalTask</td><td>无</td></tr><tr><td>pitch 控制</td><td>有</td><td>无</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<ol>
+<li>画出从 IMU pitch 到 LK 力矩命令的完整数据流，标出每个全局变量。</li>
+<li>计算 pitch 力矩命令的实际下发频率与状态 2 的读取频率之比。</li>
+<li>说明为什么 0x9C 与 0xA1 反馈的末两字节不能互换使用。</li>
+<li>若把 pitch 电机改到云台板 CAN2，列出 <code>bsp_can.cpp</code> 中需要改动的行。</li>
+</ol></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/04-LK电机/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="易错点与排查">易错点与排查</h1>
+<h2 id="1-概念">1. 概念</h2>
+<p>排查按从总线到环路的顺序推进：先确认总线上有帧，再确认帧头与命令字，然后确认单位与量程，最后才调环路参数。顺序颠倒会在没有帧的情况下反复改 PID。</p>
+<h2 id="2-排查顺序">2. 排查顺序</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["现象：电机不动"] --> B{"总线上有 0x141 帧"}
+  B -->|"否"| C["查发送调用点、句柄与过滤器"]
+  B -->|"是"| D{"已发过 0x88 使能"}
+  D -->|"否"| E["补发 0x88，0x80 后必须重发"]
+  D -->|"是"| F{"0xA1 字节4-5 非零"}
+  F -->|"否"| G["查 PID 输出与限幅"]
+  F -->|"是"| H{"指令在 iq 量程内"}
+  H -->|"否"| I["按型号折算电流，修正限幅"]
+  H -->|"是"| J["查机械与电源"]</pre></div>
+<p>读取与下发各一轮的调试时序：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant T as 调试手段
+  participant M as LK电机
+  T->>M: 0x141 0x88 使能
+  T->>M: 0x141 0x9C 读状态2
+  M-->>T: 状态2帧，核对 StdId 与字节0
+  T->>M: 0x141 0xA1 小电流
+  M-->>T: 电机转动，核对方向
+  T->>M: 0x141 0x19 设零点</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<p>按现象列出的检查点：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>可能原因</th><th>检查方法</th><th>源码位置</th></tr></thead><tbody><tr><td>电机完全不动</td><td>没发 0x88，或 0x80 之后没重发使能</td><td>抓 0x141 帧的字节 0</td><td><code>Task/Src/ControlCenterTask.cpp:36</code></td></tr><tr><td>上电后轴能自由转动</td><td>没有使能</td><td>同上</td><td>同上</td></tr><tr><td>电机响但不转</td><td>力矩为 0 或 PID 正负抵消</td><td>抓 0xA1 字节 4-5</td><td><code>Task/Src/GimbalTask.cpp:102</code></td></tr><tr><td><code>LK_motor_1</code> 恒为 0</td><td>反馈分派 ID 与电机实际反馈 ID 不匹配</td><td>在回调里计数或下断点</td><td><code>BSP/Src/bsp_can.cpp:643</code></td></tr><tr><td>速度差 100 倍</td><td>命令用 0.01 dps/LSB，反馈用 1 dps/LSB</td><td>对比 0xA2 与反馈速度</td><td><code>BSP/Src/bsp_can.cpp:417-420</code></td></tr><tr><td>位置回不到目标</td><td>用了 0xA7 增量而不是 0xA3 绝对</td><td>看命令字</td><td><code>BSP/Src/bsp_can.cpp:440</code></td></tr><tr><td>0x9C 位置与运动反馈不一致</td><td>两者末两字节语义不同</td><td>分别读取并对比</td><td><code>BSP/Src/bsp_can.cpp:643-671</code></td></tr><tr><td>收不到任何 LK 帧</td><td>过滤器、终端电阻或波特率</td><td>先看总线上是否有 ACK</td><td><code>BSP/Src/bsp_can.cpp:62-86</code></td></tr></tbody></table>
+<p>两条与配置有关的事实。过滤器是全接收：掩码全 0（<code>BSP/Src/bsp_can.cpp:72-75</code>），LK 帧能否进入回调只取决于总线上是否真的收到帧，不取决于过滤器。中断优先级方面，CAN1_RX0 与 RX1 抢占优先级为 5（<code>Core/Src/can.c:125</code>、<code>:127</code>），HAL 时基 TIM2 为 15（<code>Core/Inc/stm32f4xx_hal_conf.h:151</code>），FreeRTOS 最低中断优先级也是 15（<code>Core/Inc/FreeRTOSConfig.h:104</code>），CAN 中断可以先于后两者执行。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+<ul>
+<li>先改 PID 再查总线。总线没有帧时任何参数都无意义。</li>
+<li>只抓发送不看反馈。命令帧正确但反馈分派 ID 写错时，现象与没收到帧一样。</li>
+<li>把 0x80 当成停止使用。0x80 会清除圈数与上一条命令，恢复控制要重发 0x88。</li>
+<li>速度命令与反馈单位混用，方向对了数值差 100 倍。</li>
+<li>力矩指令按 int16 上限限幅，超过电机认可的 iq 量程。</li>
+</ul>
+<h2 id="5-小结">5. 小结</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>检查对象</th><th>通过标准</th></tr></thead><tbody><tr><td>1</td><td>总线是否有 0x141 帧</td><td>周期出现的命令帧</td></tr><tr><td>2</td><td>字节 0 命令字</td><td>已发 0x88 使能</td></tr><tr><td>3</td><td>反馈帧 StdId</td><td>与接收分派一致</td></tr><tr><td>4</td><td>参数单位与量程</td><td>换算后落在手册范围内</td></tr><tr><td>5</td><td>环路参数</td><td>前四项通过后再调</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<ol>
+<li>写出一段在 FIFO0 回调里统计各 StdId 出现次数的思路，用于确认反馈分派值。</li>
+<li>电机上电后能用手转动，列出三个需要确认的发送调用点。</li>
+<li>说明过滤器掩码全 0 时，为什么不能靠过滤器排除 DJI 报文。</li>
+<li>给定现象“速度指令给正，电机反转”，列出两种可能原因与验证方法。</li>
+</ol></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/03-DJI6020/"><span class="k">← 上一篇</span><span class="t">DJI6020</span><span class="d">CAN 与电机 · 5 个文件</span></a><a class="next" href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/05-%E6%8B%93%E6%89%91%E4%B8%8E%E6%B3%A2%E7%89%B9%E7%8E%87/"><span class="k">下一篇 →</span><span class="t">拓扑与波特率</span><span class="d">CAN 与电机 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

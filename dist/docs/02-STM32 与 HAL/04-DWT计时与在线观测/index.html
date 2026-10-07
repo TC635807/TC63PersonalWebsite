@@ -1,0 +1,1892 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>DWT计时与在线观测 · STM32 与 HAL · 王宇翔</title><meta name="description" content="Cortex-M4 的 DWT 单元里有一个 32 位周期计数器，本文说明它的使能条件、168 MHz 下 25.57 s 的回绕周期，以及本工程对它的封装、调用点与链接后的实际结果"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/04-DWT%E8%AE%A1%E6%97%B6%E4%B8%8E%E5%9C%A8%E7%BA%BF%E8%A7%82%E6%B5%8B/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="DWT计时与在线观测 · STM32 与 HAL · 王宇翔"><meta property="og:description" content="Cortex-M4 的 DWT 单元里有一个 32 位周期计数器，本文说明它的使能条件、168 MHz 下 25.57 s 的回绕周期，以及本工程对它的封装、调用点与链接后的实际结果"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/04-DWT%E8%AE%A1%E6%97%B6%E4%B8%8E%E5%9C%A8%E7%BA%BF%E8%A7%82%E6%B5%8B/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/">STM32 与 HAL</a><span class="sep" aria-hidden="true">/</span><span class="now">DWT计时与在线观测</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>DWT计时与在线观测</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>DWT 与 CYCCNT</span></a><ul class="toc__heads"><li><a href="#1-概念cyccnt-在内核的哪一层" data-depth="2" data-heading-j="0">1. 概念：CYCCNT 在内核的哪一层</a></li><li><a href="#2-机制使能顺序与状态迁移" data-depth="2" data-heading-j="1">2. 机制：使能顺序与状态迁移</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-调用点在时钟配置之后" data-depth="3" data-heading-j="3">3.1 调用点在时钟配置之后</a></li><li><a href="#32-三个时间源的分工" data-depth="3" data-heading-j="4">3.2 三个时间源的分工</a></li><li><a href="#33-量程与回绕" data-depth="3" data-heading-j="5">3.3 量程与回绕</a></li><li><a href="#34-链接后留下的函数" data-depth="3" data-heading-j="6">3.4 链接后留下的函数</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="7">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="8">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="11">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>微秒级延时的实现与代价</span></a><ul class="toc__heads"><li><a href="#1-概念三种等待的定位" data-depth="2" data-heading-j="0">1. 概念：三种等待的定位</a></li><li><a href="#2-机制周期数换算与量化误差" data-depth="2" data-heading-j="1">2. 机制：周期数换算与量化误差</a></li><li><a href="#21-溢出边界" data-depth="3" data-heading-j="2">2.1 溢出边界</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="3">3. 落到本项目</a></li><li><a href="#31-bmi088-初始化期间的-16-次短延时" data-depth="3" data-heading-j="4">3.1 BMI088 初始化期间的 16 次短延时</a></li><li><a href="#32-imutask-的两处延时" data-depth="3" data-heading-j="5">3.2 ImuTask 的两处延时</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="6">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="7">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="10">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>在线变量观测</span></a><ul class="toc__heads"><li><a href="#1-概念三条观测通道" data-depth="2" data-heading-j="0">1. 概念：三条观测通道</a></li><li><a href="#2-机制" data-depth="2" data-heading-j="1">2. 机制</a></li><li><a href="#21-变量观测依赖三件事" data-depth="3" data-heading-j="2">2.1 变量观测依赖三件事</a></li><li><a href="#22-串口帧的格式" data-depth="3" data-heading-j="3">2.2 串口帧的格式</a></li><li><a href="#23-magictoolsh-的内容" data-depth="3" data-heading-j="4">2.3 magictools.h 的内容</a></li><li><a href="#3-落到本项目两条路的实际状态" data-depth="2" data-heading-j="5">3. 落到本项目：两条路的实际状态</a></li><li><a href="#31-两个同名头文件" data-depth="3" data-heading-j="6">3.1 两个同名头文件</a></li><li><a href="#32-9-个变量的定义与下场" data-depth="3" data-heading-j="7">3.2 9 个变量的定义与下场</a></li><li><a href="#33-串口通道的状态" data-depth="3" data-heading-j="8">3.3 串口通道的状态</a></li><li><a href="#34-最小可用改法" data-depth="3" data-heading-j="9">3.4 最小可用改法</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="10">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="11">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="12">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="13">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="14">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="15">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="16">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="17">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>用 CYCCNT 测函数耗时</span></a><ul class="toc__heads"><li><a href="#1-概念一次测量要记的四件事" data-depth="2" data-heading-j="0">1. 概念：一次测量要记的四件事</a></li><li><a href="#2-机制" data-depth="2" data-heading-j="1">2. 机制</a></li><li><a href="#21-基本写法" data-depth="3" data-heading-j="2">2.1 基本写法</a></li><li><a href="#22-换算与判读" data-depth="3" data-heading-j="3">2.2 换算与判读</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>DWT 与在线观测的易错点</span></a><ul class="toc__heads"><li><a href="#1-核对清单" data-depth="2" data-heading-j="0">1. 核对清单</a></li><li><a href="#2-关键几条的展开" data-depth="2" data-heading-j="1">2. 关键几条的展开</a></li><li><a href="#21-变量被回收判据与命令" data-depth="3" data-heading-j="2">2.1 变量被回收：判据与命令</a></li><li><a href="#22-静默失败的三处" data-depth="3" data-heading-j="3">2.2 静默失败的三处</a></li><li><a href="#23-未初始化时的死循环" data-depth="3" data-heading-j="4">2.3 未初始化时的死循环</a></li><li><a href="#24-文档与代码的偏差" data-depth="3" data-heading-j="5">2.4 文档与代码的偏差</a></li><li><a href="#3-从现象到定位" data-depth="2" data-heading-j="6">3. 从现象到定位</a></li><li><a href="#4-一个真实案例can-不上总线" data-depth="2" data-heading-j="7">4. 一个真实案例：CAN 不上总线</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="8">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="11">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">STM32 与 HAL</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>STM32 / DWT / CYCCNT / Cortex-M4 / 计时 / 延时 / 忙等 / BMI088</span></div><h1 class="docs__title">DWT计时与在线观测</h1><p class="docs__lead">Cortex-M4 的 DWT 单元里有一个 32 位周期计数器，本文说明它的使能条件、168 MHz 下 25.57 s 的回绕周期，以及本工程对它的封装、调用点与链接后的实际结果</p></header><section class="dfile" id="file-1" data-file="01-DWT与CYCCNT"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-DWT与CYCCNT</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/04-DWT计时与在线观测/01-DWT与CYCCNT.md</span></div><div class="dfile__body"><h1 id="dwt-与-cyccnt">DWT 与 CYCCNT</h1>
+<blockquote>
+<p>本工程有两套计时设施：HAL 的 1 ms 时基与 FreeRTOS 的 1 kHz 节拍。需要比毫秒更细的时间读数时，代码用的是内核里的 DWT 周期计数器。</p>
+<p>本文说明 <code>CYCCNT</code> 的使能与量程，核对 <code>BSP/Src/bsp_dwt.cpp</code> 的五个函数、<code>Core/Src/main.c</code> 的调用点，并给出构建产物里的实测符号。固件源码位于 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，两块板的 <code>bsp_dwt.cpp</code> 逐字节一致。</p>
+</blockquote>
+<h2 id="1-概念cyccnt-在内核的哪一层">1. 概念：CYCCNT 在内核的哪一层</h2>
+<p>DWT（Data Watchpoint and Trace）是 Cortex-M 调试子系统的一部分，与 ITM、FPB、TPIU 同属 CoreSight 组件。CMSIS 把它封装成结构体指针，基地址固定在私有外设总线上：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Drivers/CMSIS/Include/core_cm4.h:1552,1564 与 :907 */</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> DWT_BASE</span><span style="color:#24292E">            (</span><span style="color:#D73A49">0x</span><span style="color:#005CC5">E0001000</span><span style="color:#D73A49">UL</span><span style="color:#24292E">)</span><span style="color:#6A737D">                            /*!&#x3C; DWT Base Address */</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> DWT</span><span style="color:#24292E">                 ((DWT_Type       </span><span style="color:#D73A49">*</span><span style="color:#24292E">)     DWT_BASE      )</span><span style="color:#6A737D">   /*!&#x3C; DWT configuration struct */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">__IOM </span><span style="color:#D73A49">uint32_t</span><span style="color:#24292E"> CYCCNT;</span><span style="color:#6A737D">                 /*!&#x3C; Offset: 0x004 (R/W)  Cycle Count Register */</span></span></code></pre>
+<p>三个寄存器的位置与作用：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>寄存器</th><th>地址</th><th>与本工程相关的位</th></tr></thead><tbody><tr><td><code>CoreDebug->DEMCR</code></td><td>0xE000EDFC</td><td>bit24 <code>TRCENA</code>，DWT 的总开关</td></tr><tr><td><code>DWT->CTRL</code></td><td>0xE0001000</td><td>bit0 <code>CYCCNTENA</code> 启动计数；bit25 <code>NOCYCCNT</code> 只读，表示内核是否实现该计数器</td></tr><tr><td><code>DWT->CYCCNT</code></td><td>0xE0001004</td><td>32 位自由运行计数，读一次得到当前周期数</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["Cortex-M4 内核"] --> B["私有外设总线 PPB"]
+  B --> C["CoreDebug 0xE000EDFC&#x3C;br/>DEMCR 的 TRCENA 位"]
+  B --> D["DWT 0xE0001000"]
+  D --> E["CTRL 偏移 0x000&#x3C;br/>CYCCNTENA 位"]
+  D --> F["CYCCNT 偏移 0x004&#x3C;br/>32 位周期计数"]
+  C -->|"总开关 置位后才能写入"| E
+  E --> F
+  F --> G["BSP_DWT_Init 复位并启动"]
+  F --> H["DWT_Delay_us 读差值忙等"]
+  F --> I["耗时测量 读两次取差"]</pre></div>
+<p><code>CYCCNT</code> 数的是内核时钟周期。本工程 AHB 分频为 1（<code>Core/Src/main.c:184</code> 的 <code>AHBCLKDivider = RCC_SYSCLK_DIV1</code>），HCLK 与内核时钟同为 168 MHz，一个计数就是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mn>168</mn><mtext> </mtext><mtext>MHz</mtext><mo>=</mo><mn>5.952</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">1/168\,\text{MHz} = 5.952\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/168</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">MHz</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5.952</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span>。</p>
+<h2 id="2-机制使能顺序与状态迁移">2. 机制：使能顺序与状态迁移</h2>
+<p>初始化只有三步，顺序不能换：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* BSP/Src/bsp_dwt.cpp:7-22 */</span></span>
+<span class="line"><span style="color:#D73A49">uint8_t</span><span style="color:#6F42C1"> BSP_DWT_Init</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#6A737D">    // 1. 使能 DWT</span></span>
+<span class="line"><span style="color:#24292E">    CoreDebug->DEMCR </span><span style="color:#D73A49">|=</span><span style="color:#24292E"> CoreDebug_DEMCR_TRCENA_Msk;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">    // 2. 复位计数器</span></span>
+<span class="line"><span style="color:#24292E">    DWT->CYCCNT </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">    // 3. 启动 CYCCNT</span></span>
+<span class="line"><span style="color:#24292E">    DWT->CTRL </span><span style="color:#D73A49">|=</span><span style="color:#24292E"> DWT_CTRL_CYCCNTENA_Msk;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">    // 4. 检查是否正常运行（CYCCNT 是否变化）</span></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> c1 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DWT->CYCCNT;</span></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> c2 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DWT->CYCCNT;</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> (c2 </span><span style="color:#D73A49">==</span><span style="color:#24292E"> c1);</span><span style="color:#6A737D">  // 0=成功, 1=失败</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>TRCENA</code> 是调试跟踪的总开关。它为 0 时，对 <code>DWT->CTRL</code> 的写入不生效，<code>CYCCNTENA</code> 位保持 0，计数器不动。第 2 步与第 3 步的先后不影响结果，计数器未启动时也能写入 <code>CYCCNT</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 复位未使能: 上电
+    复位未使能 --> 跟踪已使能: 写 DEMCR 置 TRCENA
+    跟踪已使能 --> 计数运行: 写 CTRL 置 CYCCNTENA
+    计数运行 --> 计数归零: 写 CYCCNT 等于 0
+    计数归零 --> 计数运行: 下一个周期继续累加
+    计数运行 --> 计数运行: 每周期加一 到 0xFFFFFFFF 后回到 0
+    计数运行 --> 内核暂停: 调试器 halt
+    内核暂停 --> 计数运行: 继续运行</pre></div>
+<p><code>NOCYCCNT</code> 为 1 表示内核没有实现周期计数器，此时写 <code>CYCCNTENA</code> 无效。本工程用的是 STM32F407，该位为 0。</p>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-调用点在时钟配置之后">3.1 调用点在时钟配置之后</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["HAL_Init&#x3C;br/>TIM2 作为 HAL 时基"] --> B["SystemClock_Config&#x3C;br/>PLLM 6 PLLN 168 PLLP 2 得到 168 MHz"]
+  B --> C["MX_GPIO_Init 到 MX_CRC_Init"]
+  C --> D["MX_USB_DEVICE_Init"]
+  D --> E["BSP_CAN_Init"]
+  E --> F["BSP_DWT_Init main.c:124"]
+  F --> G["Uart_Init 注册遥控器回调"]
+  G --> H["MX_FREERTOS_Init 创建任务"]
+  H --> I["osKernelStart 启动调度器"]</pre></div>
+<p>云台板 <code>BSP_DWT_Init()</code> 位于 <code>Core/Src/main.c:124</code>，在 <code>SystemClock_Config()</code>（同文件 :102）之后。这个位置保证 <code>HAL_RCC_GetHCLKFreq()</code> 已经返回 168 000 000，延时函数里的频率换算才有正确的基数。底盘板的调用点在 <code>Core/Src/main.c:129</code>，相对位置相同。</p>
+<h3 id="32-三个时间源的分工">3.2 三个时间源的分工</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>时间源</th><th>位宽与时钟</th><th>中断周期</th><th>自由运行时的回绕</th><th>中断优先级</th><th>用途</th></tr></thead><tbody><tr><td>DWT <code>CYCCNT</code></td><td>32 位，168 MHz</td><td>无中断</td><td>25.57 s</td><td>无</td><td>微秒延时、耗时测量</td></tr><tr><td>TIM2</td><td>32 位，计数器 1 MHz</td><td>1 ms</td><td>计数器 71.6 min</td><td>15</td><td>HAL 时基 <code>uwTick</code></td></tr><tr><td>SysTick</td><td>24 位，168 MHz</td><td>1 ms</td><td>99.86 ms</td><td>15</td><td>FreeRTOS 的 1 kHz 节拍</td></tr></tbody></table>
+<p>TIM2 的优先级来自 <code>Core/Inc/stm32f4xx_hal_conf.h:151</code> 的 <code>TICK_INT_PRIORITY = 15</code>，在 <code>Core/Src/stm32f4xx_hal_timebase_tim.c:100</code> 写入 NVIC。SysTick 的优先级取 <code>configKERNEL_INTERRUPT_PRIORITY</code>（<code>Core/Inc/FreeRTOSConfig.h:114</code>，由 <code>configLIBRARY_LOWEST_INTERRUPT_PRIORITY = 15</code> 左移得到），在 <code>portable/GCC/ARM_CM4F/port.c:363</code> 写入。其余外设中断（CAN、DMA、USART、TIM10）的数值都是 5，与 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5</code>（同文件 :110）相接。</p>
+<p>优先级数值 15 低于 5，HAL 的 tick 中断不会打断 CAN 接收，也不会在 FreeRTOS 临界区里抢占。三条时基互不依赖，DWT 这一条完全不经过中断向量表。</p>
+<h3 id="33-量程与回绕">3.3 量程与回绕</h3>
+<p>计数器从 0 数到 <code>0xFFFFFFFF</code> 再回到 0，周期是：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>wrap</mtext></msub><mo>=</mo><mfrac><msup><mn>2</mn><mn>32</mn></msup><mrow><mn>168</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow></mfrac><mo>=</mo><mn>25.5653</mn><mtext> s</mtext></mrow><annotation encoding="application/x-tex">T_{\text{wrap}} = \frac{2^{32}}{168 \times 10^6} = 25.5653 \ \text{s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">wrap</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4213em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0179em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mbin mtight">×</span><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.931em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25.5653</span><span class="mspace"> </span><span class="mord text"><span class="mord">s</span></span></span></span></span></p>
+<p><code>CYCCNT</code> 因此只适合表示 25.57 s 以内的间隔。<code>DWT_Delay_us</code> 用无符号减法 <code>(DWT->CYCCNT - start) &#x3C; cycles</code> 规避回绕：只要间隔小于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>32</mn></msup></mrow><annotation encoding="application/x-tex">2^{32}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span></span></span></span> 个周期，差值与中途是否跨过一次回绕无关。<code>DWT_GetMicroseconds()</code> 换算的是计数器绝对值，量程同样是 25.57 s，超过之后从头开始，所以它不能当系统运行时间使用。</p>
+<h3 id="34-链接后留下的函数">3.4 链接后留下的函数</h3>
+<p><code>bsp_dwt.h</code> 声明了六个函数，最终镜像里只有三个。构建使用 <code>-fdata-sections -ffunction-sections</code>（<code>cmake/gcc-arm-none-eabi.cmake:29</code>）加 <code>-Wl,--gc-sections</code>（同文件 :41），没有引用的函数会被回收：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> arm-none-eabi-nm</span><span style="color:#005CC5"> -S</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -i</span><span style="color:#032F62"> dwt</span></span>
+<span class="line"><span style="color:#6F42C1">08010490</span><span style="color:#005CC5"> 00000030</span><span style="color:#032F62"> T</span><span style="color:#032F62"> DWT_Delay_ms</span></span>
+<span class="line"><span style="color:#6F42C1">08010440</span><span style="color:#005CC5"> 00000050</span><span style="color:#032F62"> T</span><span style="color:#032F62"> DWT_Delay_us</span></span>
+<span class="line"><span style="color:#6F42C1">080103ec</span><span style="color:#005CC5"> 00000054</span><span style="color:#032F62"> T</span><span style="color:#032F62"> BSP_DWT_Init</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>函数</th><th>是否进入镜像</th><th>字节数</th><th>引用者</th></tr></thead><tbody><tr><td><code>BSP_DWT_Init</code></td><td>是</td><td>84</td><td><code>Core/Src/main.c:124</code></td></tr><tr><td><code>DWT_Delay_us</code></td><td>是</td><td>80</td><td><code>BMI088/Src/BMI088.cpp</code> 与 <code>DWT_Delay_ms</code></td></tr><tr><td><code>DWT_Delay_ms</code></td><td>是</td><td>48</td><td><code>Task/Src/ImuTask.cpp:37,100</code>，<code>BMI088.cpp:53,94</code></td></tr><tr><td><code>DWT_GetCycleCount</code></td><td>否</td><td>无</td><td>无</td></tr><tr><td><code>DWT_GetMicroseconds</code></td><td>否</td><td>无</td><td>无</td></tr><tr><td><code>DWT_GetSeconds</code></td><td>否</td><td>无</td><td>无</td></tr></tbody></table>
+<p><code>build/Debug/sentriomeni2026.map</code> 里能看到 <code>.text.DWT_GetMicroseconds</code> 这类行，那部分列出的是各目标文件的输入段，不代表它们进入了最终镜像，全局符号表里没有对应的名字。底盘板的结果相同，地址不同（<code>BSP_DWT_Init</code> 在 <code>0x0800cc88</code>，<code>DWT_Delay_us</code> 在 <code>0x0800ccdc</code>）。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>现象或写法</th><th>后果</th><th>处理</th></tr></thead><tbody><tr><td>1</td><td>只写 <code>DWT->CTRL |= CYCCNTENA</code>，不写 <code>DEMCR</code></td><td><code>TRCENA</code> 为 0 时该位写不进去，计数器不动，延时函数立即返回</td><td>保留 <code>BSP_DWT_Init</code> 的三步顺序</td></tr><tr><td>2</td><td>把 <code>BSP_DWT_Init</code> 的返回值当精度判据</td><td>返回 0 只说明两次相邻读不相等，返回 1 也可能只是内核处在暂停状态</td><td>返回值可记录，再配合实测延时验证</td></tr><tr><td>3</td><td>认为 <code>CYCCNT</code> 是 64 位</td><td>超过 25.57 s 的绝对值读数错误</td><td>用两次读数相减，间隔控制在 25.57 s 内</td></tr><tr><td>4</td><td>在 <code>SystemClock_Config</code> 之前调用延时</td><td><code>HAL_RCC_GetHCLKFreq()</code> 返回复位后的默认频率，换算出的周期数偏小</td><td>初始化放在时钟配置之后</td></tr><tr><td>5</td><td>用它做长时间统计或时间戳</td><td>25.57 s 后归零，时间戳出现回退</td><td>长间隔用 <code>HAL_GetTick()</code> 或软件扩展高位</td></tr><tr><td>6</td><td>不检查 <code>NOCYCCNT</code></td><td>换到没有实现该计数器的内核上，代码静默失效</td><td>初始化后读 <code>DWT->CTRL</code> 的 bit25</td></tr><tr><td>7</td><td>认为调试器暂停时计数器继续累加</td><td>单步或 halt 期间的差值与实际执行时间不符</td><td>计时区间不要跨越断点</td></tr></tbody></table>
+<p>第 2 条的具体情况：<code>c1</code> 与 <code>c2</code> 是两次背靠背的读，168 MHz 下中间至少隔几个周期，正常情况下必然不等，函数返回 0。它只能发现计数器完全不动的极端情况。两个调用点都没有接收返回值，语句写成 <code>BSP_DWT_Init();</code>。</p>
+<p>第 7 条依据 ARM 对 DWT 的说明：内核进入 halt 状态期间 <code>CYCCNT</code> 不递增。本工程没有实测这一条，只作为读数解释的参考。单步执行时计数器只累加被执行到的指令周期，所以单步调试中看到的时间差不等于真实运行耗时。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td><code>TRCENA</code></td><td><code>CoreDebug->DEMCR</code> 的 bit24，DWT 的总开关</td></tr><tr><td><code>CYCCNTENA</code></td><td><code>DWT->CTRL</code> 的 bit0，置位后 <code>CYCCNT</code> 每周期加一</td></tr><tr><td><code>CYCCNT</code></td><td>32 位，地址 <code>0xE0001004</code>，本工程一个计数 5.952 ns</td></tr><tr><td>回绕周期</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>32</mn></msup><mi mathvariant="normal">/</mi><mn>168</mn><mtext> </mtext><mtext>MHz</mtext><mo>=</mo><mn>25.5653</mn><mtext> s</mtext></mrow><annotation encoding="application/x-tex">2^{32}/168\,\text{MHz} = 25.5653\ \text{s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span><span class="mord">/168</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">MHz</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25.5653</span><span class="mspace"> </span><span class="mord text"><span class="mord">s</span></span></span></span></span></td></tr><tr><td>差值写法</td><td>无符号相减，间隔小于 25.57 s 时结果与是否跨回绕无关</td></tr><tr><td>三条时基</td><td>DWT 无中断，TIM2 供 <code>uwTick</code>，SysTick 供 FreeRTOS 节拍，后两者优先级都是 15</td></tr><tr><td>链接结果</td><td>六个函数只有三个进入镜像，另外三个被 <code>--gc-sections</code> 回收</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>用 DWT 而不是定时器做微秒计时</td><td>分辨率 5.95 ns，不占中断和外设</td><td>依赖调试单元的可用性，量程只有 25.57 s</td></tr><tr><td>把 DWT 封装成独立 BSP 文件</td><td>驱动层与任务层不必知道寄存器细节</td><td>六个接口中三个从未被调用，已被回收</td></tr><tr><td>初始化放在 <code>main</code> 的 USER CODE 段</td><td>不受 CubeMX 重新生成影响</td><td>依赖 <code>SystemClock_Config</code> 的位置，顺序被挪动就出错</td></tr><tr><td>HAL 时基改用 TIM2</td><td>SysTick 交给 FreeRTOS，两者节拍互不干扰</td><td>多占用一个 32 位定时器，优先级与其余外设不一致</td></tr><tr><td>保留初始化自检</td><td>启动时能发现计数器不动</td><td>判据粗糙，返回值未被使用</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>按第 3.3 节的公式，若 HCLK 变成 84 MHz，<code>CYCCNT</code> 的回绕周期是多少秒？</li>
+<li>写出本工程一个 <code>CYCCNT</code> 计数对应多少纳秒的推导过程。</li>
+<li>阅读 <code>Core/Src/main.c:110-124</code> 的调用顺序，说明 <code>BSP_DWT_Init()</code> 能否放在 <code>MX_GPIO_Init()</code> 之前。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用 <code>DWT_GetCycleCount()</code> 把 32 位计数器扩展成 64 位软件计数器：每 1 ms 在 TIM2 的 <code>HAL_TIM_PeriodElapsedCallback</code> 里检查一次进位，并说明 168 MHz 下为什么不会漏掉进位。</li>
+<li>读 <code>Drivers/CMSIS/Include/core_cm4.h</code> 中 <code>DWT_Type</code> 的定义，写一段代码记录 <code>NUMCOMP</code>、<code>NOCYCCNT</code>、<code>CYCCNTENA</code> 三个位的值，说明各自含义。</li>
+<li>把 <code>BSP_DWT_Init</code> 的自检改成可靠版本：等 1 ms 后比较 <code>CYCCNT</code> 两次读数之差是否落在 168 000 附近，写出代码并说明哪里会误判。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/bsp_dwt.h</code></td><td>六个接口声明（:15-30）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp</code></td><td>初始化与延时实现（:7-59）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>调用点（:124）、时钟配置（:153-192）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>TIM2 时基与优先级（:41-112）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>TICK_INT_PRIORITY</code>（:151）、<code>HSE_VALUE</code>（:99）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td><code>configTICK_RATE_HZ</code>（:64）、中断优先级常量（:110-117）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c</code></td><td>SysTick 装载与优先级（:363、:695）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td>回收相关的编译与链接选项（:29、:41）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf</code></td><td><code>nm</code> 实测的函数清单</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h</code></td><td><code>DWT_Type</code> 与基地址（:907、:1552、:1564）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_dwt.cpp</code></td><td>底盘板同源文件</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘板调用点（:129）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-微秒级延时"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-微秒级延时</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/04-DWT计时与在线观测/02-微秒级延时.md</span></div><div class="dfile__body"><h1 id="微秒级延时的实现与代价">微秒级延时的实现与代价</h1>
+<blockquote>
+<p><code>BSP/Src/bsp_dwt.cpp</code> 里两个延时函数一共 32 行。周期数换算、量化误差、溢出边界和 CPU 占用都能从这 32 行里算出来。</p>
+<p>本文按调用点逐条核算：BMI088 初始化期间的 150 µs 短延时与 80 ms 复位延时，以及 <code>ImuTask</code> 循环里的 1 ms 忙等。</p>
+</blockquote>
+<h2 id="1-概念三种等待的定位">1. 概念：三种等待的定位</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>基准</th><th>分辨率</th><th>是否让出 CPU</th><th>中断里能否调用</th></tr></thead><tbody><tr><td><code>DWT_Delay_us</code> / <code>DWT_Delay_ms</code></td><td><code>CYCCNT</code></td><td>5.95 ns</td><td>否，纯空转</td><td>能</td></tr><tr><td><code>osDelay</code></td><td>FreeRTOS 节拍</td><td>1 ms</td><td>是</td><td>不能</td></tr><tr><td><code>HAL_Delay</code></td><td><code>uwTick</code>（TIM2）</td><td>1 ms</td><td>否，忙等</td><td>能，但不建议</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["需要一段等待"] --> B{"在中断或驱动初始化里"}
+  B -->|"是 不能阻塞"| C["DWT_Delay_us 或 DWT_Delay_ms"]
+  B -->|"否 在任务里"| D{"等待长度大于 1 ms"}
+  D -->|"是"| E["osDelay 让出 CPU"]
+  D -->|"否 且要求亚毫秒精度"| C
+  D -->|"否 只需毫秒档"| E</pre></div>
+<p>判断依据只有两条：能否阻塞，以及精度要求。驱动初始化里不能阻塞，只能忙等；任务里等 1 ms 以上时，忙等会把同优先级任务的时间片一起占掉。</p>
+<h2 id="2-机制周期数换算与量化误差">2. 机制：周期数换算与量化误差</h2>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* BSP/Src/bsp_dwt.cpp:24-36 */</span></span>
+<span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> DWT_Delay_us</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint32_t</span><span style="color:#E36209"> us</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> start </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DWT->CYCCNT;</span></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> cycles </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">HAL_RCC_GetHCLKFreq</span><span style="color:#24292E">() </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 1000000</span><span style="color:#24292E">) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> us;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    while</span><span style="color:#24292E"> ((DWT->CYCCNT </span><span style="color:#D73A49">-</span><span style="color:#24292E"> start) </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> cycles);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> DWT_Delay_ms</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint32_t</span><span style="color:#E36209"> ms</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    while</span><span style="color:#24292E"> (ms</span><span style="color:#D73A49">--</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6F42C1">        DWT_Delay_us</span><span style="color:#24292E">(</span><span style="color:#005CC5">1000</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>换算分成两步。先取每微秒的周期数：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mrow><mo fence="true">⌊</mo><mfrac><msub><mi>f</mi><mtext>HCLK</mtext></msub><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo fence="true">⌋</mo></mrow><mo>=</mo><mfrac><mrow><mn>168</mn><mtext> </mtext><mn>000</mn><mtext> </mtext><mn>000</mn></mrow><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>168</mn></mrow><annotation encoding="application/x-tex">k = \left\lfloor \frac{f_{\text{HCLK}}}{10^6} \right\rfloor = \frac{168\,000\,000}{10^6} = 168</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">⌊</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">HCLK</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">⌋</span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mspace mtight" style="margin-right:0.1952em;"></span><span class="mord mtight">000</span><span class="mspace mtight" style="margin-right:0.1952em;"></span><span class="mord mtight">000</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">168</span></span></span></span></p>
+<p>再乘以微秒数，得到要等待的周期数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mi>k</mi><mo>⋅</mo><mi>u</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">N = k \cdot us</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span></span></span></span>。168 MHz 下 1 µs 对应 168 个周期，1 ms 对应 168 000 个周期，80 ms 对应 13 440 000 个周期。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># 调试构建（-O0）下 DWT_Delay_us 的循环体，地址 0x08010466 到 0x0801047c</span></span>
+<span class="line"><span style="color:#6F42C1">8010466:</span><span style="color:#032F62"> ldr</span><span style="color:#032F62">  r3,</span><span style="color:#24292E"> [pc, </span><span style="color:#6A737D">#32]   @ 装载 DWT 基地址 0xE0001000</span></span>
+<span class="line"><span style="color:#6F42C1">8010468:</span><span style="color:#032F62"> ldr</span><span style="color:#032F62">  r2,</span><span style="color:#24292E"> [r3, </span><span style="color:#6A737D">#4]    @ 读 CYCCNT</span></span>
+<span class="line"><span style="color:#6F42C1">801046a:</span><span style="color:#032F62"> ldr</span><span style="color:#032F62">  r3,</span><span style="color:#24292E"> [r7, </span><span style="color:#6A737D">#12]   @ 取 start</span></span>
+<span class="line"><span style="color:#6F42C1">801046c:</span><span style="color:#032F62"> subs</span><span style="color:#032F62"> r3,</span><span style="color:#032F62"> r2,</span><span style="color:#032F62"> r3</span><span style="color:#032F62">      @</span><span style="color:#032F62"> 无符号差值</span></span>
+<span class="line"><span style="color:#6F42C1">801046e:</span><span style="color:#032F62"> ldr</span><span style="color:#032F62">  r2,</span><span style="color:#24292E"> [r7, </span><span style="color:#6A737D">#8]    @ 取 cycles</span></span>
+<span class="line"><span style="color:#6F42C1">8010470:</span><span style="color:#032F62"> cmp</span><span style="color:#032F62">  r2,</span><span style="color:#032F62"> r3</span></span>
+<span class="line"><span style="color:#6F42C1">8010472:</span><span style="color:#032F62"> ite</span><span style="color:#032F62">  hi</span></span>
+<span class="line"><span style="color:#6F42C1">8010474:</span><span style="color:#032F62"> movhi</span><span style="color:#032F62"> r3,</span><span style="color:#6A737D"> #1</span></span>
+<span class="line"><span style="color:#6F42C1">8010476:</span><span style="color:#032F62"> movls</span><span style="color:#032F62"> r3,</span><span style="color:#6A737D"> #0</span></span>
+<span class="line"><span style="color:#6F42C1">8010478:</span><span style="color:#032F62"> uxtb</span><span style="color:#032F62"> r3,</span><span style="color:#032F62"> r3</span></span>
+<span class="line"><span style="color:#6F42C1">801047a:</span><span style="color:#032F62"> cmp</span><span style="color:#032F62">  r3,</span><span style="color:#6A737D"> #0</span></span>
+<span class="line"><span style="color:#6F42C1">801047c:</span><span style="color:#032F62"> bne.n</span><span style="color:#005CC5"> 8010466</span></span></code></pre>
+<p>循环体是 11 条指令。判断只在每轮结束时做一次，所以实际等待时间落在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>N</mi><mo separator="true">,</mo><mi>N</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[N, N + \Delta)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">Δ</span><span class="mclose">)</span></span></span></span> 之间，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 是一轮循环的指令周期数。等待只会偏长，不会偏短。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span> 很小时，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 的相对影响变大：请求 1 µs 是 168 个周期，而一轮循环本身就是十几到几十个周期，误差占比可观；请求 150 µs 是 25 200 个周期，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 占比降到千分之几。测量这个误差的做法是用 <code>CYCCNT</code> 前后各读一次，把实测周期数与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span> 相减，见下一篇。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant C as BMI088 驱动
+    participant F as DWT_Delay_us
+    participant R as HAL_RCC_GetHCLKFreq
+    participant D as DWT->CYCCNT
+    C->>F: DWT_Delay_us(150)
+    F->>D: 读 CYCCNT 存入 start
+    F->>R: 取 HCLK
+    R-->>F: 168000000
+    F->>F: cycles = (168000000 / 1000000) * 150 = 25200
+    loop 一轮 11 条指令
+        F->>D: 读 CYCCNT
+        D-->>F: 当前周期数
+        F->>F: 比较 now - start 与 25200
+    end
+    F-->>C: 返回 已过 25200 个周期 加上不到一轮循环的时间</pre></div>
+<p>两点细节：</p>
+<ol>
+<li><code>CYCCNT</code> 在 <code>Drivers/CMSIS/Include/core_cm4.h:907</code> 声明为 <code>__IOM uint32_t</code>，即 <code>volatile</code>，编译器不会把循环里的读提到循环外，所以空循环不会被优化掉。</li>
+<li>循环里每次重新装载基地址，是 <code>-O0</code> 的结果。换成 <code>-O2</code> 后这条 <code>ldr</code> 会被提到循环外，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 随构建类型变化。误差上界与构建类型绑定。</li>
+</ol>
+<h3 id="21-溢出边界">2.1 溢出边界</h3>
+<p><code>cycles</code> 是 <code>uint32_t</code>，乘法在 32 位内完成。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>168</mn><mo>⋅</mo><mi>u</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">168 \cdot us</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">168</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span></span></span></span> 超过 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>32</mn></msup><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">2^{32}-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8974em;vertical-align:-0.0833em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 时回绕：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mi>s</mi><mo>≥</mo><mrow><mo fence="true">⌈</mo><mfrac><msup><mn>2</mn><mn>32</mn></msup><mn>168</mn></mfrac><mo fence="true">⌉</mo></mrow><mo>=</mo><mn>25</mn><mtext> </mtext><mn>565</mn><mtext> </mtext><mn>282</mn></mrow><annotation encoding="application/x-tex">us \geq \left\lceil \frac{2^{32}}{168} \right\rceil = 25\,565\,282</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">⌈</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0179em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.931em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">⌉</span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">565</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">282</span></span></span></span></p>
+<p>此时 <code>cycles</code> 变得很小，函数提前返回。一次调用的安全上限约为 25.57 s，与 <code>CYCCNT</code> 的回绕周期一致。<code>DWT_Delay_ms</code> 按 1 ms 分段调用，所以毫秒级延时的时长不受这个限制。</p>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-bmi088-初始化期间的-16-次短延时">3.1 BMI088 初始化期间的 16 次短延时</h3>
+<p><code>BMI088/Src/BMI088.cpp</code> 的 <code>accelInit</code>（:41-79）与 <code>gyroInit</code>（:82-120）结构相同，各有 16 次 150 µs 与 1 次 80 ms：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>次数</th><th>单次</th><th>小计</th></tr></thead><tbody><tr><td>通信检查 <code>:47,49</code></td><td>2</td><td>150 µs</td><td>0.3 ms</td></tr><tr><td>复位后检查 <code>:57,59</code></td><td>2</td><td>150 µs</td><td>0.3 ms</td></tr><tr><td>配置寄存器写后检查 <code>:70,72</code> 循环 6 次</td><td>12</td><td>150 µs</td><td>1.8 ms</td></tr><tr><td>软件复位 <code>:53</code></td><td>1</td><td>80 ms</td><td>80 ms</td></tr><tr><td>单个传感器合计</td><td>16 次短延时加 1 次长延时</td><td></td><td>82.4 ms</td></tr></tbody></table>
+<p>两个传感器合起来约 164.8 ms，全部是忙等。这段时间里 <code>BMI088_Init()</code> 在 CPU 上独占运行，SPI 传输时间另计。</p>
+<h3 id="32-imutask-的两处延时">3.2 ImuTask 的两处延时</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>参数</th><th>上下文</th><th>代价</th></tr></thead><tbody><tr><td><code>Task/Src/ImuTask.cpp:37</code></td><td><code>DWT_Delay_ms(1000)</code></td><td>任务启动，等传感器稳定</td><td>168 000 000 个周期，1 s 忙等</td></tr><tr><td><code>Task/Src/ImuTask.cpp:100</code></td><td><code>DWT_Delay_ms(1)</code></td><td>1 kHz 主循环节拍</td><td>每轮占用 1 ms CPU</td></tr></tbody></table>
+<p>上电后 <code>ImuTask</code> 先做 <code>BMI088_Init()</code>（约 164.8 ms）加温度环初始化，再忙等 1 s，才进入主循环。它与其他任务同为 <code>osPriorityNormal</code>，这段时间里低优先级任务没有机会运行。</p>
+<p>主循环的占用率可以直接写出来。设任务周期为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span>、执行时间为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>exec</mtext></msub></mrow><annotation encoding="application/x-tex">T_{\text{exec}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">exec</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、忙等为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>wait</mtext></msub></mrow><annotation encoding="application/x-tex">T_{\text{wait}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">wait</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>η</mi><mtext>忙等</mtext></msub><mo>=</mo><mfrac><mrow><msub><mi>T</mi><mtext>exec</mtext></msub><mo>+</mo><msub><mi>T</mi><mtext>wait</mtext></msub></mrow><mi>T</mi></mfrac><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>η</mi><mtext>阻塞</mtext></msub><mo>=</mo><mfrac><msub><mi>T</mi><mtext>exec</mtext></msub><mi>T</mi></mfrac></mrow><annotation encoding="application/x-tex">\eta_{\text{忙等}} = \frac{T_{\text{exec}} + T_{\text{wait}}}{T}, \qquad \eta_{\text{阻塞}} = \frac{T_{\text{exec}}}{T}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">忙等</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2334em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8884em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4101em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">exec</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mbin mtight">+</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.334em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">wait</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">阻塞</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2334em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8884em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4101em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">exec</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><code>ImuTask</code> 取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>wait</mtext></msub><mo>=</mo><mn>1</mn><mtext> ms</mtext></mrow><annotation encoding="application/x-tex">T_{\text{wait}} = 1\ \text{ms}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">wait</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span> 略大于 1 ms，占用率接近 100%。换成 <code>osDelay(1)</code> 后同一时间片会还给其他任务，代价是采样间隔被 1 ms 的节拍量化，且不再严格等间隔。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>现象或写法</th><th>后果</th><th>处理</th></tr></thead><tbody><tr><td>1</td><td>在 <code>BSP_DWT_Init()</code> 之前调用 <code>DWT_Delay_us</code></td><td><code>CYCCNT</code> 恒为 0，差值恒为 0，循环条件永真，函数不返回</td><td>保证初始化最先执行，本工程在 <code>main.c:124</code></td></tr><tr><td>2</td><td><code>DWT_Delay_us(25_565_282)</code> 及更大参数</td><td>乘法回绕，实际等待远短于预期</td><td>长延时改用 <code>DWT_Delay_ms</code></td></tr><tr><td>3</td><td>用 <code>int32_t</code> 保存 <code>start</code></td><td>相减变成有符号运算，跨 <code>0xFFFFFFFF</code> 时结果错误</td><td>与 <code>CYCCNT</code> 一样用 <code>uint32_t</code></td></tr><tr><td>4</td><td>把 <code>DWT_Delay_us(1)</code> 当 1 µs 的精确基准</td><td>实际值等于请求值加不到一轮循环的时间，请求越短相对误差越大</td><td>用 <code>CYCCNT</code> 实测后按需补偿</td></tr><tr><td>5</td><td>在 Release 构建下沿用调试图的误差结论</td><td><code>-O2</code> 会减少循环指令数，误差上界改变</td><td>误差按构建类型分别测量</td></tr><tr><td>6</td><td>在 1 kHz 以上的任务里用忙等做周期</td><td>CPU 占用率接近 100%，同优先级任务被拖慢</td><td>任务中用 <code>osDelay</code>，忙等只留给驱动初始化</td></tr><tr><td>7</td><td>在中断里做毫秒级忙等</td><td>中断被拉长，其他中断被延迟或丢失</td><td>中断里只做微秒级等待</td></tr></tbody></table>
+<p>第 1 条是本文件里后果最严重的一条：未初始化时 <code>DWT->CYCCNT</code> 读到的是 0，<code>(0 - 0) &#x3C; cycles</code> 恒成立（<code>cycles</code> 大于 0 时），函数进入死循环。判断方法是接调试器看 PC 是否一直在 <code>DWT_Delay_us</code> 内循环，或核对 <code>DWT->CTRL</code> 的 bit0。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>周期数换算</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mo stretchy="false">⌊</mo><msub><mi>f</mi><mtext>HCLK</mtext></msub><mi mathvariant="normal">/</mi><msup><mn>10</mn><mn>6</mn></msup><mo stretchy="false">⌋</mo><mo>⋅</mo><mi>u</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">N = \lfloor f_{\text{HCLK}}/10^6 \rfloor \cdot us</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mopen">⌊</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">HCLK</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span><span class="mclose">⌋</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span></span></span></span>，168 MHz 下 1 µs = 168 周期</td></tr><tr><td>量化误差</td><td>实际等待在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>N</mi><mo separator="true">,</mo><mi>N</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[N, N+\Delta)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">Δ</span><span class="mclose">)</span></span></span></span> 内，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 是一轮循环的指令周期数，只会偏长</td></tr><tr><td>循环体</td><td>调试构建下 11 条指令，含两次 <code>CYCCNT</code> 相关访问与基地址重载</td></tr><tr><td>溢出边界</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mi>s</mi><mo>≥</mo><mn>25</mn><mtext> </mtext><mn>565</mn><mtext> </mtext><mn>282</mn></mrow><annotation encoding="application/x-tex">us \geq 25\,565\,282</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">565</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">282</span></span></span></span> 时乘法回绕；<code>DWT_Delay_ms</code> 分段调用不受影响</td></tr><tr><td>未初始化</td><td><code>CYCCNT</code> 恒为 0，差值恒为 0，函数不返回</td></tr><tr><td>本工程用例</td><td>BMI088 初始化 164.8 ms，<code>ImuTask</code> 启动 1 s 与循环 1 ms</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>用忙等而不是定时器中断做微秒延时</td><td>任意上下文可调用，不需要中断和外设</td><td>独占 CPU，占用率随延时长度线性上升</td></tr><tr><td><code>DWT_Delay_ms</code> 复用 <code>DWT_Delay_us(1000)</code></td><td>只有一份换算逻辑，溢出边界天然安全</td><td>每毫秒重复一次频率读取与函数调用</td></tr><tr><td><code>ImuTask</code> 用 1 ms 忙等保采样节拍</td><td>采样间隔均匀，不依赖节拍量化</td><td>同优先级任务被拖慢，占用率接近 100%</td></tr><tr><td>在循环里重复装载 DWT 基地址（<code>-O0</code>）</td><td>便于单步调试，寄存器读写可见</td><td>每轮多一条 <code>ldr</code>，量化步长变长</td></tr><tr><td>SPI 短延时统一取 150 µs</td><td>与官方推荐时序一致，不区分数值</td><td>6 个寄存器的初始化循环里多出 1.8 ms 忙等</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 150 µs、1 ms、80 ms 三个延时值在 168 MHz 下对应的周期数。</li>
+<li><code>DWT_Delay_us(1000)</code> 与 <code>DWT_Delay_ms(1)</code> 的结果是否完全一致，说明理由。</li>
+<li>若 <code>DWT_Delay_us</code> 的参数取 30 000 000，估算实际等待时间并解释原因。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用 <code>CYCCNT</code> 测量 <code>DWT_Delay_us(1)</code>、<code>DWT_Delay_us(10)</code>、<code>DWT_Delay_us(1000)</code> 的实际周期数，画出请求值与实测值的差，解释差值的来源。</li>
+<li>把 <code>ImuTask</code> 的 1 ms 忙等改成阻塞式等待，同时保持采样间隔尽量均匀：写出改动代码，说明引入的误差量级，并核算 CPU 占用率的变化。</li>
+<li>给 <code>DWT_Delay_us</code> 增加参数校验与返回值，要求：参数超过安全上限时返回错误而不是静默回绕，计数器未启动时立即返回错误。写出代码并说明如何在初始化阶段判断计数器已启动。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp</code></td><td>两个延时函数（:24-36）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp</code></td><td>16 次短延时与 2 次长延时（:41-120）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/BMI088config.h</code></td><td><code>BMI088_COM_WAIT_SENSOR_TIME = 150</code>（:207）、<code>BMI088_LONG_DELAY_TIME = 80</code>（:206）、寄存器数（:197-198）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>启动延时（:37）与循环延时（:100）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>同优先级任务的节拍来源</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf</code></td><td><code>objdump</code> 反汇编来源（<code>DWT_Delay_us</code> 在 0x08010440）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td><code>-O0 -g3</code> 的调试构建选项（:31）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h</code></td><td><code>CYCCNT</code> 的 <code>__IOM</code> 声明（:907）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ImuTask.cpp</code></td><td>底盘板的两处延时（:36、:112）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-在线变量观测"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-在线变量观测</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/04-DWT计时与在线观测/03-在线变量观测.md</span></div><div class="dfile__body"><h1 id="在线变量观测">在线变量观测</h1>
+<blockquote>
+<p>不中断程序、不接串口也能看内部状态，靠的是调试器直接读内存：把要观察的量放在不会被优化的全局变量里，再用 Watch 窗口观察。本工程为此准备了两条路，一条是 <code>Debug_vars</code> 目录，一条是 <code>BSP/Src/debug.cpp</code> 的串口帧。</p>
+<p>本文核对两条路的声明、定义、引用与链接结果，并给出最小可用的改法。核对结论是两条路当前都没有接上，原因各不相同。</p>
+</blockquote>
+<h2 id="1-概念三条观测通道">1. 概念：三条观测通道</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>通道</th><th>物理连接</th><th>是否需要目标停机</th><th>本工程状态</th></tr></thead><tbody><tr><td>调试器 Watch / Live Watch</td><td>SWD 调试线</td><td>Live Watch 不需要，普通 Watch 需要</td><td>变量未被引用，读不到有效地址</td></tr><tr><td>串口二进制帧</td><td>UART（<code>huart1</code>，115200）</td><td>不需要</td><td>发送函数未被调用，且帧格式无校验</td></tr><tr><td>ITM / SWO</td><td>SWD 的 SWO 引脚</td><td>不需要</td><td>未使用</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["要观察的量"] --> B{"目标能否停机"}
+  B -->|"能 只在断点处看"| C["普通 Watch&#x3C;br/>halt 时读内存"]
+  B -->|"不能 需要连续看"| D["Live Watch&#x3C;br/>周期性读内存"]
+  B -->|"不能用调试器 需要记录"| E["串口帧 SendDebugData"]
+  A --> F["volatile 全局变量&#x3C;br/>Debug_vars"]
+  F --> C
+  F --> D
+  E --> G["0xAA 0xBB 开头&#x3C;br/>定长字段 无长度 无校验"]
+  A --> H["ITM 端口 0 到 31&#x3C;br/>需要 SWO 接线"]</pre></div>
+<h2 id="2-机制">2. 机制</h2>
+<h3 id="21-变量观测依赖三件事">2.1 变量观测依赖三件事</h3>
+<ol>
+<li>变量有独立的内存位置，不能被优化进寄存器。加 <code>volatile</code> 可以阻止编译器把它常驻寄存器，也阻止多次读被合并。</li>
+<li>变量进入最终的镜像。构建用 <code>-fdata-sections</code> 把每个变量放进独立的段，再用 <code>-Wl,--gc-sections</code> 回收没有被引用的段，没有被任何代码引用的变量会被删掉。</li>
+<li>调试器知道变量的地址。地址来自 ELF 的符号表与 DWARF 信息，目标运行时按地址读取。</li>
+</ol>
+<p>第 2 条是这类机制最常见的失效原因。<code>volatile</code> 解决第 1 条，不解决第 2 条。</p>
+<h3 id="22-串口帧的格式">2.2 串口帧的格式</h3>
+<p><code>BSP/Src/debug.cpp</code> 的 <code>SendDebugData(format, ...)</code> 按格式字符串逐字节打包：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>格式字符</th><th>类型</th><th>字节数</th><th>取值方式</th></tr></thead><tbody><tr><td><code>f</code></td><td><code>float</code></td><td>4</td><td><code>va_arg(args, double)</code> 再转 <code>float</code></td></tr><tr><td><code>i</code></td><td><code>int32_t</code></td><td>4</td><td><code>va_arg(args, int32_t)</code></td></tr><tr><td><code>u</code></td><td><code>uint32_t</code></td><td>4</td><td><code>va_arg(args, uint32_t)</code></td></tr><tr><td><code>s</code></td><td><code>int16_t</code></td><td>2</td><td><code>va_arg(args, int)</code> 再转 <code>int16_t</code></td></tr><tr><td><code>h</code></td><td><code>uint16_t</code></td><td>2</td><td><code>va_arg(args, int)</code> 再转 <code>uint16_t</code></td></tr><tr><td><code>c</code></td><td><code>uint8_t</code></td><td>1</td><td><code>va_arg(args, int)</code> 再转 <code>uint8_t</code></td></tr></tbody></table>
+<p>帧结构是两字节头 <code>0xAA 0xBB</code> 加按格式字符串顺序排列的定长字段，最后一次性 <code>HAL_UART_Transmit</code> 发出（:113）。没有长度字段，没有帧序号，没有校验。接收端必须知道发送时用的格式字符串，否则字段边界无从确定。</p>
+<p><code>f</code> 分支读 <code>double</code> 是正确的：C 的可变参数对 <code>float</code> 会做默认实参提升，传进来的是 8 字节 <code>double</code>，代码再截断成 4 字节 <code>float</code> 打包。</p>
+<p>循环的边界条件是 <code>index &#x3C; DEBUG_MAX_BUFFER_SIZE - 4</code>（:70），<code>DEBUG_MAX_BUFFER_SIZE = 128</code>（<code>BSP/Inc/debug.h:20</code>）。每轮最多追加 4 字节，所以 <code>index</code> 不会超过 127，缓冲区是安全的。</p>
+<h3 id="23-magictoolsh-的内容">2.3 magictools.h 的内容</h3>
+<p><code>BSP/magictools.h</code> 只有一个 C++ 模板函数：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* BSP/magictools.h:11-16 */</span></span>
+<span class="line"><span style="color:#D73A49">template</span><span style="color:#24292E"> &#x3C;</span><span style="color:#D73A49">typename</span><span style="color:#6F42C1"> T</span><span style="color:#24292E">></span></span>
+<span class="line"><span style="color:#D73A49">inline</span><span style="color:#6F42C1"> T</span><span style="color:#6F42C1"> clamp</span><span style="color:#24292E">(</span><span style="color:#6F42C1">T</span><span style="color:#E36209"> value</span><span style="color:#24292E">, </span><span style="color:#6F42C1">T</span><span style="color:#E36209"> min_val</span><span style="color:#24292E">, </span><span style="color:#6F42C1">T</span><span style="color:#E36209"> max_val</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (value </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> min_val) </span><span style="color:#D73A49">return</span><span style="color:#24292E"> min_val;</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (value </span><span style="color:#D73A49">></span><span style="color:#24292E"> max_val) </span><span style="color:#D73A49">return</span><span style="color:#24292E"> max_val;</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> value;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>它与在线观测无关，是 PID 里的限幅工具，被 <code>PID/PidBase.h:46,52</code> 与 <code>Task/Src/GimbalTask.cpp:83,102</code> 使用。头文件整体用 <code>#ifdef __cplusplus</code> 包住，C 文件包含它时得到空内容。</p>
+<h2 id="3-落到本项目两条路的实际状态">3. 落到本项目：两条路的实际状态</h2>
+<h3 id="31-两个同名头文件">3.1 两个同名头文件</h3>
+<p>仓库里有两个 <code>debug_vars.h</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>内容</th><th>谁包含它</th></tr></thead><tbody><tr><td><code>BSP/debug_vars.h</code></td><td>空壳，只有宏定义与空的 <code>extern "C"</code> 块（:1-12）</td><td><code>Task/Src/ImuTask.cpp:11</code>、<code>BSP/Src/bsp_can.cpp:6,9</code>、<code>Communication/Src/dbus.cpp:7</code>、<code>Communication/Src/usart_decode.cpp:11</code></td></tr><tr><td><code>Debug_vars/debug_vars.h</code></td><td>注释掉的变量框架与 9 条 <code>extern</code> 声明（:13-23）</td><td>只有 <code>Debug_vars/debug_vars.cpp:6</code> 自己</td></tr></tbody></table>
+<p>包含结果由编译参数决定：<code>CMakeLists.txt</code> 把 <code>BSP/Inc</code>（:137）与 <code>BSP</code>（:142）排在 <code>Debug_vars</code>（:143）之前，而引号包含会先找源文件所在目录。于是除定义变量的 <code>debug_vars.cpp</code> 之外，其余文件拿到的都是空壳。真身里的 9 条 <code>extern</code> 也全是注释状态，本来声明不了任何东西。</p>
+<h3 id="32-9-个变量的定义与下场">3.2 9 个变量的定义与下场</h3>
+<p><code>Debug_vars/debug_vars.cpp:11-19</code> 定义了全部 9 个变量：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>变量</th><th>类型</th><th>初始值</th><th>段</th><th>大小</th><th>是否进入镜像</th></tr></thead><tbody><tr><td><code>debug_roll</code></td><td><code>volatile float</code></td><td>0.0f</td><td>.bss</td><td>4</td><td>否</td></tr><tr><td><code>debug_pitch</code></td><td><code>volatile float</code></td><td>0.0f</td><td>.bss</td><td>4</td><td>否</td></tr><tr><td><code>debug_yaw</code></td><td><code>volatile float</code></td><td>0.0f</td><td>.bss</td><td>4</td><td>否</td></tr><tr><td><code>debug_actual_speed</code></td><td><code>volatile float</code></td><td>-1.0f</td><td>.data</td><td>4</td><td>否</td></tr><tr><td><code>debug_angle1</code></td><td><code>volatile uint16_t</code></td><td>0</td><td>.bss</td><td>2</td><td>否</td></tr><tr><td><code>debug_angle2</code></td><td><code>volatile int16_t</code></td><td>0</td><td>.bss</td><td>2</td><td>否</td></tr><tr><td><code>debug_angle3</code></td><td><code>volatile int16_t</code></td><td>0</td><td>.bss</td><td>2</td><td>否</td></tr><tr><td><code>debug_angle4</code></td><td><code>volatile int16_t</code></td><td>0</td><td>.bss</td><td>2</td><td>否</td></tr><tr><td><code>debug_st</code></td><td><code>volatile int16_t</code></td><td>0</td><td>.bss</td><td>2</td><td>否</td></tr></tbody></table>
+<p>段与大小的依据是 <code>build/Debug/sentriomeni2026.map</code> 的输入段列表，例如 <code>.bss.debug_roll 0x0 0x4</code> 与 <code>.data.debug_actual_speed 0x0 0x4</code>，非零初值的变量进 .data。「是否进入镜像」的依据是最终 ELF：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> arm-none-eabi-nm</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -c</span><span style="color:#032F62"> debug_</span></span>
+<span class="line"><span style="color:#6F42C1">0</span></span>
+<span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> arm-none-eabi-nm</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -iE</span><span style="color:#032F62"> 'roll|angle1|actual_speed'</span></span>
+<span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> echo</span><span style="color:#005CC5"> $?</span></span>
+<span class="line"><span style="color:#6F42C1">1</span></span></code></pre>
+<p>9 个变量全部被 <code>--gc-sections</code> 回收。代码里没有任何一处写它们：<code>BSP/Src/bsp_can.cpp:652</code> 只有一行被注释掉的 <code>//debug_angle1 = LK_motor_1.rotor_angle;</code>；<code>Communication_Summary.md:279</code> 说这些量在 <code>dbus_decode</code> 里更新，但当前固件的 <code>Communication/Src/dbus.cpp</code> 里没有对应的赋值。Watch 窗口因此拿不到有效地址。</p>
+<h3 id="33-串口通道的状态">3.3 串口通道的状态</h3>
+<p><code>debug.cpp</code> 编译进了两块板，链接结果不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>符号</th><th>云台板</th><th>底盘板</th><th>说明</th></tr></thead><tbody><tr><td><code>DebugUART_Init</code></td><td>不在镜像</td><td>32 字节，<code>0x0800cd5c</code></td><td>底盘板 <code>Task/Src/ImuTask.cpp:33</code> 调用过</td></tr><tr><td><code>s_debug_huart</code></td><td>不在镜像</td><td>4 字节，<code>0x2000a41c</code></td><td>静态指针，被 <code>DebugUART_Init</code> 引用后保留</td></tr><tr><td><code>SendDebugData</code></td><td>不在镜像</td><td>不在镜像</td><td>两块板都没有调用点</td></tr><tr><td><code>DebugUART_GetHandle</code></td><td>不在镜像</td><td>不在镜像</td><td>没有调用点</td></tr></tbody></table>
+<p>云台板的 <code>Task/Src/ImuTask.cpp:12</code> 包含了 <code>debug.h</code>，但没有调用 <code>DebugUART_Init</code>，静态指针也没有被保留。即使调用了 <code>SendDebugData</code>，函数开头的 <code>if (s_debug_huart == NULL) return;</code>（:55-57）也会让它在指针为空时静默返回。</p>
+<h3 id="34-最小可用改法">3.4 最小可用改法</h3>
+<p>要让 Watch 读到变量，需要同时满足有声明与被引用：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Debug_vars/debug_vars.h：把 9 条声明改为生效 */</span></span>
+<span class="line"><span style="color:#D73A49">#ifdef</span><span style="color:#6F42C1"> __cplusplus</span></span>
+<span class="line"><span style="color:#D73A49">extern</span><span style="color:#032F62"> "C"</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">#endif</span></span>
+<span class="line"><span style="color:#D73A49">extern</span><span style="color:#D73A49"> volatile</span><span style="color:#D73A49"> float</span><span style="color:#24292E"> debug_roll;</span></span>
+<span class="line"><span style="color:#D73A49">extern</span><span style="color:#D73A49"> volatile</span><span style="color:#D73A49"> float</span><span style="color:#24292E"> debug_pitch;</span></span>
+<span class="line"><span style="color:#D73A49">extern</span><span style="color:#D73A49"> volatile</span><span style="color:#D73A49"> float</span><span style="color:#24292E"> debug_yaw;</span></span>
+<span class="line"><span style="color:#D73A49">#ifdef</span><span style="color:#6F42C1"> __cplusplus</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">#endif</span></span></code></pre>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* 任一处运行期会执行的初始化代码，例如 Core/Src/main.c 的 USER CODE 2 段 */</span></span>
+<span class="line"><span style="color:#D73A49">#include</span><span style="color:#032F62"> "debug_vars.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">debug_roll </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span><span style="color:#6A737D">   /* 一次引用就足以让该段被保留 */</span></span></code></pre>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant IDE as 调试器 Watch
+    participant ELF as ELF 符号与 DWARF
+    participant M as 目标内存
+    participant T as 目标程序
+    IDE->>ELF: 查询 debug_yaw 的地址
+    ELF-->>IDE: 地址与类型
+    loop Live Watch 轮询
+        IDE->>M: 按地址读 4 字节 不打断 CPU
+        M-->>IDE: 当前值
+    end
+    Note over IDE,T: 变量被回收或优化进寄存器时 地址无效或读数为常量</pre></div>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>现象或写法</th><th>后果</th><th>处理</th></tr></thead><tbody><tr><td>1</td><td>全局变量没有任何引用</td><td><code>--gc-sections</code> 回收该段，Watch 显示无效地址</td><td>在初始化代码里引用一次</td></tr><tr><td>2</td><td>把 <code>extern</code> 声明留在注释里</td><td>其他文件无法引用，变量注定被回收</td><td>打开声明，或集中到一处管理</td></tr><tr><td>3</td><td>混用两个同名头文件</td><td>包含到的是空壳，编译期看不出差别</td><td>核对 <code>CMakeLists.txt</code> 的包含顺序与源文件目录</td></tr><tr><td>4</td><td>声明与定义的 <code>volatile</code> 不一致</td><td>类型不匹配，跨文件读写行为未定义</td><td>声明和定义都写 <code>volatile</code></td></tr><tr><td>5</td><td>只用普通 Watch 连续观察</td><td>普通 Watch 在目标运行时不会刷新</td><td>连续观察用 Live Watch，并接受几十毫秒的轮询间隔</td></tr><tr><td>6</td><td>指针为空时调用 <code>SendDebugData</code></td><td>函数静默返回，没有输出也没有报错</td><td>先调 <code>DebugUART_Init</code>，并保留发送计数用于确认</td></tr><tr><td>7</td><td>用串口帧做长时间记录</td><td>帧无长度与校验，丢一个字节后无法重新对齐</td><td>补上长度与校验，或改用 USB CDC 的既有协议</td></tr><tr><td>8</td><td>在 1 kHz 任务里发调试帧</td><td><code>HAL_UART_Transmit</code> 超时 100 ms，一次阻塞就是上百个控制周期</td><td>发送放在低频任务里，或改 DMA</td></tr><tr><td>9</td><td>把过期的文档当依据</td><td><code>Communication_Summary.md</code> 描述的更新点在当前固件里不存在</td><td>以源码与 <code>nm</code> 输出为准</td></tr><tr><td>10</td><td>认为 <code>volatile</code> 就能保住变量</td><td><code>volatile</code> 只影响优化，不影响链接期回收</td><td>引用与 <code>volatile</code> 都要有</td></tr></tbody></table>
+<p>第 8 条的依据是 <code>BSP/Inc/debug.h:19</code> 的 <code>DEBUG_UART_TIMEOUT = 100</code>，单位毫秒，作为 <code>HAL_UART_Transmit</code> 的最后一个参数。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>在线观测的前提</td><td>变量有独立内存位置、进入镜像、地址可被调试器解析</td></tr><tr><td><code>volatile</code> 的作用范围</td><td>阻止优化，不阻止 <code>--gc-sections</code> 回收</td></tr><tr><td><code>Debug_vars</code> 现状</td><td>9 个变量全部定义，全部被回收；<code>extern</code> 声明为注释状态</td></tr><tr><td>两个同名头文件</td><td><code>BSP/debug_vars.h</code> 是空壳且先被包含，真身在 <code>Debug_vars/</code></td></tr><tr><td><code>SendDebugData</code> 帧</td><td><code>0xAA 0xBB</code> 加定长字段，无长度、无序号、无校验</td></tr><tr><td>串口通道现状</td><td>云台板两个符号都不在镜像，底盘板只保留初始化函数与静态指针</td></tr><tr><td><code>magictools.h</code></td><td>只有 C++ 的 <code>clamp</code> 模板，与观测无关</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>用 Watch 变量而不是串口打印</td><td>不占用外设，不需要协议与上位机</td><td>必须有调试器连接，无法事后回看</td></tr><tr><td>变量集中在一个 .cpp 里定义</td><td>命名统一，加变量只改一个文件</td><td>无引用时整批被回收，问题不易察觉</td></tr><tr><td>串口帧用格式字符串描述类型</td><td>实现简单，省掉结构体定义</td><td>无长度与校验，收发两端必须共享格式字符串</td></tr><tr><td><code>SendDebugData</code> 用阻塞发送</td><td>不需要 DMA 与环形缓冲</td><td>超时 100 ms，放在高频任务里会拖慢控制</td></tr><tr><td>保留空的 <code>BSP/debug_vars.h</code></td><td>旧的包含路径仍能编译通过</td><td>两个同名头文件容易混用，编译期无提示</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>用 <code>arm-none-eabi-nm</code> 核对 <code>debug_roll</code> 是否在某个 ELF 里，写出命令与判据。</li>
+<li><code>volatile</code> 与 <code>--gc-sections</code> 各自解决什么问题，为什么两者都不能单独保证变量可被观察？</li>
+<li>说明 <code>SendDebugData("ffi", a, b, c)</code> 生成的帧长度，以及接收端如何确定第三个字段的位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给 <code>Debug_vars</code> 加一个心跳变量：每 1 ms 自增一次，用 Live Watch 确认刷新，并说明为什么普通 Watch 验证不了。</li>
+<li>设计一版带长度与校验的调试帧：给出帧头、长度、序号、载荷、校验的字段布局，写出收发两端的处理流程，并说明接收端丢字节后如何恢复同步。</li>
+<li>把 <code>SendDebugData</code> 改成非阻塞实现：用 DMA 加环形缓冲，给出缓冲区大小的估算方法与溢出策略，说明在 1 kHz 任务里调用时的最坏阻塞时间。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/debug_vars.h</code></td><td>空壳头文件（:1-12）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Debug_vars/debug_vars.h</code></td><td>注释掉的声明框架（:13-23）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Debug_vars/debug_vars.cpp</code></td><td>9 个变量的定义（:11-19）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/debug.h</code></td><td>超时与缓冲区常量（:19-20）、<code>SendDebugData</code> 声明（:41）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp</code></td><td>帧打包与发送（:54-115）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/magictools.h</code></td><td><code>clamp</code> 模板（:11-16）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/CMakeLists.txt</code></td><td>包含路径顺序（:128-148）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td><code>-fdata-sections</code> 与 <code>--gc-sections</code>（:29、:41）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>被注释掉的观测赋值（:652）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication_Summary.md</code></td><td>已过期的调试说明（:277-280）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf</code></td><td><code>nm</code> 实测符号清单</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ImuTask.cpp</code></td><td>底盘板 <code>DebugUART_Init</code> 调用点（:33）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/build/Debug/sentriomeni2026.elf</code></td><td>底盘板 <code>nm</code> 结果</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>用寄存器窗口做在线排查的过程（:18-25）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-性能测量实践"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-性能测量实践</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/04-DWT计时与在线观测/04-性能测量实践.md</span></div><div class="dfile__body"><h1 id="用-cyccnt-测函数耗时">用 CYCCNT 测函数耗时</h1>
+<blockquote>
+<p>前面两篇说明 <code>CYCCNT</code> 的读法与延时代价。本工程目前没有一处测量代码：<code>DWT_GetCycleCount</code> 与 <code>DWT_GetMicroseconds</code> 都因为无引用被回收。本文给出可用的测量写法、判读口径与干扰来源，并说明为什么本工程只有 DWT 这一条计数通道可用。</p>
+</blockquote>
+<h2 id="1-概念一次测量要记的四件事">1. 概念：一次测量要记的四件事</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项目</th><th>含义</th><th>本工程的做法</th></tr></thead><tbody><tr><td>测量窗口</td><td>起止两次读 <code>CYCCNT</code> 之间的代码</td><td>只包住被测量的函数，窗口越短越容易被干扰放大</td></tr><tr><td>读数开销</td><td>两次读、减法、存储指令本身消耗的周期</td><td>需要实测标定，短窗口下不可忽略</td></tr><tr><td>样本存储</td><td>承接结果的变量</td><td>必须是会被引用的全局变量，否则被回收</td></tr><tr><td>干扰</td><td>窗口内发生的中断与任务切换</td><td>用最小值作为纯执行时间的估计</td></tr></tbody></table>
+<h2 id="2-机制">2. 机制</h2>
+<h3 id="21-基本写法">2.1 基本写法</h3>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">#include</span><span style="color:#032F62"> "bsp_dwt.h"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">/* 承接结果的变量：全局且 volatile，避免被优化或被回收 */</span></span>
+<span class="line"><span style="color:#D73A49">volatile</span><span style="color:#D73A49"> uint32_t</span><span style="color:#24292E"> prof_bmi088_min </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FFFFFFFF</span><span style="color:#D73A49">u</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">volatile</span><span style="color:#D73A49"> uint32_t</span><span style="color:#24292E"> prof_bmi088_last </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> measure_bmi088</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    extern</span><span style="color:#D73A49"> float</span><span style="color:#24292E"> gyro[</span><span style="color:#005CC5">3</span><span style="color:#24292E">], accel[</span><span style="color:#005CC5">3</span><span style="color:#24292E">], temp;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> t0 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DWT->CYCCNT;</span></span>
+<span class="line"><span style="color:#6F42C1">    BMI088_Read</span><span style="color:#24292E">(gyro, accel, </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">temp);</span></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> dt </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DWT->CYCCNT </span><span style="color:#D73A49">-</span><span style="color:#24292E"> t0;</span><span style="color:#6A737D">      /* 无符号差值，跨回绕也正确 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">    prof_bmi088_last </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dt;</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (dt </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> prof_bmi088_min) {</span></span>
+<span class="line"><span style="color:#24292E">        prof_bmi088_min </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dt;</span><span style="color:#6A737D">            /* 只保留最小值 */</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>三个写法要点：</p>
+<ol>
+<li><code>t0</code> 与 <code>dt</code> 用 <code>uint32_t</code>。有符号数在跨 <code>0xFFFFFFFF</code> 时结果错误，无符号减法天然处理一次回绕。</li>
+<li>差值直接相减，不做 <code>DWT->CYCCNT = 0</code> 之类的复位。复位会破坏其他使用者的计时。</li>
+<li>结果变量必须是全局的、会被运行期引用的。局部变量在任务返回后就没了，静态局部变量也可能被回收。</li>
+</ol>
+<h3 id="22-换算与判读">2.2 换算与判读</h3>
+<p>周期数换成时间：</p>
+<span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 35: …ac{C}{168\,000}$̲$
+
+若用整数除法在 32 位…" style="color:#cc0000">t_{\text{ms}} = \frac{C}{168\,000}$$
+
+若用整数除法在 32 位内完成，先乘后除要小心溢出；写成 `(uint64_t)C * 1000000ull / HAL_RCC_GetHCLKFreq()` 更稳，这也是 `DWT_GetMicroseconds` 的写法（`BSP/Src/bsp_dwt.cpp:52`）。
+
+判读口径决定结论：
+
+| 统计量 | 含义 | 适用场合 |
+| --- | --- | --- |
+| 最小值 | 最接近纯执行时间，被抢占的次数最少 | 评估函数本身的耗时上界 |
+| 最大值 | 含一次或多次中断与任务切换 | 评估对控制周期的冲击 |
+| 平均值 | 混合值，取决于采样点的负载 | 评估 CPU 占用率 |
+| 采样次数 | 结论的置信度依据 | 少于几百次的结论不可靠 |
+
+### 2.3 读数开销与相对误差
+
+一次测量至少包含两次 `CYCCNT` 读与一次减法，再加上结果存储。这些指令也占周期，设其总代价为 $C_{\text{ov}}$：
+
+$$\varepsilon = \frac{C_{\text{ov}}}{C_{\text{窗口}}}$$
+
+| 窗口长度 | 周期数 | 取整误差（1 周期） | 读数开销的影响 |
+| --- | --- | --- | --- |
+| 1 µs | 168 | 5.95 ns，相对 0.6% | 主导项，必须实测扣除 |
+| 10 µs | 1 680 | 相对 0.06% | 明显，仍建议扣除 |
+| 100 µs | 16 800 | 相对 0.006% | 可忽略 |
+| 1 ms | 168 000 | 相对 0.0006% | 可忽略 |
+
+$C_{\text{ov}}$ 的标定方法：连续两次测量同一段空代码，或者测量一个已知周期数的空循环。本工程没有做这一步，所以表中 `C_ov` 一列按实测需求填写。
+
+### 2.4 干扰来源
+
+测量窗口内任何中断都会拉长读数。按 NVIC 优先级分两类：
+
+| 干扰源 | 优先级 | 触发频率 | 是否打断测量窗口 |
+| --- | --- | --- | --- |
+| CAN1_RX0 / CAN2_RX0 | 5 | 每个接收帧一次，1 Mbps 下每帧约 130 µs 总线时间 | 是 |
+| USART3（DMA1_Stream1）与 USART6（DMA2_Stream1/Stream6） | 5 | 串口收发事件 | 是 |
+| SPI1 的 DMA2_Stream2/Stream3 | 5 | 每次 IMU 读写 | 是 |
+| OTG_FS | 5 | USB 事件 | 是 |
+| TIM2 的 HAL tick 与 SysTick | 15 | 都是 1 kHz | 是，但可以预期 |
+| PendSV | 15 | 每次任务切换 | 是，会显著拉长最大值 |
+| TIM10 | 5 | 不产生中断（见下） | 否 |
+
+TIM10 的 NVIC 中断在 `Core/Src/tim.c:83-84` 被使能，它也确实在跑：`BMI088/Src/ImuTempControl.cpp:15` 调用 `HAL_TIM_PWM_Start(&#x26;htim10, TIM_CHANNEL_1)` 驱动 IMU 加热。但 `HAL_TIM_PWM_Start` 只使能计数器与通道输出，不使能更新中断，代码里也没有其他位置打开 `TIM_IT_UPDATE`，所以 33.6 kHz 的更新事件不会进中断。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T as 测量代码
+    participant ISR as CAN1_RX0 中断
+    participant D as DWT->CYCCNT
+    T->>D: 读 t0
+    T->>T: BMI088_Read 开始
+    ISR->>T: 抢占
+    ISR->>ISR: HAL_CAN_IRQHandler 与回调
+    ISR-->>T: 返回
+    T->>T: BMI088_Read 结束
+    T->>D: 读 t1
+    Note over T,D: 这次样本包含中断时间 计入最大值 不计入最小值
+```
+
+## 3. 落到本项目
+
+### 3.1 可测对象与测量点
+
+| 对象 | 所在文件 | 测量点建议 | 说明 |
+| --- | --- | --- | --- |
+| `BMI088_Read` | `BMI088/Src/BMI088.cpp:351` | `ImuTask` 循环内（`ImuTask.cpp:43`） | 含 SPI 传输与 DMA 等待 |
+| `FusionAHRS::update` | `Algorithm/Src/FusionAHRS.cpp` | `ImuTask.cpp:50` 前后 | 纯计算，适合比较优化前后 |
+| 云台 PID 计算 | `Task/Src/GimbalTask.cpp` | 1 ms 循环内 | 与电流输出一起看 |
+| CAN 接收回调 | `BSP/Src/bsp_can.cpp` | 回调内部（中断上下文） | 只在调试时短期打开 |
+
+测量点放在任务里时要注意：计数窗口不要跨越 `osDelay`，否则测到的是整个周期而不是执行时间。中断上下文（CAN 回调）里也能读 `CYCCNT`，但回调执行期间同优先级及更低优先级的中断不会发生，读数只反映自身长度。
+
+### 3.2 与 24 位 SysTick 的差别
+
+| 维度 | DWT `CYCCNT` | SysTick |
+| --- | --- | --- |
+| 位宽 | 32 位，向上计数 | 24 位，向下计数 |
+| 时钟 | 内核 168 MHz | 内核 168 MHz 或内核/8 |
+| 自由运行时的回绕 | 25.565 s | 99.862 ms（内核时钟），798.9 ms（内核/8） |
+| 本工程实际装载 | 无 | 167 999，即 1 ms |
+| 占用情况 | 空闲 | 已被 FreeRTOS 用作节拍 |
+
+SysTick 的回绕时间算起来是：
+
+$$T_{\text{SysTick}} = \frac{2^{24}}{168 \times 10^6} = 99.862 \ \text{ms}$$
+
+FreeRTOS 的移植层在 `portable/GCC/ARM_CM4F/port.c:695` 把重装载值写成 `configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ - 1`，本工程是 168 000 − 1，计数器每个周期只有 1 ms 的量程，回绕周期等于节拍周期。要拿它做自由计数，就必须先放弃 FreeRTOS 的节拍，代价不可接受。TIM2 已被 HAL 时基占用，同样不能挪用。
+
+```mermaid
+flowchart TD
+  A["需要一个高分辨率计数器"] --> B{"能占用 SysTick 吗"}
+  B -->|"不能 FreeRTOS 在用"| C{"能占用 TIM2 吗"}
+  C -->|"不能 HAL 时基在用"| D["用 DWT CYCCNT&#x3C;br/>32 位 5.95 ns 25.57 s"]
+  C -->|"能 且只需要 1 ms 档"| E["用任意空闲定时器&#x3C;br/>分辨率由预分频决定"]
+  B -->|"能 且能接受 24 位量程"| F["SysTick 自由运行&#x3C;br/>99.86 ms 或 798.9 ms"]
+```
+
+## 4. 易错点
+
+| # | 现象或写法 | 后果 | 处理 |
+| --- | --- | --- | --- |
+| 1 | 测量窗口跨越 `osDelay` 或阻塞调用 | 读数是周期长度，不是执行时间 | 窗口只包住目标函数 |
+| 2 | 用有符号变量存差值 | 跨回绕时得到负数 | 统一用 `uint32_t` |
+| 3 | 复位 `CYCCNT` 后再测 | 破坏其他使用者的时间基准，且引入竞争 | 只做差值，不复位 |
+| 4 | 只采一次就下结论 | 单次样本可能正好被中断命中 | 至少几百次，同时记录最小值与最大值 |
+| 5 | 被测代码被内联或优化掉 | 窗口内没有实际工作，读数接近开销 | 核对反汇编，必要时加 `volatile` 或屏障 |
+| 6 | 结果变量是局部或静态局部 | 被回收或读不到，Watch 显示无效 | 用会被引用的全局变量 |
+| 7 | 在中断里做长时间测量并打印 | 中断被拉长，其他中断延迟或丢失 | 中断里只累加计数，打印放到任务 |
+| 8 | 忽略任务切换的贡献 | 最大值偏大时误判为函数变慢 | 最大值需结合任务状态一起解释 |
+| 9 | 把 1 ms 的 `HAL_GetTick()` 差当成耗时 | 分辨率只有 1 ms，短函数恒为 0 或 1 | 短耗时只能用 `CYCCNT` |
+| 10 | 忘记换算里的整数除法 | 168 个周期以下恒为 0 µs | 保留周期数做统计，最后一步再换算 |
+
+## 5. 小结
+
+### 核心概念
+
+| 概念 | 要点 |
+| --- | --- |
+| 窗口 | 两次 `CYCCNT` 读之间，只包住目标函数 |
+| 换算 | $t_{\text{us}} = C/168$，保留周期数做统计更精确 |
+| 判据 | 最小值接近纯执行时间，最大值反映干扰，平均值反映占用 |
+| 读数开销 | 相对误差 $C_{\text{ov}}/C_{\text{窗口}}$，短窗口必须标定 |
+| 干扰 | 优先级 5 的外设中断与任务切换都会拉长读数 |
+| TIM10 | 33.6 kHz PWM 在跑，但更新中断未使能，不构成干扰 |
+| 计数通道 | SysTick 与 TIM2 都被占用，只有 DWT 空闲 |
+
+### 设计权衡
+
+| 决策 | 收益 | 代价 |
+| --- | --- | --- |
+| 用 DWT 做性能测量 | 分辨率 5.95 ns，不影响其他外设 | 需要调试单元可用，量程 25.57 s |
+| 只保留最小值 | 抗干扰，样本量要求低 | 看不到偶发的长尾，需要另存最大值 |
+| 结果放全局变量 | 可用 Live Watch 观察，不需要串口 | 每个被测对象要占 8 字节左右，且必须被引用 |
+| 测量点放在任务里 | 上下文可控，不影响中断时序 | 无法测量中断服务函数自身的耗时 |
+| 不在中断里打印 | 不拉长中断 | 只能事后在任务里输出统计值 |
+
+## 6. 练习
+
+### 基础题
+
+1. 一个函数测得 42 000 个周期，写出它对应的微秒数与毫秒数。
+2. 窗口 1 µs 时，若读数开销为 40 个周期，相对误差是多少？
+3. 说明为什么最小值比平均值更接近函数的纯执行时间。
+
+### 挑战题
+
+4. 给 `BMI088_Read` 加一套最小开销的统计：只记录最小值、最大值与采样次数，用 Live Watch 观察，并核算这套统计本身消耗多少周期。
+5. 用 `CYCCNT` 测出 `DWT_Delay_us(1)` 的实际周期数，与理论值 168 相减，解释差值来源，并说明如何用这个差值反向标定读数开销。
+6. 设计一个能区分「函数变慢」与「中断变多」的实验：要求只用一个计数器，给出采样策略与判读方法。
+
+---
+
+### 附：本页引用的固件路径
+
+| 路径 | 用途 |
+| --- | --- |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp` | 换算写法参考（:43-53） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | `BMI088_Read`（:351）与 `readRawData`（:123） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 采样与融合的调用点（:43、:50） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp` | TIM10 的 PWM 启动（:15、:27） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 参数与 NVIC（:42-56、:83-84） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 中断入口清单（:177-365） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c` | CAN 接收中断优先级（:125-160） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/dma.c` | DMA 中断优先级（:48-60） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | 串口中断优先级（:198、:262） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | USB 中断优先级（:94） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c` | SysTick 重装载值（:695） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | 节拍频率（:64） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基占用（:41-91） |</span></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/04-DWT计时与在线观测/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="dwt-与在线观测的易错点">DWT 与在线观测的易错点</h1>
+<blockquote>
+<p>前三篇给了机制与用法，这一篇把核对源码时发现的问题汇成清单，每条附证据路径与复核命令。清单之后给一个从现象到定位的流程，以及一条来自工作记录的真实排查案例。</p>
+</blockquote>
+<h2 id="1-核对清单">1. 核对清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>问题</th><th>现象</th><th>证据</th><th>复核命令</th></tr></thead><tbody><tr><td>1</td><td>调试变量被链接器回收</td><td>Watch 读到无效地址或常量</td><td>9 个 <code>debug_*</code> 在 ELF 里零命中</td><td><code>arm-none-eabi-nm elf | grep -c debug_</code></td></tr><tr><td>2</td><td><code>extern</code> 声明全部被注释</td><td>其他文件无法引用变量</td><td><code>Debug_vars/debug_vars.h:14-23</code></td><td><code>grep -n extern Debug_vars/debug_vars.h</code></td></tr><tr><td>3</td><td>同名头文件先命中空壳</td><td>包含到的头文件没有声明</td><td><code>BSP/debug_vars.h:1-12</code> 与包含顺序</td><td>`grep -n ‘BSP\</td></tr><tr><td>4</td><td>延时未初始化即调用</td><td>函数永不返回</td><td><code>bsp_dwt.cpp:29</code> 的循环条件</td><td>调试器看 PC 是否停在 <code>DWT_Delay_us</code></td></tr><tr><td>5</td><td>初始化返回值被忽略</td><td>计数器没起来也照常运行</td><td><code>main.c:124</code> 未接收返回值</td><td><code>grep -n BSP_DWT_Init Core/Src/main.c</code></td></tr><tr><td>6</td><td>微秒延时参数溢出</td><td>实际等待远短于预期</td><td><code>bsp_dwt.cpp:27</code> 的 32 位乘法</td><td>代入 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mi>s</mi><mo>≥</mo><mn>25</mn><mtext> </mtext><mn>565</mn><mtext> </mtext><mn>282</mn></mrow><annotation encoding="application/x-tex">us \geq 25\,565\,282</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">565</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">282</span></span></span></span></td></tr><tr><td>7</td><td>空指针时调试发送静默返回</td><td>无输出也无报错</td><td><code>debug.cpp:55-57</code></td><td><code>grep -n s_debug_huart BSP/Src/debug.cpp</code></td></tr><tr><td>8</td><td>串口帧无长度与校验</td><td>丢字节后无法重新对齐</td><td><code>debug.cpp:63-64</code> 只有两字节头</td><td>读帧结构与发送代码</td></tr><tr><td>9</td><td>文档描述的更新点不存在</td><td>按文档设断点却永不命中</td><td><code>Communication_Summary.md:279</code></td><td><code>grep -n debug_yaw Communication/Src</code></td></tr><tr><td>10</td><td>忙等被当成普通延时</td><td>高频任务占用接近 100%</td><td><code>ImuTask.cpp:100</code></td><td>算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>wait</mtext></msub><mi mathvariant="normal">/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">T_{\text{wait}}/T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">wait</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span></td></tr></tbody></table>
+<h2 id="2-关键几条的展开">2. 关键几条的展开</h2>
+<h3 id="21-变量被回收判据与命令">2.1 变量被回收：判据与命令</h3>
+<p>构建选项决定了这一点。<code>cmake/gcc-arm-none-eabi.cmake:29</code> 有 <code>-fdata-sections -ffunction-sections</code>，同文件 :41 有 <code>-Wl,--gc-sections</code>。每个全局变量单独成段，未被引用的段被删掉：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> arm-none-eabi-nm</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -c</span><span style="color:#032F62"> debug_</span></span>
+<span class="line"><span style="color:#6F42C1">0</span></span>
+<span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> arm-none-eabi-nm</span><span style="color:#005CC5"> -S</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -i</span><span style="color:#032F62"> dwt</span></span>
+<span class="line"><span style="color:#6F42C1">08010490</span><span style="color:#005CC5"> 00000030</span><span style="color:#032F62"> T</span><span style="color:#032F62"> DWT_Delay_ms</span></span>
+<span class="line"><span style="color:#6F42C1">08010440</span><span style="color:#005CC5"> 00000050</span><span style="color:#032F62"> T</span><span style="color:#032F62"> DWT_Delay_us</span></span>
+<span class="line"><span style="color:#6F42C1">080103ec</span><span style="color:#005CC5"> 00000054</span><span style="color:#032F62"> T</span><span style="color:#032F62"> BSP_DWT_Init</span></span></code></pre>
+<p>同一个文件里，被调用过的函数留下，没被调用过的三个读取函数消失。调试变量与它们同理。map 文件的输入段列表里能看到段名，全局符号表里没有，两者要分开看。</p>
+<h3 id="22-静默失败的三处">2.2 静默失败的三处</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>条件</th><th>行为</th></tr></thead><tbody><tr><td><code>debug.cpp:55-57</code></td><td><code>s_debug_huart == NULL</code></td><td>直接返回，无输出</td></tr><tr><td><code>main.c:124</code> 与底盘板 <code>:129</code></td><td><code>BSP_DWT_Init</code> 返回 1</td><td>不处理，继续运行</td></tr><tr><td><code>debug.cpp:102-104</code></td><td>未知格式字符</td><td>跳过该字符，帧长度与接收端预期不一致</td></tr></tbody></table>
+<p>三处的共同点是失败不产生可见信号。核对方式是为每处加一个可观测的计数变量：初始化返回值存入全局变量，发送函数统计成功与失败次数，未知格式字符计数。这些计数变量本身要被引用，否则回到第 1 条。</p>
+<h3 id="23-未初始化时的死循环">2.3 未初始化时的死循环</h3>
+<p><code>bsp_dwt.cpp:24-30</code> 的循环条件是 <code>(DWT->CYCCNT - start) &#x3C; cycles</code>。<code>BSP_DWT_Init</code> 之前计数器不动，两次读都是 0，差值是 0：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mo>&#x3C;</mo><mi>N</mi><mspace width="1em"></mspace><mo stretchy="false">(</mo><mi>N</mi><mo>></mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">0 &#x3C; N \quad (N > 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6835em;vertical-align:-0.0391em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:1em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></p>
+<p>条件恒真，函数不返回。调用链上任何一次提前调用都会让任务卡在 <code>DWT_Delay_us</code> 里，表现是任务不再推进、看门狗不响应。定位方法是核对 <code>DWT->CTRL</code> 的 bit0，或检查调用顺序是否在 <code>SystemClock_Config</code> 与 <code>BSP_DWT_Init</code> 之后。</p>
+<h3 id="24-文档与代码的偏差">2.4 文档与代码的偏差</h3>
+<p><code>Communication_Summary.md:277-280</code> 写「这些变量在 dbus_decode 中更新」。当前固件的 <code>Communication/Src/dbus.cpp</code> 与 <code>Communication/Src/usart_decode.cpp</code> 只包含了空壳头文件，没有任何 <code>debug_*</code> 赋值。<code>BSP/Src/bsp_can.cpp:652</code> 保留了唯一一处相关的注释代码：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* BSP/Src/bsp_can.cpp:652 */</span></span>
+<span class="line"><span style="color:#6A737D">//debug_angle1 = LK_motor_1.rotor_angle;</span></span></code></pre>
+<p>按文档设断点、加 Watch 都不会有结果。核对这类描述的方法是在源码树里搜符号，而不是信任文档：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "debug_roll\|debug_yaw"</span><span style="color:#032F62"> Communication</span><span style="color:#032F62"> BSP</span><span style="color:#032F62"> Task</span><span style="color:#032F62"> Debug_vars</span></span>
+<span class="line"><span style="color:#6F42C1">Debug_vars/debug_vars.cpp:11:volatile</span><span style="color:#032F62"> float</span><span style="color:#032F62"> debug_roll</span><span style="color:#032F62"> =</span><span style="color:#032F62"> 0.0f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#6F42C1">Debug_vars/debug_vars.h:15:</span><span style="color:#032F62"> //</span><span style="color:#032F62"> extern</span><span style="color:#032F62"> volatile</span><span style="color:#032F62"> float</span><span style="color:#032F62"> debug_roll</span><span style="color:#24292E">;</span></span></code></pre>
+<h2 id="3-从现象到定位">3. 从现象到定位</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["现象：读数异常或程序卡住"] --> B{"程序还在跑吗"}
+  B -->|"卡住 不推进"| C["看 PC 是否停在 DWT_Delay_us&#x3C;br/>核对 DWT->CTRL 的 bit0"]
+  B -->|"在跑 读数可疑"| D{"Watch 能读到值吗"}
+  D -->|"读到无效地址"| E["变量被回收&#x3C;br/>查 nm 与引用"]
+  D -->|"读到常量不刷新"| F["变量被优化或没被写&#x3C;br/>查 volatile 与赋值点"]
+  D -->|"值正常但时序不对"| G["核对时基来源&#x3C;br/>DWT 是否初始化在时钟配置之后"]
+  C --> H["修调用顺序&#x3C;br/>或增加初始化返回检查"]
+  E --> I["加一次引用&#x3C;br/>打开 extern 声明"]
+  F --> J["补赋值点&#x3C;br/>确认写者存在"]
+  G --> K["用 CYCCNT 实测延时&#x3C;br/>与理论周期数对比"]</pre></div>
+<h2 id="4-一个真实案例can-不上总线">4. 一个真实案例：CAN 不上总线</h2>
+<p>工作记录 <code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code> 记了一次外设不工作的排查，方法与本文的在线观测同源：不打断程序，用调试器读寄存器和变量。</p>
+<p>现象是 CAN1 与 CAN2 都无法进回调、无法发送，代码在假期前正常工作过。排查分三步：先查代码逻辑，初始化、过滤器、中断、回调、发送函数全部正常；再用调试器读寄存器；最后定位到时钟树。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>寄存器或字段</th><th>读到的值</th><th>含义</th></tr></thead><tbody><tr><td><code>hcan2.ErrorCode</code></td><td><code>0x00200000</code></td><td><code>HAL_CAN_ERROR_NOT_STARTED</code></td></tr><tr><td><code>MSR</code></td><td><code>0x0C08</code></td><td><code>ERRI</code> 挂起，错误中断已触发</td></tr><tr><td><code>TSR</code></td><td><code>0x82000004</code></td><td>邮箱被占用，发送无法完成</td></tr></tbody></table>
+<p>三个读数给出的顺序是：外设曾经启动过，一次发送之后进入错误状态，之后邮箱一直不空。记录里的结论是时钟树被改动，波特率换算的基数随之改变。记录的波特率一栏写的是 857142 Hz，按位时间 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>+</mo><mn>15</mn><mo>+</mo><mn>5</mn><mo>=</mo><mn>21</mn></mrow><annotation encoding="application/x-tex">1 + 15 + 5 = 21</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">15</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">21</span></span></span></span> 个时间单元、预分频 2 反推：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mtext>APB1</mtext></msub><mo>=</mo><mn>857142</mn><mo>×</mo><mn>2</mn><mo>×</mo><mn>21</mn><mo>=</mo><mn>36.0</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{\text{APB1}} = 857142 \times 2 \times 21 = 36.0 \ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">APB1</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">857142</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">21</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">36.0</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
+<p>当前固件的 APB1 是 42 MHz（<code>Core/Src/main.c:185</code> 的 168 MHz 四分频），对应 1 Mbps。36 MHz 对应 SYSCLK 144 MHz，说明当时的时钟配置与现在不同。修复方式是改正 <code>.ioc</code> 里的时钟树并重新生成代码。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["外设不工作"] --> B["先读寄存器与错误码&#x3C;br/>确认外设状态"]
+  B --> C{"外设启动了吗"}
+  C -->|"ErrorCode 提示未启动"| D["查初始化调用顺序与返回值"]
+  C -->|"已启动 但发送失败"| E["查总线错误状态&#x3C;br/>MSR ESR TSR"]
+  E --> F["核对时钟树&#x3C;br/>外设时钟频率是否符合预期"]
+  F --> G["核对物理层&#x3C;br/>终端电阻 接线 示波器"]
+  G --> H["最后才怀疑代码逻辑"]</pre></div>
+<p>这个案例有两点可以迁移到 DWT 上：</p>
+<ol>
+<li>读寄存器能给出状态，但给不出事件顺序。要判断先后，需要在代码里埋计数变量或时间戳。</li>
+<li>排查顺序里时钟排在最前。DWT 的频率换算同样依赖 <code>HAL_RCC_GetHCLKFreq()</code>，时钟配置一改，延时的周期数就跟着变。</li>
+</ol>
+<p>用调试器读寄存器时要注意副作用。有些寄存器读操作会改变外设状态，例如 USART 的 <code>DR</code> 读操作会清 <code>RXNE</code> 并使能下一次接收；在暂停状态下读它，可能吞掉一个字节，让 DMA 环形缓冲的语义变化。读前先查参考手册里该寄存器是否有读副作用。</p>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>回收</td><td><code>-fdata-sections</code> 加 <code>--gc-sections</code> 会删掉没有引用的变量与函数</td></tr><tr><td>判据</td><td>以 <code>nm</code> 输出的符号为准，map 的输入段列表不代表最终镜像</td></tr><tr><td>静默失败</td><td>空指针返回、返回值未处理、未知格式字符跳过，都不报错</td></tr><tr><td>死循环条件</td><td>计数器未启动时差值恒为 0，循环条件恒真</td></tr><tr><td>文档偏差</td><td><code>Communication_Summary.md</code> 的更新点在当前固件里不存在</td></tr><tr><td>寄存器排查</td><td>先状态后顺序，时钟优先于代码逻辑</td></tr><tr><td>读副作用</td><td>部分寄存器的读操作会清标志，暂停时读要谨慎</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>调试变量集中定义</td><td>加变量只改一个文件</td><td>无引用时整批被回收，问题成批出现</td></tr><tr><td>初始化返回值为 <code>uint8_t</code> 而不中断运行</td><td>启动流程不因自检失败停止</td><td>失败无信号，需要额外变量承接</td></tr><tr><td>调试发送在空指针时直接返回</td><td>不影响主流程</td><td>调用方无从知道帧没发出去</td></tr><tr><td>串口帧省略长度与校验</td><td>代码短，收发两端实现简单</td><td>丢字节后无法重新对齐</td></tr><tr><td>用寄存器窗口排查外设</td><td>不需要改代码，能看到硬件状态</td><td>只反映瞬间状态，读操作可能有副作用</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>给出一条命令，判断 <code>DWT_Delay_us</code> 是否进入了某个 ELF。再给出一条命令，判断 <code>debug_st</code> 是否在同一个 ELF 里。</li>
+<li>说明 <code>debug.cpp:102-104</code> 跳过未知格式字符后，为什么接收端会错位。</li>
+<li>按第 4 节的方法反推：若记录里的波特率写成 1 000 000 Hz，APB1 应该是多少？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给三处静默失败各加一个计数变量，要求全部可用 Live Watch 观察，并说明每个变量的引用点放在哪里。</li>
+<li>写一份核对脚本：扫描源码树，列出所有被 <code>#ifdef</code> 或注释包住的 <code>extern</code> 声明、所有定义了但没有引用的全局变量，并说明脚本的误报来源。</li>
+<li>设计一个实验，用 <code>CYCCNT</code> 判断一次 CAN 发送失败发生在「邮箱未空」还是「总线错误」之后：要求给出测量点、时间戳存放位置与判读方法。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp</code></td><td>延时循环与 32 位乘法（:24-36）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp</code></td><td>静默返回与帧头（:55-57、:63-64、:102-104）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Debug_vars/debug_vars.h</code></td><td>注释状态的声明（:14-23）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/debug_vars.h</code></td><td>空壳头文件（:1-12）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>唯一一处相关注释（:652）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication_Summary.md</code></td><td>与当前固件不符的调试说明（:277-280）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/dbus.cpp</code></td><td>无 <code>debug_*</code> 赋值</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>初始化调用点与时钟分频（:124、:185）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>CAN1 与 CAN2 的位时间参数与中断</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf</code></td><td><code>nm</code> 实测符号清单</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td><code>-fdata-sections</code> 与 <code>--gc-sections</code>（:29、:41）</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>CAN 排查案例（:18-47、:74-80）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘板初始化调用点（:129）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/03-%E4%B8%AD%E6%96%AD%E4%B8%8EDMA/"><span class="k">← 上一篇</span><span class="t">中断与DMA</span><span class="d">STM32 与 HAL · 5 个文件</span></a><a class="next" href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/05-CubeMX/"><span class="k">下一篇 →</span><span class="t">CubeMX</span><span class="d">STM32 与 HAL · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

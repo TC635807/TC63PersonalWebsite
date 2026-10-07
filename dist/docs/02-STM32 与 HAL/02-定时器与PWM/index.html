@@ -1,0 +1,1684 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>定时器与PWM · STM32 与 HAL · 王宇翔</title><meta name="description" content="STM32F407 定时器的时基单元、PSC 与 ARR 的分频关系、更新事件与影子寄存器的装载时刻、三种计数模式，对照哨兵云台板与底盘板的 TIM2 与 TIM10 配置。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/02-%E5%AE%9A%E6%97%B6%E5%99%A8%E4%B8%8EPWM/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="定时器与PWM · STM32 与 HAL · 王宇翔"><meta property="og:description" content="STM32F407 定时器的时基单元、PSC 与 ARR 的分频关系、更新事件与影子寄存器的装载时刻、三种计数模式，对照哨兵云台板与底盘板的 TIM2 与 TIM10 配置。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/02-%E5%AE%9A%E6%97%B6%E5%99%A8%E4%B8%8EPWM/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/">STM32 与 HAL</a><span class="sep" aria-hidden="true">/</span><span class="now">定时器与PWM</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>定时器与PWM</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>定时器结构与计数模式</span></a><ul class="toc__heads"><li><a href="#1-定时器分档与本工程用到的两个" data-depth="2" data-heading-j="0">1. 定时器分档与本工程用到的两个</a></li><li><a href="#2-时基单元psccntarr" data-depth="2" data-heading-j="1">2. 时基单元：PSC、CNT、ARR</a></li><li><a href="#3-更新事件与影子寄存器" data-depth="2" data-heading-j="2">3. 更新事件与影子寄存器</a></li><li><a href="#4-计数模式" data-depth="2" data-heading-j="3">4. 计数模式</a></li><li><a href="#5-落到两个定时器的实际配置" data-depth="2" data-heading-j="4">5. 落到两个定时器的实际配置</a></li><li><a href="#51-tim2hal-时基" data-depth="3" data-heading-j="5">5.1 TIM2：HAL 时基</a></li><li><a href="#52-tim10pwm-输出" data-depth="3" data-heading-j="6">5.2 TIM10：PWM 输出</a></li><li><a href="#6-易错点" data-depth="2" data-heading-j="7">6. 易错点</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="8">7. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="11">8. 练习</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>PWM 原理与配置</span></a><ul class="toc__heads"><li><a href="#1-pwm-的输出逻辑" data-depth="2" data-heading-j="0">1. PWM 的输出逻辑</a></li><li><a href="#2-频率与占空比" data-depth="2" data-heading-j="1">2. 频率与占空比</a></li><li><a href="#3-hal-的配置链路" data-depth="2" data-heading-j="2">3. HAL 的配置链路</a></li><li><a href="#4-比较值的写入" data-depth="2" data-heading-j="3">4. 比较值的写入</a></li><li><a href="#5-易错点" data-depth="2" data-heading-j="4">5. 易错点</a></li><li><a href="#6-小结" data-depth="2" data-heading-j="5">6. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#7-练习" data-depth="2" data-heading-j="8">7. 练习</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>本项目定时器分配</span></a><ul class="toc__heads"><li><a href="#1-时间资源全景" data-depth="2" data-heading-j="0">1. 时间资源全景</a></li><li><a href="#2-tim2给-hal-用的时基" data-depth="2" data-heading-j="1">2. TIM2：给 HAL 用的时基</a></li><li><a href="#3-tim10加热-pwm" data-depth="2" data-heading-j="2">3. TIM10：加热 PWM</a></li><li><a href="#4-初始化顺序" data-depth="2" data-heading-j="3">4. 初始化顺序</a></li><li><a href="#5-其余外设为什么不需要定时器" data-depth="2" data-heading-j="4">5. 其余外设为什么不需要定时器</a></li><li><a href="#6-易错点" data-depth="2" data-heading-j="5">6. 易错点</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="6">7. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="9">8. 练习</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>定时器中断与 HAL 时基</span></a><ul class="toc__heads"><li><a href="#1-hal-时基的四个角色" data-depth="2" data-heading-j="0">1. HAL 时基的四个角色</a></li><li><a href="#2-tim2-更新中断的链路" data-depth="2" data-heading-j="1">2. TIM2 更新中断的链路</a></li><li><a href="#3-hal_inittick-的两次调用" data-depth="2" data-heading-j="2">3. HAL_InitTick 的两次调用</a></li><li><a href="#4-为什么不用-systick" data-depth="2" data-heading-j="3">4. 为什么不用 SysTick</a></li><li><a href="#5-中断优先级与临界区的关系" data-depth="2" data-heading-j="4">5. 中断优先级与临界区的关系</a></li><li><a href="#6-任务里的时间怎么用" data-depth="2" data-heading-j="5">6. 任务里的时间怎么用</a></li><li><a href="#7-32-位毫秒计数的回绕" data-depth="2" data-heading-j="6">7. 32 位毫秒计数的回绕</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>定时器易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-比较值与重装值的量纲" data-depth="2" data-heading-j="0">1. 比较值与重装值的量纲</a></li><li><a href="#2-影子寄存器的生效时刻" data-depth="2" data-heading-j="1">2. 影子寄存器的生效时刻</a></li><li><a href="#3-定时器时钟与-pwm-频率" data-depth="2" data-heading-j="2">3. 定时器时钟与 PWM 频率</a></li><li><a href="#4-nvic-使能不等于有中断" data-depth="2" data-heading-j="3">4. NVIC 使能不等于有中断</a></li><li><a href="#5-三套时间基的混用" data-depth="2" data-heading-j="4">5. 三套时间基的混用</a></li><li><a href="#6-排查顺序与手段" data-depth="2" data-heading-j="5">6. 排查顺序与手段</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="6">7. 小结</a></li><li><a href="#五个易错点速查" data-depth="3" data-heading-j="7">五个易错点速查</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="10">8. 练习</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">STM32 与 HAL</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>STM32 / TIM / 时基单元 / 更新事件 / 影子寄存器 / 计数模式 / PWM / 占空比</span></div><h1 class="docs__title">定时器与PWM</h1><p class="docs__lead">STM32F407 定时器的时基单元、PSC 与 ARR 的分频关系、更新事件与影子寄存器的装载时刻、三种计数模式，对照哨兵云台板与底盘板的 TIM2 与 TIM10 配置。</p></header><section class="dfile" id="file-1" data-file="01-定时器结构与计数模式"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-定时器结构与计数模式</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/02-定时器与PWM/01-定时器结构与计数模式.md</span></div><div class="dfile__body"><h1 id="定时器结构与计数模式">定时器结构与计数模式</h1>
+<p>云台板固件（<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>）与底盘板固件（<code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）各用到两个定时器实例：TIM2 为 HAL 提供 1 ms 时基，TIM10 为 BMI088 的加热电阻输出 PWM。两块板的 <code>Core/Src/tim.c</code> 与 <code>Core/Src/stm32f4xx_hal_timebase_tim.c</code> 逐字节相同，差别只来自时钟树给出的输入频率。</p>
+<blockquote>
+<p>源码索引（本单元引用的固件路径都相对于固件仓库根目录，两块板路径一致）</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/tim.c</code></td><td>TIM10 的初始化与 GPIO 复用配置</td></tr><tr><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>用 TIM2 实现 <code>HAL_InitTick()</code></td></tr><tr><td><code>Core/Src/main.c</code></td><td><code>SystemClock_Config()</code> 与 <code>HAL_TIM_PeriodElapsedCallback()</code></td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td><code>TIM2_IRQHandler()</code> 与 <code>TIM1_UP_TIM10_IRQHandler()</code></td></tr><tr><td><code>BMI088/Src/ImuTempControl.cpp</code></td><td>PWM 通道的启动与比较值更新</td></tr><tr><td><code>2026sentriomeni.ioc</code></td><td>时钟树与 TIM10 参数的源头</td></tr></tbody></table>
+<h2 id="1-定时器分档与本工程用到的两个">1. 定时器分档与本工程用到的两个</h2>
+<p>STM32F407 的定时器按功能分三档：高级定时器 TIM1 与 TIM8（带互补输出、死区、刹车输入），通用定时器 TIM2 至 TIM5 与 TIM9 至 TIM14，基本定时器 TIM6 与 TIM7。功能越多的档位占用越多寄存器和中断向量。</p>
+<p>本工程只用到两个通用定时器：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th>总线</th><th>计数器位宽</th><th>定时器输入时钟</th><th>本工程用途</th><th>配置位置</th></tr></thead><tbody><tr><td>TIM2</td><td>APB1</td><td>32 位</td><td>84 MHz</td><td>HAL 时基，1 ms 一次更新中断</td><td><code>stm32f4xx_hal_timebase_tim.c:70-85</code></td></tr><tr><td>TIM10</td><td>APB2</td><td>16 位</td><td>168 MHz</td><td>通道 1 输出 PWM，驱动加热电阻</td><td><code>tim.c:42-63</code></td></tr></tbody></table>
+<p>两个数值来自 <code>2026sentriomeni.ioc</code> 的 <code>RCC.APB1TimFreq_Value=84000000</code> 与 <code>RCC.APB2TimFreq_Value=168000000</code>，第 5 节给出推导。TIM2 本工程连通道都没用，只开了更新中断；TIM10 只配置了通道 1。</p>
+<h2 id="2-时基单元psccntarr">2. 时基单元：PSC、CNT、ARR</h2>
+<p>时基单元（time base unit）由三个寄存器构成：</p>
+<ul>
+<li><strong>预分频器</strong>（Prescaler, PSC）把定时器输入时钟 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub></mrow><annotation encoding="application/x-tex">f_{CK\_PSC}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0614em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span></span></span></span> 分频成计数器时钟 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>C</mi><mi>N</mi><mi>T</mi></mrow></msub></mrow><annotation encoding="application/x-tex">f_{CK\_CNT}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0614em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span></span></span></span>，分频系数是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">PSC+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>，写 0 表示 1 分频；</li>
+<li>计数器（Counter, CNT）每个计数器时钟加 1，位宽决定计数上限；</li>
+<li><strong>自动重装寄存器</strong>（Auto-Reload Register, ARR）是 CNT 的终点，CNT 从 0 数到 ARR 时产生一次更新事件，然后回到 0 重新开始。</li>
+</ul>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>C</mi><mi>N</mi><mi>T</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mrow><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{CK\_CNT}=\frac{f_{CK\_PSC}}{PSC+1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0614em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4547em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0514em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5653em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3647em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>U</mi><mi>E</mi><mi>V</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mrow><mo stretchy="false">(</mo><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{UEV}=\frac{f_{CK\_PSC}}{(PSC+1)(ARR+1)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">U</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.5714em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0514em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5653em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3647em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>代入本工程的两组数字：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub></mrow><annotation encoding="application/x-tex">f_{CK\_PSC}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0614em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span></span></span></span></th><th>PSC</th><th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>C</mi><mi>N</mi><mi>T</mi></mrow></msub></mrow><annotation encoding="application/x-tex">f_{CK\_CNT}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0614em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span></span></span></span></th><th>ARR</th><th>更新事件周期</th></tr></thead><tbody><tr><td>TIM2</td><td>84 MHz</td><td>83</td><td>1 MHz</td><td>999</td><td>1 ms</td></tr><tr><td>TIM10</td><td>168 MHz</td><td>0</td><td>168 MHz</td><td>4999</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>29.76</mn><mtext> </mtext><mi>μ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">29.76\ \mu s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">29.76</span><span class="mspace"> </span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span></span></span></span></td></tr></tbody></table>
+<p>TIM2 的分频值是 <code>stm32f4xx_hal_timebase_tim.c:70</code> 的 <code>uwPrescalerValue = (uwTimclock / 1000000U) - 1U = 83</code>，重装值是同文件 81 行的 <code>(1000000U / 1000U) - 1U = 999</code>。计数器时钟 1 MHz，每 1000 个计数一次更新事件，即 1 kHz。TIM10 是 <code>tim.c:43-45</code> 的 <code>Prescaler = 0</code>、<code>Period = 4999</code>，计数器时钟 168 MHz，每 5000 个计数一个周期：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>T</mi><mi>I</mi><mi>M</mi><mn>10</mn></mrow></msub><mo>=</mo><mfrac><mrow><mn>168</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><mrow><mo stretchy="false">(</mo><mn>0</mn><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mn>4999</mn><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></mfrac><mo>=</mo><mn>33.6</mn><mtext> kHz</mtext></mrow><annotation encoding="application/x-tex">f_{TIM10}=\frac{168\times10^6}{(0+1)(4999+1)}=33.6\ \text{kHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span><span class="mord mtight">10</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.5379em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0179em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mtight">0</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mopen mtight">(</span><span class="mord mtight">4999</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mbin mtight">×</span><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.931em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">33.6</span><span class="mspace"> </span><span class="mord text"><span class="mord">kHz</span></span></span></span></span></p>
+<p>两个式子里都出现 <code>+1</code>，原因是 PSC 与 ARR 的复位值都是 0：写 0 表示 1 分频、写 0 表示周期为 1 个计数。上电默认状态 PSC=0、ARR=0 时，计数器每来一个时钟就产生一次更新事件，所以初始化代码必须显式写这两个字段。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["定时器输入时钟 f_CK_PSC&#x3C;br/>TIM2 84 MHz，TIM10 168 MHz"] --> B["预分频器 PSC&#x3C;br/>计数器时钟 = f_CK_PSC 除以 PSC 加 1"]
+    B --> C["计数器 CNT&#x3C;br/>每个计数时钟加 1"]
+    C --> D{"CNT 到达 ARR 了吗"}
+    D -- "否" --> C
+    D -- "是" --> E["产生更新事件 UEV&#x3C;br/>CNT 回 0"]
+    E --> F["置位 SR 的 UIF 标志"]
+    E --> G["把预装载值装进影子寄存器&#x3C;br/>ARR 与 CCR"]
+    F --> H["DIER 的 UIE 已置位时&#x3C;br/>向 NVIC 发出中断请求"]
+    G --> I["TIM10 的下一个 PWM 周期&#x3C;br/>使用新的 CCR1"]</pre></div>
+<h2 id="3-更新事件与影子寄存器">3. 更新事件与影子寄存器</h2>
+<p>时基单元的同步点是<strong>更新事件</strong>（Update Event, UEV），一次 UEV 同时做四件事：CNT 回到起点；若 <code>CR1.ARPE = 1</code> 就把 ARR 的预装载值装进影子寄存器；若 <code>CCMR1.OC1PE = 1</code> 就把 CCR1 的预装载值装进影子寄存器；置位 <code>SR</code> 的 <code>UIF</code>，并在 <code>DIER.UIE</code> 已置位时向 NVIC 发中断请求。</p>
+<p>CNT 实际比较的对象是<strong>影子寄存器</strong>（shadow register）。软件写入的是预装载寄存器，硬件比较用的是影子寄存器，两者之间是否隔一次 UEV 由预装载开关决定：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>寄存器</th><th>预装载开关</th><th>本工程取值</th><th>写入后何时生效</th></tr></thead><tbody><tr><td>ARR</td><td><code>CR1.ARPE</code></td><td>DISABLE（<code>tim.c:47</code>、<code>stm32f4xx_hal_timebase_tim.c:85</code>）</td><td>立即</td></tr><tr><td>PSC</td><td>无开关，始终缓冲</td><td>83 与 0</td><td>下一次 UEV</td></tr><tr><td>CCR1</td><td><code>CCMR1.OC1PE</code></td><td>ENABLE（<code>stm32f4xx_hal_tim.c:4245</code> 强制置位）</td><td>下一次 UEV</td></tr></tbody></table>
+<p>PSC 没有预装载开关这一项，写入的新值总是在下一次 UEV 生效。HAL 在配置 PWM 通道 1 时无条件置位 <code>CCMR1.OC1PE</code>（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c:4245</code>），所以本工程对 CCR1 的每次写入都滞后一个 UEV。</p>
+<p>初始化路径也依赖这一点。<code>TIM_Base_SetConfig()</code> 先写 <code>ARR</code> 和 <code>PSC</code>，再置位 <code>CR1.URS</code> 并通过 <code>EGR.UG</code> 产生一次更新事件，把参数装入影子寄存器（<code>stm32f4xx_hal_tim.c:6801-6818</code>）。<code>URS = 1</code> 让这次更新只装载参数而不置 <code>UIF</code>，所以初始化过程不会触发中断。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant S as 软件 任务或中断
+    participant P as 预装载寄存器 ARR 或 CCR1
+    participant A as 影子寄存器
+    participant C as 计数器 CNT
+    S->>P: 写 CCR1 = 3000
+    Note over P: OC1PE = 1，写入先停在预装载寄存器
+    C->>A: 本周期继续用旧的 CCR1 比较
+    C->>A: CNT 到达 ARR，产生 UEV
+    P->>A: 把 3000 装进影子寄存器
+    Note over A: 从下一个周期开始输出宽度改变</pre></div>
+<p>具体到本工程：<code>ImuTempControl::update()</code> 在 1 kHz 的 IMU 任务里写比较值（<code>BMI088/Src/ImuTempControl.cpp:18-24</code>），TIM10 的 UEV 是 33.6 kHz，比任务周期快约 33 倍，一次写入最多等 29.76 µs 生效。如果 PWM 频率只有几百赫兹，写入滞后就会和任务周期同一量级。</p>
+<h2 id="4-计数模式">4. 计数模式</h2>
+<p>计数器有三种计数方向，区别在于 UEV 在哪个位置产生：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th>CNT 轨迹</th><th>UEV 位置</th><th>一个完整周期</th></tr></thead><tbody><tr><td>向上计数</td><td>0 递增到 ARR</td><td>CNT = ARR</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 个计数时钟</td></tr><tr><td>向下计数</td><td>ARR 递减到 0</td><td>CNT = 0</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 个计数时钟</td></tr><tr><td>中央对齐（center-aligned）</td><td>0 升到 ARR 再降回 1</td><td>到达两端时各产生一次</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>A</mi><mi>R</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">2\times ARR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> 个计数时钟</td></tr></tbody></table>
+<p>中央对齐时一个周期是往返一趟，计数时钟相同时输出频率约为边沿对齐的一半：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>U</mi><mi>E</mi><mi>V</mi><mo separator="true">,</mo><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mrow><mo stretchy="false">(</mo><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>⋅</mo><mn>2</mn><mo>⋅</mo><mi>A</mi><mi>R</mi><mi>R</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{UEV,center}=\frac{f_{CK\_PSC}}{(PSC+1)\cdot 2\cdot ARR}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">U</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">ce</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.5714em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0514em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mbin mtight">⋅</span><span class="mord mtight">2</span><span class="mbin mtight">⋅</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5653em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3647em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>换模式时要注意 ARR 的算法也跟着变：边沿对齐的周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>，中央对齐的周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>A</mi><mi>R</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">2\times ARR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span>，同一个 ARR 值算出的频率差一倍。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    subgraph UP["向上计数 TIM_COUNTERMODE_UP"]
+        U1["CNT 从 0 递增"] --> U2["CNT = ARR 时产生 UEV"] --> U3["CNT 回 0"]
+    end
+    subgraph DOWN["向下计数 TIM_COUNTERMODE_DOWN"]
+        D1["CNT 从 ARR 递减"] --> D2["CNT = 0 时产生 UEV"] --> D3["CNT 重装为 ARR"]
+    end
+    subgraph CENTER["中央对齐 TIM_COUNTERMODE_CENTERALIGNED"]
+        C1["CNT 升到 ARR"] --> C2["到达上端产生 UEV，方向转为向下"]
+        C2 --> C3["CNT 降到 0，方向转为向上"]
+        C3 --> C1
+    end</pre></div>
+<p>本工程两个定时器都写的是 <code>TIM_COUNTERMODE_UP</code>（<code>tim.c:44</code>、<code>stm32f4xx_hal_timebase_tim.c:84</code>），因此后面几章的所有公式都按边沿对齐的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 计算。计数方向由 <code>CR1.DIR</code> 与 <code>CR1.CMS</code> 决定，HAL 在 <code>TIM_Base_SetConfig()</code> 里按 <code>CounterMode</code> 字段写入（<code>stm32f4xx_hal_tim.c:6786-6801</code>）。</p>
+<h2 id="5-落到两个定时器的实际配置">5. 落到两个定时器的实际配置</h2>
+<h3 id="51-tim2hal-时基">5.1 TIM2：HAL 时基</h3>
+<p><code>stm32f4xx_hal_timebase_tim.c</code> 覆盖了 HAL 库里的弱定义 <code>HAL_InitTick()</code>，整个函数分三段：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Enable TIM2 clock */</span></span>
+<span class="line"><span style="color:#6F42C1">__HAL_RCC_TIM2_CLK_ENABLE</span><span style="color:#24292E">();</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">/* Get APB1 prescaler */</span></span>
+<span class="line"><span style="color:#24292E">uwAPB1Prescaler </span><span style="color:#D73A49">=</span><span style="color:#24292E"> clkconfig.APB1CLKDivider;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (uwAPB1Prescaler </span><span style="color:#D73A49">==</span><span style="color:#24292E"> RCC_HCLK_DIV1) {</span></span>
+<span class="line"><span style="color:#24292E">  uwTimclock </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> HAL_RCC_GetPCLK1Freq</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">} </span><span style="color:#D73A49">else</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#24292E">  uwTimclock </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49">UL</span><span style="color:#D73A49"> *</span><span style="color:#6F42C1"> HAL_RCC_GetPCLK1Freq</span><span style="color:#24292E">();</span><span style="color:#6A737D">   /* APB1 = 42 MHz 时得到 84 MHz */</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">uwPrescalerValue </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">uint32_t</span><span style="color:#24292E">) ((uwTimclock </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 1000000</span><span style="color:#D73A49">U</span><span style="color:#24292E">) </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#D73A49">U</span><span style="color:#24292E">);</span><span style="color:#6A737D">   /* = 83 */</span></span>
+<span class="line"><span style="color:#24292E">htim2.Init.Period </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#005CC5">1000000</span><span style="color:#D73A49">U</span><span style="color:#D73A49"> /</span><span style="color:#005CC5"> 1000</span><span style="color:#D73A49">U</span><span style="color:#24292E">) </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#D73A49">U</span><span style="color:#24292E">;</span><span style="color:#6A737D">                    /* = 999 */</span></span></code></pre>
+<p>这段代码对应源文件 <code>stm32f4xx_hal_timebase_tim.c:52-81</code>。定时器的输入时钟不是总线时钟本身：APB 预分频系数不为 1 时，定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span>，所以 APB1 上的 42 MHz 变成 84 MHz。这个 <code>2</code> 倍规则是 F4 的硬件行为，第 3 章会给出本项目所有时间资源的完整分配。</p>
+<h3 id="52-tim10pwm-输出">5.2 TIM10：PWM 输出</h3>
+<p><code>MX_TIM10_Init()</code> 的时基部分只有两行有效参数（<code>tim.c:42-47</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">htim10.Instance </span><span style="color:#D73A49">=</span><span style="color:#24292E"> TIM10;</span></span>
+<span class="line"><span style="color:#24292E">htim10.Init.Prescaler </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">htim10.Init.CounterMode </span><span style="color:#D73A49">=</span><span style="color:#24292E"> TIM_COUNTERMODE_UP;</span></span>
+<span class="line"><span style="color:#24292E">htim10.Init.Period </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 4999</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">htim10.Init.ClockDivision </span><span style="color:#D73A49">=</span><span style="color:#24292E"> TIM_CLOCKDIVISION_DIV1;</span></span>
+<span class="line"><span style="color:#24292E">htim10.Init.AutoReloadPreload </span><span style="color:#D73A49">=</span><span style="color:#24292E"> TIM_AUTORELOAD_PRELOAD_DISABLE;</span></span></code></pre>
+<p><code>ClockDivision</code> 只影响数字滤波器的采样时钟，不参与分频，改它不会改变 PWM 频率。定时器输入时钟是 APB2 定时器时钟 168 MHz，PSC=0、ARR=4999，输出频率 33.6 kHz，占空比分辨率为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mn>5000</mn><mo>=</mo><mn>0.02</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">1/5000 = 0.02\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/5000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">0.02%</span></span></span></span>。</p>
+<h2 id="6-易错点">6. 易错点</h2>
+<p>（1）<code>+1</code> 漏掉。<code>PSC</code> 与 <code>ARR</code> 都是从 0 开始计数，分频系数是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">PSC+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>、周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>。按 <code>ARR = f/(PSC+1)/f_{PWM}</code> 直接除会把频率算高一档。</p>
+<p>（2）把 PSC 当成立即生效。运行时改 <code>PSC</code> 要等下一个 UEV 才起作用，改 <code>ARR</code> 在 <code>ARPE = 0</code> 时立即起作用。写 <code>ARR</code> 的瞬间若 CNT 已经超过新值，计数器要等溢出才归零，本周期会异常拉长。</p>
+<p>（3）16 位与 32 位计数器的量程差别。TIM10 的 ARR 最大 65535，在 168 MHz 下最长定时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>65536</mn><mi mathvariant="normal">/</mi><mn>168</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup><mo>=</mo><mn>390</mn><mtext> </mtext><mi>μ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">65536/168\times10^6 = 390\ \mu s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">65536/168</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">390</span><span class="mspace"> </span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span></span></span></span>；TIM2 是 32 位，在 1 MHz 计数时钟下最长 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>32</mn></msup><mi mathvariant="normal">/</mi><msup><mn>10</mn><mn>6</mn></msup><mo>≈</mo><mn>4295</mn><mtext> </mtext><mi>s</mi></mrow><annotation encoding="application/x-tex">2^{32}/10^6 \approx 4295\ s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span><span class="mord">/1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4295</span><span class="mspace"> </span><span class="mord mathnormal">s</span></span></span></span>。需要长周期时只能选 32 位实例或再加一级软件计数。</p>
+<p>（4）中央对齐的频率公式。换到中央对齐时周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>A</mi><mi>R</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">2\times ARR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span>，沿用边沿对齐的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 会让实际频率差一倍。</p>
+<h2 id="7-小结">7. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>时基单元的三个寄存器是 PSC、CNT、ARR，更新事件频率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>U</mi><mi>E</mi><mi>V</mi></mrow></msub><mo>=</mo><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mo stretchy="false">(</mo><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f_{UEV}=f_{CK\_PSC}/((PSC+1)(ARR+1))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">U</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.117em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mopen">((</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">))</span></span></span></span>。</li>
+<li>定时器输入时钟不等于总线时钟：APB 预分频不为 1 时定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span>。本工程 TIM2 得到 84 MHz，TIM10 得到 168 MHz。</li>
+<li>UEV 是装载点和中断源：它装载 ARR 与 CCR 的影子寄存器，并置位 <code>UIF</code>。</li>
+<li>预装载开关决定写入何时生效：<code>ARPE</code> 关时 ARR 立即生效，<code>OC1PE</code> 开时 CCR 在下一个 UEV 生效，PSC 永远缓冲。</li>
+<li>HAL 配置 PWM 通道时强制打开 <code>OC1PE</code>，所以 PWM 比较值的更新天然滞后一个周期。</li>
+<li>本工程两个定时器都是向上计数，PSC 与 ARR 分别是 83/999 与 0/4999。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选</th><th>代价与收益</th></tr></thead><tbody><tr><td>时基实例</td><td>TIM2（32 位通用定时器）</td><td>占用一个 32 位定时器与一个中断向量，换来独立的 1 ms 时基</td></tr><tr><td>预分频值</td><td>1 MHz 计数时钟</td><td>计数器时钟不整除 HCLK，靠 <code>2\times PCLK1</code> 规则得到整数</td></tr><tr><td>PWM 分辨率</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mi>S</mi><mi>C</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">PSC=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>=</mo><mn>4999</mn></mrow><annotation encoding="application/x-tex">ARR=4999</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4999</span></span></span></span></td><td>分辨率 0.02%，代价是频率固定在 33.6 kHz，想降频就要增大 PSC 并牺牲分辨率</td></tr><tr><td>ARR 预装载</td><td>DISABLE</td><td>初始化简单，代价是运行时改频率可能产生一个异常周期</td></tr><tr><td>CCR 预装载</td><td>ENABLE（HAL 默认）</td><td>占空比更新不会产生毛刺，代价是滞后一个 PWM 周期</td></tr></tbody></table>
+<h2 id="8-练习">8. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>TIM10 的 PSC 与 ARR 都不改，把 <code>PSC</code> 改成 1，计算新的 PWM 频率与周期，并说明占空比分辨率变成多少。</li>
+<li>TIM2 的 <code>Period</code> 从 999 改成 1999，说明 <code>HAL_IncTick()</code> 的调用频率变成多少，以及 <code>HAL_GetTick()</code> 返回值的时间单位变成什么。</li>
+<li>写出 TIM10 在 168 MHz 输入、PSC=0、ARR=65535 时的输出频率，并判断这个配置能否继续当作加热 PWM 使用。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>用 <code>DWT_GetMicroseconds()</code> 测量 TIM10 的实际 PWM 周期，设计一个不需要示波器的验证方案（提示：连续两次读 <code>CNT</code> 并配合已知的计数器时钟）。</li>
+<li><code>ImuTempControl::update()</code> 每秒写 1000 次 CCR1，TIM10 每秒产生 33600 次 UEV。说明哪些写入会被后一次覆盖，以及这种覆盖对控制精度的影响。</li>
+<li>把 TIM10 换成中央对齐模式并保持 33.6 kHz，计算需要的 ARR 值；再说明中央对齐相比边沿对齐在这种加热应用里是否有收益。</li>
+</ol></div></section><section class="dfile" id="file-2" data-file="02-PWM原理与配置"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-PWM原理与配置</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/02-定时器与PWM/02-PWM原理与配置.md</span></div><div class="dfile__body"><h1 id="pwm-原理与配置">PWM 原理与配置</h1>
+<p>本工程只有一路 PWM：TIM10 的通道 1，从 PF6 输出，驱动 BMI088 的加热电阻（<code>Core/Src/tim.c:100-109</code>）。这一路信号的频率固定为 33.6 kHz，占空比由 1 kHz 的 IMU 任务按温度环输出更新（<code>BMI088/Src/ImuTempControl.cpp:15-23</code>）。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/tim.c</code></td><td><code>MX_TIM10_Init()</code>，通道 1 的 PWM1 配置与 PF6 复用</td></tr><tr><td><code>Core/Inc/tim.h</code></td><td><code>htim10</code> 与 <code>MX_TIM10_Init()</code> 的声明</td></tr><tr><td><code>BMI088/Src/ImuTempControl.cpp</code></td><td><code>HAL_TIM_PWM_Start()</code> 与 <code>__HAL_TIM_SET_COMPARE()</code></td></tr><tr><td><code>BMI088/Inc/ImuTempControl.h</code></td><td>温控类的接口</td></tr><tr><td><code>Task/Src/ImuTask.cpp</code></td><td>1 kHz 循环里调用 <code>ImuTempControl_Update()</code></td></tr><tr><td><code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c</code></td><td>HAL 的 PWM 配置与启动实现</td></tr></tbody></table>
+<h2 id="1-pwm-的输出逻辑">1. PWM 的输出逻辑</h2>
+<p>脉冲宽度调制（Pulse Width Modulation, PWM）用固定周期、可变高电平时间方波表达一个连续量。定时器用 CNT 与 CCR 的比较结果直接驱动引脚，不占用 CPU：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th>输出为高的条件（向上计数）</th><th>适用</th></tr></thead><tbody><tr><td>PWM1</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mi>N</mi><mi>T</mi><mo>&#x3C;</mo><mi>C</mi><mi>C</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">CNT &#x3C; CCR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7224em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span></td><td>本工程 TIM10 通道 1</td></tr><tr><td>PWM2</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mi>N</mi><mi>T</mi><mo>≥</mo><mi>C</mi><mi>C</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">CNT \ge CCR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span></td><td>需要反相输出时</td></tr></tbody></table>
+<p>引脚上的最终极性还受 <code>CCER.CCxP</code> 影响：<code>OCPolarity = HIGH</code> 时 PWM1 的高电平就是引脚的高电平，写 LOW 则整体反相。本工程是 <code>TIM_OCPOLARITY_HIGH</code>（<code>tim.c:58</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["CNT 每个计数时钟加 1"] --> B{"CNT 与 CCR1 比大小"}
+    B -- "CNT 小于 CCR1" --> C["OC1REF 输出有效电平"]
+    B -- "CNT 大于等于 CCR1" --> D["OC1REF 输出无效电平"]
+    C --> E["CCER.CC1P 为 HIGH 时&#x3C;br/>引脚输出高电平"]
+    D --> E
+    E --> F["CNT 到达 ARR&#x3C;br/>产生 UEV，CNT 回 0"]
+    F --> A
+    G["CCMR1.OC1PE = 1"] --> H["写入 CCR1 先停在预装载寄存器"]
+    H --> I["下一个 UEV 装入影子寄存器"]
+    I --> B</pre></div>
+<h2 id="2-频率与占空比">2. 频率与占空比</h2>
+<p>边沿对齐、向上计数时的两个基本公式：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>W</mi><mi>M</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mrow><mo stretchy="false">(</mo><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{PWM}=\frac{f_{CK\_PSC}}{(PSC+1)(ARR+1)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">W</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.5714em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0514em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5653em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3647em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi><mo>=</mo><mfrac><mrow><mi>C</mi><mi>C</mi><mi>R</mi></mrow><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow></mfrac></mrow><annotation encoding="application/x-tex">D=\frac{CCR}{ARR+1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2757em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>周期固定后，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mi>C</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">CCR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> 从 0 到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">ARR+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 的每一个整数值对应一档占空比，所以占空比分辨率为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">1/(ARR+1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span>，一个计数时钟对应的时间是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>C</mi><mi>N</mi><mi>T</mi></mrow></msub></mrow><annotation encoding="application/x-tex">1/f_{CK\_CNT}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.117em;vertical-align:-0.367em;"></span><span class="mord">1/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span></span></span></span>。</p>
+<p>代入本工程 TIM10 的三组数字：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>值</th><th>含义</th></tr></thead><tbody><tr><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub></mrow><annotation encoding="application/x-tex">f_{CK\_PSC}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0614em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span></span></span></span></td><td>168 MHz</td><td>APB2 定时器时钟</td></tr><tr><td>PSC</td><td>0</td><td>1 分频，计数器时钟 168 MHz</td></tr><tr><td>ARR</td><td>4999</td><td>一个周期 5000 个计数</td></tr><tr><td>周期</td><td>29.76 µs</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>5000</mn><mi mathvariant="normal">/</mi><mn>168</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><annotation encoding="application/x-tex">5000/168\times10^6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">5000/168</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></td></tr><tr><td>频率</td><td>33.6 kHz</td><td>加热电路的开关频率</td></tr><tr><td>占空比分辨率</td><td>0.02%</td><td>一个计数时钟 5.952 ns</td></tr><tr><td>比较值</td><td>0 至 4999</td><td>0 为恒低，5000 及以上为恒高</td></tr></tbody></table>
+<p>中央对齐模式下一个完整周期包含往返两趟，同样的计数时钟下频率约为边沿对齐的一半：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>W</mi><mi>M</mi><mo separator="true">,</mo><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mrow><mo stretchy="false">(</mo><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>⋅</mo><mn>2</mn><mo>⋅</mo><mi>A</mi><mi>R</mi><mi>R</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{PWM,center}=\frac{f_{CK\_PSC}}{(PSC+1)\cdot 2\cdot ARR}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">W</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">ce</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.5714em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0514em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mbin mtight">⋅</span><span class="mord mtight">2</span><span class="mbin mtight">⋅</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5653em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3647em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>中央对齐的 UEV 在 CNT 到达两端时各产生一次，CCR 的预装载值也随之装两次，所以同一个比较值在上下行两个半周期里都会被使用。</p>
+<h2 id="3-hal-的配置链路">3. HAL 的配置链路</h2>
+<p>从 CubeMX 生成的代码到引脚出波形，一共四步，顺序不能颠倒：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>调用</th><th>做的事</th></tr></thead><tbody><tr><td>1</td><td><code>HAL_TIM_Base_Init(&#x26;htim10)</code>（<code>tim.c:48</code>）</td><td>调用 <code>TIM_Base_SetConfig()</code> 写 PSC、ARR、计数方向与预装载开关</td></tr><tr><td>2</td><td><code>HAL_TIM_PWM_Init(&#x26;htim10)</code>（<code>tim.c:52</code>）</td><td>内部再次调用 <code>TIM_Base_SetConfig()</code>，并把四个通道状态置为 READY</td></tr><tr><td>3</td><td><code>HAL_TIM_PWM_ConfigChannel()</code>（<code>tim.c:60</code>）</td><td>写 <code>CCMR1</code> 的 OC1M、OC1PE、OC1FE 与 <code>CCER</code> 的极性</td></tr><tr><td>4</td><td><code>HAL_TIM_MspPostInit()</code>（<code>tim.c:67</code>）</td><td>配置 PF6 为复用推挽输出，<code>GPIO_AF3_TIM10</code></td></tr></tbody></table>
+<p>第 4 步放在最后，是因为引脚复用配置要等通道参数齐备后再改。<code>HAL_TIM_PWM_ConfigChannel()</code> 对通道 1 无条件置位 <code>CCMR1.OC1PE</code>（<code>stm32f4xx_hal_tim.c:4245</code>），这一点与 <code>.ioc</code> 里的 <code>TIM10.OC1Preload_PWM=ENABLE</code> 一致。</p>
+<p>让引脚出波形的是运行期的 <code>HAL_TIM_PWM_Start()</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Enable the Capture compare channel */</span></span>
+<span class="line"><span style="color:#6F42C1">TIM_CCxChannelCmd</span><span style="color:#24292E">(htim</span><span style="color:#D73A49">-></span><span style="color:#E36209">Instance</span><span style="color:#24292E">, Channel, TIM_CCx_ENABLE);</span><span style="color:#6A737D">   /* CCER.CC1E = 1 */</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">IS_TIM_BREAK_INSTANCE</span><span style="color:#24292E">(htim</span><span style="color:#D73A49">-></span><span style="color:#E36209">Instance</span><span style="color:#24292E">) </span><span style="color:#D73A49">!=</span><span style="color:#24292E"> RESET) {</span></span>
+<span class="line"><span style="color:#6F42C1">  __HAL_TIM_MOE_ENABLE</span><span style="color:#24292E">(htim);</span><span style="color:#6A737D">                                 /* 仅高级定时器有 MOE */</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#6F42C1">__HAL_TIM_ENABLE</span><span style="color:#24292E">(htim);</span><span style="color:#6A737D">                                       /* CR1.CEN = 1 */</span></span></code></pre>
+<p>这段对应 <code>stm32f4xx_hal_tim.c:1470-1491</code>。TIM10 不是带刹车输入的实例，所以 <code>MOE</code> 那一步被跳过。启动前 <code>TIM_CHANNEL_STATE_GET()</code> 必须是 READY，否则 <code>HAL_TIM_PWM_Start()</code> 直接返回 <code>HAL_ERROR</code>（同文件 1462-1468 行），重复启动同一个通道不会报错但也不会起作用。</p>
+<p>本工程的启动点只有一个，在 IMU 任务的开头（<code>BMI088/Src/ImuTempControl.cpp:15</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> ImuTempControl</span><span style="color:#24292E">::</span><span style="color:#6F42C1">init</span><span style="color:#24292E">() {</span></span>
+<span class="line"><span style="color:#6F42C1">    HAL_GPIO_WritePin</span><span style="color:#24292E">(GPIOG, GPIO_PIN_6, GPIO_PIN_SET);</span><span style="color:#6A737D">   // 拉高 PG6 尝试使能</span></span>
+<span class="line"><span style="color:#6F42C1">    HAL_GPIO_WritePin</span><span style="color:#24292E">(GPIOH, GPIO_PIN_11, GPIO_PIN_SET);</span><span style="color:#6A737D">  // 拉高 PH11 尝试使能</span></span>
+<span class="line"><span style="color:#6F42C1">    HAL_TIM_PWM_Start</span><span style="color:#24292E">(htim_, channel_);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>调用链是 <code>ImuTask::run()</code> → <code>ImuTempControl_Init()</code>（<code>Task/Src/ImuTask.cpp:36</code>），早于温控更新循环。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant T as ImuTask 1 kHz
+    participant P as TempPID
+    participant H as htim10
+    participant HW as TIM10 硬件
+    T->>H: ImuTempControl_Init 调用 HAL_TIM_PWM_Start
+    H->>HW: CCER.CC1E = 1，CR1.CEN = 1
+    HW-->>T: PF6 开始输出 33.6 kHz 方波
+    loop 每个任务周期
+        T->>P: temp_pid_calculate 目标 45 摄氏度
+        P-->>T: 返回 0 至 4500 的整数输出
+        T->>H: __HAL_TIM_SET_COMPARE 写 CCR1
+        H->>HW: 写入预装载寄存器
+        HW->>HW: 下一个 UEV 装入影子寄存器
+        HW-->>T: 占空比在 29.76 微秒内更新
+    end</pre></div>
+<h2 id="4-比较值的写入">4. 比较值的写入</h2>
+<p>CCR 的写入在 HAL 里是一个宏，直接写寄存器，没有函数调用开销（<code>Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:1394-1398</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> __HAL_TIM_SET_COMPARE</span><span style="color:#24292E">(</span><span style="color:#E36209">__HANDLE__</span><span style="color:#24292E">, </span><span style="color:#E36209">__CHANNEL__</span><span style="color:#24292E">, </span><span style="color:#E36209">__COMPARE__</span><span style="color:#24292E">) </span><span style="color:#005CC5">\</span></span>
+<span class="line"><span style="color:#24292E">  (((</span><span style="color:#6F42C1">__CHANNEL__</span><span style="color:#24292E">) </span><span style="color:#D73A49">==</span><span style="color:#24292E"> TIM_CHANNEL_1) </span><span style="color:#D73A49">?</span><span style="color:#24292E"> ((</span><span style="color:#6F42C1">__HANDLE__</span><span style="color:#24292E">)->Instance->CCR1 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">__COMPARE__</span><span style="color:#24292E">)) </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#24292E">   ((</span><span style="color:#6F42C1">__CHANNEL__</span><span style="color:#24292E">) </span><span style="color:#D73A49">==</span><span style="color:#24292E"> TIM_CHANNEL_2) </span><span style="color:#D73A49">?</span><span style="color:#24292E"> ((</span><span style="color:#6F42C1">__HANDLE__</span><span style="color:#24292E">)->Instance->CCR2 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">__COMPARE__</span><span style="color:#24292E">)) </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#24292E">   ((</span><span style="color:#6F42C1">__CHANNEL__</span><span style="color:#24292E">) </span><span style="color:#D73A49">==</span><span style="color:#24292E"> TIM_CHANNEL_3) </span><span style="color:#D73A49">?</span><span style="color:#24292E"> ((</span><span style="color:#6F42C1">__HANDLE__</span><span style="color:#24292E">)->Instance->CCR3 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">__COMPARE__</span><span style="color:#24292E">)) </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#24292E">   ((</span><span style="color:#6F42C1">__HANDLE__</span><span style="color:#24292E">)->Instance->CCR4 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">__COMPARE__</span><span style="color:#24292E">)))</span></span></code></pre>
+<p>本工程的调用点（<code>BMI088/Src/ImuTempControl.cpp:18-24</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> ImuTempControl</span><span style="color:#24292E">::</span><span style="color:#6F42C1">update</span><span style="color:#24292E">(</span><span style="color:#D73A49">float</span><span style="color:#E36209"> targetTemp</span><span style="color:#24292E">, </span><span style="color:#D73A49">float</span><span style="color:#E36209"> currentTemp</span><span style="color:#24292E">, </span><span style="color:#D73A49">float</span><span style="color:#E36209"> dt</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    uint32_t</span><span style="color:#24292E"> duty </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> temp_pid_calculate</span><span style="color:#24292E">(targetTemp, currentTemp, dt);</span></span>
+<span class="line"><span style="color:#D73A49">    auto</span><span style="color:#24292E"> compare </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> static_cast&#x3C;uint32_t></span><span style="color:#24292E">(htim_->Init.Period </span><span style="color:#D73A49">*</span><span style="color:#24292E"> duty);</span></span>
+<span class="line"><span style="color:#6F42C1">    __HAL_TIM_SET_COMPARE</span><span style="color:#24292E">(htim_, channel_, compare);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>htim_->Init.Period</code> 是 4999，<code>duty</code> 是 <code>temp_pid_calculate()</code> 的返回值。该函数声明为 <code>int16_t</code>（<code>PID/Inc/temp_pid.h:29</code>），输出被限幅在 0 到 4500（<code>PID/Src/temp_pid.cpp:41</code> 的 <code>TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)</code>，其中第四个参数是输出限幅）。于是 <code>compare</code> 的取值范围是 0 或 4999 到 22 495 500 之间的值：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><code>duty</code></th><th><code>compare = 4999 × duty</code></th><th>相对 ARR = 4999 的占空比</th></tr></thead><tbody><tr><td>0</td><td>0</td><td>0%</td></tr><tr><td>1</td><td>4999</td><td>100%</td></tr><tr><td>20</td><td>99 980</td><td>100%</td></tr><tr><td>4500</td><td>22 495 500</td><td>100%</td></tr></tbody></table>
+<p>比较值的满量程应当是 <code>ARR+1 = 5000</code>，而这里的换算用的是 <code>Period</code> 本身，也没有除以 PID 的满量程。结果是只要温度环输出非零，写进去的比较值就已经达到或超过 ARR，引脚输出恒定为高电平，加热电路按通断方式工作。这一处在第 5 章与温控环一起分析。</p>
+<h2 id="5-易错点">5. 易错点</h2>
+<p>（1）<code>CCR = 0</code> 与 <code>CCR \ge ARR+1</code> 是两个边界。PWM1 下 CCR 为 0 时输出恒低，CCR 大于 ARR 时输出恒高，两者都不再是调制波形。写比较值前要先确认量纲。</p>
+<p>（2）PWM1 与 PWM2 弄反。两者占空比互补，写反了表现为加热电流始终满值或者始终为零，而寄存器读回来都是”合法值”，不容易从寄存器上看出来。</p>
+<p>（3）启动顺序。<code>CCER.CC1E</code> 与 <code>CR1.CEN</code> 未置位时，即使 CCR 写得正确，引脚也没有波形；反过来，先写 CCR 再启动不会丢失参数，因为预装载寄存器一直保留这个值。</p>
+<p>（4）改 ARR 等于同时改频率和占空比。CCR 不变时改变 ARR 会让占空比跟着变，所以调 PWM 时应当先确定周期再调占空比。</p>
+<p>（5）把 <code>ClockDivision</code> 当成额外的分频器。<code>CR1.CKD</code> 只影响滤波采样，不改变计数器时钟，改它不会改变输出频率。</p>
+<h2 id="6-小结">6. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>PWM1 模式下输出为高的条件是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mi>N</mi><mi>T</mi><mo>&#x3C;</mo><mi>C</mi><mi>C</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">CNT &#x3C; CCR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7224em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span>，PWM2 相反；引脚极性由 <code>CCER.CCxP</code> 决定。</li>
+<li>边沿对齐频率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>W</mi><mi>M</mi></mrow></msub><mo>=</mo><msub><mi>f</mi><mrow><mi>C</mi><mi>K</mi><mi mathvariant="normal">_</mi><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msub><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mo stretchy="false">(</mo><mi>P</mi><mi>S</mi><mi>C</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f_{PWM}=f_{CK\_PSC}/((PSC+1)(ARR+1))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">W</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.117em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mopen">((</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">))</span></span></span></span>，占空比 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi><mo>=</mo><mi>C</mi><mi>C</mi><mi>R</mi><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">D=CCR/(ARR+1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord">/</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span>，分辨率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">1/(ARR+1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span>。</li>
+<li>中央对齐的周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>A</mi><mi>R</mi><mi>R</mi></mrow><annotation encoding="application/x-tex">2\times ARR</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> 个计数时钟，频率约为边沿对齐的一半。</li>
+<li>HAL 的配置顺序是 Base_Init、PWM_Init、PWM_ConfigChannel、MspPostInit，运行期再由 <code>HAL_TIM_PWM_Start()</code> 置位 <code>CC1E</code> 与 <code>CEN</code>。</li>
+<li><code>HAL_TIM_PWM_ConfigChannel()</code> 强制打开 <code>OC1PE</code>，所以 CCR 的写入在下一个 UEV 生效。</li>
+<li>本工程的比较值没有除以满量程，输出非零时占空比即为 100%，加热实际是通断控制。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选</th><th>代价与收益</th></tr></thead><tbody><tr><td>输出模式</td><td>PWM1 加高电平有效</td><td>逻辑直观，改极性需要同时改硬件接法</td></tr><tr><td>频率</td><td>33.6 kHz</td><td>高于音频范围且开关损耗可控，代价是分辨率只有 0.02%</td></tr><tr><td>通道数</td><td>只用通道 1</td><td>引脚与代码都最少，代价是以后要加第二路加热只能换实例</td></tr><tr><td>启动时机</td><td>在 IMU 任务开头启动一次</td><td>初始化集中在任务里，代价是启动前若调用 <code>update()</code> 只改寄存器不出波形</td></tr><tr><td>比较值换算</td><td><code>Period × duty</code></td><td>代码短，代价是量纲不匹配导致占空比饱和</td></tr></tbody></table>
+<h2 id="7-练习">7. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>TIM10 保持 168 MHz 输入，要输出 1 kHz 的 PWM 且占空比分辨不低于 0.1%，给出一组 PSC 与 ARR。</li>
+<li>写出 <code>ARR = 4999</code>、<code>CCR = 1250</code> 时的占空比与高电平时间。</li>
+<li>说明 <code>OCPolarity</code> 从 HIGH 改成 LOW 后，同一组寄存器值下 PF6 的波形如何变化。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li><code>ImuTempControl::update()</code> 里的 <code>compare</code> 换算改成 <code>(htim_->Init.Period + 1) * duty / 4500</code>，说明这样能覆盖的占空比范围，以及 4500 这个常数从哪里来。</li>
+<li>用 <code>DWT_GetMicroseconds()</code> 测量 PF6 高电平宽度需要外部接线或示波器；在不改硬件的前提下，设计一个只用寄存器读回值间接判断占空比的方案（提示：读 <code>CCR1</code> 与 <code>CNT</code>）。</li>
+<li>把 TIM10 的 <code>Prescaler</code> 从 0 改成 167，保持 <code>ARR = 4999</code>，计算新的频率；再说明这种改法对 PF6 上加热电路的开关损耗有什么影响。</li>
+</ol></div></section><section class="dfile" id="file-3" data-file="03-本项目定时器分配"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-本项目定时器分配</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/02-定时器与PWM/03-本项目定时器分配.md</span></div><div class="dfile__body"><h1 id="本项目定时器分配">本项目定时器分配</h1>
+<p>两块板的时间来源一共四类：FreeRTOS 占用 SysTick 产生调度节拍，TIM2 给 HAL 提供 1 ms 时基，TIM10 输出加热 PWM，DWT 的 <code>CYCCNT</code> 提供周期级计时。除此之外的时间量都由外设自己分频得到，例如 USART 的 <code>USARTDIV</code> 与 CAN 的位定时寄存器，它们不占用定时器实例。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/main.c</code></td><td><code>SystemClock_Config()</code> 与外设初始化顺序</td></tr><tr><td><code>Core/Src/tim.c</code></td><td>TIM10 的完整配置与 PF6 复用</td></tr><tr><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>TIM2 的完整配置</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>两个定时器的中断入口</td></tr><tr><td><code>BSP/Src/bsp_dwt.cpp</code></td><td><code>CYCCNT</code> 的启动与延时实现</td></tr><tr><td><code>Task/Src/ImuTask.cpp</code></td><td>温控 PWM 的启动与更新调用点</td></tr><tr><td><code>BMI088/Src/ImuTempControl.cpp</code></td><td>PWM 通道的封装</td></tr><tr><td><code>2026sentriomeni.ioc</code></td><td>时钟树、NVIC 与 TIM10 参数的源头</td></tr></tbody></table>
+<h2 id="1-时间资源全景">1. 时间资源全景</h2>
+<p>时钟树先在 <code>SystemClock_Config()</code> 里定下来（<code>Core/Src/main.c:153-192</code>）：HSE 12 MHz 经 <code>PLLM=6</code>、<code>PLLN=168</code>、<code>PLLP=DIV2</code> 得到 168 MHz 的 SYSCLK，<code>AHBCLKDivider = DIV1</code>、<code>APB1CLKDivider = DIV4</code>、<code>APB2CLKDivider = DIV2</code>，于是 HCLK 168 MHz、PCLK1 42 MHz、PCLK2 84 MHz。APB 预分频不为 1 时定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span>，所以 TIM2 看到 84 MHz、TIM10 看到 168 MHz。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>时间来源</th><th>时钟</th><th>配置</th><th>周期</th><th>本工程用途</th></tr></thead><tbody><tr><td>SysTick</td><td>HCLK 168 MHz</td><td>重装值 167999，优先级 15</td><td>1 ms</td><td>FreeRTOS 的 <code>xTickCount</code>，<code>osDelay</code> 与调度</td></tr><tr><td>TIM2</td><td>APB1 定时器时钟 84 MHz</td><td>PSC=83、ARR=999，优先级 15</td><td>1 ms</td><td><code>uwTick</code>，<code>HAL_GetTick()</code> 与 <code>HAL_Delay()</code></td></tr><tr><td>TIM10</td><td>APB2 定时器时钟 168 MHz</td><td>PSC=0、ARR=4999，通道 1</td><td>29.76 µs</td><td>PF6 输出 PWM，驱动加热电阻</td></tr><tr><td>DWT <code>CYCCNT</code></td><td>HCLK 168 MHz</td><td>使能 <code>DEMCR.TRCENA</code> 与 <code>DWT.CTRL.CYCCNTENA</code></td><td>5.952 ns</td><td><code>DWT_Delay_us()</code> 与耗时测量</td></tr></tbody></table>
+<p>SysTick 的重装值来自 FreeRTOS 移植层 <code>port.c:695</code> 的 <code>configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ - 1</code>，其中 <code>configSYSTICK_CLOCK_HZ</code> 未定义时默认等于 <code>configCPU_CLOCK_HZ</code>，即 <code>SystemCoreClock = 168 MHz</code>。DWT 由 <code>BSP_DWT_Init()</code> 启动（<code>BSP/Src/bsp_dwt.cpp:7-22</code>），在主函数里于 <code>BSP_CAN_Init()</code> 之后调用（<code>Core/Src/main.c:123-124</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    HSE["HSE 12 MHz"] --> PLL["PLL M=6 N=168 P=2"]
+    PLL --> HCLK["SYSCLK 与 HCLK 168 MHz"]
+    HCLK --> APB1["APB1 42 MHz"] --> T2CLK["定时器时钟 84 MHz"] --> TIM2["TIM2 PSC=83 ARR=999"]
+    HCLK --> APB2["APB2 84 MHz"] --> T10CLK["定时器时钟 168 MHz"] --> TIM10["TIM10 PSC=0 ARR=4999"]
+    HCLK --> SYSTICK["SysTick 重装值 167999"] --> XTICK["FreeRTOS xTickCount 1 kHz"] --> OSDELAY["osDelay 与任务调度"]
+    HCLK --> DWT["DWT CYCCNT"] --> DWTDELAY["DWT_Delay_us 与耗时测量"]
+    TIM2 --> UWTICK["更新中断 1 kHz"] --> UWTICK2["uwTick 每 1 ms 加 1"] --> GETTICK["HAL_GetTick 与 HAL_Delay"]
+    TIM10 --> PWM["PF6 输出 33.6 kHz 方波"] --> HEAT["BMI088 加热电阻"]
+    APB1 --> CAN["CAN 位定时 1 Mbps"]</pre></div>
+<h2 id="2-tim2给-hal-用的时基">2. TIM2：给 HAL 用的时基</h2>
+<p>TIM2 没有出现在 <code>main()</code> 的 <code>MX_xxx_Init()</code> 调用列表里，它的初始化在 <code>HAL_InitTick()</code> 内部完成（<code>Core/Src/stm32f4xx_hal_timebase_tim.c:41-112</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项目</th><th>值</th><th>位置</th></tr></thead><tbody><tr><td>时钟使能</td><td><code>__HAL_RCC_TIM2_CLK_ENABLE()</code></td><td>第 52 行</td></tr><tr><td>预分频</td><td>83（1 MHz 计数时钟）</td><td>第 70、82 行</td></tr><tr><td>重装值</td><td>999</td><td>第 81 行</td></tr><tr><td>计数方向</td><td><code>TIM_COUNTERMODE_UP</code></td><td>第 84 行</td></tr><tr><td>ARR 预装载</td><td><code>TIM_AUTORELOAD_PRELOAD_DISABLE</code></td><td>第 85 行</td></tr><tr><td>启动方式</td><td><code>HAL_TIM_Base_Start_IT()</code></td><td>第 91 行</td></tr><tr><td>中断优先级</td><td><code>TickPriority</code>，本工程为 15</td><td>第 100 行</td></tr></tbody></table>
+<p>TIM2 没有 MSP 回调。<code>Core/Src/tim.c:71-89</code> 的 <code>HAL_TIM_Base_MspInit()</code> 只判断 TIM10，TIM2 的时钟与 NVIC 由 timebase 文件自己处理。这是 CubeMX 把时基源选成 TIM2 时的固定结构，改动时不要往 <code>tim.c</code> 里搬。</p>
+<p>TIM2 用到的 NVIC 资源只有一个：<code>TIM2_IRQn</code>，优先级 15，与 PendSV、SysTick 同档。<code>Core/Src/stm32f4xx_it.c:233-242</code> 的 <code>TIM2_IRQHandler()</code> 把中断交给 <code>HAL_TIM_IRQHandler(&#x26;htim2)</code>，第 4 章展开这条链路。</p>
+<h2 id="3-tim10加热-pwm">3. TIM10：加热 PWM</h2>
+<p>TIM10 的占用情况：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项目</th><th>值</th><th>位置</th></tr></thead><tbody><tr><td>时钟使能</td><td><code>__HAL_RCC_TIM10_CLK_ENABLE()</code>（APB2）</td><td><code>tim.c:80</code></td></tr><tr><td>引脚</td><td>PF6，<code>GPIO_AF3_TIM10</code>，推挽输出</td><td><code>tim.c:100-109</code></td></tr><tr><td>通道</td><td><code>TIM_CHANNEL_1</code></td><td><code>tim.c:60</code></td></tr><tr><td>通道模式</td><td><code>TIM_OCMODE_PWM1</code></td><td><code>tim.c:56</code></td></tr><tr><td>初始比较值</td><td><code>Pulse = 0</code></td><td><code>tim.c:57</code></td></tr><tr><td>NVIC</td><td><code>TIM1_UP_TIM10_IRQn</code>，优先级 5，已使能</td><td><code>tim.c:83-84</code></td></tr></tbody></table>
+<p>NVIC 里使能了 <code>TIM1_UP_TIM10_IRQn</code>，但工程代码没有打开 TIM10 的更新中断：<code>MX_TIM10_Init()</code> 只调用 <code>HAL_TIM_Base_Init()</code>、<code>HAL_TIM_PWM_Init()</code> 与 <code>HAL_TIM_PWM_ConfigChannel()</code>，没有调用 <code>HAL_TIM_Base_Start_IT()</code>，所以 <code>DIER.UIE</code> 一直为 0，<code>TIM1_UP_TIM10_IRQHandler()</code> 不会被触发。它在 <code>Core/Src/stm32f4xx_it.c:219-228</code> 里是个只调用 <code>HAL_TIM_IRQHandler(&#x26;htim10)</code> 的空壳，读代码时不要因为存在这个函数就认为 TIM10 有中断。</p>
+<p>PWM 的调用链跨三个文件，全部集中在 1 kHz 的 IMU 任务里：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> StartImuTask</span><span style="color:#24292E">::</span><span style="color:#6F42C1">run</span><span style="color:#24292E">() {</span></span>
+<span class="line"><span style="color:#6F42C1">    BMI088_Init</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#6F42C1">    ImuTempControl_Init</span><span style="color:#24292E">();</span><span style="color:#6A737D">          // 内部 HAL_TIM_PWM_Start(&#x26;htim10, TIM_CHANNEL_1)</span></span>
+<span class="line"><span style="color:#6F42C1">    DWT_Delay_ms</span><span style="color:#24292E">(</span><span style="color:#005CC5">1000</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> (;;) {</span></span>
+<span class="line"><span style="color:#6F42C1">        BMI088_Read</span><span style="color:#24292E">(gyro, accel, </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">temp);</span></span>
+<span class="line"><span style="color:#6F42C1">        ImuTempControl_Update</span><span style="color:#24292E">(</span><span style="color:#005CC5">45</span><span style="color:#24292E">, temp, </span><span style="color:#005CC5">0.001</span><span style="color:#D73A49">f</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">        ahrs.</span><span style="color:#6F42C1">update</span><span style="color:#24292E">(...);</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>云台板对应 <code>Task/Src/ImuTask.cpp:36</code> 与第 47 行，底盘板对应 <code>Task/Src/ImuTask.cpp:35</code> 与第 56 行。底盘板的 1 kHz 循环里插入了功率控制与裁判系统相关的调用，所以两个行号相差 9 行，逻辑相同。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant M as main
+    participant I as ImuTask 1 kHz
+    participant W as ImuTempControl
+    participant R as TIM10 寄存器
+    participant P as PF6
+    M->>M: MX_TIM10_Init 配置 PSC 与 ARR 和通道 1
+    M->>M: MX_FREERTOS_Init 创建任务
+    M->>I: osKernelStart 后开始调度
+    I->>W: ImuTempControl_Init
+    W->>R: 写 GPIOG6 与 GPIOH11 为高
+    W->>R: HAL_TIM_PWM_Start 置位 CC1E 与 CEN
+    R->>P: 开始输出 33.6 kHz 方波
+    loop 每个 1 ms
+        I->>W: ImuTempControl_Update 目标 45 摄氏度
+        W->>R: __HAL_TIM_SET_COMPARE 写 CCR1
+        R->>P: 下一个 UEV 起使用新的占空比
+    end</pre></div>
+<h2 id="4-初始化顺序">4. 初始化顺序</h2>
+<p><code>main()</code> 里的初始化顺序（<code>Core/Src/main.c:95-134</code>）对定时器有直接影响：TIM2 在 <code>HAL_Init()</code> 与 <code>SystemClock_Config()</code> 内部配置两次，TIM10 在 <code>MX_TIM10_Init()</code> 配置一次，DWT 在 <code>BSP_DWT_Init()</code> 启动，最后 <code>osKernelStart()</code> 才开始调度。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["HAL_Init"] --> B["HAL_InitTick 第一次&#x3C;br/>按 HSI 16 MHz 配置 TIM2"]
+    B --> C["SystemClock_Config"]
+    C --> D["HAL_RCC_ClockConfig 末尾&#x3C;br/>HAL_InitTick 第二次&#x3C;br/>按 84 MHz 重算 PSC=83"]
+    D --> E["MX_GPIO_Init 与 MX_DMA_Init"]
+    E --> F["MX_CAN1_Init 与 MX_CAN2_Init"]
+    F --> G["MX_USART3 与 MX_USART6 与 MX_USART1"]
+    G --> H["MX_SPI1_Init 与 MX_I2C3_Init"]
+    H --> I["MX_TIM10_Init&#x3C;br/>配置 PWM 与 PF6"]
+    I --> J["MX_CRC_Init"]
+    J --> K["MX_USB_DEVICE_Init"]
+    K --> L["BSP_CAN_Init 与 BSP_DWT_Init"]
+    L --> M["MX_FREERTOS_Init 创建任务"]
+    M --> N["osKernelStart&#x3C;br/>SysTick 与 PendSV 设为优先级 15"]
+    N --> O["ImuTask 启动 PWM 并开始更新"]</pre></div>
+<p>TIM10 排在 <code>MX_I2C3_Init()</code> 之后、<code>MX_USART1_UART_Init()</code> 之前，与 <code>.ioc</code> 里 <code>ProjectManager.functionlistsort</code> 的顺序一致。这个顺序只影响 <code>MX_TIM10_Init()</code> 内部对 GPIOF 时钟的使能时机，不影响 PWM 参数。</p>
+<h2 id="5-其余外设为什么不需要定时器">5. 其余外设为什么不需要定时器</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>外设</th><th>时间量从哪里来</th><th>是否占定时器</th></tr></thead><tbody><tr><td>USART3 / USART6 / USART1</td><td><code>USARTDIV</code> 由 PCLK 分频得到波特率</td><td>否</td></tr><tr><td>CAN1 / CAN2</td><td><code>BTR</code> 的 Prescaler 与 BS1/BS2 由 APB1 时钟分频</td><td>否</td></tr><tr><td>SPI1</td><td>由分频系数从 PCLK 得到，本身是同步总线</td><td>否</td></tr><tr><td>USB OTG FS</td><td>需要 48 MHz 时钟，由 PLLQ=7 分出</td><td>否</td></tr><tr><td>DMA</td><td>由外设的请求信号驱动，没有自己的时钟</td><td>否</td></tr><tr><td>FreeRTOS</td><td>借用 Cortex-M4 内核的 SysTick</td><td>否</td></tr><tr><td>软件延迟</td><td><code>DWT.CYCCNT</code> 或 <code>osDelay()</code></td><td>否</td></tr></tbody></table>
+<p>这也是两块板只配了两个定时器的原因：只要不需要硬件产生波形或独立的更新中断，就不必占定时器实例。</p>
+<h2 id="6-易错点">6. 易错点</h2>
+<p>（1）把 TIM2 当通用定时器用。TIM2 已经被 HAL 时基占用，再加一路 PWM 或中断会与 <code>HAL_IncTick()</code> 抢同一个更新中断标志。</p>
+<p>（2）以为 TIM10 有中断。NVIC 里使能了 <code>TIM1_UP_TIM10_IRQn</code>，但 <code>DIER.UIE</code> 未置位，中断永远不会进；要使用它需要显式调用 <code>HAL_TIM_Base_Start_IT()</code>。</p>
+<p>（3）漏掉时基文件的第二次配置。<code>HAL_InitTick()</code> 会被调用两次，把 TIM2 的初始化搬出 <code>HAL_InitTick()</code> 就会丢掉按 168 MHz 重算的那一次。</p>
+<p>（4）两块板的差异被忽略。<code>tim.c</code> 与 <code>stm32f4xx_hal_timebase_tim.c</code> 完全相同，但 <code>Task/Src/ImuTask.cpp</code> 与 <code>Core/Src/main.c</code> 有差异，跨板核对代码时要按文件比对。</p>
+<p>（5）DWT 与定时器的混用。<code>DWT_Delay_us()</code> 是忙等，不依赖任何中断；<code>osDelay()</code> 依赖 SysTick；<code>HAL_Delay()</code> 依赖 TIM2。三者混用时要清楚各自在什么条件下会失准。</p>
+<h2 id="7-小结">7. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>两块板一共四类时间来源：SysTick（调度节拍）、TIM2（HAL 时基）、TIM10（加热 PWM）、DWT <code>CYCCNT</code>（周期级计时）。</li>
+<li>定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span>：TIM2 得到 84 MHz，TIM10 得到 168 MHz。</li>
+<li>TIM2 的初始化在 <code>HAL_InitTick()</code> 里，不在 <code>MX_xxx_Init()</code> 里，因此 <code>tim.c</code> 里看不到 TIM2。</li>
+<li>TIM10 只用到通道 1，配置为 PWM1、高电平有效，引脚是 PF6 的 AF3。</li>
+<li><code>TIM1_UP_TIM10_IRQn</code> 已使能但没有中断源，TIM10 目前不产生任何中断。</li>
+<li><code>CYCCNT</code> 由 <code>BSP_DWT_Init()</code> 打开，<code>DWT_Delay_us()</code> 是忙等，不依赖中断与 tick。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选</th><th>代价与收益</th></tr></thead><tbody><tr><td>HAL 时基源</td><td>独立 TIM2</td><td>占一个定时器与一个中断向量，换来与内核 tick 完全解耦</td></tr><tr><td>加热 PWM 实例</td><td>TIM10 通道 1</td><td>引脚与代码最少，代价是频率与分辨率被绑死</td></tr><tr><td>采样延时</td><td>DWT 忙等 1 s</td><td>初始化阶段不依赖调度器，代价是这段时间 CPU 空转</td></tr><tr><td>调试计时</td><td><code>CYCCNT</code></td><td>168 MHz 分辨率，代价是 25.57 s 回绕一次且代码未处理</td></tr><tr><td>其余外设计时</td><td>外设自身分频</td><td>不占定时器，代价是改变时钟树会同时影响所有波特率</td></tr></tbody></table>
+<h2 id="8-练习">8. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>统计两块板一共占用了几个定时器实例、几个定时器相关的中断向量，并列出其中实际会被触发的。</li>
+<li>说明 <code>Main.c</code> 里 <code>MX_TIM10_Init()</code> 的位置往前挪到 <code>MX_I2C3_Init()</code> 之前会产生什么差别。</li>
+<li><code>DWT_GetMicroseconds()</code> 的返回值在板子连续运行 30 s 后会怎样，说明原因。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>现在要加第二路 PWM 加热通道，频率同为 33.6 kHz，给出两种方案（同实例另一通道 / 另一个实例），并各写一句代价。</li>
+<li>把 TIM2 换成 TIM3 做时基，列出需要改动的文件与 <code>.ioc</code> 项，并说明漏改哪一项会导致编译通过但功能异常。</li>
+<li><code>BSP_DWT_Init()</code> 返回 1 表示 CYCCNT 没有变化。说明可能的原因，以及此时 <code>DWT_Delay_us()</code> 的行为。</li>
+</ol></div></section><section class="dfile" id="file-4" data-file="04-定时器中断与HAL时基"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-定时器中断与HAL时基</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/02-定时器与PWM/04-定时器中断与HAL时基.md</span></div><div class="dfile__body"><h1 id="定时器中断与-hal-时基">定时器中断与 HAL 时基</h1>
+<p>HAL 库的软件时基只有一个 32 位变量 <code>uwTick</code>，它由定时器的更新中断累加。本工程把这件事交给 TIM2，于是 Cortex-M4 内核的 SysTick 可以完全留给 FreeRTOS。这一章讲清两条链路：TIM2 中断如何一步步把 <code>uwTick</code> 加一，以及任务里的代码应该用哪一套时间。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>覆盖 <code>HAL_InitTick()</code>，用 TIM2 做时基</td></tr><tr><td><code>Core/Src/main.c</code></td><td><code>HAL_TIM_PeriodElapsedCallback()</code> 里调用 <code>HAL_IncTick()</code></td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td><code>TIM2_IRQHandler()</code></td></tr><tr><td><code>Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>TICK_INT_PRIORITY = 15</code></td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td><code>configTICK_RATE_HZ</code>、中断优先级门槛、句柄映射</td></tr><tr><td><code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c</code></td><td><code>uwTick</code> 与 <code>HAL_IncTick()</code>、<code>HAL_GetTick()</code>、<code>HAL_Delay()</code></td></tr><tr><td><code>Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c</code></td><td>SysTick 重装值与内核中断优先级</td></tr></tbody></table>
+<h2 id="1-hal-时基的四个角色">1. HAL 时基的四个角色</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>名称</th><th>类型</th><th>含义</th><th>位置</th></tr></thead><tbody><tr><td><code>uwTick</code></td><td><code>uint32_t</code></td><td>从启动累计的毫秒数</td><td><code>stm32f4xx_hal.c</code></td></tr><tr><td><code>uwTickFreq</code></td><td>枚举</td><td>每次中断给 <code>uwTick</code> 加多少，默认 1 kHz 档</td><td><code>stm32f4xx_hal.c:96</code></td></tr><tr><td><code>uwTickPrio</code></td><td><code>uint32_t</code></td><td>时基中断的优先级，供时钟重配时复用</td><td><code>stm32f4xx_hal.c</code></td></tr><tr><td><code>HAL_InitTick()</code></td><td><code>__weak</code> 函数</td><td>配置时基中断，本工程被覆盖</td><td><code>stm32f4xx_hal_timebase_tim.c:41</code></td></tr></tbody></table>
+<p>三个对外接口都很短。<code>HAL_IncTick()</code> 只做加法，<code>HAL_GetTick()</code> 只读变量：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">__weak </span><span style="color:#D73A49">void</span><span style="color:#6F42C1"> HAL_IncTick</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#24292E">  uwTick </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> uwTickFreq;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">__weak </span><span style="color:#D73A49">uint32_t</span><span style="color:#6F42C1"> HAL_GetTick</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> uwTick;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>HAL_Delay()</code> 是忙等，它反复读 <code>HAL_GetTick()</code> 直到差值达到目标，等待期间不让出 CPU（<code>stm32f4xx_hal.c:390-403</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#24292E">__weak </span><span style="color:#D73A49">void</span><span style="color:#6F42C1"> HAL_Delay</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint32_t</span><span style="color:#E36209"> Delay</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">  uint32_t</span><span style="color:#24292E"> tickstart </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> HAL_GetTick</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">  uint32_t</span><span style="color:#24292E"> wait </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Delay;</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (wait </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> HAL_MAX_DELAY) {</span></span>
+<span class="line"><span style="color:#24292E">    wait </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">uint32_t</span><span style="color:#24292E">)(uwTickFreq);</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#D73A49">  while</span><span style="color:#24292E"> ((</span><span style="color:#6F42C1">HAL_GetTick</span><span style="color:#24292E">() </span><span style="color:#D73A49">-</span><span style="color:#24292E"> tickstart) </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> wait) { }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>HAL 库里默认的 <code>HAL_InitTick()</code> 用 SysTick 实现（<code>stm32f4xx_hal.c:253-274</code>），本工程用同名的非 weak 实现覆盖了它，所以默认版本不参与编译。</p>
+<h2 id="2-tim2-更新中断的链路">2. TIM2 更新中断的链路</h2>
+<p>一次 <code>uwTick</code> 的累加要经过四层调用：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>代码</th><th>位置</th></tr></thead><tbody><tr><td>硬件</td><td>CNT 计到 ARR，置位 <code>SR.UIF</code>，<code>DIER.UIE</code> 已置位则发中断请求</td><td>TIM2 寄存器</td></tr><tr><td>向量</td><td><code>void TIM2_IRQHandler(void)</code></td><td><code>Core/Src/stm32f4xx_it.c:233-242</code></td></tr><tr><td>HAL</td><td><code>HAL_TIM_IRQHandler(&#x26;htim2)</code> 判标志、清标志、回调</td><td><code>stm32f4xx_hal_tim.c:3954-3961</code></td></tr><tr><td>应用</td><td><code>HAL_TIM_PeriodElapsedCallback()</code> 里按实例判断后调用 <code>HAL_IncTick()</code></td><td><code>Core/Src/main.c:206-218</code></td></tr></tbody></table>
+<p>应用层的回调是唯一与工程相关的一层：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> HAL_TIM_PeriodElapsedCallback</span><span style="color:#24292E">(TIM_HandleTypeDef </span><span style="color:#D73A49">*</span><span style="color:#E36209">htim</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (htim->Instance </span><span style="color:#D73A49">==</span><span style="color:#24292E"> TIM2)</span></span>
+<span class="line"><span style="color:#24292E">  {</span></span>
+<span class="line"><span style="color:#6F42C1">    HAL_IncTick</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>这里的实例判断不能省。同一个回调是所有定时器更新中断的公共出口，TIM10 的基时中断一旦被谁打开，也会走到这个函数；只按实例名加 <code>HAL_IncTick()</code> 才能保证 <code>uwTick</code> 的累加速度不受影响。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant HW as TIM2 硬件
+    participant NV as NVIC
+    participant ISR as TIM2_IRQHandler
+    participant HAL as HAL_TIM_IRQHandler
+    participant APP as HAL_TIM_PeriodElapsedCallback
+    participant T as uwTick
+    HW->>HW: CNT 到达 ARR 999，产生 UEV
+    HW->>HW: 置位 SR.UIF
+    HW->>NV: DIER.UIE 已置位，发出中断请求
+    NV->>ISR: 优先级 15 允许时进入
+    ISR->>HAL: HAL_TIM_IRQHandler 与 htim2
+    HAL->>HAL: 读 SR 与 DIER 判断中断源
+    HAL->>HAL: 清除 SR.UIF
+    HAL->>APP: 调用 HAL_TIM_PeriodElapsedCallback
+    APP->>APP: 判断 Instance 是否为 TIM2
+    APP->>T: HAL_IncTick 让 uwTick 加 1
+    T-->>APP: 返回，中断结束</pre></div>
+<p>清标志的动作在 HAL 层（<code>stm32f4xx_hal_tim.c:3956</code> 的 <code>__HAL_TIM_CLEAR_FLAG(htim, TIM_FLAG_UPDATE)</code>），应用回调里不需要再清，重复清会掩盖漏中断的问题。</p>
+<h2 id="3-hal_inittick-的两次调用">3. HAL_InitTick 的两次调用</h2>
+<p><code>HAL_Init()</code> 与时钟重配都会调用 <code>HAL_InitTick()</code>，本工程因此配置过两次 TIM2：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>次</th><th>触发点</th><th>当时的主频与总线</th><th>算出的 PSC</th><th>说明</th></tr></thead><tbody><tr><td>第一次</td><td><code>HAL_Init()</code>（<code>stm32f4xx_hal.c:176</code>）</td><td>HSI 16 MHz，APB1 分频为 1</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>16</mn><mi mathvariant="normal">/</mi><mn>1</mn><mo>−</mo><mn>1</mn><mo>=</mo><mn>15</mn></mrow><annotation encoding="application/x-tex">16/1-1=15</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">16/1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">15</span></span></span></span></td><td>与当时的时钟自洽</td></tr><tr><td>第二次</td><td><code>HAL_RCC_ClockConfig()</code> 末尾（<code>stm32f4xx_hal_rcc.c:722</code>）</td><td>PLL 168 MHz，APB1 为 42 MHz</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84</mn><mi mathvariant="normal">/</mi><mn>1</mn><mo>−</mo><mn>1</mn><mo>=</mo><mn>83</mn></mrow><annotation encoding="application/x-tex">84/1-1=83</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">84/1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">83</span></span></span></span></td><td>最终生效的配置</td></tr></tbody></table>
+<p>第二次调用传进去的优先级是变量 <code>uwTickPrio</code>（第一次设置的 15），不是宏 <code>TICK_INT_PRIORITY</code>。两次配置之间 TIM2 一直在跑，重写 <code>PSC</code> 要等下一次 UEV 才生效，所以中间不会出现频率突跳的瞬间。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant M as main
+    participant H as HAL_Init
+    participant S as SystemClock_Config
+    participant R as HAL_RCC_ClockConfig
+    participant T2 as TIM2
+    M->>H: 调用 HAL_Init
+    H->>T2: HAL_InitTick 优先级 15，PSC=15 ARR=999
+    Note over T2: 此时主频 16 MHz HSI，计数时钟 1 MHz
+    M->>S: 调用 SystemClock_Config
+    S->>S: 配置 PLL 与 APB 分频
+    S->>R: 调用 HAL_RCC_ClockConfig
+    R->>T2: HAL_InitTick 使用 uwTickPrio，PSC=83 ARR=999
+    Note over T2: 此时计数时钟仍是 1 MHz，PSC 在下一个 UEV 生效
+    R-->>M: 返回，之后每次 UEV 让 uwTick 加 1</pre></div>
+<h2 id="4-为什么不用-systick">4. 为什么不用 SysTick</h2>
+<p>SysTick 属于 Cortex-M4 内核，HAL 与 FreeRTOS 都能用它，但两者需要的中断处理完全不同：HAL 要的是 <code>uwTick</code> 累加，FreeRTOS 要的是 <code>xTaskIncrementTick()</code> 加可能的上下文切换。同一个异常向量只能有一个处理函数。</p>
+<p>FreeRTOS 的移植层用宏把内核句柄映射到 CMSIS 标准名（<code>Core/Inc/FreeRTOSConfig.h:127-133</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> vPortSVCHandler</span><span style="color:#24292E">    SVC_Handler</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> xPortPendSVHandler</span><span style="color:#24292E"> PendSV_Handler</span></span>
+<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> xPortSysTickHandler</span><span style="color:#24292E"> SysTick_Handler</span></span></code></pre>
+<p>这三行让 <code>SysTick_Handler</code> 执行的是 FreeRTOS 的 <code>xPortSysTickHandler()</code>。如果 HAL 的时基也放在 SysTick，<code>uwTick</code> 就没有人累加，<code>HAL_Delay()</code> 会永远等下去。把时基换成 TIM2 之后，两套节拍各走各的中断：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>时间基</th><th>产生者</th><th>维护的变量</th><th>谁在用</th><th>中断优先级</th></tr></thead><tbody><tr><td>内核节拍</td><td>SysTick</td><td><code>xTickCount</code></td><td><code>osDelay()</code>、超时、时间片</td><td>15</td></tr><tr><td>HAL 节拍</td><td>TIM2</td><td><code>uwTick</code></td><td><code>HAL_GetTick()</code>、<code>HAL_Delay()</code></td><td>15</td></tr></tbody></table>
+<p>两个数值都是 1 ms 一格，但它们彼此独立，不会自动对齐。把 <code>uwTick</code> 的差值当作任务周期来算，得到的永远是近似值。</p>
+<h2 id="5-中断优先级与临界区的关系">5. 中断优先级与临界区的关系</h2>
+<p>本工程的优先级配置可以分成三档：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>对象</th><th>优先级数值</th><th>依据</th></tr></thead><tbody><tr><td>外设中断（CAN、DMA、USART、USB、TIM1_UP_TIM10）</td><td>5</td><td><code>can.c:125</code>、<code>dma.c:48</code>、<code>usart.c:198</code>、<code>tim.c:83</code> 等</td></tr><tr><td>TIM2 时基中断</td><td>15</td><td><code>stm32f4xx_hal_conf.h:151</code> 的 <code>TICK_INT_PRIORITY = 15</code></td></tr><tr><td>PendSV 与 SysTick</td><td>15</td><td><code>stm32f4xx_hal_msp.c:75</code>、<code>port.c:361-363</code></td></tr></tbody></table>
+<p>优先级分组是 <code>NVIC_PRIORITYGROUP_4</code>（<code>stm32f4xx_hal.c:173</code>），4 位全给抢占优先级，没有子优先级，所以 5 与 15 之间不存在同级别比较的问题。</p>
+<p>FreeRTOS 的临界区把 <code>BASEPRI</code> 写成 <code>configMAX_SYSCALL_INTERRUPT_PRIORITY</code>，即 <code>5 &#x3C;&#x3C; 4 = 0x50</code>（<code>FreeRTOSConfig.h:110、117</code>）。<code>BASEPRI</code> 屏蔽的是优先级数值大于等于 5 的中断，所以 5 到 15 全部被挡在外面，其中也包括优先级 15 的 TIM2 与 SysTick。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["任务进入临界区&#x3C;br/>BASEPRI = 0x50"] --> B{"中断优先级数值"}
+    B -- "小于 5，例如 0 至 4" --> C["不受影响，可以打断任务"]
+    B -- "大于等于 5，例如 CAN 的 5" --> D["被屏蔽，等临界区结束后再进"]
+    D --> E["优先级 15 的 TIM2 更新中断&#x3C;br/>同样被屏蔽"]
+    E --> F["屏蔽期间发生的 UEV 只保留一个挂起请求"]
+    F --> G["临界区结束后执行一次 HAL_IncTick"]
+    G --> H["uwTick 落后于真实时间，最大约等于临界区总时长"]
+    C --> I["这一档中断里不能调用 FreeRTOS API"]</pre></div>
+<p>由此得到两条使用规则：</p>
+<ol>
+<li><code>HAL_TIM_PeriodElapsedCallback()</code> 里只做累加，不调用任何 FreeRTOS API。优先级 15 的中断禁止使用 <code>...FromISR()</code> 系列，否则会触发 <code>configASSERT</code>。</li>
+<li>临界区越长，<code>uwTick</code> 落后越多。因为挂起的中断只会执行一次，屏蔽期间发生 n 次 UEV，最终只累加 1 次，误差上界是临界区时长乘以 1 kHz。</li>
+</ol>
+<h2 id="6-任务里的时间怎么用">6. 任务里的时间怎么用</h2>
+<p>两块板对 <code>HAL_GetTick()</code> 的使用分两类，都是读时间戳而不是等待：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>用法</th><th>说明</th></tr></thead><tbody><tr><td><code>Task/Src/FireTask.cpp:86-186</code></td><td>记录 <code>motor_1_last_ok_time</code>、<code>angle_reach_start_time</code> 等变量，用差值判断超时</td><td>状态机的时间判据</td></tr><tr><td><code>Task/Src/ControlCenterTask.cpp:90-97</code></td><td>自瞄模式计时 4000 ms，以及按 <code>HAL_GetTick()</code> 生成正弦测试目标</td><td>演示与调试逻辑</td></tr><tr><td><code>Task/Src/UsbConnectTask.cpp:139</code></td><td>记录 <code>last_receive_time</code></td><td>判断视觉小电脑是否掉线</td></tr><tr><td><code>BMI088/Src/BMI088.cpp:300-303</code></td><td>初始化里等待 SPI 数据的超时</td><td>调用时调度器尚未运行</td></tr></tbody></table>
+<p>这些写法都安全，因为 <code>uwTick</code> 由优先级 15 的中断维护，读它不需要关中断，也不会与调度冲突。要避免的是在任务里用 <code>HAL_Delay()</code>：它是忙等，等待期间任务一直占着 CPU，且不会让出给同优先级任务。</p>
+<p>本工程实际的 <code>HAL_Delay()</code> 调用点只有两处，都不在任务的循环里：</p>
+<ul>
+<li><code>USB_DEVICE/Target/usbd_conf.c:646-649</code> 的 <code>USBD_LL_Delay()</code> 内部调用 <code>HAL_Delay()</code>，但这个函数目前没有任何调用点，<code>USB_DEVICE/Target/usbd_conf.h:106</code> 的 <code>USBD_Delay</code> 宏也没有被使用；</li>
+<li>底盘板 <code>Core/Src/main.c:127</code> 的 <code>HAL_Delay(50)</code>，位置在 <code>osKernelStart()</code> 之前，属于合法的忙等。</li>
+</ul>
+<p>云台板 <code>Core/Src/main.c</code> 没有这一行，两个 <code>main.c</code> 在 USB 初始化与裁判系统上还有别的差异。</p>
+<h2 id="7-32-位毫秒计数的回绕">7. 32 位毫秒计数的回绕</h2>
+<p><code>uwTick</code> 是 32 位，1 ms 一格，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>32</mn></msup></mrow><annotation encoding="application/x-tex">2^{32}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">32</span></span></span></span></span></span></span></span></span></span></span></span> 毫秒约 49.71 天回绕一次。判断超时的正确写法是减法：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> ((</span><span style="color:#6F42C1">HAL_GetTick</span><span style="color:#24292E">() </span><span style="color:#D73A49">-</span><span style="color:#24292E"> start_time) </span><span style="color:#D73A49">></span><span style="color:#24292E"> ANGLE_REACH_TIMEOUT)</span></span></code></pre>
+<p>无符号减法在回绕处仍然正确。反过来写成 <code>HAL_GetTick() > start_time + TIMEOUT</code> 会在回绕附近出错，这一点在 <code>Task/Src/FireTask.cpp:148</code> 这类判据里已经被写成了差值形式。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<p>（1）在 <code>HAL_TIM_PeriodElapsedCallback()</code> 里调用 <code>osSignalSet()</code> 之类的 FreeRTOS API。优先级 15 的中断优先级数值大于 5，属于”不能调用内核 API”的一档。</p>
+<p>（2）把 <code>uwTick</code> 当调度节拍。它由 TIM2 维护，与 <code>xTickCount</code> 相互独立，长时间运行会累积不同的误差。</p>
+<p>（3）在任务里用 <code>HAL_Delay()</code>。虽然 <code>uwTick</code> 会被 TIM2 继续累加，延时不会死锁，但等待期间不让出 CPU，等于把任务变成忙等。</p>
+<p>（4）以为 <code>HAL_InitTick()</code> 只调用一次。第二次由 <code>HAL_RCC_ClockConfig()</code> 触发，删掉或被覆盖会留下按 HSI 算出的旧分频。</p>
+<p>（5）改 <code>TICK_INT_PRIORITY</code> 时只看 HAL。这个宏同时决定 TIM2 中断的优先级，改成小于 5 的值会让时基中断绕过 FreeRTOS 的临界区保护，改动前要先确认 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code>。</p>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>uwTick</code> 由 TIM2 更新中断累加，累加动作在 <code>HAL_TIM_PeriodElapsedCallback()</code> 里按 <code>Instance == TIM2</code> 判断后调用 <code>HAL_IncTick()</code>。</li>
+<li><code>HAL_InitTick()</code> 被调用两次，最终生效的是 <code>HAL_RCC_ClockConfig()</code> 末尾按 168 MHz 主频算出的 PSC=83。</li>
+<li>用 TIM2 而非 SysTick 的原因只有一条：<code>SysTick_Handler</code> 已经被 FreeRTOS 的移植层占用，两者不能共用一个向量。</li>
+<li><code>uwTick</code> 与 <code>xTickCount</code> 都是 1 ms 一格，但彼此独立，不能互相替代。</li>
+<li>优先级 5 是外设中断与 FreeRTOS API 的门槛，优先级 15 是时基与内核中断的档位；<code>BASEPRI = 0x50</code> 会把 5 到 15 全部屏蔽，屏蔽期间丢失的节拍无法补回。</li>
+<li><code>uwTick</code> 是 32 位毫秒计数，约 49.71 天回绕，判断超时用减法。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选</th><th>代价与收益</th></tr></thead><tbody><tr><td>时基中断源</td><td>TIM2 更新中断</td><td>多占一个定时器与中断向量，换来两套节拍完全解耦</td></tr><tr><td>时基中断优先级</td><td>15</td><td>与内核中断同档，改动简单；代价是临界区会推迟它</td></tr><tr><td>回调内的工作量</td><td>只调用 <code>HAL_IncTick()</code></td><td>中断极短，代价是任何需要周期执行的任务逻辑都得另找出口</td></tr><tr><td>任务里的等待</td><td><code>osDelay()</code></td><td>会让出 CPU，代价是 1 tick 的量化误差</td></tr><tr><td>时间戳来源</td><td><code>HAL_GetTick()</code></td><td>读一个变量，无锁无中断，代价是与调度节拍不同源</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>计算 <code>configTICK_RATE_HZ</code> 改成 500 后 SysTick 的重装值，并说明 <code>uwTick</code> 的累加速度是否跟着变。</li>
+<li>说明把 <code>TICK_INT_PRIORITY</code> 从 15 改成 5 之后，TIM2 中断与 FreeRTOS 临界区的相对关系。</li>
+<li><code>HAL_GetTick()</code> 与 <code>osKernelGetTickCount()</code> 在系统运行 10 分钟后为什么不相等，给出两个可能的原因。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>一个临界区持续 2 ms。计算这段时间内 <code>uwTick</code> 最多落后多少，并说明 <code>osDelay(10)</code> 的唤醒时刻是否也受影响。</li>
+<li><code>HAL_TIM_PeriodElapsedCallback()</code> 里加入一段 50 µs 的处理代码。评估它对 1 kHz 时基与 PWM 输出的影响（提示：考虑 TIM10 的 UEV 与中断优先级）。</li>
+<li>设计一个只用 <code>HAL_GetTick()</code> 与 <code>DWT_GetMicroseconds()</code> 的比较实验，用来测量 <code>uwTick</code> 相对真实时间的累计误差，并说明实验中需要避免哪些干扰。</li>
+</ol></div></section><section class="dfile" id="file-5" data-file="05-定时器易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-定时器易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/02-定时器与PWM/05-定时器易错点与排查.md</span></div><div class="dfile__body"><h1 id="定时器易错点与排查">定时器易错点与排查</h1>
+<p>前四章说明了时基单元、PWM、本工程的实例分配与 HAL 时基。这一章按”看现象能否定位到寄存器”的顺序列出五个易错点，每个都给出云台板或底盘板里的实际代码位置，最后给出一套排查顺序。</p>
+<h2 id="1-比较值与重装值的量纲">1. 比较值与重装值的量纲</h2>
+<p>PWM 输出的两个参数由两个寄存器分别决定：<code>ARR</code> 决定周期，<code>CCR</code> 决定高电平宽度。两者共用同一个计数器刻度，所以比较值必须落在 0 到 <code>ARR+1</code> 之间才有调制效果：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>条件</th><th>输出</th></tr></thead><tbody><tr><td><code>CCR = 0</code></td><td>恒低，占空比 0</td></tr><tr><td><code>0 &#x3C; CCR &#x3C; ARR+1</code></td><td>正常调制，占空比 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mi>C</mi><mi>R</mi><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">CCR/(ARR+1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord">/</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></td></tr><tr><td><code>CCR \ge ARR+1</code></td><td>恒高，占空比 100%</td></tr></tbody></table>
+<p>本工程的换算发生在 <code>BMI088/Src/ImuTempControl.cpp:18-24</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">uint32_t</span><span style="color:#24292E"> duty </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> temp_pid_calculate</span><span style="color:#24292E">(targetTemp, currentTemp, dt);</span></span>
+<span class="line"><span style="color:#D73A49">auto</span><span style="color:#24292E"> compare </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> static_cast&#x3C;uint32_t></span><span style="color:#24292E">(htim_->Init.Period </span><span style="color:#D73A49">*</span><span style="color:#24292E"> duty);</span></span>
+<span class="line"><span style="color:#6F42C1">__HAL_TIM_SET_COMPARE</span><span style="color:#24292E">(htim_, channel_, compare);</span></span></code></pre>
+<p><code>duty</code> 是温度环的输出，被限幅在 0 到 4500（<code>PID/Src/temp_pid.cpp:41</code> 的第四个构造参数是输出限幅）。<code>htim_->Init.Period</code> 是 4999，于是：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mi>o</mi><mi>m</mi><mi>p</mi><mi>a</mi><mi>r</mi><mi>e</mi><mo>=</mo><mn>4999</mn><mo>×</mo><mi>d</mi><mi>u</mi><mi>t</mi><mi>y</mi><mo separator="true">,</mo><mspace width="1em"></mspace><mi>d</mi><mi>u</mi><mi>t</mi><mi>y</mi><mo>∈</mo><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>4500</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">compare = 4999 \times duty,\quad duty \in [0, 4500]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">co</span><span class="mord mathnormal">m</span><span class="mord mathnormal">p</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4999</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">u</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">u</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">4500</span><span class="mclose">]</span></span></span></span></p>
+<p>只要 <code>duty</code> 大于 0，<code>compare</code> 至少是 4999，已经不小于 <code>ARR</code>，输出饱和成恒高。加热电路实际按通断方式工作，温度环的连续输出没有转换成连续占空比。</p>
+<p>正确的换算需要两个量：满量程 <code>ARR+1 = 5000</code>，以及 <code>duty</code> 的满量程 4500。写成</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mi>C</mi><mi>R</mi><mo>=</mo><mfrac><mrow><mo stretchy="false">(</mo><mi>A</mi><mi>R</mi><mi>R</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo>×</mo><mi>d</mi><mi>u</mi><mi>t</mi><mi>y</mi></mrow><mn>4500</mn></mfrac></mrow><annotation encoding="application/x-tex">CCR = \frac{(ARR+1)\times duty}{4500}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.355em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4500</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>之后，<code>duty = 4500</code> 对应 100%，<code>duty = 2250</code> 对应 50%。</p>
+<p>还有一层是寄存器位宽。<code>__HAL_TIM_SET_COMPARE()</code> 写入的是 32 位乘积，而 TIM10 的比较寄存器只有 16 位，高 16 位不会被保留，读回的值不再随 <code>duty</code> 单调变化。在调试器里读回 <code>CCR1</code> 与写入值比对即可确认，方法见第 6 节。</p>
+<h2 id="2-影子寄存器的生效时刻">2. 影子寄存器的生效时刻</h2>
+<p>写入 <code>ARR</code> 或 <code>CCR</code> 之后，硬件未必马上按新值工作，取决于预装载开关：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>寄存器</th><th>开关</th><th>本工程</th><th>生效时刻</th></tr></thead><tbody><tr><td><code>ARR</code></td><td><code>CR1.ARPE</code></td><td>关闭（<code>tim.c:47</code>、<code>stm32f4xx_hal_timebase_tim.c:85</code>）</td><td>立即</td></tr><tr><td><code>PSC</code></td><td>无</td><td>83 与 0</td><td>下一次 UEV</td></tr><tr><td><code>CCR1</code></td><td><code>CCMR1.OC1PE</code></td><td>打开（HAL 强制置位，<code>stm32f4xx_hal_tim.c:4245</code>）</td><td>下一次 UEV</td></tr></tbody></table>
+<p>两个后果需要在代码里照顾：</p>
+<p><code>ARR</code> 立即生效意味着运行时改周期有风险。若在 CNT 已经超过新 <code>ARR</code> 的时刻写入，计数器要一直计到 16 位溢出才会归零，本周期会被异常拉长。要消除这个风险，把 <code>.ioc</code> 的 <code>TIM10.AutoReloadPreload</code> 改成 <code>TIM_AUTORELOAD_PRELOAD_ENABLE</code>，让新周期在下一个 UEV 生效。</p>
+<p><code>CCR</code> 滞后一个 UEV 意味着占空比更新有延迟上界。本工程 TIM10 的 UEV 周期是 29.76 µs，IMU 任务周期是 1 ms，所以滞后可以忽略；如果 PWM 频率降到几百赫兹，滞后就会与控制周期同量级。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant SW as 软件
+    participant PRE as 预装载寄存器
+    participant SHA as 影子寄存器
+    participant PIN as PF6
+    SW->>PRE: 写 CCR1 新值
+    Note over PRE: OC1PE = 1
+    SHA->>PIN: 本周期仍按旧的比较值输出
+    SHA->>SHA: CNT 到达 ARR 4999
+    PRE->>SHA: 新值装入影子寄存器
+    SHA->>PIN: 下个周期起高电平宽度改变
+    Note over SW,PIN: 从写入到生效最多一个 PWM 周期，即 29.76 微秒</pre></div>
+<p>初始化时的装载是另一条路径。<code>TIM_Base_SetConfig()</code> 写完 <code>ARR</code> 与 <code>PSC</code> 后置位 <code>CR1.URS</code>，再通过 <code>EGR.UG</code> 产生一次更新事件把参数装入影子寄存器（<code>stm32f4xx_hal_tim.c:6801-6818</code>）。<code>URS = 1</code> 让这次更新不置 <code>UIF</code>，所以初始化不会触发中断。</p>
+<h2 id="3-定时器时钟与-pwm-频率">3. 定时器时钟与 PWM 频率</h2>
+<p>最常见的算错来源是把总线时钟当成定时器时钟。F4 的规则是：APB 预分频系数不为 1 时，该总线上的定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span>。本工程：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>总线</th><th>PCLK</th><th>定时器时钟</th><th>挂在上面的实例</th></tr></thead><tbody><tr><td>APB1</td><td>42 MHz</td><td>84 MHz</td><td>TIM2</td></tr><tr><td>APB2</td><td>84 MHz</td><td>168 MHz</td><td>TIM10</td></tr></tbody></table>
+<p><code>.ioc</code> 里有两个字段直接给出结论：<code>RCC.APB1TimFreq_Value=84000000</code> 与 <code>RCC.APB2TimFreq_Value=168000000</code>。用总线时钟 42 MHz 去算 TIM2 会写出 PSC=41，而硬件给的计数时钟是 84 MHz 分频后的 2 MHz，更新频率从 1 kHz 变成 2 kHz；用 84 MHz 去算 TIM10 会把 33.6 kHz 算成 16.8 kHz。两种错误都能编译通过，只看代码看不出来。</p>
+<p>时钟树一旦改动，所有由总线分频得到的时间量都会跟着变。工作记录 <code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code> 里记录的那次 CAN 通信失败就是这种情况：当时按 36 MHz 的 APB1 算出 857142 Hz，而 <code>.ioc</code> 中 CAN1 与 CAN2 的 <code>Prescaler=2</code>、<code>BS1=CAN_BS1_15TQ</code>、<code>BS2=CAN_BS2_5TQ</code>、<code>CalculateBaudRate=1000000</code> 对应的是 APB1 为 42 MHz。位定时参数没变，波特率却随时钟树漂移。</p>
+<p>排查这类问题的顺序是固定的：先确认 <code>SystemClock_Config()</code> 里的 <code>PLLM/PLLN/PLLP</code> 与 <code>APB1CLKDivider/APB2CLKDivider</code>（<code>Core/Src/main.c:170-186</code>），再用 <code>.ioc</code> 的 <code>RCC.*Freq_Value</code> 交叉核对，最后才看外设自己的分频寄存器。</p>
+<h2 id="4-nvic-使能不等于有中断">4. NVIC 使能不等于有中断</h2>
+<p><code>Core/Src/tim.c:83-84</code> 使能了 <code>TIM1_UP_TIM10_IRQn</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6F42C1">HAL_NVIC_SetPriority</span><span style="color:#24292E">(TIM1_UP_TIM10_IRQn, </span><span style="color:#005CC5">5</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#6F42C1">HAL_NVIC_EnableIRQ</span><span style="color:#24292E">(TIM1_UP_TIM10_IRQn);</span></span></code></pre>
+<p>这是 CubeMX 按 <code>.ioc</code> 的 NVIC 配置生成的固定代码。让中断发生的是定时器的 <code>DIER.UIE</code>，而 <code>MX_TIM10_Init()</code> 只调用了 <code>HAL_TIM_Base_Init()</code>、<code>HAL_TIM_PWM_Init()</code> 与 <code>HAL_TIM_PWM_ConfigChannel()</code>，没有任何一处调用 <code>HAL_TIM_Base_Start_IT()</code>，所以 <code>DIER.UIE</code> 保持为 0，<code>TIM1_UP_TIM10_IRQHandler()</code> 不会被执行。</p>
+<p>判断一个定时器到底有没有中断，看两个寄存器位而不是 NVIC：<code>DIER</code> 的 <code>UIE</code>，以及 <code>CR1</code> 的 <code>CEN</code>。NVIC 只是允许请求通过。</p>
+<h2 id="5-三套时间基的混用">5. 三套时间基的混用</h2>
+<p>两块板同时存在三套独立的等待机制：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>机制</th><th>依赖</th><th>是否让出 CPU</th><th>失准条件</th></tr></thead><tbody><tr><td><code>osDelay()</code></td><td>SysTick 与调度器</td><td>是</td><td>调度器未启动时不可用；tick 被长时间屏蔽时延迟变长</td></tr><tr><td><code>HAL_Delay()</code></td><td>TIM2 与 <code>uwTick</code></td><td>否，忙等</td><td>时基中断被长时间屏蔽时误差累积</td></tr><tr><td><code>DWT_Delay_us()</code></td><td><code>CYCCNT</code></td><td>否，忙等</td><td><code>CYCCNT</code> 未使能或被调试器挂起时失效</td></tr></tbody></table>
+<p>三者的组合会出问题。<code>ImuTask</code> 是唯一用忙等维持周期的任务：初始化阶段用 <code>DWT_Delay_ms(1000)</code>（<code>Task/Src/ImuTask.cpp:37</code>），主循环末尾用 <code>DWT_Delay_ms(1)</code>（同文件第 100 行），其余任务用 <code>osDelay()</code>。把 <code>DWT_Delay_ms(1)</code> 换成 <code>HAL_Delay(1)</code> 不会让这个任务变得友善：等待源从 <code>CYCCNT</code> 换成 <code>uwTick</code> 之后它仍然不让出 CPU，同优先级任务的时间片照样被占。</p>
+<p>还有一处容易忽略的差异：<code>uwTick</code> 与 <code>xTickCount</code> 虽然都是 1 ms 一格，但由两个中断分别维护，优先级同为 15 且都会在 FreeRTOS 临界区里被屏蔽。长时间运行后两者的差值会累积，不能用其中一个的差值去推断另一个的周期。</p>
+<h2 id="6-排查顺序与手段">6. 排查顺序与手段</h2>
+<p>按”从寄存器到硬件”的顺序执行，每一步都能排除一半可能：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["现象：PF6 没有波形或占空比不对"] --> B["读 CR1 的 CEN 与 CCER 的 CC1E"]
+    B -- "为 0" --> C["HAL_TIM_PWM_Start 是否被调用过"]
+    B -- "为 1" --> D["读 ARR 与 PSC"]
+    D --> E{"与预期一致吗"}
+    E -- "否" --> F["核对 SystemClock_Config 与 ioc 的 RCC 字段"]
+    E -- "是" --> G["读 CCR1 与写入值比对"]
+    G -- "不一致" --> H["确认 16 位截断或写入时机"]
+    G -- "一致" --> I["读 CCMR1 的 OC1M 与 OC1PE"]
+    I --> J{"是 PWM1 且 OC1PE 为 1 吗"}
+    J -- "否" --> K["核对 HAL_TIM_PWM_ConfigChannel 的参数"]
+    J -- "是" --> L["读 CNT 是否在变化"]
+    L -- "不变" --> M["检查 CEN 与定时器时钟使能 RCC.APBxENR"]
+    L -- "在变" --> N["用 DWT 测周期并与公式对比"]
+    N --> O["周期正确则问题在引脚复用或外部电路"]</pre></div>
+<p>寄存器检查用 HAL 的宏最省事（<code>Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:1274-1411</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>宏</th><th>读取或写入</th><th>用途</th></tr></thead><tbody><tr><td><code>__HAL_TIM_GET_COUNTER()</code></td><td><code>CNT</code></td><td>判断计数器是否在跑</td></tr><tr><td><code>__HAL_TIM_GET_AUTORELOAD()</code></td><td><code>ARR</code></td><td>核对周期</td></tr><tr><td><code>__HAL_TIM_SET_PRESCALER()</code></td><td><code>PSC</code></td><td>运行时改分频，注意下一个 UEV 生效</td></tr><tr><td><code>__HAL_TIM_GET_COMPARE()</code></td><td><code>CCR1</code></td><td>验证写入是否被截断</td></tr></tbody></table>
+<p>通道状态也能帮忙。HAL 为每个通道维护一个软件状态，<code>HAL_TIM_PWM_Start()</code> 要求它处于 READY：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> READY : HAL_TIM_PWM_Init 置位全部通道
+    READY --> BUSY : HAL_TIM_PWM_Start 成功，CC1E 与 CEN 置位
+    BUSY --> READY : HAL_TIM_PWM_Stop 清除 CC1E 与 CEN
+    READY --> READY : HAL_TIM_PWM_Start 返回 HAL_ERROR
+    note right of BUSY
+        TIM_CHANNEL_STATE_BUSY
+        重复调用 Start 不会报错但也不生效
+    end note</pre></div>
+<p>状态机对应 <code>stm32f4xx_hal_tim.c</code> 的 1462-1468 行与 <code>HAL_TIM_PWM_Stop()</code> 的结尾。要重新启动一个通道，先 <code>Stop()</code> 把它退回 READY。</p>
+<h2 id="7-小结">7. 小结</h2>
+<h3 id="五个易错点速查">五个易错点速查</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>根因</th><th>现象</th><th>定位手段</th></tr></thead><tbody><tr><td>量纲不一致</td><td>比较值没有除以满量程</td><td>占空比饱和在 0 或 100%</td><td>比对 <code>CCR1</code> 与 <code>ARR</code></td></tr><tr><td>影子寄存器</td><td>预装载开关决定生效时刻</td><td>更新有延迟；改 <code>ARR</code> 出现异常周期</td><td>读 <code>CR1.ARPE</code> 与 <code>CCMR1.OC1PE</code></td></tr><tr><td>时钟算错</td><td>定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span></td><td>频率差一倍或出现非整数分频</td><td>核对 <code>SystemClock_Config()</code> 与 <code>RCC.*TimFreq_Value</code></td></tr><tr><td>NVIC 使能不等于有中断</td><td><code>DIER.UIE</code> 未置位</td><td>中断处理函数从不执行</td><td>读 <code>DIER</code> 与 <code>CR1.CEN</code></td></tr><tr><td>时间基混用</td><td>三套等待各有依赖</td><td>任务被拖慢或周期不准</td><td>搜代码里的 <code>Delay</code> 与 <code>osDelay</code></td></tr></tbody></table>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>比较值的合法区间是 0 到 <code>ARR+1</code>，本工程的换算缺少满量程除法，输出只能停在两端。</li>
+<li>预装载开关决定写入的生效时刻：<code>ARPE</code> 关时 <code>ARR</code> 立即生效，<code>OC1PE</code> 开时 <code>CCR</code> 等一个 UEV，<code>PSC</code> 永远等一个 UEV。</li>
+<li>定时器时钟是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">2\times PCLK</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mord mathnormal">L</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span>，用总线时钟算分频会得到能跑但频率错误的配置。</li>
+<li>NVIC 的 <code>EnableIRQ</code> 只允许请求通过，是否产生请求由 <code>DIER</code> 决定。</li>
+<li><code>osDelay()</code>、<code>HAL_Delay()</code>、<code>DWT_Delay_us()</code> 分别依赖 SysTick、TIM2、<code>CYCCNT</code>，任务循环里只用第一种。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程怎么选</th><th>代价与收益</th></tr></thead><tbody><tr><td>占空比换算</td><td>直接乘重装值</td><td>代码短，代价是输出只有通断两态</td></tr><tr><td><code>ARR</code> 预装载</td><td>关闭</td><td>不需要额外配置，代价是运行时改频率有异常周期风险</td></tr><tr><td>时基中断优先级</td><td>15</td><td>与内核中断一致，代价是临界区会推迟 <code>uwTick</code></td></tr><tr><td>TIM10 的 NVIC</td><td>使能但不用中断</td><td>预留了改造成中断驱动的空间，代价是读代码时容易误判</td></tr><tr><td>排查入口</td><td>先读寄存器再查代码</td><td>结论确定，代价是需要能连调试器</td></tr></tbody></table>
+<h2 id="8-练习">8. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>TIM10 的 <code>ARR = 4999</code>，写出 <code>CCR1</code> 分别为 0、2500、5000、20000 时的占空比。</li>
+<li>说明把 <code>.ioc</code> 的 <code>TIM10.AutoReloadPreload</code> 改成 ENABLE 后，运行时修改 <code>ARR</code> 的行为变化。</li>
+<li><code>DIER = 0</code> 但 <code>CR1.CEN = 1</code>，说明此时 <code>SR.UIF</code> 置位后会发生什么。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>软件写入 <code>CCR1</code> 的值是 <code>0x0157_9BCC</code>，调试器读回的是 <code>0x9BCC</code>，说明这两个数的关系，并判断此时 PF6 的占空比。</li>
+<li>给定现象”PF6 有 33.6 kHz 方波但占空比恒为 100%“，写出完整的排查步骤，并指出每一步期望的寄存器值。</li>
+<li>说明把 TIM10 改成用更新中断驱动占空比更新（每 33.6 µs 一次）在 168 MHz 的 F407 上是否可行，给出中断负载的估算。</li>
+</ol></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><span class="k">← 上一篇</span><span class="t">时钟树与GPIO</span><span class="d">STM32 与 HAL · 5 个文件</span></a><a class="next" href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/03-%E4%B8%AD%E6%96%AD%E4%B8%8EDMA/"><span class="k">下一篇 →</span><span class="t">中断与DMA</span><span class="d">STM32 与 HAL · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

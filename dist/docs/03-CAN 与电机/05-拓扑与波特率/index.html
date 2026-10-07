@@ -1,0 +1,2088 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>拓扑与波特率 · CAN 与电机 · 王宇翔</title><meta name="description" content="云台板与底盘板两条 CAN 总线的节点归属、引脚与中断配置，CAN1 如何成为两块板与三个执行器共享的一段总线，以及板间报文在两个方向上的走向"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/05-%E6%8B%93%E6%89%91%E4%B8%8E%E6%B3%A2%E7%89%B9%E7%8E%87/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="拓扑与波特率 · CAN 与电机 · 王宇翔"><meta property="og:description" content="云台板与底盘板两条 CAN 总线的节点归属、引脚与中断配置，CAN1 如何成为两块板与三个执行器共享的一段总线，以及板间报文在两个方向上的走向"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/05-%E6%8B%93%E6%89%91%E4%B8%8E%E6%B3%A2%E7%89%B9%E7%8E%87/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/">CAN 与电机</a><span class="sep" aria-hidden="true">/</span><span class="now">拓扑与波特率</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>拓扑与波特率</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>上下板 CAN 拓扑</span></a><ul class="toc__heads"><li><a href="#1-概念两条总线三段物理段" data-depth="2" data-heading-j="0">1. 概念：两条总线，三段物理段</a></li><li><a href="#2-机制一帧从任务到总线再从总线回到结构体" data-depth="2" data-heading-j="1">2. 机制：一帧从任务到总线，再从总线回到结构体</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-can1-共享段" data-depth="3" data-heading-j="3">3.1 CAN1 共享段</a></li><li><a href="#32-两条-can2" data-depth="3" data-heading-j="4">3.2 两条 CAN2</a></li><li><a href="#33-板间报文" data-depth="3" data-heading-j="5">3.3 板间报文</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="6">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="7">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="10">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>电机 ID 与帧头分配表</span></a><ul class="toc__heads"><li><a href="#1-概念id-落在哪一段帧头就是哪一个" data-depth="2" data-heading-j="0">1. 概念：ID 落在哪一段，帧头就是哪一个</a></li><li><a href="#2-机制0x1ff-的两种身份与工程编号" data-depth="2" data-heading-j="1">2. 机制：0x1FF 的两种身份与工程编号</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-云台板" data-depth="3" data-heading-j="3">3.1 云台板</a></li><li><a href="#32-底盘板" data-depth="3" data-heading-j="4">3.2 底盘板</a></li><li><a href="#33-与-项目概述md-的两处记录差异" data-depth="3" data-heading-j="5">3.3 与 项目概述.md 的两处记录差异</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="6">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="7">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="10">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>两板波特率一致性与采样点</span></a><ul class="toc__heads"><li><a href="#1-概念位时间的四段与采样点" data-depth="2" data-heading-j="0">1. 概念：位时间的四段与采样点</a></li><li><a href="#2-机制从-pclk1-到-1-mbps" data-depth="2" data-heading-j="1">2. 机制：从 PCLK1 到 1 Mbps</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-两块板的位定时与相关模式位逐字对照" data-depth="3" data-heading-j="3">3.1 两块板的位定时与相关模式位逐字对照</a></li><li><a href="#32-ioc-里保存的计算结果" data-depth="3" data-heading-j="4">3.2 ioc 里保存的计算结果</a></li><li><a href="#33-与电机规格核对" data-depth="3" data-heading-j="5">3.3 与电机规格核对</a></li><li><a href="#34-采样点-7619-的含义" data-depth="3" data-heading-j="6">3.4 采样点 76.19% 的含义</a></li><li><a href="#35-两板不一致时的判别顺序" data-depth="3" data-heading-j="7">3.5 两板不一致时的判别顺序</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="8">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="9">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="12">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>总线负载与丢帧</span></a><ul class="toc__heads"><li><a href="#1-概念一帧占多少位" data-depth="2" data-heading-j="0">1. 概念：一帧占多少位</a></li><li><a href="#2-机制帧率来自两个地方" data-depth="2" data-heading-j="1">2. 机制：帧率来自两个地方</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-can1-共享段" data-depth="3" data-heading-j="3">3.1 CAN1 共享段</a></li><li><a href="#32-can2-底盘段" data-depth="3" data-heading-j="4">3.2 CAN2 底盘段</a></li><li><a href="#33-can2-云台段" data-depth="3" data-heading-j="5">3.3 CAN2 云台段</a></li><li><a href="#34-三段对照" data-depth="3" data-heading-j="6">3.4 三段对照</a></li><li><a href="#35-仲裁次序" data-depth="3" data-heading-j="7">3.5 仲裁次序</a></li><li><a href="#36-丢帧的观察手段" data-depth="3" data-heading-j="8">3.6 丢帧的观察手段</a></li><li><a href="#37-可节流的发送点" data-depth="3" data-heading-j="9">3.7 可节流的发送点</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="10">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="11">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="12">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="13">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="14">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="15">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="16">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="17">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>调试案例与排查顺序</span></a><ul class="toc__heads"><li><a href="#1-概念三条寄存器线索" data-depth="2" data-heading-j="0">1. 概念：三条寄存器线索</a></li><li><a href="#2-机制第一次成功之后一直失败" data-depth="2" data-heading-j="1">2. 机制：第一次成功、之后一直失败</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#31-波特率偏差量" data-depth="3" data-heading-j="3">3.1 波特率偏差量</a></li><li><a href="#32-为什么-can1-与-can2-同时失效" data-depth="3" data-heading-j="4">3.2 为什么 CAN1 与 CAN2 同时失效</a></li><li><a href="#33-排查顺序" data-depth="3" data-heading-j="5">3.3 排查顺序</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="6">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="7">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="10">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">CAN 与电机</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>CAN / 拓扑 / 上下板 / 接线 / 哨兵固件 / ID 分配 / 帧头 / M3508</span></div><h1 class="docs__title">拓扑与波特率</h1><p class="docs__lead">云台板与底盘板两条 CAN 总线的节点归属、引脚与中断配置，CAN1 如何成为两块板与三个执行器共享的一段总线，以及板间报文在两个方向上的走向</p></header><section class="dfile" id="file-1" data-file="01-上下板CAN拓扑"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-上下板CAN拓扑</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/05-拓扑与波特率/01-上下板CAN拓扑.md</span></div><div class="dfile__body"><h1 id="上下板-can-拓扑">上下板 CAN 拓扑</h1>
+<p>哨兵的主控由两块 STM32F407 板组成：云台板 <code>2026OmniSentryGimbal</code> 与底盘板 <code>2026OmniSentryChassis</code>。两块板各有一路 CAN1 与一路 CAN2，共四个 bxCAN 控制器，物理上却只有三段总线。云台板 CAN1 与底盘板 CAN1 用导线连成一段，yaw 电机、拨弹盘电机与 pitch 电机也挂在这一段上；每块板的 CAN2 各自独立，只带自己一侧的电机。本文给出每段的节点清单、引脚与中断配置，以及帧在两块板之间的走向。</p>
+<blockquote>
+<p>云台板源码根目录 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。下文相对路径都相对于这两个根目录。</p>
+</blockquote>
+<h2 id="1-概念两条总线三段物理段">1. 概念：两条总线，三段物理段</h2>
+<p>两块板的 CAN1 引脚都配置在 PD0 与 PD1，复用功能 AF9；CAN2 引脚都配置在 PB5 与 PB6（云台板 <code>Core/Src/can.c:112-122</code>、<code>:145-155</code>，底盘板同名文件同段行号）。引脚固定之后，拓扑由接线决定，不由软件决定。</p>
+<p>三段总线的划分：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>物理段</th><th>参与的板</th><th>挂载的执行器</th><th>是否共享</th></tr></thead><tbody><tr><td>CAN1</td><td>云台板与底盘板</td><td>yaw、拨弹盘、pitch</td><td>是，两块板与三个执行器同段</td></tr><tr><td>CAN2 云台段</td><td>云台板</td><td>两个摩擦轮</td><td>否</td></tr><tr><td>CAN2 底盘段</td><td>底盘板</td><td>四个轮子</td><td>否</td></tr></tbody></table>
+<p>共享带来的直接后果：CAN1 上的标识符由全部参与者共同使用，负载率也要按整段核算。两条 CAN2 之间没有任何电气连接，同一个标识符在两段上各用一次不会冲突。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TB
+  subgraph SEG1["CAN1 共享段 1 Mbps"]
+    GIM["云台板 CAN1&#x3C;br/>PD0/PD1"]
+    CHA["底盘板 CAN1&#x3C;br/>PD0/PD1"]
+    YAW["yaw GM6020&#x3C;br/>组内 ID1"]
+    FEED["拨弹盘 M3508&#x3C;br/>ID6"]
+    PIT["pitch LK&#x3C;br/>ID1"]
+    GIM --- CHA
+  end
+  subgraph SEG2["CAN2 云台段 1 Mbps"]
+    GIM2["云台板 CAN2&#x3C;br/>PB5/PB6"]
+    FR["摩擦轮右 M3508&#x3C;br/>ID1"]
+    FL["摩擦轮左 M3508&#x3C;br/>ID2"]
+    GIM2 --- FR
+    GIM2 --- FL
+  end
+  subgraph SEG3["CAN2 底盘段 1 Mbps"]
+    CHA2["底盘板 CAN2&#x3C;br/>PB5/PB6"]
+    W1["右前 M3508&#x3C;br/>ID1"]
+    W2["左前 M3508&#x3C;br/>ID2"]
+    W3["左后 M3508&#x3C;br/>ID3"]
+    W4["右后 M3508&#x3C;br/>ID4"]
+    CHA2 --- W1
+    CHA2 --- W2
+    CHA2 --- W3
+    CHA2 --- W4
+  end</pre></div>
+<h2 id="2-机制一帧从任务到总线再从总线回到结构体">2. 机制：一帧从任务到总线，再从总线回到结构体</h2>
+<p>发送侧的函数按总线分成两组，<code>BSP_CAN1_*</code> 一组走向 <code>hcan1</code>，<code>BSP_CAN2_*</code> 一组走向 <code>hcan2</code>。两组函数的帧头与数据填充写法相同，最后一步都调用 <code>HAL_CAN_AddTxMessage</code>，区别只在传入的句柄（云台板 <code>BSP/Src/bsp_can.cpp:112</code> 与 <code>:164</code>，底盘板同文件 <code>:107</code> 与 <code>:159</code>）。</p>
+<p>接收侧的入口是 FIFO0 中断，回调函数用 <code>hcan->Instance</code> 区分两条总线（云台板 <code>BSP/Src/bsp_can.cpp:595</code> 与 <code>:617</code>，底盘板 <code>:588</code> 与 <code>:624</code>），再按 <code>RxHeader.StdId</code> 分发到各个电机结构体。中断优先级两块板都取 5（云台板 <code>Core/Src/can.c:125-128</code>、<code>:158-161</code>，底盘板同段行号），HAL 时基 TIM2 的中断优先级取 15（<code>Core/Inc/stm32f4xx_hal_conf.h:151</code>），FreeRTOS 的 PendSV 取 15（<code>Core/Inc/FreeRTOSConfig.h:104</code> 与 <code>:114</code>）。数值越小优先级越高，因此 CAN 接收中断可以打断时基中断与任务切换。</p>
+<p>各任务的发送节奏由 <code>osDelay</code> 决定，FreeRTOS 的节拍为 1000 Hz（<code>Core/Inc/FreeRTOSConfig.h:64</code>），所以延时实参的单位是毫秒：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>任务</th><th>周期</th><th>发出内容</th><th>源码</th></tr></thead><tbody><tr><td>云台板 <code>StartControlCenterTask</code></td><td>5 ms</td><td>0x200、0x1FF、0x141、0x301、0x302</td><td><code>Task/Src/ControlCenterTask.cpp:132-137</code></td></tr><tr><td>云台板 <code>StartGimbalTask</code></td><td>1 ms</td><td>0x141 读状态2</td><td><code>Task/Src/GimbalTask.cpp:87</code>、<code>:104</code></td></tr><tr><td>底盘板 <code>StartControlCenterTask</code></td><td>2 ms</td><td>0x200、0x303、0x309</td><td><code>Task/Src/ControlCenterTask.cpp:150-154</code></td></tr></tbody></table>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-can1-共享段">3.1 CAN1 共享段</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>节点</th><th>发出的帧</th><th>帧头与方向</th><th>周期</th><th>源码</th></tr></thead><tbody><tr><td>云台板</td><td>yaw 与拨弹盘控制</td><td>0x1FF 下行</td><td>5 ms</td><td>云台板 <code>ControlCenterTask.cpp:133</code></td></tr><tr><td>云台板</td><td>LK pitch 转矩</td><td>0x141 下行</td><td>5 ms</td><td><code>:134</code></td></tr><tr><td>云台板</td><td>LK 读状态2</td><td>0x141 下行</td><td>1 ms</td><td>云台板 <code>GimbalTask.cpp:87</code></td></tr><tr><td>云台板</td><td>遥控器数据</td><td>0x301 下行</td><td>5 ms</td><td><code>ControlCenterTask.cpp:135</code></td></tr><tr><td>云台板</td><td>yaw 角度</td><td>0x302 下行</td><td>5 ms</td><td><code>:136</code></td></tr><tr><td>底盘板</td><td>累计弹量与弹速</td><td>0x303 上行</td><td>2 ms</td><td>底盘板 <code>ControlCenterTask.cpp:152</code></td></tr><tr><td>底盘板</td><td>热量与底盘 wz</td><td>0x309 上行</td><td>2 ms</td><td><code>:153</code></td></tr><tr><td>yaw 电机</td><td>转子反馈</td><td>0x205 上行</td><td>规格 1 ms</td><td>云台板 <code>bsp_can.cpp:631</code></td></tr><tr><td>拨弹盘电机</td><td>转子反馈</td><td>0x206 上行</td><td>规格 1 ms</td><td><code>:620</code></td></tr><tr><td>pitch 电机</td><td>状态反馈</td><td>0x181 上行</td><td>每条命令一帧</td><td><code>:643</code></td></tr></tbody></table>
+<p>两块板都解析 0x205：云台板把它写入 <code>motor_5</code>（<code>bsp_can.cpp:631-640</code>），底盘板写入 <code>yaw_motor_5</code>（<code>bsp_can.cpp:629-638</code>），后者用于底盘跟随的转角换算（底盘板 <code>ControlCenterTask.cpp:100-101</code>）。同一帧被两个节点各自接收是共享总线的正常行为。</p>
+<h3 id="32-两条-can2">3.2 两条 CAN2</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>段落</th><th>执行器</th><th>控制帧头与槽位</th><th>反馈帧头</th><th>源码</th></tr></thead><tbody><tr><td>云台段</td><td>摩擦轮右 ID1</td><td>0x200 槽位0</td><td>0x201</td><td>云台板 <code>bsp_can.cpp:599-606</code></td></tr><tr><td>云台段</td><td>摩擦轮左 ID2</td><td>0x200 槽位1</td><td>0x202</td><td><code>:607-613</code></td></tr><tr><td>底盘段</td><td>右前 ID1</td><td>0x200 槽位0</td><td>0x201</td><td>底盘板 <code>bsp_can.cpp:592-599</code></td></tr><tr><td>底盘段</td><td>左前 ID2</td><td>0x200 槽位1</td><td>0x202</td><td><code>:600-606</code></td></tr><tr><td>底盘段</td><td>左后 ID3</td><td>0x200 槽位2</td><td>0x203</td><td><code>:607-613</code></td></tr><tr><td>底盘段</td><td>右后 ID4</td><td>0x200 槽位3</td><td>0x204</td><td><code>:614-620</code></td></tr></tbody></table>
+<p>云台段两个摩擦轮的槽位分配见云台板 <code>ControlCenterTask.cpp:132</code>，底盘段四个轮子的顺序见底盘板 <code>ControlCenterTask.cpp:80-83</code> 的注释与 <code>:150</code> 的调用。</p>
+<h3 id="33-板间报文">3.3 板间报文</h3>
+<p>板间通信复用 CAN1，共四条在用的报文与两条只有接收分支的报文：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧</th><th>方向</th><th>载荷</th><th>发送点</th><th>接收点</th></tr></thead><tbody><tr><td>0x301</td><td>云台板到底盘板</td><td>X、Y、Z 通道与 s1</td><td><code>ControlCenterTask.cpp:135</code></td><td>底盘板 <code>bsp_can.cpp:640-645</code></td></tr><tr><td>0x302</td><td>云台板到底盘板</td><td>yaw 角度，1 个 float</td><td><code>:136</code></td><td>底盘板 <code>:646-664</code></td></tr><tr><td>0x303</td><td>底盘板到云台板</td><td>累计弹量与弹速</td><td>底盘板 <code>ControlCenterTask.cpp:152</code></td><td>云台板 <code>bsp_can.cpp:675-683</code></td></tr><tr><td>0x309</td><td>底盘板到云台板</td><td>17 mm 热量与底盘 wz</td><td><code>:153</code></td><td>云台板 <code>:685-692</code></td></tr><tr><td>0x401</td><td>无发送点</td><td>底盘 IMU 三轴角度</td><td>两棵树都没有发送函数</td><td>云台板 <code>:694-705</code>、底盘板 <code>:668-679</code></td></tr><tr><td>0x501</td><td>无发送点</td><td>底盘旋转量</td><td>两棵树都没有发送函数</td><td>云台板 <code>:707-710</code>、底盘板 <code>:681-684</code></td></tr></tbody></table>
+<p>0x309 携带的底盘 wz 回到云台板后被用作 yaw 电流的前馈（云台板 <code>ControlCenterTask.cpp:131</code>），这是两板控制闭环之间唯一的一处前馈通道。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant GT as 云台板 ControlCenterTask 5 ms
+  participant BUS as CAN1 共享段
+  participant CB as 底盘板 RX 中断 优先级 5
+  participant CH as 底盘板 ControlCenterTask 2 ms
+  participant GB as 云台板 RX 中断 优先级 5
+  GT->>BUS: 0x301 三通道与 s1
+  GT->>BUS: 0x302 yaw 角度 float
+  GT->>BUS: 0x1FF yaw 与拨弹盘指令
+  GT->>BUS: 0x141 LK 转矩
+  BUS->>CB: 0x301 与 0x302
+  CB->>CB: 写 dbus 与 gimbal_yaw_angle
+  CH->>BUS: 0x303 累计弹量与弹速
+  CH->>BUS: 0x309 热量与 chassis_wz
+  BUS->>GB: 0x303 与 0x309
+  GB->>GB: 写 TotalAmmoShooted 与 control_target.chassis_wz</pre></div>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为两块板的 CAN2 也互连</td><td>按共享总线去规划两条 CAN2 的标识符，白做冲突规避</td><td>两块板各有独立收发器，<code>can.c</code> 中 CAN2 只配 PB5/PB6</td></tr><tr><td>2</td><td>认为 CAN1 上只有本板发出的帧</td><td>负载率与冲突分析只算一侧，结果偏低</td><td>接收回调里出现对端板的帧，如底盘板解析 0x205 与 0x301</td></tr><tr><td>3</td><td>按 <code>项目概述.md</code> 的接线文字判断总线</td><td>接线的描述与源码的函数句柄可能不一致</td><td>以 <code>bsp_can</code> 各函数末尾传入的句柄为准，见第 2 节</td></tr><tr><td>4</td><td>把 0x401 与 0x501 当成在用报文</td><td>排查时去追一条没有发送点的帧</td><td>两棵树的发送函数清单里没有这两个帧头</td></tr><tr><td>5</td><td>忽略 CAN 中断优先级与任务优先级的差别</td><td>以为回调会被任务调度延迟很久</td><td>回调优先级 5，高于 TIM2 与 PendSV 的 15</td></tr><tr><td>6</td><td>把 1 ms 的 <code>GimbalTask</code> 循环当成只有 PID 计算</td><td>漏掉它在 CAN1 上产生的 0x141 读状态2 帧</td><td><code>GimbalTask.cpp:87</code> 在循环体内，<code>:104</code> 是 <code>osDelay(1)</code></td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>四个 bxCAN 控制器对应三段总线：CAN1 是两块板与 yaw、拨弹盘、pitch 共享的一段；两条 CAN2 各自独立。</li>
+<li>CAN1 与 CAN2 的引脚固定为 PD0/PD1 与 PB5/PB6，AF9，两块板相同。</li>
+<li>CAN 接收中断优先级为 5，HAL 时基 TIM2 与 PendSV 为 15，接收中断可以抢占时基与任务切换。</li>
+<li>板间在用报文四条：0x301、0x302 由云台板发往底盘板，0x303、0x309 反向。0x401 与 0x501 只有接收分支。</li>
+<li>0x205 由 yaw 电机发出，两块板都在解析。</li>
+<li>任务周期为底盘板 2 ms、云台板控制 5 ms、云台 PID 1 ms，它们决定 CAN1 与各段 CAN2 上的命令帧率。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>代价与收益</th></tr></thead><tbody><tr><td>板间连接</td><td>用 CAN1 把两块板连成一段</td><td>省一对收发器与线束；代价是两块板共享标识符空间与带宽</td></tr><tr><td>板间数据</td><td>复用 CAN1 而不是另开一路串口</td><td>与电机帧共用链路，接线简单；代价是板间流量计入 CAN1 负载</td></tr><tr><td>参数同步</td><td>板间传 yaw 角度与底盘 wz</td><td>底盘跟随与 yaw 前馈成立；代价是两块板的时序被 CAN1 时延耦合</td></tr><tr><td>未用帧头</td><td>保留 0x401 与 0x501 的接收分支</td><td>便于以后再接；代价是阅读时容易误判为在用路径</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 CAN1 共享段上的全部节点，并说明底盘板为什么能读到 yaw 电机的反馈帧。</li>
+<li>两块板的 CAN2 上都有 ID1 与 ID2 的 M3508，说明这不构成标识符冲突的原因。</li>
+<li>查 <code>Core/Src/can.c</code> 的 <code>HAL_CAN_MspInit</code>，写出 CAN1 与 CAN2 的 GPIO 端口、引脚号与复用编号。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>0x301 只装了 X、Y、Z 三个通道与 s1，底盘板的遥控器通道 ch[0] 与 ch[1] 从哪来？给出结论与源码依据。</li>
+<li>若在 CAN1 共享段上新增一台 M3508，它的控制帧头应当选 0x200、0x1FF 还是 0x2FF？说明理由并列出该段上已经被占用的反馈标识符。</li>
+<li>设计一张上电自检表：只靠两块板各自的接收回调计数，判断 CAN1 的哪一段接线（云台板到总线、底盘板到总线）断开。写出用到的帧与判据。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>CAN1 与 CAN2 引脚（:112-122、:145-155）、中断优先级（:125-128、:158-161）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>发送函数按句柄分组（:89-239）、接收回调（:590-715）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>云台板发送点（:132-137）、wz 前馈（:131）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>LK 读状态2 的 1 ms 循环（:87、:104）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td>节拍 1000 Hz（:64）、PendSV 优先级（:104、:114）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h</code></td><td>时基中断优先级 15（:151）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>底盘板发送函数（:83-211）、接收回调（:583-689）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>底盘板发送点（:150-154）、轮序注释（:80-83）、跟随换算（:100-101）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/项目概述.md</code></td><td>接线与帧头的文字描述（:11-14）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-电机ID与帧头分配表"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-电机ID与帧头分配表</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/05-拓扑与波特率/02-电机ID与帧头分配表.md</span></div><div class="dfile__body"><h1 id="电机-id-与帧头分配表">电机 ID 与帧头分配表</h1>
+<p>帧头由电机的型号与 ID 共同决定，与板无关。两块板用的是同一批 DJI 电机与 LK 电机，帧头规则相同，区别只在哪台电机挂在哪条总线上。本文先给出三套编号规则，再落到本工程八台电机的实际分配，最后标出与 <code>项目概述.md</code> 文字描述不一致的地方。</p>
+<blockquote>
+<p>云台板源码根目录 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。下文行号分别取自这两个根目录。</p>
+</blockquote>
+<h2 id="1-概念id-落在哪一段帧头就是哪一个">1. 概念：ID 落在哪一段，帧头就是哪一个</h2>
+<p>DJI 两家电机的控制指令都是一帧带四台电机，数据区 8 字节切成 4 个有符号 16 位槽位，因此一条下行帧只覆盖 ID 连续的四台。段与帧头的对应：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>电机系列</th><th>ID 1 到 4 的控制帧头</th><th>ID 5 到 8 的控制帧头</th><th>反馈帧头</th><th>槽位量纲</th></tr></thead><tbody><tr><td>M3508</td><td>0x200</td><td>0x1FF</td><td>0x200 + ID</td><td>转矩电流，范围 ±16384</td></tr><tr><td>GM6020</td><td>0x1FF</td><td>0x2FF</td><td>0x204 + ID</td><td>电压，范围 ±30000</td></tr><tr><td>LK</td><td>0x140 + ID</td><td>同左</td><td>0x180 + ID</td><td>由数据区首字节的命令字区分</td></tr></tbody></table>
+<p>LK 电机与两家的差别在于下行帧的粒度：每个 ID 独占一个帧头，一帧只控制一台电机。上行方向则都是每台电机各发各的。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  subgraph DJI["DJI 电机"]
+    ID14["ID 1 到 4"] --> H1["控制帧头 0x200&#x3C;br/>M3508 电流"]
+    ID14 --> H2["控制帧头 0x1FF&#x3C;br/>GM6020 电压"]
+    ID58["ID 5 到 8"] --> H3["控制帧头 0x1FF&#x3C;br/>M3508 电流"]
+    ID58 --> H4["控制帧头 0x2FF&#x3C;br/>GM6020 电压"]
+    H2 --> FB["反馈帧头 0x204 加 ID&#x3C;br/>落在 0x205 到 0x20B"]
+    H4 --> FB
+    H1 --> FB2["反馈帧头 0x200 加 ID&#x3C;br/>落在 0x201 到 0x208"]
+    H3 --> FB2
+  end
+  subgraph LKM["LK 电机"]
+    LID["ID 1"] --> L1["控制帧头 0x141&#x3C;br/>命令字 0xA1 0xA2 0xA7 0xA8 0x9C"]
+    LID --> L2["反馈帧头 0x181"]
+  end</pre></div>
+<p>两家的反馈区间在 0x205 到 0x208 完全重合，只看反馈帧头判不出型号。</p>
+<h2 id="2-机制0x1ff-的两种身份与工程编号">2. 机制：0x1FF 的两种身份与工程编号</h2>
+<p>0x1FF 是本工程最容易读错的一帧。同一个帧头，对 M3508 是 ID 5 到 8 的电流指令，对 GM6020 是 ID 1 到 4 的电压指令。判断某台电机到底属于哪种解释，要看它响应哪条下行帧、以及它的反馈帧头是否自洽。</p>
+<p>本工程的软件变量名是另一套编号：<code>motor_1</code> 到 <code>motor_8</code> 与 <code>LK_motor_1</code>。对 GM6020，工程编号 5 到 8 对应组内 ID 1 到 4，两者相差 4；对 M3508，工程编号与物理 ID 一致。这层换算是纯软件约定，不改变总线上的字节。</p>
+<p>以云台板一次控制周期为例，槽位与标识符的往返关系：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant T as 云台板 ControlCenterTask 5 ms
+  participant B as CAN1 共享段
+  participant Y as yaw GM6020 ID1
+  participant F as 拨弹盘 M3508 ID6
+  participant I as CAN1_RX0 中断 优先级 5
+  T->>B: 0x1FF 槽位0 等于 yaw 电流 槽位1 等于拨弹盘电流
+  B->>Y: 槽位0 落入组内 ID1 的电压指令
+  B->>F: 槽位1 落入 ID6 的电流指令
+  Y->>B: 反馈 0x205
+  F->>B: 反馈 0x206
+  B->>I: FIFO0 收到两帧
+  I->>I: 按 StdId 分发
+  Note over I: 0x205 写 motor_5 0x206 写 motor_6</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-云台板">3.1 云台板</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>电机</th><th>型号</th><th>物理 ID</th><th>总线</th><th>控制帧头与槽位</th><th>反馈帧头</th><th>解析变量</th><th>源码</th></tr></thead><tbody><tr><td>摩擦轮右</td><td>M3508</td><td>1</td><td>CAN2</td><td>0x200 槽位0</td><td>0x201</td><td><code>motor_1</code></td><td>云台板 <code>bsp_can.cpp:599-606</code></td></tr><tr><td>摩擦轮左</td><td>M3508</td><td>2</td><td>CAN2</td><td>0x200 槽位1</td><td>0x202</td><td><code>motor_2</code></td><td><code>:607-613</code></td></tr><tr><td>yaw</td><td>GM6020</td><td>1</td><td>CAN1</td><td>0x1FF 槽位0</td><td>0x205</td><td><code>motor_5</code></td><td><code>:631-640</code></td></tr><tr><td>拨弹盘</td><td>M3508</td><td>6</td><td>CAN1</td><td>0x1FF 槽位1</td><td>0x206</td><td><code>motor_6</code></td><td><code>:620-629</code></td></tr><tr><td>pitch</td><td>LK</td><td>1</td><td>CAN1</td><td>0x141</td><td>0x181</td><td><code>LK_motor_1</code></td><td><code>:643-673</code></td></tr></tbody></table>
+<p>控制侧的发送点：摩擦轮走 <code>bsp_can2_djimotorcmd</code>（云台板 <code>ControlCenterTask.cpp:132</code>），yaw 与拨弹盘走 <code>bsp_can1_djimotorcmdfive2eight</code>（<code>:133</code>），pitch 走 <code>bsp_can1_lkmotortorquecmd</code>（<code>:134</code>）。三行在同一个 5 ms 循环里。</p>
+<h3 id="32-底盘板">3.2 底盘板</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>电机</th><th>型号</th><th>物理 ID</th><th>总线</th><th>控制帧头与槽位</th><th>反馈帧头</th><th>解析变量</th><th>源码</th></tr></thead><tbody><tr><td>右前轮</td><td>M3508</td><td>1</td><td>CAN2</td><td>0x200 槽位0</td><td>0x201</td><td><code>chassis_motor_1</code></td><td>底盘板 <code>bsp_can.cpp:592-599</code></td></tr><tr><td>左前轮</td><td>M3508</td><td>2</td><td>CAN2</td><td>0x200 槽位1</td><td>0x202</td><td><code>chassis_motor_2</code></td><td><code>:600-606</code></td></tr><tr><td>左后轮</td><td>M3508</td><td>3</td><td>CAN2</td><td>0x200 槽位2</td><td>0x203</td><td><code>chassis_motor_3</code></td><td><code>:607-613</code></td></tr><tr><td>右后轮</td><td>M3508</td><td>4</td><td>CAN2</td><td>0x200 槽位3</td><td>0x204</td><td><code>chassis_motor_4</code></td><td><code>:614-620</code></td></tr></tbody></table>
+<p>四个轮子共用一条 0x200，发送点为 <code>bsp_can2_djimotorcmd</code>（底盘板 <code>ControlCenterTask.cpp:150</code>），周期 2 ms。轮序为右前 1、左前 2、左后 3、右后 4，见 <code>项目概述.md:13</code> 与底盘板 <code>ControlCenterTask.cpp:80-83</code> 的注释。</p>
+<p>底盘板还解析 0x205，写入 <code>yaw_motor_5</code>（底盘板 <code>bsp_can.cpp:629-638</code>）。这一帧由云台板一侧的 yaw 电机发出，属于 CAN1 共享段，两块板都收。</p>
+<h3 id="33-与-项目概述md-的两处记录差异">3.3 与 <code>项目概述.md</code> 的两处记录差异</h3>
+<p><code>项目概述.md:12</code> 把 yaw 记作 6020 的 ID2，把拨弹盘记作 3508 的 ID2。按帧头规则反推，这两个数值与固件的收发帧对不上：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>电机</th><th><code>项目概述.md:12</code> 的记法</th><th>按型号与帧规则推</th><th>判据</th></tr></thead><tbody><tr><td>yaw</td><td>GM6020 ID2</td><td>GM6020 ID1</td><td>控制落在 0x1FF 槽位0，反馈为 0x205，即 0x204 加 1</td></tr><tr><td>拨弹盘</td><td>M3508 ID2</td><td>M3508 ID6</td><td>控制落在 0x1FF 槽位1，反馈为 0x206，即 0x200 加 6</td></tr></tbody></table>
+<p>需要说明的是，帧本身只能把范围缩小到两个候选：控制落 0x1FF 槽位0、反馈为 0x205 的组合，既可能是 GM6020 的 ID1，也可能是 M3508 的 ID5；0x1FF 槽位1 配 0x206，既可能是 M3508 的 ID6，也可能是 GM6020 的 ID2。型号来自 <code>项目概述.md:12</code> 的文字描述，ID 则按该型号对应的段反推。现场应当核对两台电机外壳上的 ID 拨码，并把 <code>项目概述.md:12</code> 的数字改成与固件一致的一份。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为 0x1FF 只属于一个系列</td><td>按帧头判断电机型号，判错量纲</td><td>M3508 的 ID5 到 8 与 GM6020 的 ID1 到 4 都用 0x1FF</td></tr><tr><td>2</td><td>把工程编号当物理 ID</td><td>给 GM6020 算反馈帧头时按 0x205 到 0x20B 去套工程编号 5 到 8</td><td>工程编号 5 到 8 对应组内 ID 1 到 4，相差 4</td></tr><tr><td>3</td><td>把 <code>motor_5</code> 当成物理 ID 5</td><td>由变量名反推物理 ID</td><td>变量名是软件编号，判断依据仍是收发帧</td></tr><tr><td>4</td><td>认为两条 CAN2 上的 ID1 与 ID2 冲突</td><td>花时间去改其中一段的拨码</td><td>两条 CAN2 无电气连接，标识符各段独立</td></tr><tr><td>5</td><td>只用反馈帧头判型号</td><td>0x205 到 0x208 两家重合，判不出</td><td>结合下行帧与型号</td></tr><tr><td>6</td><td>直接采用 <code>项目概述.md</code> 的 ID 数字</td><td>与固件解析的帧头不匹配</td><td>以固件的收发帧反推，现场核对拨码</td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>M3508 与 GM6020 都用一帧四槽的广播控制帧，槽位与组内 ID 一一对应。</li>
+<li>段与帧头：M3508 的 ID1 到 4 用 0x200、ID5 到 8 用 0x1FF；GM6020 的 ID1 到 4 用 0x1FF、ID5 到 8 用 0x2FF。</li>
+<li>反馈帧头：M3508 为 0x200 加 ID，GM6020 为 0x204 加 ID，两家在 0x205 到 0x208 重合。</li>
+<li>LK 电机每个 ID 独占下行帧头 0x140 加 ID 与上行帧头 0x180 加 ID，本工程用 ID1，对应 0x141 与 0x181。</li>
+<li>云台板：摩擦轮 M3508 的 ID1 与 ID2 在 CAN2；yaw 在 0x1FF 槽位0 且反馈 0x205，拨弹盘在槽位1 且反馈 0x206，pitch 走 0x141。</li>
+<li>底盘板：四个轮子 ID1 到 4 共用 CAN2 的 0x200，轮序为右前、左前、左后、右后。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>代价与收益</th></tr></thead><tbody><tr><td>帧头复用</td><td>沿用 DJI 原厂约定</td><td>接线与代码都能照官方例程；代价是 0x1FF 双重身份，读代码时容易误判</td></tr><tr><td>云台 CAN 分配</td><td>yaw 与拨弹盘留在 CAN1，摩擦轮放 CAN2</td><td>CAN1 承接板间报文，CAN2 只带摩擦轮；代价是 CAN1 帧种类最多</td></tr><tr><td>LK 下行粒度</td><td>每台电机独占一帧</td><td>一台一帧，指令互不影响；代价是帧数与 ID 一一绑定</td></tr><tr><td>ID 记录</td><td>以固件与拨码为准</td><td>与代码一致；代价是 <code>项目概述.md</code> 的文字需要同步修改</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 M3508 ID7 的控制帧头、槽位序号与反馈帧头。</li>
+<li>写出 GM6020 ID3 的控制帧头与反馈帧头，并说明为什么它和 M3508 ID3 的控制帧头不同。</li>
+<li>列出本工程 CAN1 共享段上已经出现过的全部反馈标识符。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>云台板的 yaw 电机若改为 M3508，保持 0x1FF 槽位0 与反馈 0x205 不变，应当给电机拨成哪个 ID，量纲要不要改？写出改动点。</li>
+<li>设计一段代码：只根据接收回调收到的标识符，判断 0x205 上那台电机是 GM6020 还是 M3508。写出可用的判据与局限。</li>
+<li>在底盘板 CAN2 上再加一台 M3508，ID 选 5。写出它的控制帧头、槽位、需要修改的发送函数与调用点，并说明为什么不能沿用现有的 0x200 调用。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>DJI 与 LK 发送函数（:89-557）、接收回调与 ID 分发（:590-715）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>云台板控制帧调用点（:132-134）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>yaw 电流限幅（:83）、pitch 电流限幅（:102）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>底盘板发送函数（:83-211）、接收回调（:583-689）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>轮序注释（:80-83）、四轮控制帧调用点（:150）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/项目概述.md</code></td><td>帧头与接线文字（:5-13）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-两板波特率一致性与采样点"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-两板波特率一致性与采样点</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/05-拓扑与波特率/03-两板波特率一致性与采样点.md</span></div><div class="dfile__body"><h1 id="两板波特率一致性与采样点">两板波特率一致性与采样点</h1>
+<p>CAN1 把云台板与底盘板连在同一段总线上，两个控制器的位定时参数必须一致。两块板的 <code>Core/Src/can.c</code> 在这几行逐字相同，ioc 里保存的计算结果也相同。本文给出这组参数的推导、采样点的位置，以及与电机规格的核对方法。时钟树的完整来历与一次波特率失效的复盘放在 <code>01-CAN外设与过滤器/04-波特率与采样点.md</code>，这里保留与两板一致性有关的部分。</p>
+<blockquote>
+<p>云台板源码根目录 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
+</blockquote>
+<h2 id="1-概念位时间的四段与采样点">1. 概念：位时间的四段与采样点</h2>
+<p>CAN 的每一位按时间份额（Time Quantum，缩写 TQ）切分。一个位时间由同步段、时间段 1 与时间段 2 组成，同步段固定 1 TQ。采样点位于时间段 1 的末尾，接收端在这一点读取总线的电平。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo><mo>⋅</mo><mi>T</mi><mi>Q</mi></mrow><annotation encoding="application/x-tex">t_{bit} = (1 + BS1 + BS2) \cdot TQ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">2</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal">Q</span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mi>Q</mi><mo>=</mo><mfrac><mrow><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi></mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub></mfrac></mrow><annotation encoding="application/x-tex">TQ = \frac{Prescaler}{f_{PCLK1}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3612em;vertical-align:-0.4811em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8801em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">esc</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>b</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub><mrow><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi><mo>⋅</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{baud} = \frac{f_{PCLK1}}{Prescaler \cdot (1 + BS1 + BS2)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ba</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4522em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">esc</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mbin mtight">⋅</span><span class="mopen mtight">(</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">2</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>s</mi></msub><mo>=</mo><mfrac><mrow><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn></mrow><mrow><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn></mrow></mfrac></mrow><annotation encoding="application/x-tex">p_s = \frac{1 + BS1}{1 + BS1 + BS2}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2757em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>四个式子里只有 <code>Prescaler</code>、<code>BS1</code>、<code>BS2</code> 三个量可以调，第四个量 SJW 只影响重同步，不改变位时间与采样点。bxCAN 的取值为 BS1 不超过 16 TQ，BS2 不超过 8 TQ。</p>
+<h2 id="2-机制从-pclk1-到-1-mbps">2. 机制：从 PCLK1 到 1 Mbps</h2>
+<p>两板共用的时钟链：外部晶振 12 MHz 经 PLLM 6 分频得到 2 MHz，经 PLLN 168 倍频得到 336 MHz，经 PLLP 2 分频得到 SYSCLK 168 MHz；AHB 不分频，APB1 取 <code>RCC_HCLK_DIV4</code>，得到 PCLK1 42 MHz。bxCAN 挂在 APB1 上，输入时钟就是 42 MHz。两块板的 ioc 都记录 <code>RCC.APB1Freq_Value=42000000</code>（云台板 <code>2026sentriomeni.ioc:364</code>，底盘板 <code>:367</code>），<code>RCC.HCLK_Freq_Value</code> 为 168000000，<code>RCC.HSE_VALUE</code> 为 12000000。</p>
+<p>代入第 1 节的式子：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mi>Q</mi><mo>=</mo><mfrac><mn>2</mn><mrow><mn>42</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow></mfrac><mo>=</mo><mn>47.619</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">TQ = \frac{2}{42 \times 10^{6}} = 47.619\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2484em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">42</span><span class="mbin mtight">×</span><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">47.619</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mn>15</mn><mo>+</mo><mn>5</mn><mo stretchy="false">)</mo><mo>×</mo><mn>47.619</mn><mtext> ns</mtext><mo>=</mo><mn>1000</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">t_{bit} = (1 + 15 + 5) \times 47.619\ \text{ns} = 1000\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">15</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">5</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">47.619</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1000</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>b</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></msub><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1000</mn><mtext> ns</mtext></mrow></mfrac><mo>=</mo><mn>1</mn><mtext> Mbps</mtext></mrow><annotation encoding="application/x-tex">f_{baud} = \frac{1}{1000\ \text{ns}} = 1\ \text{Mbps}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ba</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1000</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">ns</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">Mbps</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>s</mi></msub><mo>=</mo><mfrac><mrow><mn>1</mn><mo>+</mo><mn>15</mn></mrow><mn>21</mn></mfrac><mo>=</mo><mn>76.19</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">p_s = \frac{1 + 15}{21} = 76.19\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">21</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mtight">15</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">76.19%</span></span></span></span></p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["HSE 12 MHz"] --> B["PLLM 6 与 PLLN 168&#x3C;br/>VCO 336 MHz"]
+  B --> C["PLLP 2&#x3C;br/>SYSCLK 168 MHz"]
+  C --> D["AHB DIV1&#x3C;br/>HCLK 168 MHz"]
+  D --> E["APB1 DIV4&#x3C;br/>PCLK1 42 MHz"]
+  E --> F["Prescaler 2&#x3C;br/>TQ 47.619 ns"]
+  F --> G["1 加 15 加 5 等于 21 TQ&#x3C;br/>位时间 1000 ns"]
+  G --> H["波特率 1 Mbps"]
+  G --> I["采样点 16 除以 21&#x3C;br/>76.19%"]
+  F --> J["SJW 1 TQ&#x3C;br/>单次重同步最多挪 1 TQ"]</pre></div>
+<p>位定时参数写进 <code>BTR</code> 寄存器时取的是减一值：<code>BRP</code> 位域存 <code>Prescaler - 1</code>，<code>TS1</code> 存 <code>BS1 - 1</code>，<code>TS2</code> 存 <code>BS2 - 1</code>，<code>SJW</code> 存 <code>SJW - 1</code>。本组参数的期望值是 <code>0x004E0001</code>，用调试器在两块板上各读一次就能比对。</p>
+<p>当两个节点的位时间不一致时，失效从应答槽开始：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant A as 节点A 位时间 1000 ns
+  participant BUS as 总线
+  participant B as 节点B 位时间 1167 ns
+  A->>BUS: 发出帧起始与标识符
+  BUS->>B: 边沿按 A 的节拍到达
+  Note over B: B 的采样点落在 A 的位时间之外
+  B--xB: 采样值判错 生成错误帧
+  A->>A: 应答槽保持隐性 发送错误计数加 8
+  Note over A,B: 帧留在发送邮箱 自动重传打开时反复重发</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-两块板的位定时与相关模式位逐字对照">3.1 两块板的位定时与相关模式位逐字对照</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>云台板 <code>can.c</code></th><th>底盘板 <code>can.c</code></th><th>取值</th></tr></thead><tbody><tr><td><code>Prescaler</code></td><td>:42、:74</td><td>:42、:74</td><td>2</td></tr><tr><td><code>Mode</code></td><td>:43、:75</td><td>:43、:75</td><td><code>CAN_MODE_NORMAL</code></td></tr><tr><td><code>SyncJumpWidth</code></td><td>:44、:76</td><td>:44、:76</td><td><code>CAN_SJW_1TQ</code></td></tr><tr><td><code>TimeSeg1</code></td><td>:45、:77</td><td>:45、:77</td><td><code>CAN_BS1_15TQ</code></td></tr><tr><td><code>TimeSeg2</code></td><td>:46、:78</td><td>:46、:78</td><td><code>CAN_BS2_5TQ</code></td></tr><tr><td><code>AutoBusOff</code></td><td>:48、:80</td><td>:48、:80</td><td><code>ENABLE</code></td></tr><tr><td><code>AutoRetransmission</code></td><td>:50、:82</td><td>:50、:82</td><td><code>ENABLE</code></td></tr><tr><td><code>ReceiveFifoLocked</code></td><td>:51、:83</td><td>:51、:83</td><td><code>DISABLE</code></td></tr><tr><td><code>TransmitFifoPriority</code></td><td>:52、:84</td><td>:52、:84</td><td><code>DISABLE</code></td></tr></tbody></table>
+<p>每行两个行号分别对应 CAN1 与 CAN2。两块板的文件在这 9 行上逐字相同，因此四个控制器的位时间都是 1000 ns。</p>
+<h3 id="32-ioc-里保存的计算结果">3.2 ioc 里保存的计算结果</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>ioc 键</th><th>云台板行号</th><th>底盘板行号</th><th>取值</th></tr></thead><tbody><tr><td><code>CAN1.CalculateTimeQuantum</code></td><td>:11</td><td>:11</td><td>47.61904761904762</td></tr><tr><td><code>CAN1.CalculateTimeBit</code></td><td>:10</td><td>:10</td><td>1000</td></tr><tr><td><code>CAN1.CalculateBaudRate</code></td><td>:9</td><td>:9</td><td>1000000</td></tr><tr><td><code>CAN2.CalculateTimeQuantum</code></td><td>:26</td><td>:26</td><td>47.61904761904762</td></tr><tr><td><code>CAN2.CalculateTimeBit</code></td><td>:25</td><td>:25</td><td>1000</td></tr><tr><td><code>CAN2.CalculateBaudRate</code></td><td>:24</td><td>:24</td><td>1000000</td></tr><tr><td><code>CAN1.NART</code></td><td>:14</td><td>:14</td><td><code>ENABLE</code></td></tr><tr><td><code>NVIC.CAN1_RX0_IRQn</code></td><td>:220</td><td>:221</td><td>优先级 5</td></tr></tbody></table>
+<p>这些数值由 CubeMX 按生成时的时钟树算出并写进 ioc，不随后续改动自动更新。</p>
+<h3 id="33-与电机规格核对">3.3 与电机规格核对</h3>
+<p>本段上的节点除了两块板，还有三个电机，它们的速率不可配置：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>节点</th><th>速率</th><th>出处</th></tr></thead><tbody><tr><td>DJI M3508 配 C620 电调</td><td>固定 1 Mbps</td><td>DJI 电调说明书，源码中无该参数</td></tr><tr><td>DJI GM6020 内置驱动</td><td>固定 1 Mbps</td><td>DJI 电机说明书，源码中无该参数</td></tr><tr><td>LK 电机</td><td>出厂默认 1 Mbps</td><td>瓴控 CAN 协议文档，源码中无该参数</td></tr></tbody></table>
+<p>1 Mbps 由电机决定，两块板没有调整空间。想通过降速来缓解负载率的做法在本段上行不通。</p>
+<h3 id="34-采样点-7619-的含义">3.4 采样点 76.19% 的含义</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取值</th><th>本工程</th><th>常见目标</th></tr></thead><tbody><tr><td>总 TQ</td><td>21</td><td>由 Prescaler 与 PCLK1 决定</td></tr><tr><td>BS1</td><td>15 TQ</td><td>上限 16 TQ</td></tr><tr><td>BS2</td><td>5 TQ</td><td>上限 8 TQ</td></tr><tr><td>采样点</td><td>76.19%</td><td>87.5% 附近</td></tr><tr><td>SJW</td><td>1 TQ</td><td>不超过 BS2</td></tr></tbody></table>
+<p>在同一波特率下，BS1 取 16、BS2 取 4 可以把采样点抬到 80.95%，这是 21 TQ 方案的上限，因为 BS1 不能超过 16 TQ。要再靠近 87.5%，需要换 Prescaler 与总 TQ 数。本工程的总线长度不足一米、节点数不超过 10，76.19% 在可接受范围内。若把线束延长或更换晶振，应先复核 BS2 与 SJW 的余量。</p>
+<h3 id="35-两板不一致时的判别顺序">3.5 两板不一致时的判别顺序</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  S["两块板通信异常"] --> Q1{"本板 BTR 是否为 0x004E0001"}
+  Q1 -- "否" --> F1["位定时参数被改动&#x3C;br/>比对 can.c 与 ioc"]
+  Q1 -- "是" --> Q2{"HAL_RCC_GetPCLK1Freq 是否为 42 MHz"}
+  Q2 -- "否" --> F2["时钟树被改动&#x3C;br/>BTR 正确而物理速率错误"]
+  Q2 -- "是" --> Q3{"对端板参数是否相同"}
+  Q3 -- "否" --> F3["两板速率不一致&#x3C;br/>统一到 1 Mbps"]
+  Q3 -- "是" --> F4["排除速率&#x3C;br/>转查接线 终端电阻 收发器"]</pre></div>
+<p>若 PCLK1 从 42 MHz 变成 36 MHz，位定时参数不动时实际波特率为</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>b</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></msub><mo>=</mo><mfrac><mrow><mn>36</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><mrow><mn>2</mn><mo>×</mo><mn>21</mn></mrow></mfrac><mo>=</mo><mn>857143</mn><mtext> bps</mtext></mrow><annotation encoding="application/x-tex">f_{baud} = \frac{36 \times 10^{6}}{2 \times 21} = 857143\ \text{bps}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ba</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4213em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0179em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mbin mtight">×</span><span class="mord mtight">21</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">36</span><span class="mbin mtight">×</span><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.931em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">857143</span><span class="mspace"> </span><span class="mord text"><span class="mord">bps</span></span></span></span></span></p>
+<p>与 1 Mbps 相差 14.29%。这个数值是工作记录里那次失效的签名，排查过程见 <code>05-调试案例与排查顺序.md</code>。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>检查手段</th></tr></thead><tbody><tr><td>1</td><td>只核对一块板的 can.c</td><td>两块板生成时间不同，改动只落在一侧</td><td>两份 can.c 逐行比对，或读两块板的 BTR</td></tr><tr><td>2</td><td>把 ioc 的 CalculateBaudRate 当证据</td><td>时钟树改动后该值不更新</td><td>用 <code>HAL_RCC_GetPCLK1Freq()</code> 反算</td></tr><tr><td>3</td><td>反推 BTR 时忘记减一</td><td>BRP、TS1、TS2、SJW 都存减一值</td><td>期望值 <code>0x004E0001</code> 对照位域</td></tr><tr><td>4</td><td>认为可以为了降负载把波特率调低</td><td>电机侧固定 1 Mbps</td><td>核对电机说明书</td></tr><tr><td>5</td><td>把采样点当成可以随意取到 87.5%</td><td>21 TQ 方案下 BS1 上限 16 TQ</td><td>先定总 TQ 再选 BS1</td></tr><tr><td>6</td><td>认为 SJW 影响采样点</td><td>SJW 只限制重同步的调整量</td><td>SJW 不进入 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>s</mi></msub></mrow><annotation encoding="application/x-tex">p_s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 的分子与分母</td></tr><tr><td>7</td><td>忽略 <code>AutoRetransmission</code> 的作用</td><td>速率错时邮箱被一帧长期占用，现象像发送函数坏了</td><td>观察 TSR 的 TME 位</td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>位时间 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo><mo>⋅</mo><mi>T</mi><mi>Q</mi></mrow><annotation encoding="application/x-tex">t_{bit} = (1 + BS1 + BS2) \cdot TQ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">2</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal">Q</span></span></span></span>，采样点 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>s</mi></msub><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p_s = (1 + BS1)/(1 + BS1 + BS2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">1</span><span class="mclose">)</span><span class="mord">/</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord">2</span><span class="mclose">)</span></span></span></span>。</li>
+<li>两板 PCLK1 都为 42 MHz，<code>Prescaler</code> 为 2，TQ 为 47.619 ns，位时间 1000 ns，波特率 1 Mbps。</li>
+<li>本组参数下采样点为 76.19%，SJW 为 1 TQ，两块板与四个控制器完全一致。</li>
+<li>期望的 <code>BTR</code> 值为 <code>0x004E0001</code>，位域都存减一值。</li>
+<li>电机侧的速率固定为 1 Mbps，本段没有降速的余地。</li>
+<li>两板不一致时先比 BTR，再比 PCLK1，最后才查物理层。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>代价与收益</th></tr></thead><tbody><tr><td>Prescaler</td><td>2</td><td>TQ 最小，位内分段最细；代价是采样点上限受 BS1 的 16 TQ 限制</td></tr><tr><td>BS1 与 BS2</td><td>15 与 5</td><td>BS2 保留 5 TQ，重同步余量足；代价是采样点偏前到 76.19%</td></tr><tr><td>SJW</td><td>1 TQ</td><td>与高精度晶振匹配；代价是晶振偏差大的现场容易出错</td></tr><tr><td>参数来源</td><td>由 CubeMX 写进 ioc</td><td>生成代码与 ioc 便于互相核对；代价是 ioc 数值不随时钟树更新</td></tr><tr><td>波特率</td><td>1 Mbps</td><td>满足命令 200 Hz 与反馈 1 kHz；代价是线长与节点数受限</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>用第 1 节的公式复算：<code>Prescaler</code> 改为 3、BS1 取 11、BS2 取 2 时，位时间、波特率与采样点各是多少。</li>
+<li>写出本工程 <code>BTR</code> 期望值 <code>0x004E0001</code> 的四个位域取值与对应的物理量。</li>
+<li>说明 <code>CAN1.CalculateBaudRate=1000000</code> 为什么不能作为波特率正确的证据。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>PCLK1 保持 42 MHz，列出把采样点落在 80% 到 88% 区间的全部可行组合，并说明各组合的 SJW 上限。</li>
+<li>设计一段上电自检：不依赖外部设备，只靠寄存器与错误计数判断本板速率是否与对端一致。写出用到的寄存器、判据与失败处理。</li>
+<li>两块板一块为 1 Mbps、另一块为 950 kbps，推导通信能否成功，并说明发送错误计数会如何变化。</li>
+<li>把 BS2 从 5 TQ 改为 2 TQ、SJW 保持 1 TQ，采样点、重同步能力与两板一致性各有什么变化。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>云台板 CAN1 与 CAN2 位定时与模式位（:42-52、:74-84）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/can.c</code></td><td>底盘板同段参数（:42-52、:74-84）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td>云台板 CAN 计算结果（:5-34）与时钟树键（:363-390）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/2026sentriomeni.ioc</code></td><td>底盘板 CAN 计算结果（:5-34）与时钟树键（:366-393）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c</code></td><td>BTR 写入（:437-441）</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>857142 Hz 的实测记录与根因</td></tr><tr><td><code>docs/03-CAN 与电机/01-CAN外设与过滤器/04-波特率与采样点.md</code></td><td>时钟树推导与失效复盘</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-总线负载与丢帧"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-总线负载与丢帧</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/05-拓扑与波特率/04-总线负载与丢帧.md</span></div><div class="dfile__body"><h1 id="总线负载与丢帧">总线负载与丢帧</h1>
+<p>CAN 的位填充与仲裁让负载率不能只看数据字节。本文给出标准帧的位数、命令帧率的来源、反馈帧率的取值方式，按三段总线分别核算占用，再说明接收 FIFO 的深度与覆盖模式如何造成丢帧，最后列出可以节流的发送点。</p>
+<blockquote>
+<p>云台板源码根目录 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
+</blockquote>
+<h2 id="1-概念一帧占多少位">1. 概念：一帧占多少位</h2>
+<p>标准数据帧不计位填充时的位数：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>位数</th></tr></thead><tbody><tr><td>帧起始 SOF</td><td>1</td></tr><tr><td>标准标识符 StdId</td><td>11</td></tr><tr><td>RTR、IDE、r0</td><td>3</td></tr><tr><td>DLC</td><td>4</td></tr><tr><td>数据段</td><td>64</td></tr><tr><td>CRC 与 CRC 定界</td><td>16</td></tr><tr><td>ACK 槽与 ACK 定界</td><td>2</td></tr><tr><td>帧结束 EOF</td><td>7</td></tr><tr><td>帧间隔 IFS</td><td>3</td></tr><tr><td>合计</td><td>111</td></tr></tbody></table>
+<p>1 Mbps 下单帧占用</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mrow><mi>f</mi><mi>r</mi><mi>a</mi><mi>m</mi><mi>e</mi></mrow></msub><mo>=</mo><mfrac><mn>111</mn><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>111</mn><mtext> </mtext><mi>μ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">T_{frame} = \frac{111}{10^{6}} = 111\ \mu s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">am</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">111</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">111</span><span class="mspace"> </span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span></span></span></span></p>
+<p>理论的帧率上限为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mn>111</mn><mtext> </mtext><mi>μ</mi><mi>s</mi><mo>≈</mo><mn>9010</mn></mrow><annotation encoding="application/x-tex">1 / 111\ \mu s \approx 9010</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/111</span><span class="mspace"> </span><span class="mord mathnormal">μ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">9010</span></span></span></span> 帧每秒。实际负载率按帧数折算：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mfrac><mrow><msub><mi>N</mi><mrow><mi>f</mi><mi>r</mi><mi>a</mi><mi>m</mi><mi>e</mi></mrow></msub><mo>⋅</mo><mn>111</mn></mrow><msub><mi>f</mi><mrow><mi>b</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></msub></mfrac><mo>×</mo><mn>100</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">L = \frac{N_{frame} \cdot 111}{f_{baud}} \times 100\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4725em;vertical-align:-0.4811em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9914em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ba</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5131em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.109em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">am</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2901em;"><span></span></span></span></span></span></span><span class="mbin mtight">⋅</span><span class="mord mtight">111</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">100%</span></span></span></span></p>
+<p>位填充会把真实占用再抬高。最坏情况约多出两成，工程上按 1.15 到 1.2 倍估算比较稳妥。</p>
+<h2 id="2-机制帧率来自两个地方">2. 机制：帧率来自两个地方</h2>
+<p>命令帧率由任务周期决定，反馈帧率由器件规格决定，两者相加就是总帧数：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["osDelay 实参&#x3C;br/>底盘板 2 ms 云台板 5 ms 云台 PID 1 ms"] --> B["命令帧率"]
+  C["器件规格&#x3C;br/>DJI 反馈 1 ms&#x3C;br/>LK 每条命令一帧"] --> D["反馈帧率"]
+  B --> E["总帧数 N"]
+  D --> E
+  E --> F["乘 111 位&#x3C;br/>除以 1 Mbps"]
+  F --> G["标称负载率"]
+  F --> H["乘 1.15 到 1.2&#x3C;br/>含位填充的占用"]</pre></div>
+<p>接收侧的风险在 FIFO。每个控制器有两个接收 FIFO，每个 FIFO 深度 3。<code>ReceiveFifoLocked</code> 在本工程为 <code>DISABLE</code>（<code>Core/Src/can.c:51</code> 与 <code>:83</code>），HAL 据此把 <code>MCR</code> 的 <code>RFLM</code> 位清零（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c:417-423</code>），FIFO 满之后新报文覆盖最旧的一帧。回调每次只取一帧（云台板 <code>BSP/Src/bsp_can.cpp:593</code>，底盘板同位置），当帧率乘上服务延迟超过三个位置时就会出现覆盖。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant BUS as 总线 1 Mbps
+  participant F as FIFO0 深度 3
+  participant IRQ as CAN1_RX0 中断 优先级 5
+  participant APP as HAL_CAN_RxFifo0MsgPendingCallback
+  BUS->>F: 报文1
+  BUS->>F: 报文2
+  Note over IRQ: 中断被同期的高优先级工作推迟
+  BUS->>F: 报文3
+  BUS->>F: 报文4
+  Note over F: 深度 3 已满 RFLM 为 0
+  F->>F: 报文4 覆盖报文1
+  IRQ->>APP: 中断终于进入
+  APP->>F: HAL_CAN_GetRxMessage 取一帧
+  Note over APP: 只取一帧 RF0R 的 FMP0 仍非零 中断会再进
+  APP->>APP: 按 StdId 分发
+  Note over BUS,APP: 被覆盖的报文1 永久丢失 应用侧没有计数</pre></div>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-can1-共享段">3.1 CAN1 共享段</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧</th><th>来源</th><th>周期</th><th>帧率</th></tr></thead><tbody><tr><td>0x205 yaw 反馈</td><td>yaw GM6020</td><td>规格 1 ms</td><td>1000</td></tr><tr><td>0x206 拨弹盘反馈</td><td>拨弹盘 M3508</td><td>规格 1 ms</td><td>1000</td></tr><tr><td>0x181 LK 反馈</td><td>pitch LK</td><td>每条命令一帧</td><td>约 1200</td></tr><tr><td>0x1FF 控制</td><td>云台板 <code>ControlCenterTask.cpp:133</code></td><td>5 ms</td><td>200</td></tr><tr><td>0x141 转矩</td><td>云台板 <code>ControlCenterTask.cpp:134</code></td><td>5 ms</td><td>200</td></tr><tr><td>0x141 读状态2</td><td>云台板 <code>GimbalTask.cpp:87</code></td><td>1 ms</td><td>1000</td></tr><tr><td>0x301 遥控器</td><td>云台板 <code>ControlCenterTask.cpp:135</code></td><td>5 ms</td><td>200</td></tr><tr><td>0x302 yaw 角度</td><td>云台板 <code>ControlCenterTask.cpp:136</code></td><td>5 ms</td><td>200</td></tr><tr><td>0x303 弹量与弹速</td><td>底盘板 <code>ControlCenterTask.cpp:152</code></td><td>2 ms</td><td>500</td></tr><tr><td>0x309 热量与 wz</td><td>底盘板 <code>ControlCenterTask.cpp:153</code></td><td>2 ms</td><td>500</td></tr><tr><td>合计</td><td></td><td></td><td>6000</td></tr></tbody></table>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mrow><mi>C</mi><mi>A</mi><mi>N</mi><mn>1</mn></mrow></msub><mo>=</mo><mfrac><mrow><mn>6000</mn><mo>×</mo><mn>111</mn></mrow><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>66.6</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">L_{CAN1} = \frac{6000 \times 111}{10^{6}} = 66.6\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">6000</span><span class="mbin mtight">×</span><span class="mord mtight">111</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">66.6%</span></span></span></span></p>
+<p>含位填充按 1.15 到 1.2 倍折算，占用落在 76.6% 到 79.9%。</p>
+<p>0x181 的帧率取决于 LK 电机对每条命令回一帧的设定，源码里没有这个数字。若该电机只对转矩命令应答，则去掉 1000 帧，合计降到 5000 帧每秒，负载率 55.5%。下面两条 CAN2 的表不受这个取值影响。</p>
+<h3 id="32-can2-底盘段">3.2 CAN2 底盘段</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧</th><th>来源</th><th>周期</th><th>帧率</th></tr></thead><tbody><tr><td>0x201 到 0x204</td><td>四个 M3508</td><td>规格 1 ms</td><td>4000</td></tr><tr><td>0x200 控制</td><td>底盘板 <code>ControlCenterTask.cpp:150</code></td><td>2 ms</td><td>500</td></tr><tr><td>合计</td><td></td><td></td><td>4500</td></tr></tbody></table>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mrow><mi>C</mi><mi>A</mi><mi>N</mi><mn>2</mn><mtext>底盘</mtext></mrow></msub><mo>=</mo><mfrac><mrow><mn>4500</mn><mo>×</mo><mn>111</mn></mrow><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>49.95</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">L_{CAN2底盘} = \frac{4500 \times 111}{10^{6}} = 49.95\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mtight">2</span><span class="mord cjk_fallback mtight">底盘</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4500</span><span class="mbin mtight">×</span><span class="mord mtight">111</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">49.95%</span></span></span></span></p>
+<p>含位填充后落在 57.4% 到 59.9%。</p>
+<h3 id="33-can2-云台段">3.3 CAN2 云台段</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧</th><th>来源</th><th>周期</th><th>帧率</th></tr></thead><tbody><tr><td>0x201 与 0x202</td><td>两个 M3508</td><td>规格 1 ms</td><td>2000</td></tr><tr><td>0x200 控制</td><td>云台板 <code>ControlCenterTask.cpp:132</code></td><td>5 ms</td><td>200</td></tr><tr><td>合计</td><td></td><td></td><td>2200</td></tr></tbody></table>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mrow><mi>C</mi><mi>A</mi><mi>N</mi><mn>2</mn><mtext>云台</mtext></mrow></msub><mo>=</mo><mfrac><mrow><mn>2200</mn><mo>×</mo><mn>111</mn></mrow><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>24.42</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">L_{CAN2云台} = \frac{2200 \times 111}{10^{6}} = 24.42\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">A</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="mord mtight">2</span><span class="mord cjk_fallback mtight">云台</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2200</span><span class="mbin mtight">×</span><span class="mord mtight">111</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">24.42%</span></span></span></span></p>
+<p>含位填充后落在 28.1% 到 29.3%。</p>
+<h3 id="34-三段对照">3.4 三段对照</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>段落</th><th>标称负载</th><th>含位填充</th><th>主导项</th></tr></thead><tbody><tr><td>CAN1 共享段</td><td>66.6%</td><td>76.6% 到 79.9%</td><td>LK 读状态2 与其反馈</td></tr><tr><td>CAN2 底盘段</td><td>49.95%</td><td>57.4% 到 59.9%</td><td>四个轮子的 1 kHz 反馈</td></tr><tr><td>CAN2 云台段</td><td>24.42%</td><td>28.1% 到 29.3%</td><td>两个摩擦轮的 1 kHz 反馈</td></tr></tbody></table>
+<p>CAN1 的占用比两条 CAN2 都高，原因不在电机数量，而在两件事：LK 读状态2 在 1 ms 循环里发送，以及底盘板把两条裁判系统报文按 2 ms 周期推送。</p>
+<h3 id="35-仲裁次序">3.5 仲裁次序</h3>
+<p><code>TransmitFifoPriority</code> 为 <code>DISABLE</code>，发送邮箱按标识符大小定优先级，数值小的先发。CAN1 上的次序为 0x141、0x181、0x1FF、0x205、0x206、0x301、0x302、0x303、0x309。两条裁判系统报文排在最后，负载高时它们的等待时间最长。底盘段 CAN2 上 0x200 的控制帧小于 0x201 到 0x204 的反馈帧，控制帧先发。</p>
+<h3 id="36-丢帧的观察手段">3.6 丢帧的观察手段</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>手段</th><th>位置</th><th>说明</th></tr></thead><tbody><tr><td>覆盖标志</td><td><code>RF0R</code> 的 <code>FOV0</code></td><td>置位表示 FIFO0 发生过覆盖</td></tr><tr><td>HAL 错误码</td><td><code>HAL_CAN_ERROR_RX_FOV0</code> 等于 0x200、<code>RX_FOV1</code> 等于 0x400</td><td>定义在 <code>stm32f4xx_hal_can.h:302-303</code></td></tr><tr><td>发送失败</td><td><code>HAL_CAN_ERROR_TX_ALST0</code> 到 <code>TERR2</code></td><td>定义在 <code>:304-309</code></td></tr></tbody></table>
+<p>本工程没有任何一处读取 <code>hcan->ErrorCode</code>，覆盖与发送失败都不产生日志。要观察丢帧，需要在回调里加计数器，或周期读取 <code>RF0R</code>。</p>
+<h3 id="37-可节流的发送点">3.7 可节流的发送点</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧</th><th>当前帧率</th><th>依据</th><th>建议</th><th>可省帧率</th></tr></thead><tbody><tr><td>0x141 读状态2</td><td>1000</td><td>云台板 <code>GimbalTask.cpp:87</code> 在 1 ms 循环内</td><td>接收回调只处理 0xA1、0xA2、0xA7、0xA8（<code>bsp_can.cpp:643-673</code>），0x9C 应答进 <code>default</code> 分支被丢弃，可降频或删除</td><td>约 2000，含反馈</td></tr><tr><td>0x303 与 0x309</td><td>各 500</td><td>底盘板 <code>ControlCenterTask.cpp:152-153</code> 在 2 ms 循环内</td><td>裁判系统数据变化远慢于 500 Hz，降到 50 Hz</td><td>约 900</td></tr><tr><td>0x301 与 0x302</td><td>各 200</td><td>云台板 <code>ControlCenterTask.cpp:135-136</code></td><td>DBUS 的帧率约 71 Hz，转发降到 100 Hz</td><td>约 200</td></tr><tr><td>0x1FF、0x141 转矩</td><td>各 200</td><td>命令带宽</td><td>保留</td><td>0</td></tr><tr><td>电机反馈</td><td>固定</td><td>器件规格</td><td>无法调整</td><td>0</td></tr></tbody></table>
+<p>三项合计可省约 3100 帧每秒，CAN1 从 6000 帧每秒降到约 2900 帧每秒，标称负载从 66.6% 降到 32.2%。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>只按数据字节算负载</td><td>漏掉帧头、CRC 与帧间隔，结果偏低约三成</td><td>8 字节数据只占 111 位中的 64 位</td></tr><tr><td>2</td><td>忽略位填充</td><td>实际占用比标称高一到两成</td><td>最坏情况按 1.2 倍</td></tr><tr><td>3</td><td>认为 1 kHz 反馈可以降频</td><td>反馈由电调自主发送</td><td>命令帧率可调，反馈帧率不可调</td></tr><tr><td>4</td><td>认为两条 CAN2 共享负载</td><td>三段总线的占用要分别核算</td><td>两块板的 CAN2 无电气连接</td></tr><tr><td>5</td><td>忽略 FIFO0 只有三个位置</td><td>认为高帧率不会丢帧</td><td>深度 3，覆盖模式</td></tr><tr><td>6</td><td>把回调读一帧当成吞吐不足</td><td>未命中时会再次进入中断</td><td>RF0R 的 FMP0 仍非零即再次触发</td></tr><tr><td>7</td><td>不看 <code>ErrorCode</code></td><td>覆盖与发送失败都被静默吞掉</td><td>全树没有读取点</td></tr><tr><td>8</td><td>忽略仲裁次序</td><td>认为各帧平等竞争</td><td>邮箱优先级由标识符决定</td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>标准数据帧 8 字节数据共 111 位，1 Mbps 下单帧 111 微秒。</li>
+<li>负载率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mi>N</mi><mo>⋅</mo><mn>111</mn><mi mathvariant="normal">/</mi><msub><mi>f</mi><mrow><mi>b</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></msub></mrow><annotation encoding="application/x-tex">L = N \cdot 111 / f_{baud}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">111/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ba</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，含位填充再乘 1.15 到 1.2。</li>
+<li>CAN1 共享段标称 66.6%，CAN2 底盘段 49.95%，CAN2 云台段 24.42%。</li>
+<li>命令帧率来自任务周期，反馈帧率来自器件规格，后者不可调。</li>
+<li>RX FIFO0 深度 3，<code>RFLM</code> 为 0，满时覆盖最旧一帧，覆盖不产生应用层记录。</li>
+<li>发送邮箱按标识符定优先级，CAN1 上两条裁判系统报文优先级最低。</li>
+<li>可节流的三项合计约 3100 帧每秒，其中 LK 读状态2 一项占约 2000。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>代价与收益</th></tr></thead><tbody><tr><td>反馈帧</td><td>让电机按 1 kHz 自主上报</td><td>速度环反馈新；代价是固定占用三段总线的一半左右</td></tr><tr><td>控制周期</td><td>底盘 2 ms、云台 5 ms</td><td>与速度环带宽匹配；代价是 CAN1 上命令帧数偏多</td></tr><tr><td>板间裁判数据</td><td>2 ms 周期推送</td><td>云台侧数据及时；代价是 CAN1 增加 1000 帧每秒</td></tr><tr><td>LK 读状态2</td><td>1 ms 周期发送</td><td>便于读取状态；代价是应答被丢弃，占去约三分之一的 CAN1 带宽</td></tr><tr><td>错误处理</td><td>不检查返回值与 <code>ErrorCode</code></td><td>代码简洁；代价是丢帧与发送失败不可见</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出标准数据帧 111 位的构成，并说明 8 字节数据在其中占多少位。</li>
+<li>计算 1 Mbps 下单帧占用时间与理论帧率上限。</li>
+<li>算出 CAN2 底盘段的标称负载率，并给出含位填充的区间。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用一条公式表示 CAN1 的负载率与 <code>osDelay</code> 实参、反馈帧率、LK 应答策略四者的关系，并求负载率降到 50% 以下需要满足的条件。</li>
+<li>写一段代码：在 <code>HAL_CAN_RxFifo0MsgPendingCallback</code> 里统计 <code>RF0R</code> 的覆盖标志，输出每秒覆盖次数。说明为什么不能只在回调里数帧数来判丢帧。</li>
+<li>若 CAN1 上新增一台反馈 1 kHz 的电机，重算负载率，并给出至少两种把总占用压回 60% 以下的方案及其代价。</li>
+<li>位填充最坏情况按 1.2 倍估算，说明这个系数的来源，并给出一种在总线上实测真实占用的方法。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>云台板命令帧调用点（:132-136）与 5 ms 周期（:137）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>0x141 读状态2 的 1 ms 循环（:87、:104）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>接收回调与 0x181 分支（:590-715）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td><code>ReceiveFifoLocked</code> 与位定时（:42-52、:74-84）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>四轮控制与两条裁判报文（:150-154）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c</code></td><td><code>RFLM</code> 写入（:417-423）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h</code></td><td>错误码定义（:302-309）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-调试案例与排查顺序"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-调试案例与排查顺序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/03-CAN 与电机/05-拓扑与波特率/05-调试案例与排查顺序.md</span></div><div class="dfile__body"><h1 id="调试案例与排查顺序">调试案例与排查顺序</h1>
+<p>工作记录 <code>can通信波特率问题.md</code> 记下一次 CAN 全体失效：底盘板的 CAN1 与 CAN2 都收不到报文，发送函数第一次返回 <code>HAL_OK</code>，之后一直返回 <code>HAL_ERROR</code>，假期前代码是正常的。记录给出的根因是时钟树被改动导致 APB1 频率变化。本文按源码口径重建这条链路，修正记录里两处与头文件不符的描述，并整理一份可复用的排查顺序。</p>
+<blockquote>
+<p>涉及的源码：云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code> 与底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。两块板的 <code>Core/Src/can.c</code> 与 HAL 驱动相同，行号通用。工作记录位于 <code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code>。</p>
+</blockquote>
+<h2 id="1-概念三条寄存器线索">1. 概念：三条寄存器线索</h2>
+<p>记录里用调试器读回的三个值：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>寄存器</th><th>读回值</th></tr></thead><tbody><tr><td><code>hcan2.ErrorCode</code></td><td>0x00200000</td></tr><tr><td>MSR</td><td>0x0C08</td></tr><tr><td>TSR</td><td>0x82000004</td></tr></tbody></table>
+<p>按 CMSIS 头文件与 HAL 头文件的位定义逐位解析：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>值</th><th>位定义</th><th>含义</th><th>出处</th></tr></thead><tbody><tr><td>ErrorCode 0x00200000</td><td><code>HAL_CAN_ERROR_PARAM</code></td><td>最近一次失败的调用属于参数类失败</td><td><code>stm32f4xx_hal_can.h:314</code></td></tr><tr><td>MSR 0x0C08 的 bit3</td><td><code>CAN_MSR_WKUI</code></td><td>唤醒中断挂起</td><td><code>stm32f407xx.h:1813-1815</code></td></tr><tr><td>MSR 0x0C08 的 bit10</td><td><code>CAN_MSR_SAMP</code></td><td>最近一次采样点的电平</td><td><code>:1825-1827</code></td></tr><tr><td>MSR 0x0C08 的 bit11</td><td><code>CAN_MSR_RX</code></td><td>CANRX 引脚电平</td><td><code>:1828-1830</code></td></tr><tr><td>TSR 0x82000004 的 bit2</td><td><code>CAN_TSR_ALST0</code></td><td>邮箱 0 仲裁失败</td><td><code>:1839-1841</code></td></tr><tr><td>TSR 0x82000004 的 bit25:24</td><td><code>CAN_TSR_CODE</code></td><td>值为 2，下一次请求使用邮箱 2</td><td><code>:1878-1880</code></td></tr><tr><td>TSR 0x82000004 的 bit28:26</td><td><code>CAN_TSR_TME2</code> 到 <code>TME0</code></td><td>全为 0，三个发送邮箱都没有空位</td><td><code>:1885-1893</code></td></tr><tr><td>TSR 0x82000004 的 bit31</td><td><code>CAN_TSR_LOW2</code></td><td>邮箱 2 处于最低优先级</td><td><code>:1904-1906</code></td></tr></tbody></table>
+<p>记录的文字描述里有两处与头文件对不上，按源码口径更正：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>记录里的写法</th><th>源码口径</th></tr></thead><tbody><tr><td>0x00200000 等于 <code>HAL_CAN_ERROR_NOT_STARTED</code></td><td>0x00200000 是 <code>HAL_CAN_ERROR_PARAM</code>；<code>NOT_STARTED</code> 是 0x00100000（<code>stm32f4xx_hal_can.h:313-314</code>）</td></tr><tr><td>MSR 0x0C08 表示 ERRI 挂起</td><td>ERRI 是 MSR 的 bit2，0x0C08 的 bit2 为 0；置位的是 bit3、bit10 与 bit11</td></tr></tbody></table>
+<p><code>HAL_CAN_ERROR_NOT_STARTED</code> 的产生点在 <code>HAL_CAN_Stop@@ 里（</code>stm32f4xx_hal_can.c:1088<code>、</code>:1128`），与本次现象无关。</p>
+<h2 id="2-机制第一次成功之后一直失败">2. 机制：第一次成功、之后一直失败</h2>
+<p><code>HAL_CAN_AddTxMessage</code> 的结构决定了这两种返回值来自不同分支（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c:1252-1342</code>）：</p>
+<ol>
+<li>先判断外设状态必须是 <code>READY</code> 或 <code>LISTENING</code>（<code>:1273-1274</code>）。</li>
+<li>读一次 TSR，检查三个 <code>TME</code> 位里是否有任意一位为 1（<code>:1276-1279</code>）。有一位为空，就填入该邮箱、置请求位并返回 <code>HAL_OK</code>（<code>:1281-1325</code>）。</li>
+<li>三个邮箱都满时，走 <code>else</code> 分支，把 <code>ErrorCode</code> 或上 <code>HAL_CAN_ERROR_PARAM</code> 并返回 <code>HAL_ERROR</code>（<code>:1327-1333</code>）。</li>
+<li>状态不满足时，或上 <code>HAL_CAN_ERROR_NOT_INITIALIZED</code>（<code>:1335-1341</code>）。</li>
+</ol>
+<p>因此读到的 0x00200000 只能来自第 3 步，也就是三个邮箱全满。把这条约束与 <code>AutoRetransmission</code> 的取值放在一起，现象就能还原。两块板的 <code>AutoRetransmission</code> 都是 <code>ENABLE</code>（<code>Core/Src/can.c:50</code> 与 <code>:82</code>），发送失败或未获应答的帧会留在邮箱里自动重发。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant APP as 控制任务
+  participant HW as bxCAN
+  participant BUS as 总线
+  participant PEER as 对端节点
+  APP->>HW: HAL_CAN_AddTxMessage 第一帧
+  HW->>BUS: 按错误的位速率发出
+  Note over BUS: 位宽与对端不一致 对端判为错误 不应答
+  PEER--xBUS: 应答槽保持隐性
+  HW->>HW: 应答错误 发送错误计数加 8
+  Note over HW: AutoRetransmission 为 ENABLE 该帧留在邮箱重发
+  APP->>HW: 第二帧
+  HW-->>APP: 三个邮箱都不空 返回 HAL_ERROR
+  HW->>HW: ErrorCode 或上 0x00200000
+  APP->>HW: 后续每一帧
+  HW-->>APP: 一直返回 HAL_ERROR</pre></div>
+<p>第一次进邮箱是软件动作，与总线状态无关，所以返回 <code>HAL_OK</code>。之后失败是因为第一帧占着邮箱不肯离开。</p>
+<h2 id="3-落到本项目">3. 落到本项目</h2>
+<h3 id="31-波特率偏差量">3.1 波特率偏差量</h3>
+<p>记录给出的根因是时钟树配置被修改，APB1 频率随 <code>RCC.APB1CLKDivider</code> 与 PLL 参数变化。位定时参数不动时，把 PCLK1 从 42 MHz 换成 36 MHz：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mi>Q</mi><mo>=</mo><mfrac><mn>2</mn><mrow><mn>36</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow></mfrac><mo>=</mo><mn>55.556</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">TQ = \frac{2}{36 \times 10^{6}} = 55.556\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2484em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">36</span><span class="mbin mtight">×</span><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">55.556</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>=</mo><mn>21</mn><mo>×</mo><mn>55.556</mn><mtext> ns</mtext><mo>=</mo><mn>1166.67</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">t_{bit} = 21 \times 55.556\ \text{ns} = 1166.67\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">21</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">55.556</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1166.67</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>b</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></msub><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1166.67</mn><mtext> ns</mtext></mrow></mfrac><mo>=</mo><mn>857143</mn><mtext> bps</mtext></mrow><annotation encoding="application/x-tex">f_{baud} = \frac{1}{1166.67\ \text{ns}} = 857143\ \text{bps}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ba</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1166.67</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">ns</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">857143</span><span class="mspace"> </span><span class="mord text"><span class="mord">bps</span></span></span></span></span></p>
+<p>与目标 1 Mbps 相差 14.29%。记录里写的计算波特率 857142 Hz 与这个数值一致，说明当时的 PCLK1 约为 36 MHz。仓库当前的两份 <code>Core/Src/can.c</code> 位定时参数相同，ioc 的 <code>RCC.APB1Freq_Value</code> 也都是 42000000（云台板 <code>2026sentriomeni.ioc:364</code>，底盘板 <code>:367</code>），修复已经落到代码里。</p>
+<h3 id="32-为什么-can1-与-can2-同时失效">3.2 为什么 CAN1 与 CAN2 同时失效</h3>
+<p>两个 bxCAN 控制器都挂在 APB1 上，共用同一个 PCLK1。时钟树改动会影响两个控制器的实际位速率，因此 CAN1 与共享段上的对端板、CAN2 与四个轮子同时失去通信。这一点是判断根因在时钟树而非单条总线接线的重要依据：一条总线的故障通常只影响一条。</p>
+<h3 id="33-排查顺序">3.3 排查顺序</h3>
+<p>记录给出的优先级是时钟、GPIO 复用、外设初始化顺序、中断、物理层、应用逻辑。按第 1 节与第 2 节的推导，这个顺序对本工程成立，其中第 1 项与第 2 项的判断依据如下：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  S["CAN 收发异常"] --> Q1{"HAL_RCC_GetPCLK1Freq&#x3C;br/>是否为 42 MHz"}
+  Q1 -- "否" --> F1["时钟树被改动&#x3C;br/>核对 ioc 的 RCC 键并重新生成"]
+  Q1 -- "是" --> Q2{"两块板的 BTR&#x3C;br/>是否都为 0x004E0001"}
+  Q2 -- "否" --> F2["位定时参数被改动&#x3C;br/>比对两份 can.c"]
+  Q2 -- "是" --> Q3{"ErrorCode 是否为 0x00200000"}
+  Q3 -- "是" --> F3["发送邮箱被占满&#x3C;br/>查 AutoRetransmission 与应答缺失"]
+  Q3 -- "否" --> Q4{"总线上是否有差分波形"}
+  Q4 -- "否" --> F4["物理层&#x3C;br/>接线 终端电阻 收发器供电"]
+  Q4 -- "是" --> F5["查 GPIO 复用 初始化顺序 中断与过滤器"]</pre></div>
+<p>时钟树排在第一位的原因：BTR 的值不会随时钟树变化，读回来仍是 <code>0x004E0001</code>，而物理速率已经错了。寄存器正确、速率错误这一组合是本次最难判断的地方。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>按数值猜 HAL 错误码的含义</td><td>把 0x00200000 记成 <code>NOT_STARTED</code></td><td><code>stm32f4xx_hal_can.h:313-314</code></td></tr><tr><td>2</td><td>只看 ErrorCode 不看产生分支</td><td>把邮箱占满误判为未启动</td><td><code>stm32f4xx_hal_can.c:1276-1279</code> 与 <code>:1327-1333</code></td></tr><tr><td>3</td><td>相信 ioc 里的 <code>CalculateBaudRate</code></td><td>该值不随时钟树更新</td><td>用 <code>HAL_RCC_GetPCLK1Freq()</code> 反算</td></tr><tr><td>4</td><td>把 TSR 的 TME 位当成接收错误</td><td>TME 为 0 表示邮箱没有空位</td><td><code>stm32f407xx.h:1885-1893</code></td></tr><tr><td>5</td><td>把 MSR 的 bit3 当 ERRI</td><td>ERRI 在 bit2</td><td><code>:1812-1815</code></td></tr><tr><td>6</td><td>只怀疑一块板</td><td>共享段上两块板都要核对，且两条 CAN2 各自独立</td><td>见 <code>01-上下板CAN拓扑.md</code></td></tr><tr><td>7</td><td>把第一次返回 <code>HAL_OK</code> 当成通信可用</td><td>进邮箱与上线是两件事</td><td><code>HAL_CAN_AddTxMessage</code> 的返回只表示入队</td></tr><tr><td>8</td><td>不检查发送函数的返回值</td><td>本例的持续失败在调用点被丢掉</td><td>两块板的调用点都没有接收返回值</td></tr><tr><td>9</td><td>忽略 <code>AutoRetransmission</code></td><td>邮箱被一帧长期占用，现象像驱动坏了</td><td><code>Core/Src/can.c:50</code>、<code>:82</code></td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>0x00200000 是 <code>HAL_CAN_ERROR_PARAM</code>，来自 <code>HAL_CAN_AddTxMessage</code> 三个邮箱全满的分支；<code>NOT_STARTED</code> 是 0x00100000。</li>
+<li>TSR 0x82000004 表示邮箱 0 仲裁失败、三个邮箱都没有空位、下一次请求指向邮箱 2。</li>
+<li>MSR 0x0C08 的 bit2 为 0，记录的 ERRI 结论与位定义不符；置位的是 bit3、bit10 与 bit11。</li>
+<li><code>AutoRetransmission</code> 为 <code>ENABLE</code> 时，未获应答的帧留在邮箱重发，后续发送全部返回 <code>HAL_ERROR</code>。</li>
+<li>两个控制器共用 PCLK1，时钟树改动会让 CAN1 与 CAN2 同时失效。</li>
+<li>排查顺序里时钟树排在第一位，因为 BTR 值正确并不说明物理速率正确。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>代价与收益</th></tr></thead><tbody><tr><td>根因定位</td><td>记录按时钟、GPIO、初始化、中断、物理层、逻辑排序</td><td>覆盖了共享 PCLK1 这一层；代价是每一步都要读寄存器，耗时长</td></tr><tr><td>错误码使用</td><td>记录用数值记错误码</td><td>排查时信息集中；代价是数值与文字对不上时容易被误导</td></tr><tr><td>自动重传</td><td><code>ENABLE</code></td><td>偶发仲裁失败能自恢复；代价是速率错误时现象具有误导性</td></tr><tr><td>返回值处理</td><td>调用点不接收</td><td>代码简洁；代价是持续失败不可见</td></tr><tr><td>BTR 核对</td><td>期望值 <code>0x004E0001</code></td><td>一眼可比对；代价是时钟树变化不在这个寄存器里体现</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>HAL_CAN_ERROR_PARAM</code> 与 <code>HAL_CAN_ERROR_NOT_STARTED</code> 的数值，并指出各自的产生分支。</li>
+<li>逐位写出 TSR 0x82000004 的四个字段与取值。</li>
+<li>说明第一次发送返回 <code>HAL_OK</code>、第二次返回 <code>HAL_ERROR</code> 的原因。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>若把 <code>AutoRetransmission</code> 改成 <code>DISABLE</code>，本次失效的现象会怎样变化？邮箱还会被长期占用吗？</li>
+<li>设计一段上电自检：用 <code>HAL_RCC_GetPCLK1Freq()</code> 与 <code>BTR</code> 两个读数算出实际波特率，与 1 Mbps 比较并在偏差超过 1% 时停机。写出判据与处理。</li>
+<li>记录里 MSR 的 bit3 与 bit11 都置位。结合 <code>MCR</code> 的 <code>SLEEP</code> 位，说明 <code>WKUI</code> 置位可能的来因，以及在判断总线状态时应当如何取舍这两位。</li>
+<li>假设只有底盘板 CAN2 失效、CAN1 正常，按本文的排查顺序写出最短路径，并说明为什么可以直接排除时钟树。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c</code></td><td><code>HAL_CAN_AddTxMessage</code> 全满分支（:1276-1279、:1327-1333）、状态分支（:1273-1274、:1335-1341）、<code>HAL_CAN_Stop</code>（:1088、:1128）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h</code></td><td>错误码定义（:292-319）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h</code></td><td>MSR 位域（:1806-1830）、TSR 位域（:1836-1906）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>位定时（:42-46、:74-78）、<code>AutoRetransmission</code>（:50、:82）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td>时钟树与波特率计算结果（:363-390）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/2026sentriomeni.ioc</code></td><td>底盘板同段键（:366-393）</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>失效现象、寄存器读回值与根因记录</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/04-LK%E7%94%B5%E6%9C%BA/"><span class="k">← 上一篇</span><span class="t">LK电机</span><span class="d">CAN 与电机 · 5 个文件</span></a><a class="next" href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/06-%E5%8A%9F%E7%8E%87%E6%8E%A7%E5%88%B6/"><span class="k">下一篇 →</span><span class="t">功率控制</span><span class="d">CAN 与电机 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
