@@ -1,0 +1,2678 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>MJCF模型 · MuJoCo 与 MJX · 王宇翔</title><meta name="description" content="MJCF 各段编译成的 MjModel 字段、Go1 的 body 树与 qpos 布局，以及 mjx-go1-getup 从场景 XML 到 put_model 的加载链。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/01-MJCF%E6%A8%A1%E5%9E%8B/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="MJCF模型 · MuJoCo 与 MJX · 王宇翔"><meta property="og:description" content="MJCF 各段编译成的 MjModel 字段、Go1 的 body 树与 qpos 布局，以及 mjx-go1-getup 从场景 XML 到 put_model 的加载链。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/01-MJCF%E6%A8%A1%E5%9E%8B/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/">MuJoCo 与 MJX</a><span class="sep" aria-hidden="true">/</span><span class="now">MJCF模型</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>MJCF模型</b><span>06 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">06 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>MJCF模型结构与加载</span></a><ul class="toc__heads"><li><a href="#1-mjcf-的段与它们编译成什么" data-depth="2" data-heading-j="0">1. MJCF 的段与它们编译成什么</a></li><li><a href="#2-元素顺序名字与地址三套坐标" data-depth="2" data-heading-j="1">2. 元素顺序、名字与地址三套坐标</a></li><li><a href="#3-body-树与-qpos-的-712-布局" data-depth="2" data-heading-j="2">3. body 树与 qpos 的 7+12 布局</a></li><li><a href="#4-编译后实测的九个维度" data-depth="2" data-heading-j="3">4. 编译后实测的九个维度</a></li><li><a href="#5-从场景-xml-到-put_model-的四步加载链" data-depth="2" data-heading-j="4">5. 从场景 XML 到 put_model 的四步加载链</a></li><li><a href="#6-xml-写死结构运行期覆盖参数" data-depth="2" data-heading-j="5">6. XML 写死结构，运行期覆盖参数</a></li><li><a href="#7-keyframe-是出生姿态的单一来源" data-depth="2" data-heading-j="6">7. keyframe 是出生姿态的单一来源</a></li><li><a href="#8-结构与加载相关的故障现象" data-depth="2" data-heading-j="7">8. 结构与加载相关的故障现象</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>默认类与参数继承</span></a><ul class="toc__heads"><li><a href="#1-default-是编译期的参数模板" data-depth="2" data-heading-j="0">1. default 是编译期的参数模板</a></li><li><a href="#2-取值优先级与-childclass" data-depth="2" data-heading-j="1">2. 取值优先级与 childclass</a></li><li><a href="#3-逐项展开一条小腿关节的每个字段来自哪" data-depth="2" data-heading-j="2">3. 逐项展开：一条小腿关节的每个字段来自哪</a></li><li><a href="#4-三个-go1-版本的参数差异" data-depth="2" data-heading-j="3">4. 三个 Go1 版本的参数差异</a></li><li><a href="#5-本工程-go1-的-default-树落点" data-depth="2" data-heading-j="4">5. 本工程 Go1 的 default 树落点</a></li><li><a href="#6-用编译结果核对-default-展开" data-depth="2" data-heading-j="5">6. 用编译结果核对 default 展开</a></li><li><a href="#7-参数继承相关的故障现象" data-depth="2" data-heading-j="6">7. 参数继承相关的故障现象</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>关节与执行器</span></a><ul class="toc__heads"><li><a href="#1-关节给自由度执行器给力" data-depth="2" data-heading-j="0">1. 关节给自由度，执行器给力</a></li><li><a href="#2-位置伺服编译成固定增益与仿射偏置" data-depth="2" data-heading-j="1">2. 位置伺服编译成固定增益与仿射偏置</a></li><li><a href="#3-一步的完整链路与-10-个子步" data-depth="2" data-heading-j="2">3. 一步的完整链路与 10 个子步</a></li><li><a href="#4-走路与起身的动作落点" data-depth="2" data-heading-j="3">4. 走路与起身的动作落点</a></li><li><a href="#5-执行器顺序与关节顺序观测切片的一致性" data-depth="2" data-heading-j="4">5. 执行器顺序与关节顺序、观测切片的一致性</a></li><li><a href="#6-动作语义改动前后的对照" data-depth="2" data-heading-j="5">6. 动作语义改动前后的对照</a></li><li><a href="#7-关节与执行器相关的故障现象" data-depth="2" data-heading-j="6">7. 关节与执行器相关的故障现象</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>几何与碰撞参数</span></a><ul class="toc__heads"><li><a href="#1-外观与碰撞两套-geom" data-depth="2" data-heading-j="0">1. 外观与碰撞两套 geom</a></li><li><a href="#2-contype-与-conaffinity-的位与过滤" data-depth="2" data-heading-j="1">2. contype 与 conaffinity 的位与过滤</a></li><li><a href="#3-priority-决定接触参数整组归属" data-depth="2" data-heading-j="2">3. priority 决定接触参数整组归属</a></li><li><a href="#4-condim-与溶剂参数软硬两套物理" data-depth="2" data-heading-j="3">4. condim 与溶剂参数：软硬两套物理</a></li><li><a href="#5-本工程-geom-与接触参数的落点" data-depth="2" data-heading-j="4">5. 本工程 geom 与接触参数的落点</a></li><li><a href="#6-地形场景的三条硬约束" data-depth="2" data-heading-j="5">6. 地形场景的三条硬约束</a></li><li><a href="#7-geom-与接触相关的故障现象" data-depth="2" data-heading-j="6">7. geom 与接触相关的故障现象</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>场景装配、传感器与关键帧</span></a><ul class="toc__heads"><li><a href="#1-主体与场景的两段式装配" data-depth="2" data-heading-j="0">1. 主体与场景的两段式装配</a></li><li><a href="#2-includecompiler-与-asset-的路径基准" data-depth="2" data-heading-j="1">2. include、compiler 与 asset 的路径基准</a></li><li><a href="#3-hfield-的-size-四项与高度范围" data-depth="2" data-heading-j="2">3. hfield 的 size 四项与高度范围</a></li><li><a href="#4-14-个传感器的三类分工" data-depth="2" data-heading-j="3">4. 14 个传感器的三类分工</a></li><li><a href="#5-sensordata-的寻址范式" data-depth="2" data-heading-j="4">5. sensordata 的寻址范式</a></li><li><a href="#6-keyframe-与-qposqvel-的维度差" data-depth="2" data-heading-j="5">6. keyframe 与 qpos/qvel 的维度差</a></li><li><a href="#7-本工程传感器与关键帧的读取点" data-depth="2" data-heading-j="6">7. 本工程传感器与关键帧的读取点</a></li><li><a href="#8-场景与传感器相关的故障现象" data-depth="2" data-heading-j="7">8. 场景与传感器相关的故障现象</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="5"><a href="#file-6"><span class="n">06</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-按三个时刻分层定位" data-depth="2" data-heading-j="0">1. 按三个时刻分层定位</a></li><li><a href="#2-编译自检脚本要打印什么" data-depth="2" data-heading-j="1">2. 编译自检脚本要打印什么</a></li><li><a href="#3-调试工具链与顺序" data-depth="2" data-heading-j="2">3. 调试工具链与顺序</a></li><li><a href="#4-常见问题清单" data-depth="2" data-heading-j="3">4. 常见问题清单</a></li><li><a href="#5-易错点" data-depth="2" data-heading-j="4">5. 易错点</a></li><li><a href="#6-观测维度三档的对齐检查" data-depth="2" data-heading-j="5">6. 观测维度三档的对齐检查</a></li><li><a href="#7-nan-护栏不能只回填状态" data-depth="2" data-heading-j="6">7. NaN 护栏不能只回填状态</a></li><li><a href="#8-资产路径的三处核对" data-depth="2" data-heading-j="7">8. 资产路径的三处核对</a></li><li><a href="#9-三处最常改错的位置" data-depth="2" data-heading-j="8">9. 三处最常改错的位置</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">MuJoCo 与 MJX</span><span class="dot" aria-hidden="true">·</span><span>6 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>MuJoCo / MJCF / MJX / Go1 / 模型加载 / default / 参数继承 / joint</span></div><h1 class="docs__title">MJCF模型</h1><p class="docs__lead">MJCF 各段编译成的 MjModel 字段、Go1 的 body 树与 qpos 布局，以及 mjx-go1-getup 从场景 XML 到 put_model 的加载链。</p></header><section class="dfile" id="file-1" data-file="01-MJCF模型结构与加载"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-MJCF模型结构与加载</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/01-MJCF模型/01-MJCF模型结构与加载.md</span></div><div class="dfile__body"><h1 id="mjcf模型结构与加载">MJCF模型结构与加载</h1>
+<p>MJCF 是 MuJoCo 的模型描述格式，用若干 XML 段描述一个多体系统。编译之后得到两个对象：MjModel 存放不随时间变化的结构与参数，MjData 存放每一时刻的状态。理解这两个对象的边界，是读懂后面所有物理参数的前提。</p>
+<p>每个 XML 段编译后落到 MjModel 的哪个部分，是后面读任何字段都要先回答的问题；元素顺序、名字与地址这三套坐标如何区分，决定按名取字段会不会取错。项目在 Go1 上实测的九个维度数字，以及从场景 XML 到 <code>mjx.put_model</code> 的四步加载链里哪些参数被覆盖，都能用来验证这两条。</p>
+<blockquote>
+<p>主体模型是 <code>models/go1/go1_mjx_position.xml</code>，场景入口是 <code>models/go1/scene_mjx_position.xml</code>，运行时加载在 <code>envs/go1_walk.py:405-448</code>。</p>
+</blockquote>
+<h2 id="1-mjcf-的段与它们编译成什么">1. MJCF 的段与它们编译成什么</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>MJCF 段</th><th>编译后落到</th><th>本项目用途</th></tr></thead><tbody><tr><td><code>compiler</code></td><td>编译期选项，不进入运行时字段</td><td>角度单位、mesh 目录、autolimits</td></tr><tr><td><code>option</code></td><td><code>model.opt</code></td><td>接触锥、impratio</td></tr><tr><td><code>default</code></td><td>无独立字段，编译时展开到各元素</td><td>关节与执行器的公共参数</td></tr><tr><td><code>asset</code></td><td><code>mesh_*</code> / <code>mat_*</code> / <code>tex_*</code> / <code>hfield_*</code></td><td>STL、材质、地形高度场</td></tr><tr><td><code>worldbody</code></td><td><code>body_*</code> / <code>geom_*</code> / <code>site_*</code> / <code>jnt_*</code></td><td>运动学树与碰撞体</td></tr><tr><td><code>actuator</code></td><td><code>actuator_*</code></td><td>12 个位置伺服</td></tr><tr><td><code>sensor</code></td><td><code>sensor_*</code></td><td>RL 观测来源</td></tr><tr><td><code>keyframe</code></td><td><code>key_*</code></td><td>home 出生姿态</td></tr></tbody></table>
+<p>结构与动态的分界是 <code>mj_forward</code>。XML 只决定 MjModel 的常数；qpos、qvel、act 属于 MjData，仿真步进时变化。编译过程按固定顺序完成：解析 include、展开 default、按出现顺序编号 body/joint/geom/actuator/sensor、建立名字到 id 的表。编号顺序在运行时可见，改动 XML 中元素的先后会直接改变下标。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["XML 文本"] --> B["解析 include 与 default"]
+  B --> C["按出现顺序编号元素"]
+  C --> D["建立名字到 id 的表"]
+  D --> E["MjModel 结构与参数"]
+  E --> F["mj_forward 产生派生量"]
+  G["qpos qvel act"] --> F
+  F --> H["MjData 状态"]</pre></div>
+<h2 id="2-元素顺序名字与地址三套坐标">2. 元素顺序、名字与地址三套坐标</h2>
+<p>同一个元素在 MuJoCo 里有三种被引用的方式，混用是最常见的下标错位来源：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>名称</th><th>含义</th><th>取值方式</th></tr></thead><tbody><tr><td>元素顺序 id</td><td>编译时按出现顺序分配</td><td><code>model.geom_bodyid[gid]</code> 这类数组</td></tr><tr><td>名字</td><td>XML 里的 <code>name</code> 属性</td><td><code>model.geom("FR").id</code></td></tr><tr><td>地址</td><td>该元素在拼接数组中的偏移</td><td><code>model.sensor_adr[sid]</code></td></tr></tbody></table>
+<p>顺序 id 是数组下标，用于批量访问；名字是查找键，运行时用 <code>geom(name)</code>、<code>site(name)</code>、<code>body(name)</code> 查回 id；地址只对拼接型字段有意义，例如 <code>sensordata</code> 与 <code>qpos</code>。运行时按名字取 id，例如 <code>model.site("imu").id</code> 与 <code>model.body("trunk").id</code>，这样重排 XML 不会静默改错对象。</p>
+<p>三者的关系可以这样概括：名字是稳定的接口，id 与地址都是编译产物。凡是把 id 或地址写进代码的地方，改 XML 顺序都要重新核对。</p>
+<h2 id="3-body-树与-qpos-的-712-布局">3. body 树与 qpos 的 7+12 布局</h2>
+<p><code>worldbody</code> 是树的根，<code>body</code> 按父子嵌套定义。子 body 的 <code>pos</code>/<code>quat</code> 是相对父体坐标系的位姿，关节只增加该 body 相对父体的自由度。Go1 的树是四层深度，四条腿结构相同：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  W["worldbody"] --> T["trunk (pos 0 0 0.445)"]
+  T --> FH["FR_hip"] --> FT["FR_thigh"] --> FC["FR_calf"]
+  T --> LH["FL_hip"] --> LT["FL_thigh"] --> LC["FL_calf"]
+  T --> RH["RR_hip"] --> RT["RR_thigh"] --> RC["RR_calf"]
+  T --> XH["RL_hip"] --> XT["RL_thigh"] --> XC["RL_calf"]</pre></div>
+<p>trunk 上的 <code>freejoint</code> 让基座有 6 个自由度，编译成 qpos 的 7 个分量（3 位移 + 4 单位四元数 w x y z）与 qvel 的 6 个分量（3 线速度 + 3 角速度）。12 个铰链关节按声明顺序追加到 qpos[7:19]：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi><mi>p</mi><mi>o</mi><mi>s</mi><mo>=</mo><msup><mrow><mo fence="true">[</mo><mtable rowspacing="0.16em" columnalign="center center center center center center center center center center" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>p</mi><mi>x</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>p</mi><mi>y</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>p</mi><mi>z</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>q</mi><mi>w</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>q</mi><mi>x</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>q</mi><mi>y</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>q</mi><mi>z</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>θ</mi><mn>1</mn></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mo lspace="0em" rspace="0em">…</mo></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>θ</mi><mn>12</mn></msub></mstyle></mtd></mtr></mtable><mo fence="true">]</mo></mrow><mi>T</mi></msup></mrow><annotation encoding="application/x-tex">qpos = \begin{bmatrix} p_x &#x26; p_y &#x26; p_z &#x26; q_w &#x26; q_x &#x26; q_y &#x26; q_z &#x26; \theta_1 &#x26; \dots &#x26; \theta_{12} \end{bmatrix}^{T}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mord mathnormal">p</span><span class="mord mathnormal">os</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4312em;vertical-align:-0.35em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">[</span></span><span class="mord"><span class="mtable"><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="minner">…</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">12</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">]</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.0812em;"><span style="top:-3.3029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>关节顺序与四条腿的分段：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>切片</th><th>腿</th><th>关节顺序</th></tr></thead><tbody><tr><td>qpos[7:10]</td><td>FR</td><td>hip / thigh / calf</td></tr><tr><td>qpos[10:13]</td><td>FL</td><td>hip / thigh / calf</td></tr><tr><td>qpos[13:16]</td><td>RR</td><td>hip / thigh / calf</td></tr><tr><td>qpos[16:19]</td><td>RL</td><td>hip / thigh / calf</td></tr></tbody></table>
+<p>四元数用 4 个分量表达 3 个旋转自由度，所以位置态比速度态多一个分量：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo>=</mo><mn>19</mn></mrow><annotation encoding="application/x-tex">nq = 19</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">19</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi><mo>=</mo><mn>18</mn></mrow><annotation encoding="application/x-tex">nv = 18</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">18</span></span></span></span>，两者差 1 正好来自基座旋转的四元数冗余。这一条差值在观测切片与 reset 里都要记住，否则速度切片会越界。</p>
+<h2 id="4-编译后实测的九个维度">4. 编译后实测的九个维度</h2>
+<p>用 <code>mujoco.MjModel.from_xml_path</code> 编译本场景后实测：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo>=</mo><mn>19</mn></mrow><annotation encoding="application/x-tex">nq=19</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">19</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi><mo>=</mo><mn>18</mn></mrow><annotation encoding="application/x-tex">nv=18</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">18</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>u</mi><mo>=</mo><mn>12</mn></mrow><annotation encoding="application/x-tex">nu=12</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">12</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>j</mi><mi>n</mi><mi>t</mi><mo>=</mo><mn>13</mn></mrow><annotation encoding="application/x-tex">njnt=13</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">nj</span><span class="mord mathnormal">n</span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">13</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>b</mi><mi>o</mi><mi>d</mi><mi>y</mi><mo>=</mo><mn>14</mn></mrow><annotation encoding="application/x-tex">nbody=14</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">nb</span><span class="mord mathnormal">o</span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">14</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>s</mi><mi>i</mi><mi>t</mi><mi>e</mi><mo>=</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">nsite=6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">s</span><span class="mord mathnormal">i</span><span class="mord mathnormal">t</span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>s</mi><mi>e</mi><mi>n</mi><mi>s</mi><mi>o</mi><mi>r</mi><mo>=</mo><mn>14</mn></mrow><annotation encoding="application/x-tex">nsensor=14</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">se</span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0278em;">sor</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">14</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>k</mi><mi>e</mi><mi>y</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">nkey=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">nk</span><span class="mord mathnormal" style="margin-right:0.0359em;">ey</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>。关节类型数组是 <code>[0, 3, 3, ...]</code>，0 为 free joint，3 为 hinge。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>值</th><th>来源</th></tr></thead><tbody><tr><td><code>nq</code></td><td>19</td><td>free joint 7 + 12 铰链</td></tr><tr><td><code>nv</code></td><td>18</td><td>free joint 6 + 12 铰链</td></tr><tr><td><code>nu</code></td><td>12</td><td>actuator 段 12 个 <code>position</code></td></tr><tr><td><code>njnt</code></td><td>13</td><td>1 free + 12 hinge</td></tr><tr><td><code>nbody</code></td><td>14</td><td>world 之外的 13 个 body</td></tr><tr><td><code>nsite</code></td><td>6</td><td>head、imu 与四个足端</td></tr><tr><td><code>nsensor</code></td><td>14</td><td>见场景装配一篇的分类</td></tr><tr><td><code>nkey</code></td><td>1</td><td>home</td></tr></tbody></table>
+<p>这些维度由编译结果决定，不能全部从 XML 逐行读出。<code>nq</code> 与 <code>nv</code> 由关节类型决定，<code>nu</code> 由 actuator 段的行数决定，<code>nbody</code> 由 body 嵌套层数决定。核对维度比逐行读 XML 更快地发现结构性改动。</p>
+<h2 id="5-从场景-xml-到-put_model-的四步加载链">5. 从场景 XML 到 put_model 的四步加载链</h2>
+<p>加载链分四步：选场景、收集资产、编译、转 MJX。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant E as Go1Walk.__init__
+  participant M as mujoco
+  participant X as mjx
+  E->>E: 选 scene_mjx_position 或 scene_mjx_terrain
+  E->>E: update_assets 收集 xml 与 assets 目录
+  E->>M: MjModel.from_xml_path(xml_path)
+  M-->>E: MjModel
+  E->>E: 覆盖 opt.timestep / ccd_iterations / iterations
+  E->>X: mjx.put_model(model, impl)
+  X-->>E: mjx.Model（JAX 数组）</pre></div>
+<p>资产先收集再编译的原因在 <code>envs/go1_walk.py:415-419</code>：<code>update_assets</code> 把主体 XML 与 <code>assets/</code> 下的 STL 一起放进字典，MJX 在 JIT 内重建模型时需要同一份资产，而不是回读本机路径。字典存进 <code>self._model_assets</code>，供后续 viewer 与重放使用。</p>
+<p>场景选择在 <code>envs/go1_walk.py:413</code>：<code>TERRAIN_XML_PATH if terrain else XML_PATH</code>。两个场景的差异只在地面与外观，机器人定义来自同一份主体文件。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>与原理的对应</th></tr></thead><tbody><tr><td><code>envs/go1_walk.py:413</code></td><td><code>TERRAIN_XML_PATH if terrain else XML_PATH</code></td><td>场景选择</td></tr><tr><td><code>envs/go1_walk.py:417-419</code></td><td><code>update_assets(...)</code> 打包 XML 与 assets</td><td>供 MJX 在 JIT 内解析资源</td></tr><tr><td><code>envs/go1_walk.py:420-422</code></td><td><code>MjModel.from_xml_path</code>、<code>opt.timestep</code>、<code>ccd_iterations</code></td><td>XML 到 MjModel，再覆盖选项</td></tr><tr><td><code>envs/go1_walk.py:445-446</code></td><td><code>mjx.put_model(..., impl=...)</code></td><td>MjModel 到 MJX 模型</td></tr><tr><td><code>envs/go1_walk.py:472-473</code></td><td><code>keyframe("home").qpos</code> 与 <code>qpos[7:]</code></td><td>home 姿态与关节默认值</td></tr><tr><td><code>envs/go1_walk.py:485-491</code></td><td><code>body("trunk")</code> / <code>site(name)</code> / <code>geom(name)</code></td><td>名字到 id</td></tr><tr><td><code>envs/go1_walk.py:574-588</code></td><td><code>xml_path</code>、<code>action_size</code>、<code>mj_model</code>、<code>mjx_model</code> 访问器</td><td>对外暴露编译产物</td></tr><tr><td><code>envs/go1_walk.py:580</code></td><td><code>action_size</code> 返回 <code>mjx_model.nu</code></td><td>12，来自 actuator 段数量</td></tr><tr><td><code>envs/go1_walk.py:844</code></td><td>reset 末尾调用 <code>mj_forward</code></td><td>一次性算出派生量</td></tr></tbody></table>
+<h2 id="6-xml-写死结构运行期覆盖参数">6. XML 写死结构，运行期覆盖参数</h2>
+<p>XML 里能写死的是结构，不是全部运行参数。<code>models/go1/go1_mjx_position.xml:20</code> 只写了 <code>cone="elliptic" impratio="100"</code>，timestep 与求解器迭代次数都在加载后覆盖：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>XML</th><th>运行时</th><th>原因</th></tr></thead><tbody><tr><td><code>timestep</code></td><td>未写（默认 0.002）</td><td><code>envs/go1_walk.py:421</code> 赋 <code>sim_dt</code></td><td>训练与查看器共用配置</td></tr><tr><td><code>ccd_iterations</code></td><td>未写</td><td><code>envs/go1_walk.py:422</code> 赋 20</td><td>高速足端撞击的连续碰撞检测</td></tr><tr><td><code>iterations</code></td><td>未写</td><td><code>envs/go1_walk.py:425-433</code> 赋 2 或 20</td><td>软/硬接触两套物理</td></tr></tbody></table>
+<p><code>mj_forward</code> 在 reset 末尾调用（<code>envs/go1_walk.py:844</code>），把 keyframe 的 qpos 一次性算出 site_xpos、sensordata 等派生量。派生量属于 MjData，不写回 MjModel。</p>
+<p>这套分工带来一个固定顺序：改结构要重编模型，改运行参数不用。排查”改了 XML 没反应”时，先确认改的是结构还是被覆盖的参数。</p>
+<h2 id="7-keyframe-是出生姿态的单一来源">7. keyframe 是出生姿态的单一来源</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>与原理的对应</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml:96</code></td><td><code>&#x3C;body name="trunk" pos="0 0 0.445" childclass="go1"></code></td><td>树根下唯一的浮动基座</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:99</code></td><td>trunk 质量 5.204 kg 与三项 diaginertia</td><td><code>body_subtreemass</code> 的组成</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:100</code></td><td><code>&#x3C;freejoint/></code></td><td>qpos[0:7] 与 qvel[0:6] 的来源</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:111,117,124</code></td><td>FR_hip / FR_thigh / FR_calf 的 pos</td><td>相对位姿链，决定腿长关系</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:98,110,131</code></td><td>site <code>head</code>、<code>imu</code> 与四个足端 site</td><td>观测、接触、可视化的坐标点</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:247-249</code></td><td>home keyframe 的 qpos 19 项与 ctrl 12 项</td><td>出生姿态，不写在 body 的 pos 里</td></tr></tbody></table>
+<p>reset 读同一份 keyframe（<code>envs/go1_walk.py:790</code>）。因此 trunk 的 <code>pos="0 0 0.445"</code> 只在编译期作为默认 qpos；实际出生点由 keyframe 的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi><mo>=</mo><mn>0.35</mn></mrow><annotation encoding="application/x-tex">z=0.35</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.35</span></span></span></span> 加地形高度决定，平地自由沉降后稳定在约 0.277 m（<code>docs/experiment-log.md:1429-1430</code> 记录了 0.2760 m 的实测）。<code>envs/go1_getup.py:119</code> 用 <code>mj_model.jnt_range[1:]</code> 取 12 个铰链的限位，跳过第 0 个 free joint，正是依赖上面这套编号约定。</p>
+<h2 id="8-结构与加载相关的故障现象">8. 结构与加载相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>把 body 的 <code>pos</code> 当成运行时 qpos</td><td>改了 XML 的 z，reset 结果不变</td><td><code>envs/go1_walk.py:790</code> 覆盖 qpos</td></tr><tr><td>按固定下标取关节</td><td>改腿顺序后 qpos 切片错位</td><td><code>envs/go1_getup.py:119</code> 注释标明第 0 项是 free joint</td></tr><tr><td>混淆同名 site 与 geom</td><td>足端 site 与足端 geom 都叫 FR</td><td><code>models/go1/go1_mjx_position.xml:130-131</code></td></tr><tr><td>场景未 include 主体</td><td><code>body("trunk")</code> 直接报错</td><td><code>scene_mjx_position.xml:2</code></td></tr><tr><td>在 XML 里改 timestep</td><td>运行时无效</td><td><code>envs/go1_walk.py:421</code> 代码赋值覆盖</td></tr><tr><td>用 <code>nsite</code> 当足端数量</td><td>足端 site 是 4 个，另有 imu 与 head</td><td><code>models/go1/go1_mjx_position.xml:98,110,131</code> 共 6 个</td></tr><tr><td>只复制主体 XML 不复制 assets</td><td>编译时报找不到 STL</td><td><code>envs/go1_walk.py:417-419</code> 两个目录都要收集</td></tr><tr><td>把 include 后的路径当成相对当前文件</td><td>子目录场景找不到模型</td><td><code>scene_mjx_terrain.xml:33</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ol>
+<li>MJCF 分三类内容：编译期选项、静态结构（body/joint/geom）、运行时接口（actuator/sensor/keyframe）。</li>
+<li>body 树决定运动学链，freejoint 让 trunk 成为浮动基座，qpos 布局是 7 + 12。</li>
+<li>编译后本模型 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo>=</mo><mn>19</mn></mrow><annotation encoding="application/x-tex">nq=19</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">19</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi><mo>=</mo><mn>18</mn></mrow><annotation encoding="application/x-tex">nv=18</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">18</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>u</mi><mo>=</mo><mn>12</mn></mrow><annotation encoding="application/x-tex">nu=12</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">12</span></span></span></span>，关节顺序与 actuator 顺序一致。</li>
+<li>一切按名字取 id，不按下标；编号顺序由 XML 出现顺序决定。</li>
+<li>keyframe 是出生姿态的单一来源，body 的 pos 只是编译默认值。</li>
+<li>加载链是选场景、收资产、编译、转 MJX 四步，资产字典供 JIT 内重建。</li>
+</ol>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>优点</th><th>代价</th></tr></thead><tbody><tr><td>单文件包含 worldbody 与场景</td><td>一处看全</td><td>换地面要复制整棵 body 树</td></tr><tr><td>主体 XML + scene include</td><td>地面与外观独立替换</td><td>需要 <code>update_assets</code> 同时打包两个文件</td></tr><tr><td>结构写 XML、参数运行期覆盖</td><td>同一模型跑多套物理</td><td>实际生效值不在 XML 里，排查要两处看</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出编译 <code>scene_mjx_position.xml</code> 后的 <code>nq</code>、<code>nv</code>、<code>nu</code>、<code>njnt</code>，并说明 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi></mrow><annotation encoding="application/x-tex">nq</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi></mrow><annotation encoding="application/x-tex">nv</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span></span></span></span> 相差 1 的原因。</li>
+<li>说明元素顺序 id、名字与地址三者的区别，并各给出一个使用场景。</li>
+<li>解释为什么在 XML 里改 <code>timestep</code> 不会生效，实际决定子步时长的是哪两处。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>把四条腿的声明顺序整体倒过来（RL 在最前），列出需要同步修改的位置，并说明不改会怎样表现。</li>
+<li>设计一个只读 <code>MjModel</code> 的加载自检脚本，用它判断”某次改动是否真的改变了模型结构”，列出要打印的字段。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml</code></td><td>主体 MJCF</td></tr><tr><td><code>models/go1/scene_mjx_position.xml</code></td><td>平地场景</td></tr><tr><td><code>models/go1/scene_mjx_terrain.xml</code></td><td>地形场景</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>加载、reset、step</td></tr><tr><td><code>envs/go1_getup.py</code></td><td>复用同一模型的起身环境</td></tr><tr><td><code>docs/experiment-log.md</code></td><td>沉降高度等实测记录</td></tr><tr><td>仓库根 <code>/home/tc63/mujoco/mjx-go1-getup</code></td><td>本项目源码根</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-默认类与参数继承"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-默认类与参数继承</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/01-MJCF模型/02-默认类与参数继承.md</span></div><div class="dfile__body"><h1 id="默认类与参数继承">默认类与参数继承</h1>
+<p>MJCF 的 <code>default</code> 段定义参数模板，<code>class</code> 属性把模板挂到具体元素上。模板不产生运行时字段，编译期把每个元素的字段补全后才写入 MjModel。四足模型有 12 个结构相同的铰链与 56 个 geom，逐元素写全会让”改一个参数”变成改十几处，default 树解决的正是这个问题。</p>
+<p>默认类与实例谁覆盖谁，是这份继承规则里最容易记反的一条；<code>autolimits</code> 让 <code>limited</code> 由 <code>range</code> 推断，则说明 XML 里写的值不一定是编译后的值。把一条小腿关节的每项字段追到来源行，再对照本项目、参考仓库与 menagerie 三个版本，能看出哪些差异来自 default 树、哪些来自加载后的覆盖。</p>
+<blockquote>
+<p>继承规则写在 <code>models/go1/go1_mjx_position.xml:22-83</code> 的 <code>&#x3C;default></code> 树里；对照版本在 <code>unitree_go1/go1_position.xml</code>、<code>unitree_go1/go1_torque.xml</code> 与 menagerie 的 <code>unitree_go1/go1.xml</code>。</p>
+</blockquote>
+<h2 id="1-default-是编译期的参数模板">1. default 是编译期的参数模板</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层面</th><th>写法</th><th>作用范围</th></tr></thead><tbody><tr><td>顶层 default</td><td><code>&#x3C;default class="go1">...&#x3C;/default></code></td><td>显式引用该类的元素</td></tr><tr><td>子类 default</td><td>嵌套在类里的 <code>&#x3C;default class="knee"></code></td><td>引用 <code>class="knee"</code> 的元素</td></tr><tr><td>body 级 childclass</td><td><code>&#x3C;body ... childclass="go1"></code></td><td>该 body 及其所有后代，除非后代另写 class</td></tr></tbody></table>
+<p>Go1 模型的 default 树按元素类型分支，<code>knee</code>、<code>foot</code> 这类子类只覆盖少数几项，其余继承 <code>go1</code>：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  G["default class=go1&#x3C;br/>joint: axis 0 1 0 / damping 1.0 / armature 0.01 / frictionloss 0.1&#x3C;br/>position: kp 20 / kv 1 / forcerange 正负 23.7"] --> A["abduction&#x3C;br/>axis 1 0 0 / range 正负 0.863"]
+  G --> H["hip&#x3C;br/>range -0.686 到 4.501"]
+  G --> K["knee&#x3C;br/>range -2.818 到 -0.888 / forcerange 正负 35.55"]
+  G --> V["visual&#x3C;br/>mesh / contype 0 / conaffinity 0 / group 2"]
+  G --> C["collision&#x3C;br/>capsule / group 3"]
+  C --> F["foot&#x3C;br/>sphere 0.023 / condim 6 / solimp 0.015 1 0.031&#x3C;br/>priority 1 / friction 0.6 0.02 0.01"]</pre></div>
+<p>default 树的结构与元素类型一一对应：<code>joint</code>、<code>geom</code>、<code>site</code>、<code>position</code> 各有自己的模板分支，<code>foot</code> 挂在 <code>geom</code> 下而不是并列。写错了嵌套层级，元素拿不到预期参数，编译却不会报错。</p>
+<h2 id="2-取值优先级与-childclass">2. 取值优先级与 childclass</h2>
+<p>编译单个元素时的取值优先级，从高到低：</p>
+<ol>
+<li>元素自身的属性，例如 <code>&#x3C;joint class="knee" ... forcerange="..."></code> 里直接写的值。</li>
+<li>元素 <code>class</code> 指向的 default 里对应元素类型的属性。</li>
+<li>该 class 的祖先 default。</li>
+<li>MuJoCo 内置默认值。</li>
+</ol>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["元素属性"] -->|未写| B["class 指向的 default"]
+  B -->|未写| C["祖先 class default"]
+  C -->|未写| D["编译器内置默认"]
+  A --> E["写入 MjModel 字段"]
+  B --> E
+  C --> E
+  D --> E</pre></div>
+<p>嵌套的 <code>default</code> 按 XML 树继承：子类自动继承父类的全部属性，再覆盖自己写出的项。同一个 <code>default</code> 树里类名必须唯一，跨段重名会让后者覆盖前者，编译不报错。</p>
+<p><code>childclass</code> 把默认模板一次性挂给整棵子树。<code>models/go1/go1_mjx_position.xml:96</code> 的 <code>childclass="go1"</code> 让 trunk 之下所有 body 默认走 <code>go1</code> 模板，四条腿的关节与 geom 因此共享同一套公共参数。后代若显式写了 <code>class</code>，以显式值为准。</p>
+<h2 id="3-逐项展开一条小腿关节的每个字段来自哪">3. 逐项展开：一条小腿关节的每个字段来自哪</h2>
+<p>以 <code>FR_calf_joint</code> 为例，编译后的每个字段来自哪一层可以逐项核对：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>值</th><th>来源层</th></tr></thead><tbody><tr><td><code>axis</code></td><td>0 1 0</td><td>go1 基类第 24 行</td></tr><tr><td><code>damping</code></td><td>1.0</td><td>go1 基类第 24 行</td></tr><tr><td><code>armature</code></td><td>0.01</td><td>go1 基类第 24 行</td></tr><tr><td><code>frictionloss</code></td><td>0.1</td><td>go1 基类第 24 行</td></tr><tr><td><code>range</code></td><td>-2.818 -0.888</td><td>knee 子类第 35 行</td></tr><tr><td><code>limited</code></td><td>真</td><td>autolimits 由 range 推断</td></tr><tr><td>执行器 <code>forcerange</code></td><td>-35.55 35.55</td><td>knee 子类第 36 行</td></tr><tr><td>执行器 <code>ctrlrange</code></td><td>-2.818 -0.888</td><td>knee 子类第 36 行</td></tr><tr><td>执行器 <code>kp</code> / <code>kv</code></td><td>20 / 1</td><td>go1 基类第 25 行</td></tr></tbody></table>
+<p>四条腿共用同一模板，改一个数值就同时改动 FR/FL/RR/RL 的对应关节。12 个关节里只有 <code>range</code> 与 <code>forcerange</code> 需要按腿区分，其余共用，这是选择 default 而非逐元素书写的主要原因。</p>
+<p><code>autolimits="true"</code>（<code>models/go1/go1_mjx_position.xml:18</code>）把 <code>limited</code> 属性交给编译器推断：写了 <code>range</code> 就是有限位，没写就是无限位。因此 XML 里只写 <code>range="-0.863 0.863"</code> 而不写 <code>limited="true"</code>。编译后实测 <code>jnt_limited</code> 对 12 个铰链全为真。</p>
+<h2 id="4-三个-go1-版本的参数差异">4. 三个 Go1 版本的参数差异</h2>
+<p>数值来自编译后的 MjModel：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>本项目 <code>go1_mjx_position.xml</code></th><th>参考仓库 position 模型</th><th>menagerie <code>go1.xml</code></th></tr></thead><tbody><tr><td>基类 <code>position</code></td><td>kp 20 / kv 1</td><td>kp 20 / kv 1</td><td>kp 100 / 无 kv</td></tr><tr><td>基类 <code>joint</code> damping</td><td>1.0</td><td>1.0</td><td>2.0</td></tr><tr><td>基类 <code>joint</code> frictionloss</td><td>0.1</td><td>0.1</td><td>0.2</td></tr><tr><td>abduction 类 damping</td><td>继承 1.0</td><td>继承 1.0</td><td>覆盖为 1.0</td></tr><tr><td>足端 solimp</td><td>0.015 1 0.031</td><td>0.015 1 0.031</td><td>0.015 1 0.023</td></tr><tr><td>足端 friction</td><td>0.6 0.02 0.01</td><td>0.6 0.02 0.01</td><td>0.8 0.02 0.01</td></tr><tr><td>基类 <code>geom</code> condim</td><td>未写，编译为 3</td><td>第 8 行注释掉</td><td>生效 <code>condim="1"</code></td></tr><tr><td>材质 dark</td><td>rgba 0.1</td><td>rgba 0.1</td><td>rgba 0.2</td></tr><tr><td>home qpos z</td><td>0.35</td><td>0.35</td><td>0.27</td></tr></tbody></table>
+<p>参考仓库的 torque 模型又是另一套：<code>position</code> 缺省变成纯力矩执行器（gainprm 1、biasprm 全 0），足端 <code>friction="2.0 0.02 0.01"</code>（<code>unitree_go1/go1_torque.xml:9-12,66</code>）。</p>
+<p>三个版本里最容易被忽略的差异是 kp：menagerie 的 100 是参考仓库与本项目的五倍，换模型却不换策略时，同样的动作目标会产生完全不同的力矩量级。对照实验前先把这张表逐项确认。</p>
+<h2 id="5-本工程-go1-的-default-树落点">5. 本工程 Go1 的 default 树落点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>与原理的对应</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml:24</code></td><td><code>&#x3C;joint axis="0 1 0" damping="1.0" armature="0.01" frictionloss="0.1"/></code></td><td>基类给所有铰链的公共动力学参数</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:25</code></td><td><code>&#x3C;position kp="20" kv="1" forcerange="-23.7 23.7"/></code></td><td>位置伺服基类</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:26-29</code></td><td>abduction 覆盖 axis 与 range</td><td>外展关节绕 x 轴，行程正负 0.863</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:30-33</code></td><td>hip 覆盖 range</td><td>大腿行程 -0.686 到 4.501</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:34-37</code></td><td>knee 覆盖 range 与 forcerange</td><td>小腿行程 -2.818 到 -0.888，力矩正负 35.55</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:38-40</code></td><td>visual 类 <code>contype=0 conaffinity=0 group=2</code></td><td>外观网格不参与碰撞</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:41-81</code></td><td>collision 类与 hip/thigh/calf/foot 子类</td><td>碰撞几何复用同一套模板</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:76-80</code></td><td>foot 覆盖 condim/solimp/friction/priority</td><td>足端接触参数的最终来源</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:96</code></td><td><code>childclass="go1"</code></td><td>整棵 body 树默认走 go1 模板</td></tr><tr><td><code>envs/go1_walk.py:434-438</code></td><td>直接把 <code>geom_solimp</code> / <code>geom_condim</code> 写回 MjModel</td><td>default 是编译期输入，编译后仍可覆盖</td></tr><tr><td><code>envs/go1_walk.py:476-483</code></td><td>由 <code>actuator_ctrlrange</code> 算内缩 5% 的软限位</td><td>ctrlrange 的运行时用途</td></tr></tbody></table>
+<p><code>envs/go1_walk.py:436-438</code> 把四个足端的 <code>solimp</code> 改成 <code>[0.9, 0.95, 0.023, 0.5, 2.0]</code> 并把 <code>condim</code> 改成 3，对应软接触训练档；<code>foot_soft_contact=False</code> 时保留 XML 的硬接触。<code>envs/go1_getup.py:119-125</code> 则从 <code>jnt_range</code> 取限位，再把软限位算成中心正负 0.5×range×0.95，说明 default 里的 <code>range</code> 会一路传到奖励函数。</p>
+<p>default 与 autolimits 的组合让改一个数值就影响全体同类元素，代价是单个关节的实际取值必须靠编译结果核对，不能只看元素那一行。</p>
+<h2 id="6-用编译结果核对-default-展开">6. 用编译结果核对 default 展开</h2>
+<p>default 只在编译期存在，因此核对它必须看 MjModel。下面这段只读脚本可以逐项确认展开是否符合预期：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">import</span><span style="color:#24292E"> mujoco, numpy </span><span style="color:#D73A49">as</span><span style="color:#24292E"> np</span></span>
+<span class="line"><span style="color:#24292E">m </span><span style="color:#D73A49">=</span><span style="color:#24292E"> mujoco.MjModel.from_xml_path(</span><span style="color:#032F62">"models/go1/scene_mjx_position.xml"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#032F62">"nq nv nu njnt ngeom"</span><span style="color:#24292E">, m.nq, m.nv, m.nu, m.njnt, m.ngeom)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#032F62">"jnt_limited"</span><span style="color:#24292E">, m.jnt_limited)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#032F62">"jnt_range"</span><span style="color:#24292E">, m.jnt_range)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#032F62">"actuator_gainprm"</span><span style="color:#24292E">, m.actuator_gainprm[:</span><span style="color:#005CC5">5</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#032F62">"geom_solimp 足端"</span><span style="color:#24292E">, m.geom_solimp[m.geom(</span><span style="color:#032F62">"FR"</span><span style="color:#24292E">).id])</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#032F62">"geom_condim 足端"</span><span style="color:#24292E">, m.geom_condim[m.geom(</span><span style="color:#032F62">"FR"</span><span style="color:#24292E">).id])</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>打印字段</th><th>用来回答的问题</th></tr></thead><tbody><tr><td><code>nq / nv / nu</code></td><td>结构与执行器数量是否与预期一致</td></tr><tr><td><code>jnt_limited / jnt_range</code></td><td>autolimits 展开是否符合预期</td></tr><tr><td><code>actuator_gainprm / biasprm</code></td><td>位置伺服增益是否来自 go1 基类</td></tr><tr><td><code>geom_solimp / geom_condim</code></td><td>足端子类覆盖是否生效</td></tr><tr><td><code>geom_contype / conaffinity</code></td><td>visual 类是否确实退出接触</td></tr></tbody></table>
+<p>把这张表跑成一条命令，改 XML 之后先看输出再跑训练，可以省掉一整轮训练才发现参数没生效的成本。</p>
+<h2 id="7-参数继承相关的故障现象">7. 参数继承相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>以为 default 有运行时对象</td><td>在 Python 里找不到 <code>model.default</code></td><td><code>models/go1/go1_mjx_position.xml:22-83</code> 只在编译期生效</td></tr><tr><td>子类只写差异项却当成全部覆盖</td><td>knee 的 axis 仍是基类的 <code>0 1 0</code></td><td><code>models/go1/go1_mjx_position.xml:24,34-37</code></td></tr><tr><td>漏写 <code>childclass</code></td><td>子 body 拿不到 go1 模板，参数回落到内置默认</td><td><code>models/go1/go1_mjx_position.xml:96</code></td></tr><tr><td>混用 position 与 torque 模型参数</td><td>用 kp=100 训练后策略换到本项目物理行为变了</td><td><code>unitree_go1/go1.xml:10</code> 与 <code>models/go1/go1_mjx_position.xml:25</code> 的差异</td></tr><tr><td>在 XML 改参数后期望策略兼容</td><td>训练好的 pkl 行为改变</td><td><code>envs/go1_walk.py:434-438</code> 运行期仍会覆盖</td></tr><tr><td>忽略 <code>autolimits</code></td><td>关节没写 <code>limited</code> 就以为无限位</td><td><code>models/go1/go1_mjx_position.xml:18</code> 与实测 <code>jnt_limited</code> 全真</td></tr><tr><td>直接编译主体 XML</td><td>报 <code>unrecognized name 'floor'</code></td><td><code>models/go1/go1_mjx_position.xml:241-244</code> 依赖场景的 floor</td></tr><tr><td>把 torque 模型的 friction 2.0 当成本项目值</td><td>摩擦对照对不上</td><td><code>unitree_go1/go1_torque.xml:66</code></td></tr><tr><td>以为 class 只作用于 body 与 joint</td><td>asset 行也带 <code>class="go1"</code></td><td><code>models/go1/go1_mjx_position.xml:87-91</code>，本模型无 mesh default，编译值不受影响（推断）</td></tr></tbody></table>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ol>
+<li>default 是参数模板，编译期展开，没有运行时字段。</li>
+<li>取值优先级是元素属性、class default、祖先 default、内置默认。</li>
+<li><code>childclass</code> 决定整棵子树的默认模板，是 Go1 模型最省重复的写法。</li>
+<li><code>autolimits</code> 让 <code>limited</code> 由 <code>range</code> 是否存在推断。</li>
+<li>编译后的 MjModel 仍可被 Python 侧改写，XML 不是最终值。</li>
+</ol>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>优点</th><th>代价</th></tr></thead><tbody><tr><td>用 default 集中参数</td><td>改一处影响全模型，便于对齐参考仓库</td><td>单个元素覆盖项不直观，需要对照编译结果</td></tr><tr><td>每个元素写全属性</td><td>读到即所得</td><td>12 个关节、56 个 geom 重复度高，易漏改</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出编译单个元素时的四级取值优先级，并说明 <code>childclass</code> 与 <code>class</code> 的差别。</li>
+<li>以 <code>FR_calf_joint</code> 为例，列出 <code>axis</code>、<code>damping</code>、<code>range</code>、<code>forcerange</code> 四个字段各自的来源层。</li>
+<li>说明 <code>autolimits="true"</code> 对 <code>limited</code> 的影响，以及为什么实测 <code>jnt_limited</code> 对 12 个铰链全为真。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>三个版本的 kp 分别是 20、20、100。写出把 menagerie 模型换进本项目时，除 kp 之外还需要同步核对的三项参数，并说明各自的后果。</li>
+<li>设计一个只读 MjModel 的自检脚本，验证 “默认类展开是否符合预期”，列出要打印的字段与判据。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml</code></td><td>本项目 default 树</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>运行期覆盖 geom 参数与软限位</td></tr><tr><td><code>envs/go1_getup.py</code></td><td>从 jnt_range 取限位</td></tr><tr><td><code>unitree_go1/go1_position.xml</code></td><td>参考仓库 position 模型</td></tr><tr><td><code>unitree_go1/go1_torque.xml</code></td><td>参考仓库 torque 模型</td></tr><tr><td><code>unitree_go1/go1.xml</code></td><td>menagerie 版本</td></tr><tr><td>仓库根 <code>/home/tc63/mujoco/mjx-go1-getup</code>、<code>/home/tc63/mujoco/quadruped-rl-locomotion-main</code>、<code>/home/tc63/mujoco/models/mujoco_menagerie</code></td><td>三个对照仓库的根</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-关节与执行器"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-关节与执行器</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/01-MJCF模型/03-关节与执行器.md</span></div><div class="dfile__body"><h1 id="关节与执行器">关节与执行器</h1>
+<p>关节给 body 增加自由度，执行器给自由度施加广义力。这两件事在 MJCF 里分属两个段，在 MjModel 里分属两个数组，在物理求解里则汇合到同一个方程。Go1 的 13 个关节里只有 12 个受执行器驱动，基座完全靠重力和接触受力，这条不对称是所有动作语义讨论的起点。</p>
+<p>执行器顺序一旦与关节顺序、观测切片错开，策略输出的动作就会加到别的关节上，这类错误在数值上只表现为性能下降。位置伺服编译后的力律、三组执行器的行程与力矩上限，以及从策略输出到 qpos 推进的完整链路，是判断动作语义是否一致的三份依据。</p>
+<blockquote>
+<p>关节与执行器定义在 <code>models/go1/go1_mjx_position.xml:22-37</code> 与 <code>:212-228</code>；动作到 ctrl 的映射在 <code>envs/go1_walk.py:896-904</code> 与 <code>envs/go1_getup.py:239-243</code>。</p>
+</blockquote>
+<h2 id="1-关节给自由度执行器给力">1. 关节给自由度，执行器给力</h2>
+<p>Go1 两种关节：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>关节</th><th>数量</th><th>自由度</th><th>位置</th></tr></thead><tbody><tr><td>free joint</td><td>1</td><td>平移 3 + 旋转 3</td><td>trunk，<code>models/go1/go1_mjx_position.xml:100</code></td></tr><tr><td>hinge</td><td>12</td><td>每个 1 个转角</td><td>每条腿 hip / thigh / calf，<code>models/go1/go1_mjx_position.xml:113,119,126</code> 等</td></tr></tbody></table>
+<p>三种执行器语义对比：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型</th><th>输入含义</th><th>输出力</th><th>本项目使用</th></tr></thead><tbody><tr><td><code>position</code></td><td>目标关节角</td><td><code>kp*(ctrl-q) - kv*qdot</code></td><td>是，12 个</td></tr><tr><td><code>motor</code></td><td>直接力矩</td><td>与 ctrl 成比例</td><td>参考仓库的 torque 模型</td></tr><tr><td><code>general</code></td><td>自定义</td><td><code>gain*act + bias</code></td><td>否</td></tr></tbody></table>
+<p>执行器数量等于受控关节数，本仓库 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>u</mi><mo>=</mo><mn>12</mn></mrow><annotation encoding="application/x-tex">nu=12</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">12</span></span></span></span>，与 12 个铰链一一对应；free joint 不在其中。</p>
+<p>位置伺服把「目标角」变成「力矩」。策略输出的是角度目标，力矩由伺服按增益算出，这个换算关系决定了 RL 动作的物理含义。</p>
+<p>控制周期与物理步长分离。<code>envs/go1_walk.py:65-66</code> 定义 <code>ctrl_dt=0.02</code>、<code>sim_dt=0.002</code>，一个控制步含 10 个物理子步；<code>sim/getup_keyframe.py:40</code> 也用 0.02 s 作控制步。ctrl 在一个控制步内保持不变，执行器按子步持续出力。</p>
+<h2 id="2-位置伺服编译成固定增益与仿射偏置">2. 位置伺服编译成固定增益与仿射偏置</h2>
+<p>MuJoCo 的位置执行器编译后是固定增益 + 仿射偏置。本项目实测 <code>actuator_gainprm = [20, 0, ...]</code>、<code>actuator_biasprm = [0, -20, -1, ...]</code>、<code>gear = 1</code>，因此第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span> 个执行器的关节力矩：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>τ</mi><mi>i</mi></msub><mo>=</mo><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">p</mi></mrow><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>k</mi><mi>p</mi></msub><mo stretchy="false">(</mo><msub><mi>u</mi><mi>i</mi></msub><mo>−</mo><msub><mi>q</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mo>−</mo><msub><mi>k</mi><mi>v</mi></msub><msub><mover accent="true"><mi>q</mi><mo>˙</mo></mover><mi>i</mi></msub><mo separator="true">,</mo><mtext> </mtext><mo>−</mo><msub><mi>f</mi><mi>max</mi><mo>⁡</mo></msub><mo separator="true">,</mo><mtext> </mtext><msub><mi>f</mi><mi>max</mi><mo>⁡</mo></msub><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo></mrow><annotation encoding="application/x-tex">\tau_i = \mathrm{clip}\big(k_p (u_i - q_i) - k_v \dot{q}_i,\ -f_{\max},\ f_{\max}\big)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathrm">clip</span></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>u</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">u_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是 ctrl，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>p</mi></msub><mo>=</mo><mn>20</mn></mrow><annotation encoding="application/x-tex">k_p=20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>v</mi></msub><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">k_v=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">q_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover accent="true"><mi>q</mi><mo>˙</mo></mover><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\dot{q}_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8623em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 从 qpos[7:]/qvel[6:] 取。<code>ctrlrange</code> 先夹 ctrl，<code>forcerange</code> 再夹力矩。trunk 没有执行器，它靠重力和接触受力。</p>
+<p>三组执行器的行程与力矩上限：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组</th><th>ctrlrange (rad)</th><th>forcerange (N·m)</th></tr></thead><tbody><tr><td>hip（abduction 类）</td><td>-0.863 .. 0.863</td><td>正负 23.7</td></tr><tr><td>thigh（hip 类）</td><td>-0.686 .. 4.501</td><td>正负 23.7</td></tr><tr><td>calf（knee 类）</td><td>-2.818 .. -0.888</td><td>正负 35.55</td></tr></tbody></table>
+<p><code>actuator_gainprm</code> 与 <code>actuator_biasprm</code> 是编译产物，读它们可以确认伺服参数确实来自 XML 的 default 而不是内置默认：本项目实测 gainprm 首项 20、biasprm 前三项 0、-20、-1，与 <code>kp=20</code>、<code>kv=1</code> 对应。</p>
+<p>关节自身还有三项动力学参数：<code>damping=1.0</code>（粘滞）、<code>armature=0.01</code>（转子惯量）、<code>frictionloss=0.1</code>（库仑摩擦）。它们与伺服力一起进入 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mover accent="true"><mi>q</mi><mo>¨</mo></mover><mo>+</mo><msub><mi>τ</mi><mrow><mi>b</mi><mi>i</mi><mi>a</mi><mi>s</mi></mrow></msub><mo>=</mo><msub><mi>τ</mi><mrow><mi>a</mi><mi>c</mi><mi>t</mi></mrow></msub></mrow><annotation encoding="application/x-tex">M\ddot q + \tau_{bias} = \tau_{act}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1667em;"><span class="mord">¨</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bia</span><span class="mord mathnormal mtight">s</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 的求解，因此单纯提高 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>p</mi></msub></mrow><annotation encoding="application/x-tex">k_p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 只改变跟踪刚度，不改变可达行程。</p>
+<p>两个夹紧点的顺序也要记住：ctrlrange 在环境的 <code>step</code> 里生效，forcerange 在 MuJoCo 求解器里生效。策略输出超出 ctrlrange 时行为不报错、只是被夹住，这是动作饱和最常见的表现。</p>
+<h2 id="3-一步的完整链路与-10-个子步">3. 一步的完整链路与 10 个子步</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["策略输出 12 维 action"] --> B{"动作语义"}
+  B -->|走路：绝对| C["clip(action, ctrl_lo, ctrl_hi)"]
+  B -->|起身：增量| D["clip(qpos[7:] + 0.5*action, ctrl_lo, ctrl_hi)"]
+  C --> E["mjx_env.step 得到 data.ctrl"]
+  D --> E
+  E --> F["位置伺服 tau = kp(ctrl-q) - kv*qd"]
+  F --> G["forcerange 饱和"]
+  G --> H["qacc / qvel / qpos 推进 n_substeps 次"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant P as 策略
+  participant E as env.step
+  participant S as mjx 求解器
+  P->>E: action (12,)
+  E->>E: clip 到 ctrlrange
+  E->>S: mjx_env.step(model, data, ctrl, n_substeps)
+  S->>S: 子步 1 到 n，每步重力与接触与伺服积分
+  S-->>E: 新 data
+  E-->>P: obs, reward, done</pre></div>
+<p><code>ctrl_dt</code> 与 <code>sim_dt</code> 的比值要能整除，否则子步数取整会让实际控制周期偏移。本仓库 0.02 / 0.002 正好是 10。</p>
+<p>一次控制步展开成 10 个物理子步，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mtext>sub</mtext></msub><mo>=</mo><mn>0.02</mn><mi mathvariant="normal">/</mi><mn>0.002</mn><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">n_{\text{sub}} = 0.02 / 0.002 = 10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">sub</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.02/0.002</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span>。子步之间 ctrl 恒定，所以策略发出的目标在 20 ms 内一直有效；这条性质让”动作平滑”与”低通滤波”成为两个独立的手段：前者改目标，后者改目标的变化率。</p>
+<h2 id="4-走路与起身的动作落点">4. 走路与起身的动作落点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>与原理的对应</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml:25</code></td><td><code>&#x3C;position kp="20" kv="1" forcerange="-23.7 23.7"/></code></td><td>三类关节的公共伺服增益</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:36</code></td><td>knee 的 <code>forcerange="-35.55 35.55" ctrlrange="-2.818 -0.888"</code></td><td>小腿行程与力矩上限</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:100</code></td><td><code>&#x3C;freejoint/></code></td><td>无执行器的 6 自由度基座</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:113,119,126</code></td><td>abduction / hip / knee 的 <code>class</code></td><td>关节限位来自 default 子类</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:212-228</code></td><td>12 个 <code>&#x3C;position ... joint="..."></code></td><td>关节与执行器一一对应</td></tr><tr><td><code>envs/go1_walk.py:421-422</code></td><td><code>opt.timestep=sim_dt</code>、<code>ccd_iterations=20</code></td><td>子步时长与连续碰撞检测</td></tr><tr><td><code>envs/go1_walk.py:902-904</code></td><td><code>jp.clip(action, ctrlrange[:,0], ctrlrange[:,1])</code></td><td>走路绝对动作语义</td></tr><tr><td><code>envs/go1_walk.py:931-932</code></td><td><code>mjx_env.step(..., motor_targets, self.n_substeps)</code></td><td>一次控制步展开为多个物理子步</td></tr><tr><td><code>envs/go1_getup.py:242-243</code></td><td><code>target = qpos[7:] + action*0.5</code></td><td>起身增量动作语义</td></tr><tr><td><code>envs/go1_getup_v2.py:264</code></td><td><code>target = default_pose + 0.5*a_f</code></td><td>另一版以名义站姿为锚的增量</td></tr><tr><td><code>sim/getup_keyframe.py:42-52</code></td><td><code>HOME</code>、<code>CTRL_LO</code>、<code>CTRL_HI</code> 常量</td><td>状态机直接用 ctrlrange 端点发力</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:24</code></td><td><code>damping/armature/frictionloss</code></td><td>关节自身的动力学，与伺服增益叠加</td></tr></tbody></table>
+<p>起身两版的锚点不同：<code>envs/go1_getup.py:242-243</code> 以当前关节角为锚，<code>envs/go1_getup_v2.py:264</code> 以 keyframe 的名义站姿为锚并配动作滤波。前者对任意摔倒姿态都温和，后者把可达范围限制在名义站姿正负 1.5 rad，接近参考的公开配方。</p>
+<p>走路与起身的差别只在动作语义。<code>envs/go1_walk.py:897-901</code> 记录了早期版本把动作从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-1,1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span></span></span></span> 仿射映射到 ctrlrange，零动作落在行程中点，初始策略一上来就把 hip 目标推到 1.9 rad，关节速度约 7 rad/s，奖励被成本压住。改成直接输出 ctrl 目标后才有非零回报。</p>
+<h2 id="5-执行器顺序与关节顺序观测切片的一致性">5. 执行器顺序与关节顺序、观测切片的一致性</h2>
+<p>执行器的排列顺序与关节顺序、<code>envs/go1_walk.py:1003</code> 里按腿 reshape 的 qpos 切片、观测维度三者一致。任何一处重排都要同时改这四处，否则动作会打到错误的关节上。四者的顺序在编译后由 <code>nu=12</code> 与 actuator 段的行序共同固定。</p>
+<p><code>envs/go1_walk.py:1003</code> 的切片按腿分块，每块三个关节的顺序与执行器顺序一致。观测里若含关节角与关节速度，切片顺序也必须相同，否则策略看到的 q 与它输出的目标不在同一坐标系。</p>
+<p>这条约束的来源是 MJCF 的编译约定：关节按出现顺序编号，执行器也按出现顺序编号，两者都写进 MjModel 数组。环境代码按固定切片取 qpos[7:19]，因此腿的顺序、执行器的顺序、动作向量的分块三者必须同步。</p>
+<h2 id="6-动作语义改动前后的对照">6. 动作语义改动前后的对照</h2>
+<p>走路动作语义从”仿射映射到 ctrlrange”改成”直接输出 ctrl 目标”是这一页影响最大的一次改动，两版在同一个初始策略下的差别可以直接量出来：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>零动作对应的 hip 目标</th><th>初始关节速度</th><th>早期回报</th></tr></thead><tbody><tr><td>仿射映射</td><td>约 1.9 rad（行程中点）</td><td>约 7 rad/s</td><td>被成本项压住，长期为零</td></tr><tr><td>直接输出 ctrl</td><td>0 rad（贴住软限位）</td><td>接近零</td><td>出现非零回报</td></tr></tbody></table>
+<p>根因是零动作的含义：仿射映射把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">a=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> 映到行程中点，而 hip 行程 -0.686 到 4.501 的中点接近 1.9 rad，与站立姿态差距很大。改成语义直连后零动作等于零目标，初始策略不会主动甩关节，探索从温和状态开始。</p>
+<p>起身两版可以做同样的对照：<code>envs/go1_getup.py:242-243</code> 的锚是当前角，<code>envs/go1_getup_v2.py:264</code> 的锚是名义站姿。前者对摔倒姿态更宽容，后者可达范围受名义站姿限制。选哪一版取决于任务是否需要从任意姿态恢复。</p>
+<h2 id="7-关节与执行器相关的故障现象">7. 关节与执行器相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>把 <code>kv</code> 与关节 <code>damping</code> 当同一个量</td><td>两处都在耗能，调一个不够</td><td><code>models/go1/go1_mjx_position.xml:24</code> 与 <code>:25</code></td></tr><tr><td>动作当成力矩</td><td>位置模型下输出被解释为目标角</td><td><code>models/go1/go1_mjx_position.xml:25</code> 是 position 而非 motor</td></tr><tr><td>忘记 ctrl 会被夹</td><td>策略输出超程但行为不变</td><td><code>envs/go1_walk.py:902-904</code></td></tr><tr><td>以为抬 kp 能解决行程不足</td><td>力矩先顶到 forcerange 饱和</td><td><code>models/go1/go1_mjx_position.xml:25</code>，<code>docs/experiment-log.md:1098</code></td></tr><tr><td>动作单位用度</td><td>ctrlrange 是弧度</td><td><code>models/go1/go1_mjx_position.xml:28,32,36</code></td></tr><tr><td>起身用绝对目标</td><td>随机初始策略把机器人甩飞</td><td><code>envs/go1_getup.py:84-87</code> 的取舍</td></tr><tr><td>改动作缩放不看 ctrlrange</td><td>增量累积越界被 clip，节奏错乱</td><td><code>docs/experiment-log.md:5440-5444</code> 的实测</td></tr><tr><td>忽略 armature</td><td>小步长下腿部抖动异常</td><td><code>models/go1/go1_mjx_position.xml:24</code></td></tr><tr><td>认为 trunk 也有执行器</td><td>12 个执行器里没有基座</td><td><code>models/go1/go1_mjx_position.xml:100,212-228</code></td></tr><tr><td>混淆 hip 类与髋 body</td><td>hip 类实际是 thigh 关节</td><td><code>models/go1/go1_mjx_position.xml:26-33,113,119</code></td></tr><tr><td>重排执行器顺序</td><td>ctrlrange 切片与观测同时错</td><td><code>models/go1/go1_mjx_position.xml:212-228</code> 与 <code>envs/go1_walk.py:1003</code></td></tr><tr><td>把 frictionloss 当阻尼</td><td>低速静差表现不同</td><td><code>models/go1/go1_mjx_position.xml:24</code></td></tr></tbody></table>
+<p>执行器段没有隐式映射：每个受控关节都要显式写一个 <code>&#x3C;position></code>，否则该关节只有重力和接触作用。</p>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ol>
+<li>freejoint 提供 6 自由度基座，12 个 hinge 各 1 自由度，qpos/qvel 布局 7+12 / 6+12。</li>
+<li><code>position</code> 执行器编译为固定增益与仿射偏置，关节力矩是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>p</mi></msub><mo stretchy="false">(</mo><mi>c</mi><mi>t</mi><mi>r</mi><mi>l</mi><mo>−</mo><mi>q</mi><mo stretchy="false">)</mo><mo>−</mo><msub><mi>k</mi><mi>v</mi></msub><mover accent="true"><mi>q</mi><mo>˙</mo></mover></mrow><annotation encoding="application/x-tex">k_p(ctrl-q)-k_v\dot q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">c</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span></span> 再被 forcerange 夹。</li>
+<li>ctrlrange 是动作空间边界，forcerange 是物理力矩上限，两者作用不同。</li>
+<li>走路用绝对目标，起身用增量目标，区别只在 env 的 step。</li>
+<li>关节 <code>damping</code>、<code>armature</code>、<code>frictionloss</code> 是关节自身的动力学，与伺服增益叠加。</li>
+<li>一次控制步含 10 个物理子步，ctrl 在子步之间保持不变。</li>
+</ol>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>优点</th><th>代价</th></tr></thead><tbody><tr><td>位置伺服 + 绝对目标</td><td>与参考仓库逐位一致，任务窄易学</td><td>策略输出无界时容易瞬间甩到行程端点</td></tr><tr><td>位置伺服 + 增量目标</td><td>早期探索温和，适合起身</td><td>目标随当前角漂移，需额外锚定</td></tr><tr><td>换 torque 执行器</td><td>直接控制力矩，更接近真实电机</td><td>参考仓库的 position 策略不能直接迁移</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出位置伺服编译后的力律，并说明 ctrlrange 与 forcerange 各自在哪一层夹紧。</li>
+<li>列出 hip、thigh、calf 三组执行器的 ctrlrange 与 forcerange，并指出小腿力矩上限更高的物理原因。</li>
+<li>说明 freejoint 与 hinge 在 qpos/qvel 里各占多少个分量，以及为什么 trunk 没有执行器。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>
+<p>把 <code>sim_dt</code> 从 0.002 改成 0.001 并保持 <code>ctrl_dt=0.02</code>，算出新的子步数，并说明这对伺服跟踪与接触稳定性分别有什么影响。</p>
+</li>
+<li>
+<p>走路早期版本把动作仿射映射到 ctrlrange。推导零动作对应的 hip 目标角，并说明它为什么会把初始策略的关节速度推到约 7 rad/s。</p>
+</li>
+<li>
+<p>从 <code>actuator_gainprm</code> 与 <code>actuator_biasprm</code> 反推 <code>kp</code>、<code>kv</code>，写出对应关系，并说明 <code>gear</code> 不为 1 时公式要怎样改写。</p>
+</li>
+<li>
+<p>说明为什么执行器数量是 12 而不是 13，并指出给基座也配执行器会带来什么后果。</p>
+</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml</code></td><td>关节与执行器定义</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>走路动作语义与子步</td></tr><tr><td><code>envs/go1_getup.py</code></td><td>起身增量动作</td></tr><tr><td><code>envs/go1_getup_v2.py</code></td><td>锚定名义站姿的增量动作</td></tr><tr><td><code>sim/getup_keyframe.py</code></td><td>关键帧状态机用 ctrlrange 端点</td></tr><tr><td><code>docs/experiment-log.md</code></td><td>动作语义与饱和的实测</td></tr><tr><td>仓库根 <code>/home/tc63/mujoco/mjx-go1-getup</code></td><td>本项目源码根</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-几何与碰撞参数"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-几何与碰撞参数</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/01-MJCF模型/04-几何与碰撞参数.md</span></div><div class="dfile__body"><h1 id="几何与碰撞参数">几何与碰撞参数</h1>
+<p>georm 段定义几何体，它同时承担两种职责：给渲染用的外观，与给求解器用的碰撞形状。同一根小腿在外观上是一块 STL 网格，在物理上是一段胶囊，两者形状不同、用途不同。用一套 geom 兼任两件事会让渲染精度与碰撞代价绑在一起，因此模型把它们拆成两套。</p>
+<p>两套 geom 靠 default 模板与位与过滤器隔离，容器组的归属决定一次改动会影响哪些接触；<code>condim</code> 与溶剂参数对应软硬两套物理，改错会让接触从刚性变成可穿透。地形场景的三条硬约束是检验这两件事的边界条件。</p>
+<blockquote>
+<p>geom 定义在 <code>models/go1/go1_mjx_position.xml:38-81,101-109,130-131</code>；地面 geom 在 <code>scene_mjx_position.xml:23</code> 与 <code>scene_mjx_terrain.xml:85-86</code>；运行期改动在 <code>envs/go1_walk.py:434-438</code>。</p>
+</blockquote>
+<h2 id="1-外观与碰撞两套-geom">1. 外观与碰撞两套 geom</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类别</th><th>class</th><th>类型</th><th>contype/conaffinity</th><th>group</th><th>用途</th></tr></thead><tbody><tr><td>外观</td><td><code>visual</code></td><td>mesh</td><td>0 / 0</td><td>2</td><td>渲染</td></tr><tr><td>碰撞</td><td><code>collision</code></td><td>capsule / box / cylinder / sphere</td><td>1 / 1</td><td>3</td><td>物理接触</td></tr></tbody></table>
+<p>两套 geom 的位置与尺寸各自独立：外观用 STL 的完整形状，碰撞用简化形体。简化形体的好处是接触计算快且数值稳定，代价是几何误差，因此碰撞体的尺寸要按净空需求单独标定，不能直接取网格包围盒，因此碰撞体的尺寸要按净空需求单独标定，不能直接取网格包围盒。</p>
+<p>Go1 编译后 <code>ngeom=56</code>。按分组实测：<code>group=2</code> 的 13 个是 mesh 外观体，<code>group=3</code> 的 42 个是碰撞体，另有地面 1 个。按类型分：mesh 13、capsule 24、cylinder 12、sphere 4、box 2、plane 1。其中 <code>contype</code> 与 <code>conaffinity</code> 全 0 的正好是那 13 个外观体。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>分组</th><th>数量</th><th>说明</th></tr></thead><tbody><tr><td><code>group=2</code></td><td>13</td><td>mesh 外观体，不参与接触</td></tr><tr><td><code>group=3</code></td><td>42</td><td>胶囊、圆柱、盒、球</td></tr><tr><td><code>group=0</code></td><td>1</td><td>地面 floor</td></tr></tbody></table>
+<p><code>group</code> 只影响查看器里的显示开关，与物理无关。判断一个 geom 是否参与接触要看 <code>contype/conaffinity</code>，这一点在下一节展开。</p>
+<h2 id="2-contype-与-conaffinity-的位与过滤">2. contype 与 conaffinity 的位与过滤</h2>
+<p><code>contype</code> 与 <code>conaffinity</code> 是按位与的过滤器：接触对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>a</mi><mo separator="true">,</mo><mi>b</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(a,b)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">a</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">b</span><span class="mclose">)</span></span></span></span> 只有在 <code>contype[a] &#x26; conaffinity[b]</code> 与 <code>contype[b] &#x26; conaffinity[a]</code> 都非零时才生成。外观网格两值全 0，任何一对都不成立，所以它们只出现在渲染里。</p>
+<p>这条过滤发生在宽相之前，因此它的作用不只是”跳过接触计算”：外观几何根本不进入接触候选列表，接触数量与 <code>naconmax</code> 的余量也不受它们影响。把外观 geom 的两值写成 1 会让网格参与接触，接触数暴增且数值异常。</p>
+<p>碰撞几何用 <code>fromto</code> 描述轴向，<code>autolimits</code> 编译时把它折算成 <code>pos</code> 与 <code>size</code>。<code>fromto</code> 是书写便利，编译后不再存在；读参数要读 <code>geom_pos</code> 与 <code>geom_size</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["geom A 与 geom B"] --> B{"contype/conaffinity 位与非零"}
+  B -->|否| C["不生成接触"]
+  B -->|是| D{"priority 是否不同"}
+  D -->|是| E["取高 priority 一侧的整组参数"]
+  D -->|否且非 0| F["逐项取两侧最大值"]
+  D -->|否且为 0| G["逐项取最大值"]
+  E --> H["condim / friction / solref / solimp / margin"]
+  F --> H
+  G --> H</pre></div>
+<h2 id="3-priority-决定接触参数整组归属">3. priority 决定接触参数整组归属</h2>
+<p>接触整组参数包含 <code>condim</code>（接触维数）、<code>friction</code>（滑动/扭转/滚动三项）、<code>solref</code> 与 <code>solimp</code>（约束柔度）。足端在 XML 里写 <code>priority="1"</code>、地面默认 <code>priority=0</code>，于是足-地接触整套取足端的值。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>规则</th><th>条件</th><th>结果</th></tr></thead><tbody><tr><td>高优先级胜出</td><td>两侧 priority 不同</td><td>整套取高的一侧</td></tr><tr><td>逐项最大</td><td>两侧 priority 相同且非 0</td><td>每项各取较大值</td></tr><tr><td>默认规则</td><td>两侧 priority 都为 0</td><td>每项各取较大值</td></tr></tbody></table>
+<p>足-地摩擦的实测结果（<code>docs/experiment-log.md:778-782</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>对象</th><th>滑动</th><th>扭转</th><th>滚动</th></tr></thead><tbody><tr><td>足端 geom</td><td>0.6</td><td>0.02</td><td>0.01</td></tr><tr><td>地面 floor</td><td>1.0</td><td>0.005</td><td>0</td></tr><tr><td>足-地实际生效</td><td>0.6</td><td>0.02</td><td>0.01</td></tr></tbody></table>
+<p>地面自己写 1.0，但足端 <code>priority=1</code> 高于地面 0，整组取足端，生效 0.6。参考仓库的 <code>go1_torque.xml:66</code> 用 2.0，position 模型用 0.6。</p>
+<p>priority 的后果之一是”改地面摩擦不再影响足端”。想让地面摩擦起作用，必须把地面的 priority 提到与足端相同或更高，此时会转为逐项取最大值（<code>docs/experiment-log.md:1421-1424</code> 记录了改名与改 priority 的硬约束）。</p>
+<h2 id="4-condim-与溶剂参数软硬两套物理">4. condim 与溶剂参数：软硬两套物理</h2>
+<p>接触维数决定约束的组成：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>condim</th><th>约束</th><th>典型用途</th></tr></thead><tbody><tr><td>1</td><td>法向</td><td>点接触近似</td></tr><tr><td>3</td><td>法向 + 两个切向</td><td>软接触走路</td></tr><tr><td>4</td><td>3 + 扭转</td><td>需要抗旋</td></tr><tr><td>6</td><td>3 + 扭转 + 滚动 2</td><td>硬接触足端，参考仓库档</td></tr></tbody></table>
+<p>本项目 XML 的足端是 <code>condim=6</code>，运行期软接触档改回 <code>condim=3</code>。维数越高，每个接触的约束行越多，<code>nefc</code> 与求解时间随之上升；<code>models/go1/go1_mjx_position.xml:8-10</code> 的 <code>iterations</code> 取值正是为硬接触准备的。</p>
+<p><code>solimp</code> 与 <code>solref</code> 控制约束的柔度。按 MuJoCo 手册，<code>solimp</code> 前三个值是约束阻抗的下界、上界与过渡宽度，<code>solref</code> 是时间常数与阻尼比。本项目足端 XML 只写 3 个值 <code>0.015 1 0.031</code>；软接触档在代码里写全 5 个值 <code>0.9 0.95 0.023 0.5 2.0</code>（<code>envs/go1_walk.py:437</code>），前者偏硬、后者偏软，这是两套物理的开关。</p>
+<p>只改 <code>solimp</code> 不改 <code>solref</code> 时，约束的时间常数没变，收敛速度与穿透深度的组合会落在两套物理之间，表现为”看起来软了但抖”。两套参数要成对切换。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant X as XML geom
+  participant M as MjModel
+  participant E as env
+  participant S as mjx 求解器
+  X->>M: 编译 contype/conaffinity/priority/condim/solimp
+  E->>M: 软接触档改写足端 geom_solimp/geom_condim
+  E->>S: make_data 时传 njmax / naconmax
+  S->>S: 宽相过滤，窄相生成接触，按 priority 取参数</pre></div>
+<h2 id="5-本工程-geom-与接触参数的落点">5. 本工程 geom 与接触参数的落点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>与原理的对应</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml:38-40</code></td><td>visual 类 <code>contype=0 conaffinity=0 group=2</code></td><td>渲染几何不参与接触</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:41-81</code></td><td>collision 类与 hip_left/right、thigh、calf、foot 子类</td><td>碰撞几何模板</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:76-80</code></td><td>foot 的 <code>priority="1" solimp="0.015 1 0.031" condim="6" friction="0.6 0.02 0.01"</code></td><td>足端生效参数的来源</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:62-75</code></td><td>thigh/calf 的 <code>fromto</code> 胶囊</td><td>autolimits 折成 pos+size</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:102-109</code></td><td>躯干碰撞盒与圆柱</td><td>翻倒时的自碰撞几何</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:8-10</code></td><td><code>option iterations</code></td><td>硬接触求解迭代</td></tr><tr><td><code>scene_mjx_position.xml:23</code></td><td><code>&#x3C;geom name="floor" type="plane"></code></td><td>平地，priority 默认 0</td></tr><tr><td><code>scene_mjx_terrain.xml:85-86</code></td><td><code>&#x3C;geom name="floor" type="hfield" ... friction="1.0 0.02 0.01"></code></td><td>地形，priority 仍为 0</td></tr><tr><td><code>envs/go1_walk.py:434-438</code></td><td>软接触档把 <code>geom_solimp</code> 改成 <code>[0.9,0.95,0.023,0.5,2.0]</code>、<code>geom_condim</code> 改 3</td><td>编译后覆盖</td></tr><tr><td><code>envs/go1_walk.py:437</code></td><td>足端 <code>geom_solimp</code> 五行写法</td><td>与 XML 三行对照</td></tr><tr><td><code>envs/go1_walk.py:518-523</code></td><td>按 <code>contype</code> 过滤非足端碰撞 geom</td><td>自碰撞统计范围</td></tr><tr><td><code>envs/go1_walk.py:519-523</code></td><td>排除 floor 后的自碰撞几何列表</td><td>外观网格已在宽相外</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:241-244</code></td><td>四个 <code>*_floor_found</code> 接触传感器绑 <code>geom2="floor"</code></td><td>floor 名字是接口</td></tr><tr><td><code>scene_mjx_terrain.xml:67</code></td><td><code>&#x3C;hfield ... size="6 6 0.3000 0.0960"></code></td><td>地形几何的范围与高度</td></tr><tr><td><code>docs/experiment-log.md:774-785</code></td><td>足-地实际生效摩擦表</td><td>priority 规则的实测印证</td></tr><tr><td><code>docs/experiment-log.md:1421-1424</code></td><td>floor 名与 priority 的硬约束</td><td>改名或改 priority 的后果</td></tr></tbody></table>
+<p><code>envs/go1_walk.py:518-523</code> 按 <code>geom_type</code> 取 <code>geom_size</code> 的语义算净空：球取半径、胶囊取半径与半长、盒取半边长。<code>autolimits</code> 已经把 <code>fromto</code> 折算完，所以这段代码读到的 size 是编译结果而不是 XML 里写的数。</p>
+<p>碰撞参数的生效结果要看编译后的 MjModel，不能只读 XML 里那一行。priority 让足端整套覆盖地面，contype 让外观体退出接触，autolimits 又改写了 size 字段。</p>
+<h2 id="6-地形场景的三条硬约束">6. 地形场景的三条硬约束</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>约束</th><th>内容</th><th>位置</th></tr></thead><tbody><tr><td>floor 名字</td><td>必须叫 floor，接触传感器按名绑定</td><td><code>models/go1/go1_mjx_position.xml:241-244</code>、<code>scene_mjx_terrain.xml:72</code></td></tr><tr><td>priority</td><td>floor 保持 0，足端保持 1</td><td><code>scene_mjx_terrain.xml:79-84</code></td></tr><tr><td>接触上限</td><td>每对 geom-hfield 接触上限 50，超出静默截断</td><td><code>scene_mjx_terrain.xml:18-20</code></td></tr></tbody></table>
+<p>三条约束里前两条由传感器与 priority 决定，第三条与地形分辨率耦合。</p>
+<p>第三条最隐蔽：分辨率越高的 hfield，足端与地面的接触点越多，超过 50 之后多余接触被丢弃，表现为脚下偶尔踩空或穿地，而日志没有报错。地形分辨率因此不能只按视觉精度选。</p>
+<h2 id="7-geom-与接触相关的故障现象">7. geom 与接触相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>把 floor 的 priority 写成 1</td><td>足-地参数变成两侧最大值，实测 condim 3、摩擦 1.0</td><td><code>scene_mjx_terrain.xml:79-84</code></td></tr><tr><td>给 floor 改名</td><td>四个足端接触传感器全断</td><td><code>models/go1/go1_mjx_position.xml:241-244</code></td></tr><tr><td>把外观 mesh 当碰撞体</td><td>净空计算被整块网格尺寸污染</td><td><code>envs/go1_walk.py:519-523</code> 显式过滤</td></tr><tr><td>只看 geom 的 pos/size</td><td>fromto 已被 autolimits 改写</td><td><code>models/go1/go1_mjx_position.xml:62-75</code></td></tr><tr><td>认为 condim 越大越好</td><td>硬接触在 MJX 迭代求解器下不收敛</td><td><code>models/go1/go1_mjx_position.xml:8-10</code></td></tr><tr><td>混淆 friction 三项</td><td>扭转与滚动项写反</td><td><code>models/go1/go1_mjx_position.xml:79</code></td></tr><tr><td>地形分辨率过高</td><td>每对 geom-hfield 接触上限 50，静默截断</td><td><code>scene_mjx_terrain.xml:18-20</code></td></tr><tr><td>把 group 当物理开关</td><td>group 只影响查看器显示</td><td><code>envs/go1_walk.py:518-523</code> 用 contype 判断</td></tr><tr><td>忽略 solref 只改 solimp</td><td>约束时间常数未变，收敛行为不同</td><td><code>envs/go1_walk.py:437</code> 与 <code>models/go1/go1_mjx_position.xml:79</code></td></tr></tbody></table>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ol>
+<li>外观与碰撞用两套 default 模板分开，靠 <code>contype/conaffinity</code> 过滤器隔离。</li>
+<li>接触对先过位与过滤，再按 <code>priority</code> 取参数：两侧不同取高，相同且非 0 取逐项最大值。</li>
+<li>足端 <code>priority=1</code> 让整套硬接触参数覆盖地面，实测生效摩擦 0.6。</li>
+<li><code>autolimits</code> 把 <code>fromto</code> 折成 <code>pos</code>+<code>size</code>，读 size 要按 geom 类型解释。</li>
+<li>编译后的 geom 参数仍可被 env 覆盖，软/硬接触是运行期开关。</li>
+<li>floor 的名字与 priority 是传感器与接触参数的接口，不能随意改。</li>
+</ol>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>优点</th><th>代价</th></tr></thead><tbody><tr><td>外观与碰撞分两套 geom</td><td>渲染精度与碰撞代价解耦</td><td>geom 数量翻倍，命名要成对维护</td></tr><tr><td>硬接触 condim 6 加紧 solimp</td><td>与参考仓库逐位一致，抓地强</td><td>MJX 迭代求解器不收敛，需软接触降级</td></tr><tr><td>足端 priority=1</td><td>足端参数独立于地面</td><td>地面摩擦改动不再影响足端，容易误判</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出 <code>contype/conaffinity</code> 的过滤条件，并说明为什么外观网格的两值全 0 就能退出接触。</li>
+<li>从编译结果里读出足端 geom <code>FR</code> 的 <code>condim</code>、<code>solimp</code>、<code>friction</code> 与 <code>floor</code> 的 <code>priority</code>，据此写出足-地接触实际生效的摩擦三项。</li>
+<li>说明 <code>fromto</code> 与编译后的 <code>pos</code>+<code>size</code> 的关系，以及按 geom 类型读 size 的三套语义。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>想让地面摩擦从 1.0 开始影响足-地接触。写出需要改动的字段与改动后的取值规则，并说明会连带影响哪些其他接触对。</li>
+<li>地形分辨率提高后出现脚下踩空。定位到接触上限的原因并给出两种修法，说明各自的代价。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml</code></td><td>geom 与碰撞模板</td></tr><tr><td><code>models/go1/scene_mjx_position.xml</code></td><td>平地 floor</td></tr><tr><td><code>models/go1/scene_mjx_terrain.xml</code></td><td>hfield floor 与接触约束</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>软接触覆盖、碰撞体筛选</td></tr><tr><td><code>docs/experiment-log.md</code></td><td>摩擦实测与 priority 约束</td></tr><tr><td><code>unitree_go1/go1_torque.xml</code></td><td>参考仓库高摩擦版本</td></tr><tr><td>仓库根 <code>/home/tc63/mujoco/mjx-go1-getup</code>、<code>/home/tc63/mujoco/quadruped-rl-locomotion-main</code></td><td>本项目与参考仓库根</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-场景装配与传感器关键帧"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-场景装配与传感器关键帧</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/01-MJCF模型/05-场景装配与传感器关键帧.md</span></div><div class="dfile__body"><h1 id="场景装配传感器与关键帧">场景装配、传感器与关键帧</h1>
+<p>主体 XML 只描述机器人，场景 XML 负责地面、光照与外观。两者用 <code>include</code> 拼接，编译后是同一个 MjModel。这条分离让平地与地形场景共用一份机器人定义，代价是资产路径与按名绑定都要成套维护。</p>
+<p><code>include</code> 与 <code>compiler</code> 决定资产路径的基准，写错一个相对路径会让两个场景共用同一份机器人定义时行为不同。hfield 的 <code>size</code> 四项与高度范围、14 个传感器在 <code>sensordata</code> 里的寻址范式，以及 keyframe 与 qpos/qvel 的维度差，是装配环节最容易接错的三处。</p>
+<blockquote>
+<p>场景入口是 <code>models/go1/scene_mjx_position.xml</code> 与 <code>scene_mjx_terrain.xml</code>，传感器与关键帧在 <code>models/go1/go1_mjx_position.xml:230-249</code>，运行时读取在 <code>envs/go1_walk.py:447-448,472-473,549-559</code>。</p>
+</blockquote>
+<h2 id="1-主体与场景的两段式装配">1. 主体与场景的两段式装配</h2>
+<p>场景文件的四类内容：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>段</th><th>作用</th><th>平地处</th><th>地形处</th></tr></thead><tbody><tr><td><code>include</code></td><td>引入主体模型</td><td><code>scene_mjx_position.xml:2</code></td><td><code>scene_mjx_terrain.xml:33</code></td></tr><tr><td><code>statistic</code></td><td>查看器的视野中心与范围</td><td>第 4 行</td><td>第 35 行</td></tr><tr><td><code>visual</code></td><td>头灯、雾、默认视角</td><td>第 6-10 行</td><td>第 37-41 行</td></tr><tr><td><code>asset</code></td><td>天空盒、地面贴图、hfield</td><td>第 12-17 行</td><td>第 43-68 行</td></tr><tr><td><code>worldbody</code></td><td>方向光与地面 geom</td><td>第 19-24 行</td><td>第 70-87 行</td></tr><tr><td><code>light</code></td><td>方向光</td><td>第 20 行</td><td>第 71 行</td></tr></tbody></table>
+<p>主体模型里另外三个运行时常量：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>段</th><th>内容</th><th>运行时读取</th></tr></thead><tbody><tr><td><code>sensor</code></td><td>14 个传感器</td><td><code>model.sensor_adr</code> / <code>sensor_dim</code></td></tr><tr><td><code>keyframe</code></td><td>home 姿态与 ctrl</td><td><code>mj_model.keyframe("home")</code> / <code>key_ctrl</code></td></tr><tr><td><code>option</code></td><td>接触锥与 impratio</td><td><code>model.opt</code></td></tr></tbody></table>
+<p>场景与主体分离的直接收益是地面可替换：平地场景把 floor 写成 plane，地形场景换成 hfield，其余 body、sensor、keyframe 全部沿用同一份主体文件。两处 floor 都必须叫 floor，因为主体的接触传感器按名字绑定它。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  S["scene_mjx_position 或 scene_mjx_terrain"] --> I["include go1_mjx_position.xml"]
+  I --> C["compiler: meshdir=assets, autolimits"]
+  C --> A["asset: mesh / texture / material / hfield"]
+  A --> W["worldbody: body 树与 floor geom"]
+  W --> M["单一 MjModel"]
+  M --> E["env 按 sensor_adr 读 sensordata"]</pre></div>
+<h2 id="2-includecompiler-与-asset-的路径基准">2. include、compiler 与 asset 的路径基准</h2>
+<p><code>include</code> 在编译期展开，路径相对包含它的文件所在目录。主体里 <code>compiler</code> 的 <code>meshdir="assets"</code>（<code>models/go1/go1_mjx_position.xml:18</code>）生效于整个模型，mesh 与 hfield 的文件名都相对该目录解析。地形 PNG 由 <code>sim/gen_terrain.py</code> 生成到 <code>models/go1/assets/</code>，场景里只写 <code>file="terrain.png"</code>。</p>
+<p>路径基准只有一处，因此移动或复制模型目录时要把 <code>assets/</code> 一起带走。运行时 <code>envs/go1_walk.py:415-419</code> 的 <code>update_assets</code> 收集 <code>*.xml</code> 与整个 <code>assets/</code> 目录放进字典，MJX 在 JIT 内重建模型时用同一份，不会回读本机路径。</p>
+<p>asset 段里的资源分三类：mesh（STL）、texture/material（贴图与材质）、hfield（地形高度场）。三者在 MjModel 里都是固定大小数组，运行时不能替换。</p>
+<h2 id="3-hfield-的-size-四项与高度范围">3. hfield 的 size 四项与高度范围</h2>
+<p>hfield 的 <code>size</code> 是 <code>radius_x radius_y elevation_z base_z</code>。按场景注释的实测口径，geom 的高度范围是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>p</mi><mi>o</mi><mi>s</mi><mi mathvariant="normal">.</mi><mi>z</mi><mo separator="true">,</mo><mtext> </mtext><mi>p</mi><mi>o</mi><mi>s</mi><mi mathvariant="normal">.</mi><mi>z</mi><mo>+</mo><mi>e</mi><mi>l</mi><mi>e</mi><mi>v</mi><mi>a</mi><mi>t</mi><mi>i</mi><mi>o</mi><mi>n</mi><mi mathvariant="normal">_</mi><mi>z</mi><mo>+</mo><mi>b</mi><mi>a</mi><mi>s</mi><mi>e</mi><mi mathvariant="normal">_</mi><mi>z</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[pos.z,\ pos.z + elevation\_z + base\_z]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal">p</span><span class="mord mathnormal">os</span><span class="mord">.</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mord mathnormal">os</span><span class="mord">.</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal">i</span><span class="mord mathnormal">o</span><span class="mord mathnormal">n</span><span class="mord" style="margin-right:0.0278em;">_</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord mathnormal">ba</span><span class="mord mathnormal">se</span><span class="mord" style="margin-right:0.0278em;">_</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mclose">]</span></span></span></span>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>本项目取值</th><th>作用</th></tr></thead><tbody><tr><td><code>radius_x</code></td><td>6</td><td>半宽</td></tr><tr><td><code>radius_y</code></td><td>6</td><td>半长</td></tr><tr><td><code>elevation_z</code></td><td>0.3000</td><td>PNG 灰度的乘法系数</td></tr><tr><td><code>base_z</code></td><td>0.0960</td><td>只撑开几何包围盒</td></tr></tbody></table>
+<p><code>base_z</code> 只撑开几何包围盒，地形形状全在 PNG 里，<code>elevation_z</code> 是 PNG 灰度的乘法系数。<code>base_z=0</code> 会被 MuJoCo 拒绝，所以取正的 0.0960。这条约束让”改 PNG 灰度”与”改 size”成为两件事：前者改形状，后者改采样系数与包围盒。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant G as sim/gen_terrain.py
+  participant P as assets/terrain.png
+  participant X as scene_mjx_terrain.xml
+  participant M as MjModel
+  G->>P: 生成灰度高度场
+  G->>X: 同步 elevation_z 与 base_z
+  X->>M: hfield size 与 file
+  M->>M: 采样高度 = 灰度 乘 elevation_z</pre></div>
+<h2 id="4-14-个传感器的三类分工">4. 14 个传感器的三类分工</h2>
+<p>传感器输出拼在一维 <code>sensordata</code> 数组里，每个传感器有 <code>adr</code> 与 <code>dim</code>。运行时不直接按下标取，而是先查 <code>sensor(name).id</code>，再从 <code>sensor_adr</code> 拿偏移。Go1 的 14 个传感器分三类：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类</th><th>传感器名</th><th>维度</th><th>用途</th></tr></thead><tbody><tr><td>本体</td><td><code>gyro</code>、<code>accelerometer</code>、本地 <code>local_linvel</code></td><td>3 各</td><td>角速度、加速度、机体系线速度</td></tr><tr><td>帧</td><td><code>global_linvel</code>、<code>global_angvel</code>、<code>upvector</code></td><td>3 各</td><td>世界系速度、姿态竖直分量</td></tr><tr><td>足端</td><td><code>{FR,FL,RR,RL}_global_linvel</code></td><td>3 各</td><td>足端速度，滑移惩罚</td></tr><tr><td>接触</td><td><code>{FR,FL,RR,RL}_floor_found</code></td><td>1 各</td><td>足-地接触，腾空时间</td></tr></tbody></table>
+<p>接触传感器写 <code>reduce="mindist" num="1" data="found" geom2="floor"</code>，输出是否发生接触。消费侧用 <code>> 0</code> 判布尔（<code>envs/go1_walk.py:956-959</code>）。</p>
+<p>三类传感器对应三种观测需求：本体类给策略当前姿态与角速度，帧类给世界系速度与竖直方向，足端与接触类给步态相位与滑移判据。观测维度 48、83、91 的三个档位就是按这三类加不加区分出来的（<code>sim/view_go1.py:238-240</code>）。</p>
+<h2 id="5-sensordata-的寻址范式">5. sensordata 的寻址范式</h2>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">sid </span><span style="color:#D73A49">=</span><span style="color:#24292E"> mj_model.sensor(name).id</span></span>
+<span class="line"><span style="color:#24292E">adr </span><span style="color:#D73A49">=</span><span style="color:#24292E"> mj_model.sensor_adr[sid]</span></span>
+<span class="line"><span style="color:#24292E">dim </span><span style="color:#D73A49">=</span><span style="color:#24292E"> mj_model.sensor_dim[sid]</span></span>
+<span class="line"><span style="color:#24292E">value </span><span style="color:#D73A49">=</span><span style="color:#24292E"> data.sensordata[adr:adr </span><span style="color:#D73A49">+</span><span style="color:#24292E"> dim]</span></span></code></pre>
+<p><code>envs/go1_walk.py:447-448</code> 用 <code>site("imu").id</code> 定位观测参考点，<code>envs/go1_walk.py:549-559</code> 按 <code>sensor_adr</code>/<code>sensor_dim</code> 拼足端速度与接触。按名寻址的两个好处：改传感器顺序不会让观测错位，加传感器不会静默复用旧下标。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant X as keyframe 与 asset
+  participant M as MjModel
+  participant D as MjData
+  participant E as env
+  E->>M: keyframe home 的 qpos 与 key_ctrl
+  E->>D: make_data(qpos, ctrl, njmax, naconmax)
+  D->>D: mjx.forward 计算 sensordata 与 site_xpos
+  E->>M: sensor(name).id 到 sensor_adr 到 sensor_dim
+  E->>D: 取 sensordata[adr:adr+dim]
+  E-->>E: 拼进 48 或 83 或 91 维观测</pre></div>
+<h2 id="6-keyframe-与-qposqvel-的维度差">6. keyframe 与 qpos/qvel 的维度差</h2>
+<p>keyframe 只在编译时提供默认值。reset 会覆盖 qpos 的 xy、z 与四元数，但保留关节噪声；<code>key_ctrl</code> 用来初始化 ctrl 并叠加噪声（<code>envs/go1_walk.py:790-801</code>）。</p>
+<p>qpos 与 qvel 的维度不同：位置态是 7 + 12 = 19，速度态是 6 + 12 = 18。reset 里 <code>qvel = jp.zeros(nv)</code> 先建全零，再写入前 6 维的随机根速度，剩下 12 维交给关节（<code>envs/go1_walk.py:802</code>）。观测里的 base 速度与关节速度因此都从 qvel 切片而来，切片上界要用 nv 而不是 nq。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数组</th><th>维数</th><th>组成</th></tr></thead><tbody><tr><td><code>qpos</code></td><td>19</td><td>基座 7 + 关节 12</td></tr><tr><td><code>qvel</code></td><td>18</td><td>基座 6 + 关节 12</td></tr><tr><td><code>ctrl</code></td><td>12</td><td>每个执行器一项</td></tr><tr><td><code>sensordata</code></td><td>按传感器累加</td><td>由 <code>adr</code>/<code>dim</code> 定位</td></tr></tbody></table>
+<p>传感器与 keyframe 是 XML 里少数被运行时反复读取的段，改动它们等于改环境接口，而不只是改模型外观。</p>
+<h2 id="7-本工程传感器与关键帧的读取点">7. 本工程传感器与关键帧的读取点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>与原理的对应</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml:18</code></td><td><code>compiler ... meshdir="assets"</code></td><td>资产路径基准</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:85-92</code></td><td>5 个 STL 与材质 dark</td><td>mesh 资产</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:230-245</code></td><td>14 个 <code>&#x3C;sensor></code></td><td>观测来源</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:230-249</code></td><td>sensor 段与 keyframe 段</td><td>两条运行时接口</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:241-244</code></td><td>足端接触传感器绑 <code>geom2="floor"</code></td><td>依赖场景的 floor 名字</td></tr><tr><td><code>models/go1/go1_mjx_position.xml:247-249</code></td><td><code>&#x3C;key name="home" qpos="..." ctrl="..."></code></td><td>出生姿态与初始 ctrl</td></tr><tr><td><code>scene_mjx_position.xml:2</code></td><td><code>&#x3C;include file="go1_mjx_position.xml"/></code></td><td>平地场景拼装</td></tr><tr><td><code>scene_mjx_terrain.xml:33</code></td><td><code>&#x3C;include file="go1_mjx_position.xml"/></code></td><td>地形场景拼装</td></tr><tr><td><code>scene_mjx_terrain.xml:52-55</code></td><td>hfield 的 size 与文件名</td><td>资产与几何参数</td></tr><tr><td><code>scene_mjx_terrain.xml:53-55</code></td><td><code>elevation_z</code> 与 <code>base_z</code> 的注释口径</td><td>高度范围公式</td></tr><tr><td><code>scene_mjx_terrain.xml:67</code></td><td><code>&#x3C;hfield name="terrain" file="terrain.png" size="6 6 0.3000 0.0960"></code></td><td>地形几何</td></tr><tr><td><code>envs/go1_walk.py:415-419</code></td><td><code>update_assets</code> 收集 <code>*.xml</code> 与 <code>assets/</code></td><td>编译与 JIT 重建共用</td></tr><tr><td><code>envs/go1_walk.py:447-448</code></td><td><code>site("imu").id</code></td><td>传感器坐标 site</td></tr><tr><td><code>envs/go1_walk.py:549-559</code></td><td><code>sensor_adr</code> / <code>sensor_dim</code> 拼足端速度与接触</td><td>传感器读取范式</td></tr><tr><td><code>envs/go1_walk.py:790</code></td><td><code>keyframe("home").qpos</code></td><td>出生姿态</td></tr><tr><td><code>envs/go1_walk.py:790-801</code></td><td>reset 覆盖 qpos 与 ctrl 噪声</td><td>keyframe 只是默认值</td></tr><tr><td><code>envs/go1_walk.py:802</code></td><td><code>jp.zeros(nv)</code></td><td>qvel 维度</td></tr><tr><td><code>envs/go1_walk.py:956-959</code></td><td>接触输出 <code>> 0</code> 判布尔</td><td>接触传感器消费</td></tr><tr><td><code>sim/gen_terrain.py:44-46</code></td><td>写 <code>assets/terrain.png</code></td><td>资产生成</td></tr><tr><td><code>sim/view_go1.py:238-240</code></td><td>48/83/91 维观测区分</td><td>传感器组合决定维度</td></tr></tbody></table>
+<h2 id="8-场景与传感器相关的故障现象">8. 场景与传感器相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>按 sensordata 下标硬取</td><td>改传感器顺序后观测错位</td><td><code>envs/go1_walk.py:549-559</code> 用 adr</td></tr><tr><td>改 floor 名字</td><td>四个接触传感器失效</td><td><code>models/go1/go1_mjx_position.xml:241-244</code></td></tr><tr><td>只把 XML 加进 assets 字典</td><td>JIT 内找不到 STL 或 PNG</td><td><code>envs/go1_walk.py:415-419</code> 两个目录都要收</td></tr><tr><td>手动改 terrain.json 的 base_z 期望生效</td><td>XML 的 base_z 是单独同步的</td><td><code>scene_mjx_terrain.xml:52-55</code></td></tr><tr><td>改 hfield 后不重测 pos.z</td><td>出生点穿地或悬空</td><td><code>scene_mjx_terrain.xml:53-55</code></td></tr><tr><td>只复制 terrain.png 不复制 terrain.json</td><td>复现时档位信息丢失</td><td><code>models/go1/assets/terrain.json</code></td></tr><tr><td>把 keyframe 当运行时状态</td><td>中途改动无效，reset 才读</td><td><code>envs/go1_walk.py:790</code></td></tr><tr><td>切地形场景却沿用平地观测维度</td><td>策略形状不符</td><td><code>sim/view_go1.py:238-240</code> 的 48/83 维区分</td></tr><tr><td>以为 hfield 的 base_z 改变地形</td><td>采样高度只乘 elevation_z</td><td><code>scene_mjx_terrain.xml:53-55</code></td></tr><tr><td>把 qpos 维度当成 qvel 维度</td><td>速度切片越界</td><td><code>envs/go1_walk.py:802</code></td></tr><tr><td>以为 sensor 段可省</td><td>观测里没有 upvector 与接触信号</td><td><code>models/go1/go1_mjx_position.xml:230-245</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ol>
+<li><code>include</code> 把主体与场景在编译期拼成一个 MjModel，路径相对各自文件。</li>
+<li><code>compiler</code> 的 <code>meshdir</code> 决定 mesh 与 hfield 的文件基准。</li>
+<li>传感器数据在 <code>sensordata</code> 一维数组里，按名字查到 <code>adr</code> 与 <code>dim</code> 再取。</li>
+<li>接触传感器输出布尔，靠 <code>geom2="floor"</code> 绑定地面，改名即断。</li>
+<li>keyframe 是出生姿态与初始 ctrl 的单一来源，只在 reset 时读。</li>
+<li>hfield 的 <code>base_z</code> 只撑包围盒，采样高度由灰度乘 <code>elevation_z</code> 决定。</li>
+</ol>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>优点</th><th>代价</th></tr></thead><tbody><tr><td>主体与场景分文件加 include</td><td>平地与地形共用一份机器人定义</td><td>资产要成套复制，路径基准是 meshdir</td></tr><tr><td>传感器写在主体而不是 env</td><td>物理与观测同一来源</td><td>改传感器要重编模型</td></tr><tr><td>hfield 走 PNG 资产</td><td>训练与查看器加载同一份地形</td><td>需要 gen_terrain 同步 elevation_z 与 base_z</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>解释 <code>keyframe("home").qpos</code> 的 19 个分量如何分配，以及 reset 覆盖了哪些、保留哪些。</li>
+<li>写出按名读取一个传感器的四步代码，并说明为什么不能使用固定的 <code>sensordata</code> 下标。</li>
+<li>说明 hfield 的 <code>size</code> 四项各自的作用，以及为什么 <code>base_z</code> 不能取 0。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>把 <code>scene_mjx_position.xml</code> 的 floor 改成 <code>scene_mjx_terrain.xml</code> 那样的 hfield，同时保持出生高度与平地一致。给出 size 四项取值、geom 的 <code>pos.z</code> 确定方式、四个接触传感器是否仍有效，以及验证对齐用的脚本。</li>
+<li>观测维度有 48、83、91 三档。列出每一档包含哪些传感器组合，并说明增加一档需要改动的三处位置。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml</code></td><td>主体、asset、sensor、keyframe</td></tr><tr><td><code>models/go1/scene_mjx_position.xml</code></td><td>平地场景</td></tr><tr><td><code>models/go1/scene_mjx_terrain.xml</code></td><td>地形场景与 hfield</td></tr><tr><td><code>models/go1/assets/terrain.json</code></td><td>地形生成参数</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>传感器与 keyframe 读取</td></tr><tr><td><code>sim/gen_terrain.py</code></td><td>生成并同步地形资产</td></tr><tr><td><code>sim/view_go1.py</code></td><td>按观测维度区分查看器</td></tr><tr><td>仓库根 <code>/home/tc63/mujoco/mjx-go1-getup</code></td><td>本项目源码根</td></tr></tbody></table></div></section><section class="dfile" id="file-6" data-file="06-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 06</span><span class="dfile__name">06-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/01-MJCF模型/06-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<p>MJCF 的问题分布在三个时刻：编译期、加载后覆盖、运行时物理。三个时刻的修法不同，先判定时刻再看段，能把排查范围缩小一半。反过来先改 XML 再发现是 Python 覆盖，或者先调求解器再发现 floor 被改了名字，都会白跑一轮。</p>
+<p>按症状先判定出问题的时刻，能把排查范围缩小一半；最小编译自检脚本要打印哪些字段，就是判定时刻的依据。三处最常改错的位置分别是 XML 写错、加载后被 Python 覆盖与运行时物理异常，各自的验证方式不同。</p>
+<blockquote>
+<p>调试对象是 <code>models/go1/</code> 下的三份 XML 与 <code>envs/go1_walk.py</code> 的加载、覆盖、reset 段；探针在 <code>sim/</code> 下，历史现象记在 <code>docs/experiment-log.md</code>。</p>
+</blockquote>
+<h2 id="1-按三个时刻分层定位">1. 按三个时刻分层定位</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>症状</th><th>首查时刻</th><th>首查对象</th></tr></thead><tbody><tr><td>加载报错或找不到资产</td><td>编译期</td><td>include 路径、meshdir、assets 字典</td></tr><tr><td>参数与 XML 不符</td><td>加载后覆盖</td><td><code>envs/go1_walk.py</code> 的 opt/geom 赋值</td></tr><tr><td>观测维度或接触数异常</td><td>运行时</td><td>sensor 段、njmax/naconmax</td></tr><tr><td>策略行为与训练档不符</td><td>运行时</td><td>场景选择、软硬接触开关</td></tr><tr><td>出生点穿地或悬空</td><td>编译期加运行时</td><td>hfield 的 pos.z 与 keyframe</td></tr></tbody></table>
+<p>判定时刻的依据是 MjModel 是否已经建立。编译期错误来自 XML 本身；MjModel 一旦建成，XML 的改动就不再生效，剩下的现象都来自 Python 侧或物理求解。观测维度 48、83、91 三档由场景与 height_scan 开关组合决定，属于运行时（<code>envs/go1_walk.py:412-413</code>）。</p>
+<h2 id="2-编译自检脚本要打印什么">2. 编译自检脚本要打印什么</h2>
+<p>排查顺序是先复现编译，再打印编译结果，最后看物理。一个最小的编译自检：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">import</span><span style="color:#24292E"> mujoco</span></span>
+<span class="line"><span style="color:#24292E">m </span><span style="color:#D73A49">=</span><span style="color:#24292E"> mujoco.MjModel.from_xml_path(</span><span style="color:#032F62">"models/go1/scene_mjx_position.xml"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(m.nq, m.nv, m.nu, m.njnt, m.nbody, m.ngeom, m.nsensor, m.nkey)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(m.opt.cone, m.opt.impratio, m.opt.timestep)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(m.actuator_gainprm[:</span><span style="color:#005CC5">2</span><span style="color:#24292E">], m.actuator_biasprm[:</span><span style="color:#005CC5">2</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#24292E">gid </span><span style="color:#D73A49">=</span><span style="color:#24292E"> m.geom(</span><span style="color:#032F62">"FR"</span><span style="color:#24292E">).id</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(m.geom_condim[gid], m.geom_solimp[gid][:</span><span style="color:#005CC5">3</span><span style="color:#24292E">], m.geom_friction[gid])</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(m.geom_priority[m.geom(</span><span style="color:#032F62">"floor"</span><span style="color:#24292E">).id])</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>打印项</th><th>能回答的问题</th></tr></thead><tbody><tr><td><code>nq / nv / nu / njnt / ngeom / nsensor</code></td><td>结构、执行器、几何、传感器数量是否符合预期</td></tr><tr><td><code>opt.cone / impratio / timestep</code></td><td>option 段与运行期覆盖是否生效</td></tr><tr><td><code>actuator_gainprm / biasprm</code></td><td>位置伺服是否来自 go1 基类的 kp 与 kv</td></tr><tr><td><code>geom_condim / solimp / friction</code></td><td>足端子类覆盖与运行期软接触开关</td></tr><tr><td><code>geom_priority</code></td><td>足-地接触参数按哪一侧整组取</td></tr></tbody></table>
+<p>这套输出能回答大多数参数问题。它与训练无关，不需要 GPU，几秒钟就能跑完，应当在改动 XML 之后先跑一遍。</p>
+<h2 id="3-调试工具链与顺序">3. 调试工具链与顺序</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["症状"] --> B{"XML 能编译吗"}
+  B -->|否| C["查 include 与 meshdir 与 assets 字典与 floor 名"]
+  B -->|是| D{"MjModel 字段符合预期吗"}
+  D -->|否| E["查 default 继承与 autolimits，再查 Python 覆盖"]
+  D -->|是| F{"物理或观测异常吗"}
+  F -->|"NaN 或接触溢出"| G["查 njmax 与 naconmax 与求解器迭代"]
+  F -->|"行为不符"| H["查场景选择与软硬接触与 keyframe 与动作语义"]
+  F -->|"出生异常"| I["查 hfield 的 pos.z 与 reset"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant D as 调试者
+  participant M as MjModel
+  participant P as 探针 sim 目录
+  participant L as experiment-log
+  D->>M: from_xml_path 复现编译
+  M-->>D: 维度与参数
+  D->>M: 对照 XML 与参考仓库
+  D->>P: probe_nefc 与 probe_standability 与 view_go1
+  P-->>D: 接触数、站立高度、逐帧行为
+  D->>L: 对照历史现象与判据</pre></div>
+<p>运行时的接触容量由 <code>envs/go1_walk.py:87-96</code> 的两个配置决定：<code>naconmax</code> 是所有 world 共享的接触槽总数（默认 <code>8*8192</code>），<code>njmax</code> 是单个 world 的约束行上限（256）。<code>sim/probe_nefc.py</code> 专测 njmax 溢出，属于约束预算那一单元的范围。</p>
+<p>工具链里最后一步常被跳过：对照历史记录。<code>docs/experiment-log.md</code> 里记着此前同类现象已经排除的原因，先读一遍可以避免重复验证。</p>
+<h2 id="4-常见问题清单">4. 常见问题清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>位置</th></tr></thead><tbody><tr><td><code>unrecognized name 'floor'</code></td><td>单独编译主体 XML，接触传感器找不到 floor</td><td><code>models/go1/go1_mjx_position.xml:241-244</code></td></tr><tr><td>足-地接触 condim 与摩擦被改</td><td>floor 的 priority 写成 1，两侧同级取最大值</td><td><code>scene_mjx_terrain.xml:79-84</code></td></tr><tr><td>足端接触信号全断</td><td>floor 被改名</td><td><code>scene_mjx_terrain.xml:72</code></td></tr><tr><td>改了 XML 参数行为不变</td><td>MjModel 建成后 Python 又覆盖</td><td><code>envs/go1_walk.py:421-438</code></td></tr><tr><td>关节参数与元素行不一致</td><td>default 继承与 autolimits</td><td><code>models/go1/go1_mjx_position.xml:22-37</code></td></tr><tr><td>观测维度 48/83/91 不符</td><td>场景与 height_scan 开关组合</td><td><code>envs/go1_walk.py:412-413</code></td></tr><tr><td>出生穿地或悬空</td><td>hfield 的 pos.z 未随地形重标</td><td><code>scene_mjx_terrain.xml:73-78</code></td></tr><tr><td>高台阶上拖地不罚</td><td>奖励用绝对足端 z</td><td><code>envs/go1_walk.py:963-968</code></td></tr><tr><td>JIT 内找不到 STL 或 PNG</td><td>assets 字典漏收目录</td><td><code>envs/go1_walk.py:415-419</code></td></tr><tr><td>训练 NaN</td><td>求解器迭代与接触容量不匹配</td><td><code>envs/go1_walk.py:76-84,92-96</code></td></tr><tr><td>改地形分辨率后接触被截断</td><td>每对 geom-hfield 上限 50，静默溢出</td><td><code>scene_mjx_terrain.xml:18-20</code></td></tr><tr><td>传感器读数错位</td><td>按 sensordata 下标硬取</td><td><code>envs/go1_walk.py:549-559</code></td></tr></tbody></table>
+<p>逐条定位时，先打印编译结果，再决定改 XML 还是改 Python。XML 只影响新编译的 MjModel；已经训练过的策略吃的是旧物理，二者不能混用。</p>
+<h2 id="5-易错点">5. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把 floor 当普通 geom 改名</td><td>接触传感器与奖励一起失效</td><td><code>models/go1/go1_mjx_position.xml:241-244</code></td></tr><tr><td>改 priority 不看接触规则</td><td>condim 3、摩擦 1.0，抓地语义变</td><td><code>scene_mjx_terrain.xml:79-84</code></td></tr><tr><td>只在 XML 调参数</td><td>运行期覆盖把值改回</td><td><code>envs/go1_walk.py:434-438</code></td></tr><tr><td>用绝对 z 写地形判据</td><td>高台上判据失真</td><td><code>envs/go1_walk.py:768-776</code></td></tr><tr><td>复现实验只带 PNG</td><td>档位信息丢失</td><td><code>models/go1/assets/terrain.json</code></td></tr><tr><td>忽略 keyframe 与 body pos 的区别</td><td>改 XML 的 z 出生点没变</td><td><code>envs/go1_walk.py:790-801</code></td></tr><tr><td>用平地策略跑地形场景</td><td>物理与观测都不一致</td><td><code>sim/view_go1.py:235-240</code></td></tr><tr><td>看到 NaN 只回填 qpos/qvel</td><td>奖励仍读到非有限值</td><td><code>envs/go1_walk.py:934-939</code></td></tr><tr><td>排查时不先看编译结果</td><td>实际生效的是 env 覆盖值</td><td><code>envs/go1_walk.py:421-438</code></td></tr></tbody></table>
+<h2 id="6-观测维度三档的对齐检查">6. 观测维度三档的对齐检查</h2>
+<p>观测维度 48、83、91 三档来自同一份 obs 组装函数在不同开关组合下的三个结果。排查维度不符时按三步走：</p>
+<ol>
+<li>确认场景选择是平地还是地形（<code>envs/go1_walk.py:412-413</code>）；</li>
+<li>确认 height_scan 一类开关是否与训练时一致；</li>
+<li>打印策略输入层形状与 env 的 observation_size 对照。</li>
+</ol>
+<p>策略加载时会用第一层 kernel 的形状反推 obs 维度，维度不符直接报形状错误。因此“切场景却沿用平地策略”表现为加载失败，比行为异常更容易定位。三档的具体组成见观测空间设计单元，本页只给排查取向。</p>
+<h2 id="7-nan-护栏不能只回填状态">7. NaN 护栏不能只回填状态</h2>
+<p><code>envs/go1_walk.py:934-939</code> 的 NaN 护栏在检测到非有限值后回填 qpos/qvel，但奖励已经在同一子步里读到非有限值。护栏能防止仿真继续发散，不能把这一步的回报纠正回来。</p>
+<p>排查顺序因此是：先确认 NaN 的来源（求解器迭代与接触容量，见 <code>envs/go1_walk.py:76-84,92-96</code>），再去调回填逻辑。只加护栏不改来源，会得到“训练不崩但奖励里夹着一批异常值”。</p>
+<h2 id="8-资产路径的三处核对">8. 资产路径的三处核对</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>要核对什么</th><th>位置</th></tr></thead><tbody><tr><td>编译</td><td>include 相对路径与 <code>meshdir</code></td><td><code>models/go1/go1_mjx_position.xml:18</code></td></tr><tr><td>打包</td><td><code>update_assets</code> 是否含整个 <code>assets/</code> 目录</td><td><code>envs/go1_walk.py:415-419</code></td></tr><tr><td>复现</td><td>PNG 与 <code>terrain.json</code> 成对复制</td><td><code>models/go1/assets/terrain.json</code></td></tr></tbody></table>
+<p>三处核对都只依赖文件系统，不需要启动仿真，适合放进交付前的检查清单。</p>
+<p>三处任一处缺失的表现不同：编译期缺 include 会直接报错，打包缺目录只在 JIT 内报找不到文件，复现缺 json 则表现为地形档位对不上而没有任何报错。</p>
+<h2 id="9-三处最常改错的位置">9. 三处最常改错的位置</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>常见改法</th><th>正确做法</th><th>验证方式</th></tr></thead><tbody><tr><td><code>envs/go1_walk.py:434-438</code> 软接触覆盖</td><td>在 XML 里改 solimp</td><td>改代码里的 <code>geom_solimp</code> 与 <code>geom_condim</code>，两套参数成对切换</td><td>重新编译 MjModel，打印足端 <code>geom_solimp</code></td></tr><tr><td><code>scene_mjx_terrain.xml:73-78</code> 地形标定</td><td>改 PNG 后不动 pos.z</td><td>按新的 <code>elevation_z</code> 与 <code>base_z</code> 重标 geom 高度</td><td>让机器人自由沉降，看稳定高度是否与平地一致</td></tr><tr><td><code>envs/go1_walk.py:790-833</code> reset</td><td>改 body 的 pos 期望出生点变化</td><td>改 keyframe 与 reset 覆盖逻辑</td><td>打印 reset 后 <code>qpos[2]</code> 与稳定值</td></tr></tbody></table>
+<p>三处的共同点是”改了一处，另一处仍在生效”。验证的方式都落在重新编译模型或打印运行时状态上，而不是读 XML。</p>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ol>
+<li>先判定问题在编译期、加载后覆盖还是运行时物理，再选查哪一段。</li>
+<li>编译自检脚本打印维度、opt、gainprm/biasprm、geom 接触参数与 priority。</li>
+<li>floor 是最多接口绑定的 geom：接触传感器、priority、地形类型都指向它。</li>
+<li>XML 只决定新编译的 MjModel，训练好的策略不会随 XML 改变。</li>
+<li>接触容量与求解器迭代属于运行期配置，与模型结构分开排查。</li>
+<li>历史记录先读一遍，避免重复验证已经排除的原因。</li>
+</ol>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>优点</th><th>代价</th></tr></thead><tbody><tr><td>参数写在 XML</td><td>单一来源，可复现</td><td>编译后不可热改，需重新加载</td></tr><tr><td>参数在 env 里覆盖</td><td>同一模型跑软硬两套物理</td><td>实际生效值不在 XML 里，易误判</td></tr><tr><td>用探针脚本定位</td><td>量化接触数、沉降、站立高度</td><td>需要额外运行时间与 GPU 资源</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>编译 <code>models/go1/scene_mjx_position.xml</code>，打印 <code>nq</code>、<code>nv</code>、<code>nu</code>、<code>njnt</code>、<code>ngeom</code>，并说明 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo mathvariant="normal">≠</mo><mi>n</mi><mi>v</mi></mrow><annotation encoding="application/x-tex">nq \ne nv</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel"><span class="mrel"><span class="mord vbox"><span class="thinbox"><span class="rlap"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="inner"><span class="mord"><span class="mrel"></span></span></span><span class="fix"></span></span></span></span></span><span class="mspace nobreak"></span><span class="mrel">=</span></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span></span></span></span> 的原因与 freejoint 在 qpos 中的切片。</li>
+<li>从编译结果里读出足端 geom <code>FR</code> 的 <code>condim</code>、<code>solimp</code>、<code>friction</code> 与 <code>floor</code> 的 <code>priority</code>，据此写出足-地接触实际生效的摩擦三项，并指出这是哪条规则决定的。</li>
+<li>解释 <code>keyframe("home").qpos</code> 的 19 个分量如何分配，以及 <code>envs/go1_walk.py:790-833</code> 的 reset 覆盖了其中哪些、保留哪些。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把 <code>models/go1/scene_mjx_position.xml</code> 的 floor 改成 <code>models/go1/scene_mjx_terrain.xml</code> 那样的 hfield，同时保持出生高度与平地一致。要求给出：hfield 的 <code>size</code> 四项各取什么、geom 的 <code>pos.z</code> 如何确定、四个 <code>*_floor_found</code> 传感器是否仍然有效，以及用哪个探针或脚本验证对齐（提示：<code>sim/gen_terrain.py</code> 的同步逻辑与 <code>scene_mjx_terrain.xml:73-78</code> 的标定说明）。</li>
+<li>给出一个只跑编译自检、不启动训练的回归脚本，列出它要断言的字段与每项判据，并说明它能拦住哪三类改动引入的错误。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>models/go1/go1_mjx_position.xml</code></td><td>主体模型与传感器</td></tr><tr><td><code>models/go1/scene_mjx_position.xml</code></td><td>平地场景</td></tr><tr><td><code>models/go1/scene_mjx_terrain.xml</code></td><td>地形场景与 floor 约束</td></tr><tr><td><code>models/go1/assets/terrain.json</code></td><td>地形档位元数据</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>加载、覆盖、reset、NaN 护栏</td></tr><tr><td><code>sim/gen_terrain.py</code>、<code>sim/probe_nefc.py</code>、<code>sim/view_go1.py</code></td><td>生成、探针、查看器</td></tr><tr><td><code>docs/experiment-log.md</code></td><td>历史现象与判据</td></tr><tr><td>仓库根 <code>/home/tc63/mujoco/mjx-go1-getup</code></td><td>本项目源码根</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/05-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA%E4%B8%8E%E4%BE%9D%E8%B5%96%E9%94%81%E5%AE%9A/"><span class="k">← 上一篇</span><span class="t">环境搭建与依赖锁定</span><span class="d">JAX 与 Brax · 4 个文件</span></a><a class="next" href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/02-hfield%E7%A8%8B%E5%BA%8F%E5%8C%96%E5%9C%B0%E5%BD%A2/"><span class="k">下一篇 →</span><span class="t">hfield程序化地形</span><span class="d">MuJoCo 与 MJX · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

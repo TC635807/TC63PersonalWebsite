@@ -1,10 +1,10 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>内存管理与临界区 · FreeRTOS · 王宇翔</title><meta name="description" content="heap_1 到 heap_5 与静态分配各自解决的问题，以及哨兵固件只选 heap_4 的原因"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/01-FreeRTOS/03-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%B8%8E%E4%B8%B4%E7%95%8C%E5%8C%BA/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="内存管理与临界区 · FreeRTOS · 王宇翔"><meta property="og:description" content="heap_1 到 heap_5 与静态分配各自解决的问题，以及哨兵固件只选 heap_4 的原因"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/01-FreeRTOS/03-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%B8%8E%E4%B8%B4%E7%95%8C%E5%8C%BA/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/01-FreeRTOS/">FreeRTOS</a><span class="sep" aria-hidden="true">/</span><span class="now">内存管理与临界区</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>内存管理与临界区</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>FreeRTOS 内存方案对比</span></a><ul class="toc__heads"><li><a href="#1-开篇rtos-弃用-libc-malloc-的三条原因" data-depth="2" data-heading-j="0">1. 开篇：RTOS 弃用 libc malloc 的三条原因</a></li><li><a href="#2-核心概念" data-depth="2" data-heading-j="1">2. 核心概念</a></li><li><a href="#21-两个正交的维度" data-depth="3" data-heading-j="2">2.1 两个正交的维度</a></li><li><a href="#22-heap_1只会加不会减" data-depth="3" data-heading-j="3">2.2 heap_1：只会加，不会减</a></li><li><a href="#23-heap_2首次适配但不合并已被淘汰" data-depth="3" data-heading-j="4">2.3 heap_2：首次适配，但不合并（已被淘汰）</a></li><li><a href="#24-heap_3只是给-libc-的-malloc-加了一把锁" data-depth="3" data-heading-j="5">2.4 heap_3：只是给 libc 的 malloc 加了一把锁</a></li><li><a href="#25-heap_4首次适配--相邻合并本工程的选择" data-depth="3" data-heading-j="6">2.5 heap_4：首次适配 + 相邻合并（本工程的选择）</a></li><li><a href="#26-heap_5heap_4-加多段内存注册" data-depth="3" data-heading-j="7">2.6 heap_5：heap_4 加多段内存注册</a></li><li><a href="#27-决策图" data-depth="3" data-heading-j="8">2.7 决策图</a></li><li><a href="#28-静态分配换来的确定性" data-depth="3" data-heading-j="9">2.8 静态分配换来的确定性</a></li><li><a href="#3-机制heap_4-里一次分配的完整路径" data-depth="2" data-heading-j="10">3. 机制：heap_4 里一次分配的完整路径</a></li><li><a href="#4-产业案例电控固件普遍选择-heap_4" data-depth="2" data-heading-j="11">4. 产业案例：电控固件普遍选择 heap_4</a></li><li><a href="#5-高级话题与常见问题" data-depth="2" data-heading-j="12">5. 高级话题与常见问题</a></li><li><a href="#易错点-1pvportmalloc-和-malloc-混用" data-depth="3" data-heading-j="13">易错点 1：pvPortMalloc 和 malloc 混用</a></li><li><a href="#易错点-2heap_1-和-include_vtaskdelete-互相打架" data-depth="3" data-heading-j="14">易错点 2：heap_1 和 INCLUDE_vTaskDelete 互相打架</a></li><li><a href="#易错点-3xportgetfreeheapsize-在第一次分配之前没有意义" data-depth="3" data-heading-j="15">易错点 3：xPortGetFreeHeapSize() 在第一次分配之前没有意义</a></li><li><a href="#易错点-4taskbasestart-不检查返回值" data-depth="3" data-heading-j="16">易错点 4：TaskBase::start() 不检查返回值</a></li><li><a href="#易错点-5别用-new-创建任务对象" data-depth="3" data-heading-j="17">易错点 5：别用 new 创建任务对象</a></li><li><a href="#6-小结" data-depth="2" data-heading-j="18">6. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="19">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="20">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="21">结论</a></li><li><a href="#7-练习题" data-depth="2" data-heading-j="22">7. 练习题</a></li><li><a href="#基础题" data-depth="3" data-heading-j="23">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="24">挑战题</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>heap_4 与 40 KB 堆</span></a><ul class="toc__heads"><li><a href="#1-开篇40-kb-从哪来" data-depth="2" data-heading-j="0">1. 开篇：40 KB 从哪来</a></li><li><a href="#2-核心概念heap_4-的块结构" data-depth="2" data-heading-j="1">2. 核心概念：heap_4 的块结构</a></li><li><a href="#21-每个块前面都有-8-字节的块头" data-depth="3" data-heading-j="2">2.1 每个块前面都有 8 字节的块头</a></li><li><a href="#22-空闲链表按地址升序两端有哨兵" data-depth="3" data-heading-j="3">2.2 空闲链表：按地址升序，两端有哨兵</a></li><li><a href="#23-用最高位当已分配标志" data-depth="3" data-heading-j="4">2.3 用最高位当”已分配”标志</a></li><li><a href="#24-最小块16-字节" data-depth="3" data-heading-j="5">2.4 最小块：16 字节</a></li><li><a href="#3-机制原理" data-depth="2" data-heading-j="6">3. 机制/原理</a></li><li><a href="#31-分配首次适配--分割" data-depth="3" data-heading-j="7">3.1 分配：首次适配 + 分割</a></li><li><a href="#32-释放按地址插回--相邻合并" data-depth="3" data-heading-j="8">3.2 释放：按地址插回 + 相邻合并</a></li><li><a href="#33-碎片的产生条件与本工程的情况" data-depth="3" data-heading-j="9">3.3 碎片的产生条件与本工程的情况</a></li><li><a href="#4-40960-里有-40944-可用prvheapinit-的三次截断" data-depth="2" data-heading-j="10">4. 40960 里有 40944 可用：prvHeapInit 的三次截断</a></li><li><a href="#5-真实堆预算表" data-depth="2" data-heading-j="11">5. 真实堆预算表</a></li><li><a href="#51-逐次分配的实测参数" data-depth="3" data-heading-j="12">5.1 逐次分配的实测参数</a></li><li><a href="#52-预算表" data-depth="3" data-heading-j="13">5.2 预算表</a></li><li><a href="#53-不在堆里的部分" data-depth="3" data-heading-j="14">5.3 不在堆里的部分</a></li><li><a href="#6-xportgetfreeheapsize--xportgetminimumeverfreeheapsize-怎么用" data-depth="2" data-heading-j="15">6. xPortGetFreeHeapSize / xPortGetMinimumEverFreeHeapSize 怎么用</a></li><li><a href="#61-在本工程里怎么打印" data-depth="3" data-heading-j="16">6.1 在本工程里怎么打印</a></li><li><a href="#62-三个必须知道的前提" data-depth="3" data-heading-j="17">6.2 三个必须知道的前提</a></li><li><a href="#7-40-kb-对-6-个任务栈的余量" data-depth="2" data-heading-j="18">7. 40 KB 对 6 个任务栈的余量</a></li><li><a href="#71-静态结论够用只占-695" data-depth="3" data-heading-j="19">7.1 静态结论：够用，只占 69.5%</a></li><li><a href="#72-还能撑多少余量的几种用法" data-depth="3" data-heading-j="20">7.2 还能撑多少：余量的几种用法</a></li><li><a href="#73-底盘板-configminimal_stack_size-取-512-的原因" data-depth="3" data-heading-j="21">7.3 底盘板 configMINIMAL_STACK_SIZE 取 512 的原因</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="22">8. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="23">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="24">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="25">结论</a></li><li><a href="#9-练习题" data-depth="2" data-heading-j="26">9. 练习题</a></li><li><a href="#基础题" data-depth="3" data-heading-j="27">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="28">挑战题</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>临界区与中断安全</span></a><ul class="toc__heads"><li><a href="#1-开篇临界区每毫秒都在跑" data-depth="2" data-heading-j="0">1. 开篇：临界区每毫秒都在跑</a></li><li><a href="#2-核心概念cortex-m-的优先级是数值越小越优先" data-depth="2" data-heading-j="1">2. 核心概念：Cortex-M 的优先级是”数值越小越优先”</a></li><li><a href="#21-两套说法必须分清" data-depth="3" data-heading-j="2">2.1 两套说法，必须分清</a></li><li><a href="#22-优先级分组必须和-configprio_bits-对齐" data-depth="3" data-heading-j="3">2.2 优先级分组必须和 configPRIO_BITS 对齐</a></li><li><a href="#3-机制taskenter_critical-到底做了什么" data-depth="2" data-heading-j="4">3. 机制：taskENTER_CRITICAL 到底做了什么</a></li><li><a href="#31-宏的链路" data-depth="3" data-heading-j="5">3.1 宏的链路</a></li><li><a href="#32-实现细节" data-depth="3" data-heading-j="6">3.2 实现细节</a></li><li><a href="#33-basepri-原理" data-depth="3" data-heading-j="7">3.3 BASEPRI 原理</a></li><li><a href="#34-屏蔽关系图" data-depth="3" data-heading-j="8">3.4 屏蔽关系图</a></li><li><a href="#35-一张表看全" data-depth="3" data-heading-j="9">3.5 一张表看全</a></li><li><a href="#4-中断版的临界区portset_interrupt_mask_from_isr" data-depth="2" data-heading-j="10">4. 中断版的临界区：portSET_INTERRUPT_MASK_FROM_ISR</a></li><li><a href="#5-本工程的真实中断优先级表" data-depth="2" data-heading-j="11">5. 本工程的真实中断优先级表</a></li><li><a href="#51-零裕量警告" data-depth="3" data-heading-j="12">5.1 零裕量警告</a></li><li><a href="#52-改阈值会怎样" data-depth="3" data-heading-j="13">5.2 改阈值会怎样</a></li><li><a href="#6-isr-里不能用非-fromisr-版本的原因" data-depth="2" data-heading-j="14">6. ISR 里不能用非 FromISR 版本的原因</a></li><li><a href="#理由-1fromisr-版本才接受唤醒标志这个出参" data-depth="3" data-heading-j="15">理由 1：FromISR 版本才接受”唤醒标志”这个出参</a></li><li><a href="#理由-2非-fromisr-版本会调用任务态的临界区直接命中-configassert" data-depth="3" data-heading-j="16">理由 2：非 FromISR 版本会调用任务态的临界区，直接命中 configASSERT</a></li><li><a href="#理由-3非-fromisr-版本会试图阻塞" data-depth="3" data-heading-j="17">理由 3：非 FromISR 版本会试图阻塞</a></li><li><a href="#正确与错误路径对照" data-depth="3" data-heading-j="18">正确与错误路径对照</a></li><li><a href="#唯一一处真实调用" data-depth="3" data-heading-j="19">唯一一处真实调用</a></li><li><a href="#7-完整的跨上下文数据流" data-depth="2" data-heading-j="20">7. 完整的跨上下文数据流</a></li><li><a href="#8-优先级反转与优先级继承" data-depth="2" data-heading-j="21">8. 优先级反转与优先级继承</a></li><li><a href="#9-高级话题与常见问题" data-depth="2" data-heading-j="22">9. 高级话题与常见问题</a></li><li><a href="#易错点-1在临界区里做耗时操作" data-depth="3" data-heading-j="23">易错点 1：在临界区里做耗时操作</a></li><li><a href="#易错点-2hal_delay-在任何中断里都是错的" data-depth="3" data-heading-j="24">易错点 2：HAL_Delay() 在任何中断里都是错的</a></li><li><a href="#易错点-3osdelay-和-hal_delay-分不清" data-depth="3" data-heading-j="25">易错点 3：osDelay() 和 HAL_Delay() 分不清</a></li><li><a href="#易错点-4临界区嵌套不对称" data-depth="3" data-heading-j="26">易错点 4：临界区嵌套不对称</a></li><li><a href="#易错点-5把-configassert-当无害的调试开关" data-depth="3" data-heading-j="27">易错点 5：把 configASSERT 当无害的调试开关</a></li><li><a href="#易错点-6在-isr-里用-printf" data-depth="3" data-heading-j="28">易错点 6：在 ISR 里用 printf</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="29">10. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="30">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="31">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="32">结论</a></li><li><a href="#11-练习题" data-depth="2" data-heading-j="33">11. 练习题</a></li><li><a href="#基础题" data-depth="3" data-heading-j="34">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="35">挑战题</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>栈溢出检测与断言</span></a><ul class="toc__heads"><li><a href="#1-开篇一个被忽略的开关" data-depth="2" data-heading-j="0">1. 开篇：一个被忽略的开关</a></li><li><a href="#2-核心概念栈往哪边长" data-depth="2" data-heading-j="1">2. 核心概念：栈往哪边长</a></li><li><a href="#3-两种检测模式真实内核代码" data-depth="2" data-heading-j="2">3. 两种检测模式：真实内核代码</a></li><li><a href="#31-模式-1只检查当时的栈指针" data-depth="3" data-heading-j="3">3.1 模式 1：只检查当时的栈指针</a></li><li><a href="#32-模式-2填充魔数--检查栈底的-4-个字" data-depth="3" data-heading-j="4">3.2 模式 2：填充魔数 + 检查栈底的 4 个字</a></li><li><a href="#33-对比表" data-depth="3" data-heading-j="5">3.3 对比表</a></li><li><a href="#34-模式-2-的三重连锁条件" data-depth="3" data-heading-j="6">3.4 模式 2 的三重连锁条件</a></li><li><a href="#4-检查在什么时候发生" data-depth="2" data-heading-j="7">4. 检查在什么时候发生</a></li><li><a href="#5-vapplicationstackoverflowhook-怎么写" data-depth="2" data-heading-j="8">5. vApplicationStackOverflowHook 怎么写</a></li><li><a href="#51-函数签名" data-depth="3" data-heading-j="9">5.1 函数签名</a></li><li><a href="#52-它运行在什么上下文" data-depth="3" data-heading-j="10">5.2 它运行在什么上下文</a></li><li><a href="#53-一个能用的实现" data-depth="3" data-heading-j="11">5.3 一个能用的实现</a></li><li><a href="#6-configassert命中即死循环" data-depth="2" data-heading-j="12">6. configASSERT：命中即死循环</a></li><li><a href="#61-本工程的真实定义" data-depth="3" data-heading-j="13">6.1 本工程的真实定义</a></li><li><a href="#62-它没有关中断只是抬高了-basepri" data-depth="3" data-heading-j="14">6.2 它没有关中断，只是抬高了 BASEPRI</a></li><li><a href="#63-命中断言时怎么定位" data-depth="3" data-heading-j="15">6.3 命中断言时怎么定位</a></li><li><a href="#7-uxtaskgetstackhighwatermark-实战" data-depth="2" data-heading-j="16">7. uxTaskGetStackHighWaterMark 实战</a></li><li><a href="#71-本工程默认用不了" data-depth="3" data-heading-j="17">7.1 本工程默认用不了</a></li><li><a href="#72-它的实现与单位" data-depth="3" data-heading-j="18">7.2 它的实现与单位</a></li><li><a href="#73-方案-a任务自己查自己" data-depth="3" data-heading-j="19">7.3 方案 A：任务自己查自己</a></li><li><a href="#74-方案-b集中统计推荐" data-depth="3" data-heading-j="20">7.4 方案 B：集中统计（推荐）</a></li><li><a href="#75-判据余量多少才算安全" data-depth="3" data-heading-j="21">7.5 判据：余量多少才算安全</a></li><li><a href="#8-高级话题与常见问题" data-depth="2" data-heading-j="22">8. 高级话题与常见问题</a></li><li><a href="#易错点-1以为没报错等于没问题" data-depth="3" data-heading-j="23">易错点 1：以为”没报错”等于”没问题”</a></li><li><a href="#易错点-2任务名被截断" data-depth="3" data-heading-j="24">易错点 2：任务名被截断</a></li><li><a href="#易错点-3打开检测后忘记实现-hook" data-depth="3" data-heading-j="25">易错点 3：打开检测后忘记实现 hook</a></li><li><a href="#易错点-4用-uxtaskgetstackhighwatermark-的返回值猜当前用了多少" data-depth="3" data-heading-j="26">易错点 4：用 uxTaskGetStackHighWaterMark 的返回值猜”当前用了多少”</a></li><li><a href="#易错点-5单位搞混" data-depth="3" data-heading-j="27">易错点 5：单位搞混</a></li><li><a href="#易错点-6在-configassert-处理函数里调用会再次断言的函数" data-depth="3" data-heading-j="28">易错点 6：在 configASSERT 处理函数里调用会再次断言的函数</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="29">9. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="30">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="31">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="32">结论</a></li><li><a href="#10-练习题" data-depth="2" data-heading-j="33">10. 练习题</a></li><li><a href="#基础题" data-depth="3" data-heading-j="34">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="35">挑战题</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>本项目 FreeRTOSConfig 逐项解读</span></a><ul class="toc__heads"><li><a href="#1-开篇一份编译期契约" data-depth="2" data-heading-j="0">1. 开篇：一份编译期契约</a></li><li><a href="#2-逐项解读" data-depth="2" data-heading-j="1">2. 逐项解读</a></li><li><a href="#21-基础开关与调度" data-depth="3" data-heading-j="2">2.1 基础开关与调度</a></li><li><a href="#22-协程历史遗留" data-depth="3" data-heading-j="3">2.2 协程（历史遗留）</a></li><li><a href="#23-api-裁剪开关flash-体积" data-depth="3" data-heading-j="4">2.3 API 裁剪开关（Flash 体积）</a></li><li><a href="#24-中断cortex-m-专有" data-depth="3" data-heading-j="5">2.4 中断（Cortex-M 专有）</a></li><li><a href="#25-断言与端口映射" data-depth="3" data-heading-j="6">2.5 断言与端口映射</a></li><li><a href="#26-本工程没有定义但很重要的项" data-depth="3" data-heading-j="7">2.6 本工程没有定义、但很重要的项</a></li><li><a href="#3-三块最容易出事的配置" data-depth="2" data-heading-j="8">3. 三块最容易出事的配置</a></li><li><a href="#31-调度与时钟1000-hz-意味着什么" data-depth="3" data-heading-j="9">3.1 调度与时钟：1000 Hz 意味着什么</a></li><li><a href="#32-内存两个-1-带来的双轨制" data-depth="3" data-heading-j="10">3.2 内存：两个 1 带来的双轨制</a></li><li><a href="#33-优先级7-这个数字刚好卡在边界" data-depth="3" data-heading-j="11">3.3 优先级：7 这个数字刚好卡在边界</a></li><li><a href="#34-中断5-和-15-是一对" data-depth="3" data-heading-j="12">3.4 中断：5 和 15 是一对</a></li><li><a href="#35-断言与钩子一开就要配" data-depth="3" data-heading-j="13">3.5 断言与钩子：一开就要配</a></li><li><a href="#36-include-裁剪在省-flash-和留余地之间" data-depth="3" data-heading-j="14">3.6 INCLUDE 裁剪：在省 Flash 和留余地之间</a></li><li><a href="#37-两个装饰性配置configenable_fpu--configenable_mpu" data-depth="3" data-heading-j="15">3.7 两个装饰性配置：configENABLE_FPU / configENABLE_MPU</a></li><li><a href="#4-cmsis-rtos-v1-的优先级映射" data-depth="2" data-heading-j="16">4. CMSIS-RTOS v1 的优先级映射</a></li><li><a href="#41-换算公式的真实实现" data-depth="3" data-heading-j="17">4.1 换算公式的真实实现</a></li><li><a href="#42-完整映射表" data-depth="3" data-heading-j="18">4.2 完整映射表</a></li><li><a href="#43-本工程的真实调度格局" data-depth="3" data-heading-j="19">4.3 本工程的真实调度格局</a></li><li><a href="#5-改哪个值会发生什么" data-depth="2" data-heading-j="20">5. 改哪个值会发生什么</a></li><li><a href="#6-当前配置总览速查" data-depth="2" data-heading-j="21">6. 当前配置总览（速查）</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="22">7. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="23">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="24">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="25">结论</a></li><li><a href="#8-练习题" data-depth="2" data-heading-j="26">8. 练习题</a></li><li><a href="#基础题" data-depth="3" data-heading-j="27">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="28">挑战题</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">FreeRTOS</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>FreeRTOS / 内存管理 / heap_4 / 静态分配 / STM32F407 / 内存碎片 / ucHeap / 堆水位</span></div><h1 class="docs__title">内存管理与临界区</h1><p class="docs__lead">heap_1 到 heap_5 与静态分配各自解决的问题，以及哨兵固件只选 heap_4 的原因</p></header><section class="dfile" id="file-1" data-file="01-内存方案对比"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-内存方案对比</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/01-FreeRTOS/03-内存管理与临界区/01-内存方案对比.md</span></div><div class="dfile__body"><h1 id="freertos-内存方案对比">FreeRTOS 内存方案对比</h1>
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>内存管理与临界区 · FreeRTOS · 王宇翔</title><meta name="description" content="heap_1 到 heap_5 与静态分配各自解决的问题，以及哨兵固件只选 heap_4 的原因"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/01-FreeRTOS/03-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%B8%8E%E4%B8%B4%E7%95%8C%E5%8C%BA/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="内存管理与临界区 · FreeRTOS · 王宇翔"><meta property="og:description" content="heap_1 到 heap_5 与静态分配各自解决的问题，以及哨兵固件只选 heap_4 的原因"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/01-FreeRTOS/03-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%B8%8E%E4%B8%B4%E7%95%8C%E5%8C%BA/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/01-FreeRTOS/">FreeRTOS</a><span class="sep" aria-hidden="true">/</span><span class="now">内存管理与临界区</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>内存管理与临界区</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>FreeRTOS 内存方案对比</span></a><ul class="toc__heads"><li><a href="#1-rtos-不用-libc-malloc-的三条原因" data-depth="2" data-heading-j="0">1. RTOS 不用 libc malloc 的三条原因</a></li><li><a href="#2-分配算法与内存来源两条维度" data-depth="2" data-heading-j="1">2. 分配算法与内存来源两条维度</a></li><li><a href="#21-两个正交的维度" data-depth="3" data-heading-j="2">2.1 两个正交的维度</a></li><li><a href="#22-heap_1只会加不会减" data-depth="3" data-heading-j="3">2.2 heap_1：只会加，不会减</a></li><li><a href="#23-heap_2首次适配但不合并已被淘汰" data-depth="3" data-heading-j="4">2.3 heap_2：首次适配，但不合并（已被淘汰）</a></li><li><a href="#24-heap_3只是给-libc-的-malloc-加了一把锁" data-depth="3" data-heading-j="5">2.4 heap_3：只是给 libc 的 malloc 加了一把锁</a></li><li><a href="#25-heap_4首次适配--相邻合并本工程的选择" data-depth="3" data-heading-j="6">2.5 heap_4：首次适配 + 相邻合并（本工程的选择）</a></li><li><a href="#26-heap_5heap_4-加多段内存注册" data-depth="3" data-heading-j="7">2.6 heap_5：heap_4 加多段内存注册</a></li><li><a href="#27-决策图" data-depth="3" data-heading-j="8">2.7 决策图</a></li><li><a href="#28-静态分配换来的确定性" data-depth="3" data-heading-j="9">2.8 静态分配换来的确定性</a></li><li><a href="#3-heap_4-里一次分配的完整路径" data-depth="2" data-heading-j="10">3. heap_4 里一次分配的完整路径</a></li><li><a href="#4-产业案例电控固件普遍选择-heap_4" data-depth="2" data-heading-j="11">4. 产业案例：电控固件普遍选择 heap_4</a></li><li><a href="#5-高级话题与常见问题" data-depth="2" data-heading-j="12">5. 高级话题与常见问题</a></li><li><a href="#易错点-1pvportmalloc-和-malloc-混用" data-depth="3" data-heading-j="13">易错点 1：pvPortMalloc 和 malloc 混用</a></li><li><a href="#易错点-2heap_1-和-include_vtaskdelete-互相打架" data-depth="3" data-heading-j="14">易错点 2：heap_1 和 INCLUDE_vTaskDelete 互相打架</a></li><li><a href="#易错点-3xportgetfreeheapsize-在第一次分配之前没有意义" data-depth="3" data-heading-j="15">易错点 3：xPortGetFreeHeapSize() 在第一次分配之前没有意义</a></li><li><a href="#易错点-4taskbasestart-不检查返回值" data-depth="3" data-heading-j="16">易错点 4：TaskBase::start() 不检查返回值</a></li><li><a href="#易错点-5别用-new-创建任务对象" data-depth="3" data-heading-j="17">易错点 5：别用 new 创建任务对象</a></li><li><a href="#6-小结" data-depth="2" data-heading-j="18">6. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="19">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="20">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="21">结论</a></li><li><a href="#7-练习" data-depth="2" data-heading-j="22">7. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="23">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="24">挑战题</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>heap_4 与 40 KB 堆</span></a><ul class="toc__heads"><li><a href="#1-40-kb-从哪来" data-depth="2" data-heading-j="0">1. 40 KB 从哪来</a></li><li><a href="#2-heap_4-的块结构" data-depth="2" data-heading-j="1">2. heap_4 的块结构</a></li><li><a href="#21-每个块前面都有-8-字节的块头" data-depth="3" data-heading-j="2">2.1 每个块前面都有 8 字节的块头</a></li><li><a href="#22-空闲链表按地址升序两端有哨兵" data-depth="3" data-heading-j="3">2.2 空闲链表：按地址升序，两端有哨兵</a></li><li><a href="#23-用最高位当已分配标志" data-depth="3" data-heading-j="4">2.3 用最高位当”已分配”标志</a></li><li><a href="#24-最小块16-字节" data-depth="3" data-heading-j="5">2.4 最小块：16 字节</a></li><li><a href="#3-分配释放与碎片的形成条件" data-depth="2" data-heading-j="6">3. 分配、释放与碎片的形成条件</a></li><li><a href="#31-分配首次适配--分割" data-depth="3" data-heading-j="7">3.1 分配：首次适配 + 分割</a></li><li><a href="#32-释放按地址插回--相邻合并" data-depth="3" data-heading-j="8">3.2 释放：按地址插回 + 相邻合并</a></li><li><a href="#33-碎片的产生条件与本工程的情况" data-depth="3" data-heading-j="9">3.3 碎片的产生条件与本工程的情况</a></li><li><a href="#4-40960-里有-40944-可用prvheapinit-的三次截断" data-depth="2" data-heading-j="10">4. 40960 里有 40944 可用：prvHeapInit 的三次截断</a></li><li><a href="#5-真实堆预算表" data-depth="2" data-heading-j="11">5. 真实堆预算表</a></li><li><a href="#51-逐次分配的实测参数" data-depth="3" data-heading-j="12">5.1 逐次分配的实测参数</a></li><li><a href="#52-预算表" data-depth="3" data-heading-j="13">5.2 预算表</a></li><li><a href="#53-不在堆里的部分" data-depth="3" data-heading-j="14">5.3 不在堆里的部分</a></li><li><a href="#6-xportgetfreeheapsize--xportgetminimumeverfreeheapsize-怎么用" data-depth="2" data-heading-j="15">6. xPortGetFreeHeapSize / xPortGetMinimumEverFreeHeapSize 怎么用</a></li><li><a href="#61-在本工程里怎么打印" data-depth="3" data-heading-j="16">6.1 在本工程里怎么打印</a></li><li><a href="#62-三个必须知道的前提" data-depth="3" data-heading-j="17">6.2 三个必须知道的前提</a></li><li><a href="#7-40-kb-对-6-个任务栈的余量" data-depth="2" data-heading-j="18">7. 40 KB 对 6 个任务栈的余量</a></li><li><a href="#71-静态结论够用只占-695" data-depth="3" data-heading-j="19">7.1 静态结论：够用，只占 69.5%</a></li><li><a href="#72-还能撑多少余量的几种用法" data-depth="3" data-heading-j="20">7.2 还能撑多少：余量的几种用法</a></li><li><a href="#73-底盘板-configminimal_stack_size-取-512-的原因" data-depth="3" data-heading-j="21">7.3 底盘板 configMINIMAL_STACK_SIZE 取 512 的原因</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="22">8. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="23">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="24">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="25">结论</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="26">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="27">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="28">挑战题</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>临界区与中断安全</span></a><ul class="toc__heads"><li><a href="#1-临界区每毫秒都在跑" data-depth="2" data-heading-j="0">1. 临界区每毫秒都在跑</a></li><li><a href="#2-cortex-m-的优先级是数值越小越优先" data-depth="2" data-heading-j="1">2. Cortex-M 的优先级是”数值越小越优先”</a></li><li><a href="#21-两套说法必须分清" data-depth="3" data-heading-j="2">2.1 两套说法，必须分清</a></li><li><a href="#22-优先级分组必须和-configprio_bits-对齐" data-depth="3" data-heading-j="3">2.2 优先级分组必须和 configPRIO_BITS 对齐</a></li><li><a href="#3-taskenter_critical-到底做了什么" data-depth="2" data-heading-j="4">3. taskENTER_CRITICAL 到底做了什么</a></li><li><a href="#31-宏的链路" data-depth="3" data-heading-j="5">3.1 宏的链路</a></li><li><a href="#32-实现细节" data-depth="3" data-heading-j="6">3.2 实现细节</a></li><li><a href="#33-basepri-原理" data-depth="3" data-heading-j="7">3.3 BASEPRI 原理</a></li><li><a href="#34-屏蔽关系图" data-depth="3" data-heading-j="8">3.4 屏蔽关系图</a></li><li><a href="#35-一张表看全" data-depth="3" data-heading-j="9">3.5 一张表看全</a></li><li><a href="#4-中断版的临界区portset_interrupt_mask_from_isr" data-depth="2" data-heading-j="10">4. 中断版的临界区：portSET_INTERRUPT_MASK_FROM_ISR</a></li><li><a href="#5-本工程的真实中断优先级表" data-depth="2" data-heading-j="11">5. 本工程的真实中断优先级表</a></li><li><a href="#51-零裕量警告" data-depth="3" data-heading-j="12">5.1 零裕量警告</a></li><li><a href="#52-改阈值会怎样" data-depth="3" data-heading-j="13">5.2 改阈值会怎样</a></li><li><a href="#6-isr-里不能用非-fromisr-版本的原因" data-depth="2" data-heading-j="14">6. ISR 里不能用非 FromISR 版本的原因</a></li><li><a href="#理由-1fromisr-版本才接受唤醒标志这个出参" data-depth="3" data-heading-j="15">理由 1：FromISR 版本才接受”唤醒标志”这个出参</a></li><li><a href="#理由-2非-fromisr-版本会调用任务态的临界区直接命中-configassert" data-depth="3" data-heading-j="16">理由 2：非 FromISR 版本会调用任务态的临界区，直接命中 configASSERT</a></li><li><a href="#理由-3非-fromisr-版本会试图阻塞" data-depth="3" data-heading-j="17">理由 3：非 FromISR 版本会试图阻塞</a></li><li><a href="#正确与错误路径对照" data-depth="3" data-heading-j="18">正确与错误路径对照</a></li><li><a href="#唯一一处真实调用" data-depth="3" data-heading-j="19">唯一一处真实调用</a></li><li><a href="#7-完整的跨上下文数据流" data-depth="2" data-heading-j="20">7. 完整的跨上下文数据流</a></li><li><a href="#8-优先级反转与优先级继承" data-depth="2" data-heading-j="21">8. 优先级反转与优先级继承</a></li><li><a href="#9-高级话题与常见问题" data-depth="2" data-heading-j="22">9. 高级话题与常见问题</a></li><li><a href="#易错点-1在临界区里做耗时操作" data-depth="3" data-heading-j="23">易错点 1：在临界区里做耗时操作</a></li><li><a href="#易错点-2hal_delay-在任何中断里都是错的" data-depth="3" data-heading-j="24">易错点 2：HAL_Delay() 在任何中断里都是错的</a></li><li><a href="#易错点-3osdelay-和-hal_delay-分不清" data-depth="3" data-heading-j="25">易错点 3：osDelay() 和 HAL_Delay() 分不清</a></li><li><a href="#易错点-4临界区嵌套不对称" data-depth="3" data-heading-j="26">易错点 4：临界区嵌套不对称</a></li><li><a href="#易错点-5把-configassert-当无害的调试开关" data-depth="3" data-heading-j="27">易错点 5：把 configASSERT 当无害的调试开关</a></li><li><a href="#易错点-6在-isr-里用-printf" data-depth="3" data-heading-j="28">易错点 6：在 ISR 里用 printf</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="29">10. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="30">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="31">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="32">结论</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="33">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="34">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="35">挑战题</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>栈溢出检测与断言</span></a><ul class="toc__heads"><li><a href="#1-一个被忽略的开关" data-depth="2" data-heading-j="0">1. 一个被忽略的开关</a></li><li><a href="#2-栈往哪边长" data-depth="2" data-heading-j="1">2. 栈往哪边长</a></li><li><a href="#3-两种内核检测模式" data-depth="2" data-heading-j="2">3. 两种内核检测模式</a></li><li><a href="#31-模式-1只检查当时的栈指针" data-depth="3" data-heading-j="3">3.1 模式 1：只检查当时的栈指针</a></li><li><a href="#32-模式-2填充魔数--检查栈底的-4-个字" data-depth="3" data-heading-j="4">3.2 模式 2：填充魔数 + 检查栈底的 4 个字</a></li><li><a href="#33-对比表" data-depth="3" data-heading-j="5">3.3 对比表</a></li><li><a href="#34-模式-2-的三重连锁条件" data-depth="3" data-heading-j="6">3.4 模式 2 的三重连锁条件</a></li><li><a href="#4-检查在什么时候发生" data-depth="2" data-heading-j="7">4. 检查在什么时候发生</a></li><li><a href="#5-vapplicationstackoverflowhook-怎么写" data-depth="2" data-heading-j="8">5. vApplicationStackOverflowHook 怎么写</a></li><li><a href="#51-函数签名" data-depth="3" data-heading-j="9">5.1 函数签名</a></li><li><a href="#52-它运行在什么上下文" data-depth="3" data-heading-j="10">5.2 它运行在什么上下文</a></li><li><a href="#53-一个能用的实现" data-depth="3" data-heading-j="11">5.3 一个能用的实现</a></li><li><a href="#54-任务名被截断" data-depth="3" data-heading-j="12">5.4 任务名被截断</a></li><li><a href="#6-configassert命中即死循环" data-depth="2" data-heading-j="13">6. configASSERT：命中即死循环</a></li><li><a href="#61-本工程的真实定义" data-depth="3" data-heading-j="14">6.1 本工程的真实定义</a></li><li><a href="#62-它没有关中断只是抬高了-basepri" data-depth="3" data-heading-j="15">6.2 它没有关中断，只是抬高了 BASEPRI</a></li><li><a href="#63-命中断言时怎么定位" data-depth="3" data-heading-j="16">6.3 命中断言时怎么定位</a></li><li><a href="#64-断言处理函数里别再触发断言" data-depth="3" data-heading-j="17">6.4 断言处理函数里别再触发断言</a></li><li><a href="#7-uxtaskgetstackhighwatermark-实战" data-depth="2" data-heading-j="18">7. uxTaskGetStackHighWaterMark 实战</a></li><li><a href="#71-本工程默认用不了" data-depth="3" data-heading-j="19">7.1 本工程默认用不了</a></li><li><a href="#72-它的实现与单位" data-depth="3" data-heading-j="20">7.2 它的实现与单位</a></li><li><a href="#73-方案-a任务自己查自己" data-depth="3" data-heading-j="21">7.3 方案 A：任务自己查自己</a></li><li><a href="#74-方案-b集中统计推荐" data-depth="3" data-heading-j="22">7.4 方案 B：集中统计（推荐）</a></li><li><a href="#75-判据余量多少才算安全" data-depth="3" data-heading-j="23">7.5 判据：余量多少才算安全</a></li><li><a href="#76-没报错不等于没问题" data-depth="3" data-heading-j="24">7.6 没报错不等于没问题</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="25">8. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="26">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="27">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="28">结论</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="29">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="30">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="31">挑战题</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>本项目 FreeRTOSConfig 逐项解读</span></a><ul class="toc__heads"><li><a href="#1-一份编译期契约" data-depth="2" data-heading-j="0">1. 一份编译期契约</a></li><li><a href="#2-逐项解读" data-depth="2" data-heading-j="1">2. 逐项解读</a></li><li><a href="#21-基础开关与调度" data-depth="3" data-heading-j="2">2.1 基础开关与调度</a></li><li><a href="#22-协程历史遗留" data-depth="3" data-heading-j="3">2.2 协程（历史遗留）</a></li><li><a href="#23-api-裁剪开关flash-体积" data-depth="3" data-heading-j="4">2.3 API 裁剪开关（Flash 体积）</a></li><li><a href="#24-中断cortex-m-专有" data-depth="3" data-heading-j="5">2.4 中断（Cortex-M 专有）</a></li><li><a href="#25-断言与端口映射" data-depth="3" data-heading-j="6">2.5 断言与端口映射</a></li><li><a href="#26-本工程没有定义但很重要的项" data-depth="3" data-heading-j="7">2.6 本工程没有定义、但很重要的项</a></li><li><a href="#3-三块最容易出事的配置" data-depth="2" data-heading-j="8">3. 三块最容易出事的配置</a></li><li><a href="#31-调度与时钟1000-hz-意味着什么" data-depth="3" data-heading-j="9">3.1 调度与时钟：1000 Hz 意味着什么</a></li><li><a href="#32-内存两个-1-带来的双轨制" data-depth="3" data-heading-j="10">3.2 内存：两个 1 带来的双轨制</a></li><li><a href="#33-优先级7-这个数字刚好卡在边界" data-depth="3" data-heading-j="11">3.3 优先级：7 这个数字刚好卡在边界</a></li><li><a href="#34-中断5-和-15-是一对" data-depth="3" data-heading-j="12">3.4 中断：5 和 15 是一对</a></li><li><a href="#35-断言与钩子一开就要配" data-depth="3" data-heading-j="13">3.5 断言与钩子：一开就要配</a></li><li><a href="#36-include-裁剪在省-flash-和留余地之间" data-depth="3" data-heading-j="14">3.6 INCLUDE 裁剪：在省 Flash 和留余地之间</a></li><li><a href="#37-两个装饰性配置configenable_fpu--configenable_mpu" data-depth="3" data-heading-j="15">3.7 两个装饰性配置：configENABLE_FPU / configENABLE_MPU</a></li><li><a href="#4-cmsis-rtos-v1-的优先级映射" data-depth="2" data-heading-j="16">4. CMSIS-RTOS v1 的优先级映射</a></li><li><a href="#41-换算公式的真实实现" data-depth="3" data-heading-j="17">4.1 换算公式的真实实现</a></li><li><a href="#42-完整映射表" data-depth="3" data-heading-j="18">4.2 完整映射表</a></li><li><a href="#43-本工程的真实调度格局" data-depth="3" data-heading-j="19">4.3 本工程的真实调度格局</a></li><li><a href="#5-改哪个值会发生什么" data-depth="2" data-heading-j="20">5. 改哪个值会发生什么</a></li><li><a href="#6-当前配置总览速查" data-depth="2" data-heading-j="21">6. 当前配置总览（速查）</a></li><li><a href="#7-小结" data-depth="2" data-heading-j="22">7. 小结</a></li><li><a href="#核心概念总结" data-depth="3" data-heading-j="23">核心概念总结</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="24">设计权衡</a></li><li><a href="#结论" data-depth="3" data-heading-j="25">结论</a></li><li><a href="#8-练习" data-depth="2" data-heading-j="26">8. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="27">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="28">挑战题</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">FreeRTOS</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>FreeRTOS / 内存管理 / heap_4 / 静态分配 / STM32F407 / 内存碎片 / ucHeap / 堆水位</span></div><h1 class="docs__title">内存管理与临界区</h1><p class="docs__lead">heap_1 到 heap_5 与静态分配各自解决的问题，以及哨兵固件只选 heap_4 的原因</p></header><section class="dfile" id="file-1" data-file="01-内存方案对比"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-内存方案对比</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/01-FreeRTOS/03-内存管理与临界区/01-内存方案对比.md</span></div><div class="dfile__body"><h1 id="freertos-内存方案对比">FreeRTOS 内存方案对比</h1>
 <blockquote>
 <p>本单元属于 <code>docs/01-FreeRTOS/03-内存管理与临界区/</code>，全部素材取自哨兵机器人云台板固件
 <code>2026OmniSentryGimbal</code>（STM32F407，FreeRTOS Kernel V10.3.1，应用层走 CMSIS-RTOS v1 包装）。
 底盘板 <code>2026OmniSentryChassis</code> 与它同构，两块板不一样的地方本文都会点出来。</p>
 </blockquote>
-<h2 id="1-开篇rtos-弃用-libc-malloc-的三条原因">1. 开篇：RTOS 弃用 libc <code>malloc</code> 的三条原因</h2>
+<h2 id="1-rtos-不用-libc-malloc-的三条原因">1. RTOS 不用 libc <code>malloc</code> 的三条原因</h2>
 <p>在不带 RTOS 的程序里 <code>malloc</code> 尚可使用，接入 RTOS 后它直接不可用，原因有三条：</p>
 <ol>
 <li>不确定性。newlib 的 <code>malloc</code> 走 <code>_sbrk</code>，堆边界是运行期推的，最坏耗时不可预测。RTOS 要求”分配 200 字节”这句话的耗时有个上界，哪怕上界是 O(n)。</li>
@@ -40,7 +40,7 @@
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> ls</span><span style="color:#032F62"> Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/</span></span>
 <span class="line"><span style="color:#6F42C1">heap_4.c</span></span></code></pre>
 <p>CubeMX 生成工程时把 <code>heap_1.c</code> ~ <code>heap_5.c</code> 全给裁掉了，只留 heap_4.c。所以下文关于分配算法的讨论都会收敛到同一个实现上，这是理解本单元的前提。</p>
-<h2 id="2-核心概念">2. 核心概念</h2>
+<h2 id="2-分配算法与内存来源两条维度">2. 分配算法与内存来源两条维度</h2>
 <h3 id="21-两个正交的维度">2.1 两个正交的维度</h3>
 <p>下面两件事常被混为一件事，它们互相独立：</p>
 <ul>
@@ -131,7 +131,7 @@
 本工程 <code>configUSE_TIMERS</code> 没有定义（默认 0），所以只需要 <code>vApplicationGetIdleTaskMemory</code> 一个。
 一旦把 <code>configUSE_TIMERS</code> 打开，就必须补一个 <code>vApplicationGetTimerTaskMemory</code>，否则报 <code>undefined reference to 'vApplicationGetTimerTaskMemory'</code>。</p>
 </blockquote>
-<h2 id="3-机制heap_4-里一次分配的完整路径">3. 机制：heap_4 里一次分配的完整路径</h2>
+<h2 id="3-heap_4-里一次分配的完整路径">3. heap_4 里一次分配的完整路径</h2>
 <p>heap_4 碎片少的直观解释先看一遍分配与释放路径，详细推导放在 <code>02-heap_4与40KB堆</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["pvPortMalloc 请求 n 字节"] --> B["xWantedSize 加上 xHeapStructSize 8 字节块头"]
@@ -230,7 +230,7 @@
 <p>配套的 <code>taskEntry</code> 是 C++ 与 C 风格 RTOS API 的经典衔接方式：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> void</span><span style="color:#6F42C1"> taskEntry</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#D73A49"> const*</span><span style="color:#E36209"> argument</span><span style="color:#24292E">) {</span></span>
 <span class="line"><span style="color:#D73A49">    auto*</span><span style="color:#24292E"> task </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> static_cast&#x3C;</span><span style="color:#24292E">TaskBase</span><span style="color:#D73A49">*></span><span style="color:#24292E">(</span><span style="color:#D73A49">const_cast&#x3C;void*></span><span style="color:#24292E">(argument));</span></span>
-<span class="line"><span style="color:#24292E">    task-></span><span style="color:#6F42C1">run</span><span style="color:#24292E">();</span><span style="color:#6A737D">      // 静态入口，真正的逻辑在虚函数 run() 里</span></span>
+<span class="line"><span style="color:#24292E">    task-></span><span style="color:#6F42C1">run</span><span style="color:#24292E">();</span><span style="color:#6A737D">      // 静态入口，实际逻辑在虚函数 run() 里</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <h3 id="易错点-5别用-new-创建任务对象">易错点 5：别用 <code>new</code> 创建任务对象</h3>
 <p><code>TaskBase</code> 的派生类实例全部是全局静态对象，例如 <code>static StartControlCenterTask controlcenterTask;</code>，没有用 <code>new</code>。</p>
@@ -315,7 +315,7 @@
 <table><thead><tr><th>权衡点</th><th>偏向 heap_4 的理由</th><th>反面代价</th></tr></thead><tbody><tr><td>通用性 vs 极致精简</td><td>保留释放能力，将来加 <code>vTaskDelete</code> 不用改配置</td><td>代码体积比 heap_1 大，分配最坏 O(n)</td></tr><tr><td>碎片 vs 确定性</td><td>相邻合并把碎片压到极低</td><td>分配耗时不再是常数，无法给出严格 WCET</td></tr><tr><td>动态 vs 静态</td><td>启动期一次分配完，代码短、改动快</td><td>分配失败在编译期看不出来，只能运行期排查</td></tr><tr><td>默认值 vs 主动决策</td><td>CubeMX 默认 heap_4，不改最省事</td><td>不懂就改不动，<code>configTOTAL_HEAP_SIZE</code> 改错会很难查</td></tr></tbody></table>
 <h3 id="结论">结论</h3>
 <p>heap_4 的价值在于：在启动期一次性分配、运行期零分配这种最常见的电控固件模式下，它把碎片风险降到零，付出的代价只是一次 O(n) 的启动期开销。</p>
-<h2 id="7-练习题">7. 练习题</h2>
+<h2 id="7-练习">7. 练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
 <li>本工程 <code>MemMang</code> 目录只有一个 <code>heap_4.c</code>。如果把 <code>INCLUDE_vTaskDelete</code> 改成 0，能不能顺手把实现换成 heap_1？换成 heap_1 之后 <code>configTOTAL_HEAP_SIZE</code> 还需要 40960 吗？</li>
@@ -335,7 +335,7 @@
 <code>arm-none-eabi-gcc</code> 拿本工程的 <code>FreeRTOSConfig.h</code> 和 port 头文件编译探针量出来的；
 堆地址和 <code>ucHeap</code> 大小取自 <code>build/Debug/sentriomeni2026.map</code>。</p>
 </blockquote>
-<h2 id="1-开篇40-kb-从哪来">1. 开篇：40 KB 从哪来</h2>
+<h2 id="1-40-kb-从哪来">1. 40 KB 从哪来</h2>
 <p><code>Core/Inc/FreeRTOSConfig.h</code> 第 67 行：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configTOTAL_HEAP_SIZE</span><span style="color:#24292E">                    ((</span><span style="color:#D73A49">size_t</span><span style="color:#24292E">)</span><span style="color:#005CC5">40960</span><span style="color:#24292E">)</span></span></code></pre>
 <p>40960 = 40 × 1024，也就是 40 KB。它就是 heap_4 里这个数组的长度：</p>
@@ -350,7 +350,7 @@
 <p>最后一列 <code>0xa000</code> 就是 40960，配置里的数字和链接后的实际大小对得上。</p>
 <p>这块内存只占 RAM，不占 Flash。本工程 STM32F407 有 128 KB SRAM（链接脚本 <code>RAM ORIGIN = 0x20000000, LENGTH = 128K</code>，栈顶 <code>_estack = 0x20020000</code>）。整块 <code>.bss</code> 是 54668 字节，其中 <code>ucHeap</code> 就占了 40960，也就是 75%。</p>
 <p>下面要看的是这 40 KB 装下了什么、还剩多少、够不够。</p>
-<h2 id="2-核心概念heap_4-的块结构">2. 核心概念：heap_4 的块结构</h2>
+<h2 id="2-heap_4-的块结构">2. heap_4 的块结构</h2>
 <h3 id="21-每个块前面都有-8-字节的块头">2.1 每个块前面都有 8 字节的块头</h3>
 <p>heap_4 把整块内存切成一段段”块”（block），每个块的开头都放一个 <code>BlockLink_t</code>：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:69-73 */</span></span>
@@ -398,7 +398,7 @@
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> heapMINIMUM_BLOCK_SIZE</span><span style="color:#24292E">	( ( </span><span style="color:#D73A49">size_t</span><span style="color:#24292E"> ) ( xHeapStructSize </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) )</span><span style="color:#6A737D">   /* = 8 &#x3C;&#x3C; 1 = 16 */</span></span></code></pre>
 <p>分割（split）只在剩余量大于 16 字节时才做。如果一块 100 字节的空闲块被申请走 90 字节，剩下的 10 字节不会被单独切出来：太小了，切出来光块头就占 8 字节，还得额外维护链表项。整块 100 字节都归这次申请。</p>
 <p>这条规则叫”不许出现小于 <code>heapMINIMUM_BLOCK_SIZE</code> 的碎片”，是 heap_4 抑制碎片的第二道防线。</p>
-<h2 id="3-机制原理">3. 机制/原理</h2>
+<h2 id="3-分配释放与碎片的形成条件">3. 分配、释放与碎片的形成条件</h2>
 <h3 id="31-分配首次适配--分割">3.1 分配：首次适配 + 分割</h3>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["应用调用 pvPortMalloc 请求 n 字节"] --> B["请求量自增 8 字节块头"]
@@ -704,7 +704,7 @@
 
 
 
-<table><thead><tr><th>#</th><th>对象</th><th>创建位置</th><th>栈深 words</th><th>栈字节</th><th>栈+块头</th><th>TCB+块头</th><th>小计</th></tr></thead><tbody><tr><td>1</td><td><code>usbRxQueue</code></td><td><code>freertos.c:114</code></td><td>—</td><td>128</td><td>—</td><td>—</td><td>208</td></tr><tr><td>2</td><td><code>defaultTask</code></td><td><code>freertos.c:123</code></td><td>256</td><td>1024</td><td>1032</td><td>92</td><td>1124</td></tr><tr><td>3</td><td><code>StartFireTask</code></td><td><code>FireTask.cpp:217</code></td><td>512</td><td>2048</td><td>2056</td><td>92</td><td>2148</td></tr><tr><td>4</td><td><code>imuTask</code></td><td><code>ImuTask.cpp:112</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>5</td><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp:120</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td>6</td><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp:149</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>7</td><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp:118</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td></td><td>合计</td><td></td><td>6912</td><td>27648</td><td>27696</td><td>552</td><td>28456</td></tr></tbody></table>
+<table><thead><tr><th>#</th><th>对象</th><th>创建位置</th><th>栈深 words</th><th>栈字节</th><th>栈+块头</th><th>TCB+块头</th><th>小计</th></tr></thead><tbody><tr><td>1</td><td><code>usbRxQueue</code></td><td><code>freertos.c:114</code></td><td>—</td><td>128</td><td>—</td><td>—</td><td>208</td></tr><tr><td>2</td><td><code>defaultTask</code></td><td><code>freertos.c:123</code></td><td>256</td><td>1024</td><td>1032</td><td>92</td><td>1124</td></tr><tr><td>3</td><td><code>StartFireTask</code></td><td><code>FireTask.cpp:80</code></td><td>512</td><td>2048</td><td>2056</td><td>92</td><td>2148</td></tr><tr><td>4</td><td><code>imuTask</code></td><td><code>ImuTask.cpp:123</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>5</td><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp:110</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td>6</td><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp:122</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>7</td><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp:177</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td></td><td>合计</td><td></td><td>6912</td><td>27648</td><td>27696</td><td>552</td><td>28456</td></tr></tbody></table>
 <p>其中队列的 208 字节是这样来的：队列体大小 = <code>sizeof(Queue_t)</code> + 消息存储 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>72</mn><mo>+</mo><mo stretchy="false">(</mo><mn>128</mn><mo>×</mo><mn>1</mn><mo stretchy="false">)</mo><mo>=</mo><mn>200</mn></mrow><annotation encoding="application/x-tex">72 + (128 \times 1) = 200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">72</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">128</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span>，再加上 8 字节块头 = 208。</p>
 <p>用公式写一遍：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mo>=</mo><munder><munder><mn>208</mn><mo stretchy="true">⏟</mo></munder><mtext>queue</mtext></munder><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mn>6</mn></msubsup><mrow><mo fence="true">(</mo><munder><munder><mrow><mn>4</mn><msub><mi>d</mi><mi>i</mi></msub><mo>+</mo><mn>8</mn></mrow><mo stretchy="true">⏟</mo></munder><mtext>stack</mtext></munder><mo>+</mo><munder><munder><mn>92</mn><mo stretchy="true">⏟</mo></munder><mtext>TCB</mtext></munder><mo fence="true">)</mo></mrow><mo>=</mo><mn>208</mn><mo>+</mo><mn>27648</mn><mo>+</mo><mn>48</mn><mo>+</mo><mn>552</mn><mo>=</mo><mn>28456</mn><mtext> bytes</mtext></mrow><annotation encoding="application/x-tex">C = \underbrace{208}_{\text{queue}} + \sum_{i=1}^{6}\left(\underbrace{4 d_i + 8}_{\text{stack}} + \underbrace{92}_{\text{TCB}}\right) = 208 + 27648 + 48 + 552 = 28456 \ \text{bytes}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.9299em;vertical-align:-1.2855em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6444em;"><span style="top:-1.8506em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">queue</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6444em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
@@ -1030,7 +1030,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>用 heap_4 而不是 heap_1</td><td>保留 <code>vTaskDelete</code> 余量，未来改动不用重选方案</td><td>多 100 行代码；分配耗时不再是常数</td></tr><tr><td>堆定 40960 而不是默认 15360</td><td>6 个任务的栈（27648 B）才有地方放</td><td>吃掉 75% 的 <code>.bss</code>，RAM 余量变紧</td></tr><tr><td>空闲任务静态化</td><td>杜绝”堆小到连空闲任务都建不出来”</td><td><code>configSUPPORT_STATIC_ALLOCATION = 1</code> 会带来链接期钩子强依赖</td></tr><tr><td>运行期不释放</td><td>零碎片风险</td><td>失去了动态伸缩任务的灵活性</td></tr><tr><td>不开 <code>configCHECK_FOR_STACK_OVERFLOW</code></td><td>省一次 27648 字节的 <code>memset</code> 与少量代码</td><td>栈溢出完全没有保护，这是本工程最大的监控盲区</td></tr></tbody></table>
 <h3 id="结论">结论</h3>
 <p><code>configTOTAL_HEAP_SIZE = 40960</code> 这句话的真实含义是可用 40944 字节，其中 28456 字节被 6 个任务和 1 个队列一次性占掉，剩 12488 字节。把这个数算清楚，比背任何 API 都更有助于改配置时不慌。</p>
-<h2 id="9-练习题">9. 练习题</h2>
+<h2 id="9-练习">9. 练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
 <li>用第 5 节的公式复算一遍：如果 <code>gimbalTask</code> 的栈从 2048 降到 1536，堆用量变成多少？余量变成多少？</li>
@@ -1048,7 +1048,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <code>portable/GCC/ARM_CM4F/portmacro.h</code>（BASEPRI 汇编）、<code>port.c</code>（临界区实现），
 以及真实应用代码 <code>USB_DEVICE/App/usbd_cdc_if.c</code> 里唯一一处 ISR 调用队列的地方。</p>
 </blockquote>
-<h2 id="1-开篇临界区每毫秒都在跑">1. 开篇：临界区每毫秒都在跑</h2>
+<h2 id="1-临界区每毫秒都在跑">1. 临界区每毫秒都在跑</h2>
 <p>多数人第一次听到”临界区”是在教程里看到 <code>taskENTER_CRITICAL()</code>。但在本工程里，应用层从来没有写过这个宏，它却每毫秒都在跑。</p>
 <p>证据：<code>Core/Src/freertos.c</code> 建了一个队列，<code>USB_DEVICE/App/usbd_cdc_if.c</code> 在 USB 中断里往里塞字节：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c:114 */</span></span>
@@ -1077,7 +1077,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p><code>xQueueSendFromISR()</code> 内部必然要操作队列的读写指针和等待任务链表，这是典型的临界区。如果它在改链表时被另一个中断打断、那个中断也来改同一个队列，链表就断了。</p>
 <p>FreeRTOS 保护它的方式是抬高中断屏蔽门槛（BASEPRI），并没有关掉所有中断。本文把这件事讲透：抬到多高、抬的时候谁还能进来、以及中断里只能用 <code>FromISR</code> 版本的原因。</p>
-<h2 id="2-核心概念cortex-m-的优先级是数值越小越优先">2. 核心概念：Cortex-M 的优先级是”数值越小越优先”</h2>
+<h2 id="2-cortex-m-的优先级是数值越小越优先">2. Cortex-M 的优先级是”数值越小越优先”</h2>
 <p>这一节先立规矩，否则第 4 节容易看晕。</p>
 <h3 id="21-两套说法必须分清">2.1 两套说法，必须分清</h3>
 <p>Cortex-M 的 NVIC 用数值表示优先级：数值越小，优先级越高。<code>0</code> 是最高，<code>15</code> 是最低（STM32F407 用了 4 个位，<code>configPRIO_BITS = 4</code>）。</p>
@@ -1120,7 +1120,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <span class="line"><span style="color:#D73A49"> #define</span><span style="color:#6F42C1"> configPRIO_BITS</span><span style="color:#005CC5">         4</span></span>
 <span class="line"><span style="color:#D73A49">#endif</span></span></code></pre>
 <p>两者必须一致。如果哪天把分组改成 <code>NVIC_PRIORITYGROUP_2</code>（2 位抢占 + 2 位子优先级），却没把 <code>configPRIO_BITS</code> 改成 2，FreeRTOS 换算出的 <code>configMAX_SYSCALL_INTERRUPT_PRIORITY</code> 就会写错位，屏障关系整个错位。这是移植时最容易出错的一步。</p>
-<h2 id="3-机制taskenter_critical-到底做了什么">3. 机制：taskENTER_CRITICAL 到底做了什么</h2>
+<h2 id="3-taskenter_critical-到底做了什么">3. taskENTER_CRITICAL 到底做了什么</h2>
 <h3 id="31-宏的链路">3.1 宏的链路</h3>
 <p><code>taskENTER_CRITICAL()</code> 在 <code>task.h</code> 里只是一层转发：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/task.h:187-222（节选） */</span></span>
@@ -1140,6 +1140,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> portEXIT_CRITICAL</span><span style="color:#24292E">()						</span><span style="color:#6F42C1">vPortExitCritical</span><span style="color:#24292E">()</span></span></code></pre>
 <p>注意 <code>portDISABLE_INTERRUPTS()</code> 的名字有误导性：它并不等同于 <code>__disable_irq()</code>（那个是 PRIMASK，关掉除 NMI/HardFault 外的一切），只是抬高 BASEPRI。</p>
 <h3 id="32-实现细节">3.2 实现细节</h3>
+<p>源码只有两个函数，逻辑是「抬高 BASEPRI → 计数加一 → 计数归零时放行」：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/port.c:403-428 */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> vPortEnterCritical</span><span style="color:#24292E">( </span><span style="color:#D73A49">void</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
@@ -1199,6 +1200,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <span class="line"><span style="color:#6A737D">        /* = 5 &#x3C;&#x3C; 4 = 80 = 0x50 */</span></span></code></pre>
 <p>左移的原因：STM32F407 只用优先级寄存器的高 4 位，NVIC 把 <code>5</code> 存成 <code>5 &#x3C;&#x3C; 4 = 0x50</code>。CMSIS 的 <code>NVIC_SetPriority()</code> 完成了这个移位（所以在 <code>HAL_NVIC_SetPriority()</code> 里写的是 <code>5</code>，不是 <code>0x50</code>），而 FreeRTOS 的 port 直接写寄存器，必须自己移位。</p>
 <h3 id="34-屏蔽关系图">3.4 屏蔽关系图</h3>
+<p>先按 NVIC 数值把中断分成两段，再看临界区抬高 BASEPRI 之后哪一段会被挡住：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   subgraph HIGH["NVIC 数值 0 到 4  逻辑优先级最高"]
     H0["数值 0 最高"]
@@ -1464,6 +1466,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <h3 id="理由-3非-fromisr-版本会试图阻塞">理由 3：非 FromISR 版本会试图阻塞</h3>
 <p><code>xQueueSend()</code> 的第二个参数是要等多久（<code>xTicksToWait</code>）。队列满时它会把当前任务挂到等待链表上。而在中断里根本没有”当前任务”这个概念可挂，它挂的是被中断的那个任务，语义完全错乱。</p>
 <h3 id="正确与错误路径对照">正确与错误路径对照</h3>
+<p>下面把两种写法并排走一遍，注意错误路径最后停在死循环：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant HW as USB 硬件
   participant ISR as OTG_FS_IRQHandler
@@ -1518,41 +1521,15 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
   SCHED --> RX</pre></div>
 <p>注意这张图里的上下文边界：<code>usbRxQueue</code> 左边是中断上下文，右边是任务上下文。整条链路只有这一个跨上下文接口，而它由 FreeRTOS 的队列负责保护，这就是”中断安全”在本工程的具体落点。</p>
 <h2 id="8-优先级反转与优先级继承">8. 优先级反转与优先级继承</h2>
-<p>临界区保护的是”同时访问”，还有一个问题叫优先级反转（Priority Inversion）：高优先级任务因为等一个被低优先级任务占着的锁，实际表现得比中优先级任务还慢。</p>
-<p>本工程开了互斥量支持，正是为了有优先级继承可用：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:70 */</span></span>
-<span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configUSE_MUTEXES</span><span style="color:#005CC5">                        1</span></span></code></pre>
-<p>（注意：本工程目前没有实际使用任何互斥量，<code>MX_FREERTOS_Init()</code> 里 <code>RTOS_MUTEX</code> 段是空的。所以下面是一个”能力已备好但尚未启用”的场景。一旦按 <code>02-同步与IPC</code> 的建议加锁，就必须用互斥量，不能用二值信号量。）</p>
-<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
-  participant L as 低优先级任务
-  participant M as 中优先级任务
-  participant H as 高优先级任务
-  Note over L,H: 反转发生 没有优先级继承
-  L->>L: 取得互斥量 进入临界区
-  H->>H: 就绪 抢占 L
-  H->>L: 申请同一互斥量 被挡住
-  Note over L: L 本应继续跑完临界区 但被中优先级任务抢了
-  M->>M: 就绪 抢占 L
-  M->>M: 长时间计算 不涉及那把锁
-  Note over H: H 在等 M 跑完 优先级反转发生
-  M-->>L: M 跑完
-  L->>L: 跑完临界区 释放互斥量
-  L-->>H: 互斥量交给 H
-  Note over L,H: 继承生效 有优先级继承
-  L->>L: 取得互斥量 进入临界区
-  L->>L: 优先级被临时提升到 H 的级别
-  H->>H: 就绪 但无法抢占已提升的 L
-  M->>M: 就绪 无法抢占已提升的 L
-  L->>L: 跑完临界区并释放
-  L->>L: 优先级恢复原值
-  H->>L: 拿到互斥量</pre></div>
-<p>关键区别在于：优先级继承把低优先级任务的优先级临时抬到等待者的级别，于是中优先级任务抢不进来，持锁时间被压缩到最短。这只有在用互斥量（<code>xSemaphoreCreateMutex()</code>）时才有；二值信号量（<code>xSemaphoreCreateBinary()</code>）没有这个机制。</p>
+<p>临界区保护的是「同时访问」；优先级反转（Priority Inversion）说的是另一种现象：高优先级任务因为等一个被低优先级任务占着的锁，实际表现得比中优先级任务还慢。完整时序与继承机制在 <code>02-同步与IPC/04-优先级反转与继承.md</code> 里推过一遍，这里只留与本层有关的三点。</p>
+<p>本工程开了互斥量支持（<code>Core/Inc/FreeRTOSConfig.h:70</code> 的 <code>configUSE_MUTEXES = 1</code>），但 <code>MX_FREERTOS_Init()</code> 里 <code>RTOS_MUTEX</code> 段是空的，所以目前是「能力已备好但尚未启用」。之后按 <code>02-同步与IPC</code> 的建议加锁时要用互斥量，不能用二值信号量。</p>
+<p>区别就在这里：优先级继承只在互斥量（<code>xSemaphoreCreateMutex()</code>）上有，二值信号量（<code>xSemaphoreCreateBinary()</code>）没有这个机制。用错会得到一个「看起来加了锁、实际仍会被中优先级任务插队」的实现。</p>
 <h2 id="9-高级话题与常见问题">9. 高级话题与常见问题</h2>
 <h3 id="易错点-1在临界区里做耗时操作">易错点 1：在临界区里做耗时操作</h3>
 <p>临界区抬高了 BASEPRI，意味着数值 ≥ 5 的所有中断都被推迟。本工程里那意味着 CAN 接收、串口 DMA、USB 全部被推迟。在临界区里放一句 <code>HAL_Delay(1)</code>，就等于让整个系统丢 1 ms 的中断。</p>
 <p>规则：临界区里只放几行内存操作，不调用任何可能耗时或有阻塞语义的函数。</p>
 <h3 id="易错点-2hal_delay-在任何中断里都是错的">易错点 2：<code>HAL_Delay()</code> 在任何中断里都是错的</h3>
-<p><code>HAL_Delay()</code> 依赖 <code>HAL_GetTick()</code>，而后者依赖 HAL 的时基中断（本工程是 TIM2，优先级 15）。在优先级 5 的中断里调用 <code>HAL_Delay()</code>，因为 BASEPRI 的关系它等不到时基更新，直接死循环。本工程在 <code>usbd_cdc_if.c</code> 的发送路径上用 <code>osDelay(5)</code> 轮询 <code>USBD_BUSY</code>（<code>UsbConnectTask.cpp:90-96</code>），那是任务上下文，没问题；但把同样的代码挪进 ISR，立刻挂死。</p>
+<p><code>HAL_Delay()</code> 依赖 <code>HAL_GetTick()</code>，而后者依赖 HAL 的时基中断（本工程是 TIM2，优先级 15）。在优先级 5 的中断里调用 <code>HAL_Delay()</code>，因为 BASEPRI 的关系它等不到时基更新，直接死循环。本工程在任务代码里用 <code>osDelay(5)</code> 轮询 <code>USBD_BUSY</code>（<code>UsbConnectTask.cpp:148</code>，<code>usbd_cdc_if.c</code> 内没有延时调用），那是任务上下文，没问题；但把同样的代码挪进 ISR，立刻挂死。</p>
 <h3 id="易错点-3osdelay-和-hal_delay-分不清">易错点 3：<code>osDelay()</code> 和 <code>HAL_Delay()</code> 分不清</h3>
 
 
@@ -1708,7 +1685,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>阈值定 5，外设中断也定 5</td><td>全部外设中断都能合法调用 FreeRTOS API，配置统一好记</td><td>零裕量，改任何一个外设优先级都可能破坏队列安全</td></tr><tr><td>用 BASEPRI 而不是 PRIMASK</td><td>高优先级中断（0~4）不受临界区影响，实时性可控</td><td>要求工程师理解”哪些中断不能调 API”这条隐含约束</td></tr><tr><td>应用层不手写临界区</td><td>同步逻辑集中，可靠性高</td><td>跨上下文交互必须凑够”队列入队”这种形态，灵活性低</td></tr><tr><td>开 <code>configUSE_MUTEXES</code> 但暂不使用</td><td>需要时可以立刻上锁并享受优先级继承</td><td>少一个二值信号量能用的场景（多任务同时给出信号的语义）</td></tr><tr><td><code>configASSERT</code> 死循环</td><td>立刻停在现场，便于调试</td><td>无任何日志，且只屏蔽 BASEPRI 级别，现场现象可能误导</td></tr></tbody></table>
 <h3 id="结论">结论</h3>
 <p><code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5</code> 的含义是 NVIC 数值 ≥ 5 的中断（逻辑优先级不高于第 5 级）才允许调用 FreeRTOS API；临界区并不关中断，它只是把 BASEPRI 抬到 0x50，让 5<del>15 的中断排队等待，而 0</del>4 的中断依旧畅通，所以那批中断里绝不能碰内核数据结构。</p>
-<h2 id="11-练习题">11. 练习题</h2>
+<h2 id="11-练习">11. 练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
 <li>本工程 <code>configPRIO_BITS = 4</code>，请手算 <code>configKERNEL_INTERRUPT_PRIORITY</code> 和 <code>configMAX_SYSCALL_INTERRUPT_PRIORITY</code> 的十进制值，并说明为什么 <code>HAL_NVIC_SetPriority(OTG_FS_IRQn, 5, 0)</code> 里写的是 5 而 BASEPRI 里写的是 0x50。</li>
@@ -1727,7 +1704,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 下文先把两种检测模式的内核实现讲清楚，再讲怎么在本工程里把它打开并正确使用。</p>
 </blockquote>
-<h2 id="1-开篇一个被忽略的开关">1. 开篇：一个被忽略的开关</h2>
+<h2 id="1-一个被忽略的开关">1. 一个被忽略的开关</h2>
 <p>在 <code>Core/Inc/FreeRTOSConfig.h</code> 里搜 <code>STACK_OVERFLOW</code>：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -n</span><span style="color:#032F62"> "STACK_OVERFLOW"</span><span style="color:#032F62"> Core/Inc/FreeRTOSConfig.h</span></span>
 <span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">无输出</span><span style="color:#24292E">)</span></span></code></pre>
@@ -1774,7 +1751,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 <table><thead><tr><th>钩子</th><th>由哪个开关触发</th><th>本工程状态</th></tr></thead><tbody><tr><td><code>vApplicationStackOverflowHook</code></td><td><code>configCHECK_FOR_STACK_OVERFLOW > 0</code></td><td>未定义开关，未实现</td></tr><tr><td><code>vApplicationMallocFailedHook</code></td><td><code>configUSE_MALLOC_FAILED_HOOK = 1</code></td><td>未定义开关（默认 0），未实现</td></tr><tr><td><code>vApplicationIdleHook</code></td><td><code>configUSE_IDLE_HOOK = 1</code></td><td>显式设成 0</td></tr><tr><td><code>vApplicationTickHook</code></td><td><code>configUSE_TICK_HOOK = 1</code></td><td>显式设成 0</td></tr></tbody></table>
 <p>所以现状是：6 个任务、6912 words 的栈全部”声明式”地跑着，没有任何机制在验证”声明得够不够”。这是本工程最大的监控盲区，也是下面要解决的问题。</p>
-<h2 id="2-核心概念栈往哪边长">2. 核心概念：栈往哪边长</h2>
+<h2 id="2-栈往哪边长">2. 栈往哪边长</h2>
 <p>Cortex-M 的栈向下生长（从高地址往低地址）。ARM_CM4F 的 port 明确声明了这一点：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h:73 */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> portSTACK_GROWTH</span><span style="color:#24292E">			( </span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E"> )</span></span></code></pre>
@@ -1792,7 +1769,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
   E --> F["现象随机 可能改坏别人的变量 可能取指跑飞"]</pre></div>
 <p><code>pxStack</code> 是栈的最低地址（malloc 返回的基址），<code>pxTopOfStack</code> 是当前保存的栈指针。溢出 = <code>pxTopOfStack</code> 掉到 <code>pxStack</code> 以下。</p>
 <p>这就是栈溢出在本工程里后果严重的原因：栈是从 <code>ucHeap</code> 里切的，紧挨着栈的很可能是另一个任务的 TCB 或另一个任务的栈。越界写入不会立刻报错，而是把别人的数据改坏，现象是某个完全无关的功能偶尔抽风。</p>
-<h2 id="3-两种检测模式真实内核代码">3. 两种检测模式：真实内核代码</h2>
+<h2 id="3-两种内核检测模式">3. 两种内核检测模式</h2>
 <p>FreeRTOS 的检测逻辑全部集中在 <code>include/StackMacros.h</code> 的 <code>taskCHECK_FOR_STACK_OVERFLOW()</code> 宏里，它由 <code>configCHECK_FOR_STACK_OVERFLOW</code> 的值选择不同实现。</p>
 <h3 id="31-模式-1只检查当时的栈指针">3.1 模式 1：只检查当时的栈指针</h3>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/StackMacros.h:52-62（portSTACK_GROWTH &#x3C; 0 分支） */</span></span>
@@ -1812,6 +1789,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <p>优点：零成本，不需要填充栈，不需要 <code>memset</code>，每次检查就一条比较。
 缺点：只在任务切换的那一刻看得见。如果某个任务深调用了一次之后正常返回了，栈指针又回到安全区，那么这次越界不会被发现，尽管它可能已经踩坏了别人的内存。</p>
 <h3 id="32-模式-2填充魔数--检查栈底的-4-个字">3.2 模式 2：填充魔数 + 检查栈底的 4 个字</h3>
+<p>模式 2 不看寄存器，而是回看栈的起点有没有被动过：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/StackMacros.h:82-99（portSTACK_GROWTH &#x3C; 0 分支） */</span></span>
 <span class="line"><span style="color:#D73A49">#if</span><span style="color:#24292E">( ( </span><span style="color:#6F42C1">configCHECK_FOR_STACK_OVERFLOW</span><span style="color:#D73A49"> ></span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> ( </span><span style="color:#6F42C1">portSTACK_GROWTH</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#24292E"> ) )</span></span>
 <span class="line"></span>
@@ -1972,7 +1950,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
   BAD -->|"是"| HOOK["调用 vApplicationStackOverflowHook"]
   HOOK --> NOHOOK{"工程里实现了这个 hook 吗"}
   NOHOOK -->|"没有 链接期就会报错"| ERR["undefined reference"]
-  NOHOOK -->|"有"| ACT["执行你的处理 通常保存任务名后复位或死循环"]
+  NOHOOK -->|"有"| ACT["执行应用的处理 通常保存任务名后复位或死循环"]
   SKIP --> NEXT
   NEXT --> RESUME["PendSV 恢复新任务上下文 返回"]</pre></div>
 <p>有一个有利条件：检查频率很高。因为本工程 <code>configTICK_RATE_HZ = 1000</code>（1 tick = 1 ms），而且 <code>configUSE_TIME_SLICING</code> 默认是 1（<code>FreeRTOS.h:793-794</code>），6 个同优先级任务每毫秒都会轮转一次。也就是说模式 1 的检查最快每毫秒就会对每个任务做一次，捕捉概率并不低。</p>
@@ -2019,6 +1997,40 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>这个 hook 是必需的。只要 <code>configCHECK_FOR_STACK_OVERFLOW > 0</code>，内核就会引用它；不实现就是链接错误：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>undefined reference to vApplicationStackOverflowHook</span></span></code></pre>
+<h3 id="54-任务名被截断">5.4 任务名被截断</h3>
+<p><code>configMAX_TASK_NAME_LEN = 16</code>，而本工程有任务名超过了这个长度：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>任务名</th><th>字符数</th><th>会怎样</th></tr></thead><tbody><tr><td><code>"StartControlCenterTask"</code></td><td>21</td><td>被截断成 15 字符加结束符</td></tr><tr><td><code>"StartUsbConnectTask"</code></td><td>19</td><td>被截断</td></tr><tr><td><code>"StartFireTask"</code></td><td>13</td><td>完整</td></tr><tr><td><code>"imuTask"</code> / <code>"gimbalTask"</code></td><td>8 / 10</td><td>完整</td></tr></tbody></table>
+<p>所以在 <code>vApplicationStackOverflowHook</code> 里看到 <code>pcTaskName</code> 是 <code>"StartControlCent"</code> 这种半截名字时，不要以为是内存被改坏了，那只是名字长度限制。想看到完整名字就把 <code>configMAX_TASK_NAME_LEN</code> 调大（每个任务多占几个字节的 TCB 空间）。</p>
 <h2 id="6-configassert命中即死循环">6. configASSERT：命中即死循环</h2>
 <h3 id="61-本工程的真实定义">6.1 本工程的真实定义</h3>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:119-123 */</span></span>
@@ -2127,6 +2139,15 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E">( ;; ) { }</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>代价是 <code>__FILE__</code> 是字符串常量，每个断言点都会往 Flash 里加一个文件名字符串。本工程 Flash 只用 92 KB（共 1 MB），完全放得下，可以采用这个方案。</p>
+<h3 id="64-断言处理函数里别再触发断言">6.4 断言处理函数里别再触发断言</h3>
+<p>如果把 <code>configASSERT</code> 改成调用 <code>vAssertFailed()</code>，而这个函数内部又用了 <code>printf</code> 或任何带临界区的 API，就可能递归触发断言。<code>vPortEnterCritical()</code> 里的注释专门提到了这一点：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* port.c:408-412 */</span></span>
+<span class="line"><span style="color:#6A737D">	/* This is not the interrupt safe version of the enter critical function so</span></span>
+<span class="line"><span style="color:#6A737D">	assert() if it is being called from an interrupt context.  Only API</span></span>
+<span class="line"><span style="color:#6A737D">	functions that end in "FromISR" can be used in an interrupt.  Only assert if</span></span>
+<span class="line"><span style="color:#6A737D">	the critical nesting count is 1 to protect against recursive calls if the</span></span>
+<span class="line"><span style="color:#6A737D">	assert function also uses a critical section. */</span></span></code></pre>
+<p>内核已经用 <code>if( uxCriticalNesting == 1 )</code> 保护了自己，但 <code>vAssertFailed()</code> 也得同样克制：只做寄存器级操作和内存写，别调外设。</p>
 <h2 id="7-uxtaskgetstackhighwatermark-实战">7. uxTaskGetStackHighWaterMark 实战</h2>
 <h3 id="71-本工程默认用不了">7.1 本工程默认用不了</h3>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -n</span><span style="color:#032F62"> "INCLUDE_uxTaskGetStackHighWaterMark"</span><span style="color:#032F62"> Core/Inc/FreeRTOSConfig.h</span></span>
@@ -2146,6 +2167,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 两个开关开哪一个都能让另一个具备工作前提。</p>
 </blockquote>
 <h3 id="72-它的实现与单位">7.2 它的实现与单位</h3>
+<p>实现就是把栈底残留的填充字节数出来：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:3799-3814 */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> configSTACK_DEPTH_TYPE </span><span style="color:#6F42C1">prvTaskCheckFreeStackSpace</span><span style="color:#24292E">( </span><span style="color:#D73A49">const</span><span style="color:#D73A49"> uint8_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209"> pucStackByte</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
@@ -2168,6 +2190,45 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <li>返回的是历史最小值（自任务创建以来剩余最少时的值），这正是它的价值所在；</li>
 <li>返回类型 <code>configSTACK_DEPTH_TYPE</code> 默认是 <code>uint16_t</code>（<code>FreeRTOS.h:855-858</code>），最大 65535 words，对本工程绰绰有余。</li>
 </ul>
+<p>返回值容易被误读：它给的是历史最少剩余量，不是当前值。所以：</p>
+<ul>
+<li><code>used = declared - free</code> 算出来的是历史峰值用量；</li>
+<li>当前用量可能远小于峰值；</li>
+<li>这个特性正是它的价值：需要的就是”最坏那一刻”。</li>
+</ul>
+<p>单位也要分清。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>API 或配置</th><th>单位</th><th>本工程 512 对应</th></tr></thead><tbody><tr><td><code>uxTaskGetStackHighWaterMark()</code></td><td>words</td><td>512 words</td></tr><tr><td><code>xPortGetFreeHeapSize()</code></td><td>bytes</td><td>2048 字节</td></tr><tr><td><code>configMINIMAL_STACK_SIZE</code></td><td>words</td><td>—</td></tr><tr><td><code>xTaskCreate</code> 的 <code>usStackDepth</code></td><td>words</td><td>—</td></tr></tbody></table>
+<p>把 words 当 bytes 会低估 4 倍风险，把 bytes 当 words 会虚报 4 倍余量。这类错误最容易犯，也最难发现。</p>
 <h3 id="73-方案-a任务自己查自己">7.3 方案 A：任务自己查自己</h3>
 <p>改动最小，不需要任何句柄管理。<code>uxTaskGetStackHighWaterMark(NULL)</code> 里的 <code>NULL</code> 表示”当前任务”：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/TestTask.cpp —— 把空闲的 TestTask 改造成排查任务 */</span></span>
@@ -2326,95 +2387,9 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 <table><thead><tr><th>任务</th><th>声明 words</th><th>最占栈的原因</th><th>观察重点</th></tr></thead><tbody><tr><td><code>defaultTask</code></td><td>256</td><td>只有 <code>MX_USB_DEVICE_Init()</code> + <code>osDelay</code></td><td>启动后水位应该很高</td></tr><tr><td><code>StartFireTask</code></td><td>512</td><td>PID + <code>HAL_GetTick</code>，全工程最小栈</td><td>余量最容易不足，第一个怀疑对象</td></tr><tr><td><code>imuTask</code></td><td>1024</td><td><code>FusionAHRS</code> 更新 + 三角函数 + 浮点</td><td>融合算法的局部变量是主要消耗</td></tr><tr><td><code>StartGimbalTask</code></td><td>2048</td><td>角度环 + 速度环 PID + 浮点</td><td>声明最宽裕的两个之一</td></tr><tr><td><code>StartControlCenterTask</code></td><td>1024</td><td>遥控器映射 + 视觉数据处理</td><td>中等</td></tr><tr><td><code>StartUsbConnectTask</code></td><td>2048</td><td><code>CDC_Transmit_FS</code> 调用栈较深</td><td>声明最宽裕的两个之一</td></tr></tbody></table>
 <p><code>StartFireTask</code> 是 512 words（2 KB），全工程最小，而它的 <code>run()</code> 里有多个 <code>SpeedPID</code> / <code>AnglePID</code> 对象和浮点运算。统计水位时它应当是第一个被怀疑的对象。本文的实战价值主要在于给出判断”512 到底够不够”的依据。</p>
-<h2 id="8-高级话题与常见问题">8. 高级话题与常见问题</h2>
-<h3 id="易错点-1以为没报错等于没问题">易错点 1：以为”没报错”等于”没问题”</h3>
+<h3 id="76-没报错不等于没问题">7.6 没报错不等于没问题</h3>
 <p>本工程 <code>configCHECK_FOR_STACK_OVERFLOW = 0</code>，所以栈溢出既不会报错也不会复位，它只会静默地改坏别人的内存。这是本文开头强调那个事实的原因。</p>
-<h3 id="易错点-2任务名被截断">易错点 2：任务名被截断</h3>
-<p><code>configMAX_TASK_NAME_LEN = 16</code>，而本工程有任务名超过了这个长度：</p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>任务名</th><th>字符数</th><th>会怎样</th></tr></thead><tbody><tr><td><code>"StartControlCenterTask"</code></td><td>21</td><td>被截断成 15 字符加结束符</td></tr><tr><td><code>"StartUsbConnectTask"</code></td><td>19</td><td>被截断</td></tr><tr><td><code>"StartFireTask"</code></td><td>13</td><td>完整</td></tr><tr><td><code>"imuTask"</code> / <code>"gimbalTask"</code></td><td>8 / 10</td><td>完整</td></tr></tbody></table>
-<p>所以在 <code>vApplicationStackOverflowHook</code> 里看到 <code>pcTaskName</code> 是 <code>"StartControlCent"</code> 这种半截名字时，不要以为是内存被改坏了，那只是名字长度限制。想看到完整名字就把 <code>configMAX_TASK_NAME_LEN</code> 调大（每个任务多占几个字节的 TCB 空间）。</p>
-<h3 id="易错点-3打开检测后忘记实现-hook">易错点 3：打开检测后忘记实现 hook</h3>
-<p>只要 <code>configCHECK_FOR_STACK_OVERFLOW > 0</code> 就是硬链接依赖。这是”改配置导致编译报错”的少数良性情况之一，遇到就照第 5.3 节补上。</p>
-<h3 id="易错点-4用-uxtaskgetstackhighwatermark-的返回值猜当前用了多少">易错点 4：用 <code>uxTaskGetStackHighWaterMark</code> 的返回值猜”当前用了多少”</h3>
-<p>它返回的是历史最少剩余量，不是当前值。所以：</p>
-<ul>
-<li><code>used = declared - free</code> 算出来的是历史峰值用量；</li>
-<li>当前用量可能远小于峰值；</li>
-<li>这个特性正是它的价值：需要的就是”最坏那一刻”。</li>
-</ul>
-<h3 id="易错点-5单位搞混">易错点 5：单位搞混</h3>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>API 或配置</th><th>单位</th><th>本工程 512 对应</th></tr></thead><tbody><tr><td><code>uxTaskGetStackHighWaterMark()</code></td><td>words</td><td>512 words</td></tr><tr><td><code>xPortGetFreeHeapSize()</code></td><td>bytes</td><td>2048 字节</td></tr><tr><td><code>configMINIMAL_STACK_SIZE</code></td><td>words</td><td>—</td></tr><tr><td><code>xTaskCreate</code> 的 <code>usStackDepth</code></td><td>words</td><td>—</td></tr></tbody></table>
-<p>把 words 当 bytes 会低估 4 倍风险，把 bytes 当 words 会虚报 4 倍余量。这类错误最容易犯，也最难发现。</p>
-<h3 id="易错点-6在-configassert-处理函数里调用会再次断言的函数">易错点 6：在 <code>configASSERT</code> 处理函数里调用会再次断言的函数</h3>
-<p>如果把 <code>configASSERT</code> 改成调用 <code>vAssertFailed()</code>，而这个函数内部又用了 <code>printf</code> 或任何带临界区的 API，就可能递归触发断言。<code>vPortEnterCritical()</code> 里的注释专门提到了这一点：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* port.c:408-412 */</span></span>
-<span class="line"><span style="color:#6A737D">	/* This is not the interrupt safe version of the enter critical function so</span></span>
-<span class="line"><span style="color:#6A737D">	assert() if it is being called from an interrupt context.  Only API</span></span>
-<span class="line"><span style="color:#6A737D">	functions that end in "FromISR" can be used in an interrupt.  Only assert if</span></span>
-<span class="line"><span style="color:#6A737D">	the critical nesting count is 1 to protect against recursive calls if the</span></span>
-<span class="line"><span style="color:#6A737D">	assert function also uses a critical section. */</span></span></code></pre>
-<p>内核已经用 <code>if( uxCriticalNesting == 1 )</code> 保护了自己，但 <code>vAssertFailed()</code> 也得同样克制：只做寄存器级操作和内存写，别调外设。</p>
-<h2 id="9-小结">9. 小结</h2>
+<h2 id="8-小结">8. 小结</h2>
 <h3 id="核心概念总结">核心概念总结</h3>
 
 
@@ -2500,7 +2475,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>不开 <code>configCHECK_FOR_STACK_OVERFLOW</code></td><td>省 27648 字节的 <code>memset</code>，启动更快</td><td>栈溢出完全无保护，故障现象随机且难复现</td></tr><tr><td><code>configASSERT</code> 用死循环而非复位</td><td>停在现场，调试器能看到调用栈</td><td>无日志、无现场保存；只屏蔽 BASEPRI，现象可能误导</td></tr><tr><td>不在启动期打印堆栈水位</td><td>启动流程干净，不被调试代码污染</td><td>交付前无法证明栈深够用</td></tr><tr><td><code>configMAX_TASK_NAME_LEN = 16</code></td><td>每个 TCB 省几个字节</td><td>长任务名被截断，调试时容易误判</td></tr></tbody></table>
 <h3 id="结论">结论</h3>
 <p>本工程当前对栈没有保护：<code>configCHECK_FOR_STACK_OVERFLOW</code> 没定义、<code>INCLUDE_uxTaskGetStackHighWaterMark</code> 没开、栈连 <code>0xa5</code> 填充都没有。要让 <code>StartFireTask</code> 那 512 words 的栈有依据，只需要三步：打开 <code>configCHECK_FOR_STACK_OVERFLOW = 2</code>、实现 <code>vApplicationStackOverflowHook</code>、打开 <code>INCLUDE_uxTaskGetStackHighWaterMark = 1</code> 并周期性打印水位，然后整机重启。</p>
-<h2 id="10-练习题">10. 练习题</h2>
+<h2 id="9-练习">9. 练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
 <li><code>configCHECK_FOR_STACK_OVERFLOW</code> 模式 1 和模式 2 分别检查什么？为什么模式 2 能抓到”已经返回的越界”，而模式 1 不能？</li>
@@ -2519,7 +2494,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 素材是云台板 <code>2026OmniSentryGimbal</code> 的真实文件（139 行），底盘板 <code>2026OmniSentryChassis</code> 的差异会单独标出。
 背配置没有意义，需要的是能回答”改这一行，系统会变成什么样”。</p>
 </blockquote>
-<h2 id="1-开篇一份编译期契约">1. 开篇：一份编译期契约</h2>
+<h2 id="1-一份编译期契约">1. 一份编译期契约</h2>
 <p>FreeRTOS 的配置方式和大多数库都不一样：没有运行期的配置结构体，没有 <code>vTaskConfigure()</code>。所有配置都是 <code>#define</code>，在编译时就被嵌进内核代码。这带来三个后果：</p>
 <ol>
 <li>改配置必须重新编译、重新烧录。没有”热改配置”这回事。</li>
@@ -2543,7 +2518,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
   G --> M["任务如何被选中与切换"]
   I --> M
   J --> N["中断能否安全调用内核 API"]
-  K --> O["出问题时你看到的现象"]
+  K --> O["出问题时观察到的现象"]
   L --> P["链接期是否报 undefined reference"]
   H --> Q["任务创建是否成功"]</pre></div>
 <h2 id="2-逐项解读">2. 逐项解读</h2>
@@ -2962,7 +2937,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 
-<table><thead><tr><th>现象</th><th>来自哪一行代码</th></tr></thead><tbody><tr><td><code>osDelay(1)</code> 就是 1 ms</td><td><code>GimbalTask.cpp:104</code>、<code>FireTask.cpp:207</code>、<code>ControlCenterTask.cpp:137</code> 的控制周期</td></tr><tr><td><code>osDelay(5)</code> = 5 ms</td><td><code>UsbConnectTask.cpp:95</code> 轮询 <code>USBD_BUSY</code> 的间隔</td></tr><tr><td><code>osDelay(10)</code> = 10 ms</td><td><code>UsbConnectTask.cpp:99</code> USB 任务主循环周期</td></tr><tr><td><code>1.0f / 1000.0f</code> 当 dt</td><td><code>ImuTask.cpp</code> 里 <code>1kHz</code> 的融合频率</td></tr><tr><td><code>configTICK_RATE_HZ = 1000</code> 与 <code>HAL_Delay(1)</code> 数值相同</td><td>两个时基恰好都是 1 ms，见 <code>03</code> 易错点 3</td></tr></tbody></table>
+<table><thead><tr><th>现象</th><th>来自哪一行代码</th></tr></thead><tbody><tr><td><code>osDelay(1)</code> 就是 1 ms</td><td><code>FireTask.cpp:70</code>、<code>ControlCenterTask.cpp:111</code> 的控制周期；<code>gimbalTask</code> 用的是 <code>osDelay(2)</code>（<code>GimbalTask.cpp:100</code>）</td></tr><tr><td><code>osDelay(5)</code> = 5 ms</td><td><code>UsbConnectTask.cpp:148</code> 轮询 <code>USBD_BUSY</code> 的间隔</td></tr><tr><td><code>osDelay(10)</code> = 10 ms</td><td><code>UsbConnectTask.cpp:154</code> USB 任务主循环周期</td></tr><tr><td><code>1.0f / 1000.0f</code> 当 dt</td><td><code>ImuTask.cpp</code> 里 <code>1kHz</code> 的融合频率</td></tr><tr><td><code>configTICK_RATE_HZ = 1000</code> 与 <code>HAL_Delay(1)</code> 数值相同</td><td>两个时基恰好都是 1 ms，见 <code>03</code> 易错点 3</td></tr></tbody></table>
 <p>最后一行只是巧合，不是设计保证。<code>osDelay</code> 的单位是 tick，<code>HAL_Delay</code> 的单位是 ms。两者数值相同仅仅因为 <code>configTICK_RATE_HZ = 1000</code>。改滴答频率时，所有 <code>osDelay(n)</code> 的语义都会跟着变，而 <code>HAL_Delay(n)</code> 不变。</p>
 <p><code>configUSE_PREEMPTION = 1</code> 决定”高优先级任务就绪时是否立刻抢”。本工程 6 个任务同优先级，所以抢占主要发生在”任务 vs 空闲任务”之间：只要有任务就绪，空闲任务（优先级 0）就永远不会被运行。</p>
 <h3 id="32-内存两个-1-带来的双轨制">3.2 内存：两个 <code>1</code> 带来的双轨制</h3>
@@ -3027,7 +3002,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configASSERT</span><span style="color:#24292E">( </span><span style="color:#E36209">x</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">if</span><span style="color:#24292E"> ((x) </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">) {</span><span style="color:#6F42C1">taskDISABLE_INTERRUPTS</span><span style="color:#24292E">(); </span><span style="color:#D73A49">for</span><span style="color:#24292E">( ;; );}</span></span></code></pre>
 <p>这一行是本工程的”最后防线”，细节见 <code>04</code>。配置层面要掌握的是成对关系：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
-  A["你打开了某个诊断开关"] --> B{"它是否要求一个应用回调"}
+  A["某个诊断开关被打开"] --> B{"它是否要求一个应用回调"}
   B -->|"configCHECK_FOR_STACK_OVERFLOW 大于 0"| C["必须实现 vApplicationStackOverflowHook"]
   B -->|"configUSE_MALLOC_FAILED_HOOK 等于 1"| D["必须实现 vApplicationMallocFailedHook"]
   B -->|"configUSE_IDLE_HOOK 等于 1"| E["必须实现 vApplicationIdleHook"]
@@ -3066,11 +3041,11 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 <table><thead><tr><th>关掉的</th><th>影响</th></tr></thead><tbody><tr><td><code>INCLUDE_vTaskDelayUntil = 0</code></td><td>不能用”绝对时刻延时”。对 1 ms 级的固定周期控制，<code>vTaskDelayUntil</code> 比 <code>osDelay</code> 更抗漂移。本工程三个控制任务都用 <code>osDelay</code>，周期会累积漂移</td></tr><tr><td><code>INCLUDE_vTaskCleanUpResources = 0</code></td><td>本来就已废弃，无所谓</td></tr><tr><td><code>INCLUDE_uxTaskGetStackHighWaterMark</code> 未定义</td><td>栈水位不可用（见 <code>04</code>）</td></tr></tbody></table>
-<p><code>INCLUDE_vTaskDelayUntil = 0</code> 需要单独说明。本工程 <code>GimbalTask</code> 用 <code>osDelay(1)</code> 做 1 kHz 控制：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/GimbalTask.cpp:104 */</span></span>
-<span class="line"><span style="color:#6F42C1">osDelay</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">);</span><span style="color:#6A737D"> // 控制周期与输出周期同步</span></span></code></pre>
-<p><code>osDelay</code> 是相对延时：它在”本次调用时刻”基础上加 1 tick。每轮的 PID 计算、CAN 收发耗时都会叠加到周期里，于是实际周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mtext> ms</mtext><mo>+</mo><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">1\ \text{ms} + \epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span>。而 <code>vTaskDelayUntil</code> 是绝对延时：它保存上次唤醒的绝对时刻，下一轮按 <code>上次 + 1 tick</code> 唤醒，误差不累积。</p>
-<p>对云台这种角度环加 1 kHz 速度环的场合，累积漂移会直接变成相位滞后。要改成 <code>vTaskDelayUntil</code> 需要三步：把 <code>INCLUDE_vTaskDelayUntil</code> 置 1、在循环外记录 <code>TickType_t xLastWakeTime = xTaskGetTickCount()</code>、循环内换成 <code>vTaskDelayUntil(&#x26;xLastWakeTime, pdMS_TO_TICKS(1))</code>。这是本工程一个明确的可优化点。</p>
+<p><code>INCLUDE_vTaskDelayUntil = 0</code> 需要单独说明。本工程 <code>GimbalTask</code> 在循环末尾调用 <code>osDelay(2)</code>（<code>GimbalTask.cpp:100</code>，源码注释写的是 1 ms 控制周期）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/GimbalTask.cpp:100 */</span></span>
+<span class="line"><span style="color:#6F42C1">osDelay</span><span style="color:#24292E">(</span><span style="color:#005CC5">2</span><span style="color:#24292E">);</span><span style="color:#6A737D"> // 1ms控制周期</span></span></code></pre>
+<p><code>osDelay</code> 是相对延时：它在”本次调用时刻”基础上加 2 tick。每轮的 PID 计算、CAN 收发耗时都会叠加到周期里，于是实际周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext> ms</mtext><mo>+</mo><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">2\ \text{ms} + \epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span>。而 <code>vTaskDelayUntil</code> 是绝对延时：它保存上次唤醒的绝对时刻，下一轮按 <code>上次 + 2 tick</code> 唤醒，误差不累积。</p>
+<p>对云台这种角度环加 1 kHz 速度环的场合，累积漂移会直接变成相位滞后。要改成 <code>vTaskDelayUntil</code> 需要三步：把 <code>INCLUDE_vTaskDelayUntil</code> 置 1、在循环外记录 <code>TickType_t xLastWakeTime = xTaskGetTickCount()</code>、循环内换成 <code>vTaskDelayUntil(&#x26;xLastWakeTime, pdMS_TO_TICKS(2))</code>。这是本工程一个明确的可优化点。</p>
 <h3 id="37-两个装饰性配置configenable_fpu--configenable_mpu">3.7 两个装饰性配置：configENABLE_FPU / configENABLE_MPU</h3>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configENABLE_FPU</span><span style="color:#005CC5">                         0</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configENABLE_MPU</span><span style="color:#005CC5">                         0</span></span></code></pre>
@@ -3246,7 +3221,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 
-<table><thead><tr><th>任务</th><th>创建位置</th><th>传入优先级</th><th>实际 FreeRTOS 优先级</th></tr></thead><tbody><tr><td><code>defaultTask</code></td><td><code>freertos.c:123</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartFireTask</code></td><td><code>FireTask.cpp:217</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>imuTask</code></td><td><code>ImuTask.cpp:112</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp:120</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp:149</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp:118</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td>空闲任务</td><td>内核自动创建</td><td><code>tskIDLE_PRIORITY</code></td><td>0</td></tr></tbody></table>
+<table><thead><tr><th>任务</th><th>创建位置</th><th>传入优先级</th><th>实际 FreeRTOS 优先级</th></tr></thead><tbody><tr><td><code>defaultTask</code></td><td><code>freertos.c:123</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartFireTask</code></td><td><code>FireTask.cpp:80</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>imuTask</code></td><td><code>ImuTask.cpp:123</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp:110</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp:122</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp:177</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td>空闲任务</td><td>内核自动创建</td><td><code>tskIDLE_PRIORITY</code></td><td>0</td></tr></tbody></table>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   subgraph L6["优先级 6 最高 未使用"]
     P6["空"]
@@ -3637,7 +3612,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>沿用 CubeMX 默认配置，只改堆大小</td><td>风险低，与 CubeMX 重新生成时不会冲突</td><td>保留了若干不适用本工程的项（<code>configENABLE_FPU</code>、协程配置）</td></tr><tr><td>6 个任务同优先级</td><td>简单，不用担心优先级反转与饥饿</td><td>实时性无法区分；USB 轮询和 IMU 融合互相打断</td></tr><tr><td>阈值与所有中断都定 5</td><td>配置统一，全部中断都能安全调用内核 API</td><td>零裕量，改任何一个外设优先级都可能破坏队列安全</td></tr><tr><td>不开栈溢出检测与水位</td><td>启动快、省 27 KB <code>memset</code></td><td>栈深无据可依，<code>StartFireTask</code> 的 512 words 全靠信任</td></tr><tr><td><code>configUSE_TIMERS = 0</code></td><td>少一个任务和一个队列，省约 1.5 KB 堆</td><td>不能用内核软件定时器，只能用 HAL 的 TIM</td></tr><tr><td><code>INCLUDE_vTaskDelayUntil = 0</code></td><td>省少量 Flash</td><td>周期控制有累积漂移，1 kHz 控制受影响</td></tr></tbody></table>
 <h3 id="结论">结论</h3>
 <p>读 <code>FreeRTOSConfig.h</code> 的关键不在背下每个值，而在于掌握三件事：哪些配置有连锁条件（打开就要补回调）、哪些配置会静默失败（钳位与分配失败都不报错）、以及哪些配置在本工程实际上不生效（<code>configENABLE_FPU</code> 与”所有任务同优先级”）。</p>
-<h2 id="8-练习题">8. 练习题</h2>
+<h2 id="8-练习">8. 练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
 <li>本工程 <code>osPriorityNormal</code> 对应 FreeRTOS 的哪个优先级？请从 <code>makeFreeRtosPriority()</code> 的公式推导，并说明为什么 <code>configMAX_PRIORITIES = 7</code> 是这个 CMSIS 映射的最小值。</li>
@@ -3649,4 +3624,4 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <li><code>configUSE_TIME_SLICING</code> 在本工程没有显式定义（默认 1）。如果把它显式定义成 0，请描述系统的实际调度行为会发生什么变化，特别注意 <code>GimbalTask</code> 与 <code>StartUsbConnectTask</code> 之间的相互影响，并预测 <code>StartUsbConnectTask</code> 里那个 <code>while (CDC_Transmit_FS(...) == USBD_BUSY) { osDelay(5); }</code> 循环会不会变成问题。</li>
 <li>假设要把 <code>configTICK_RATE_HZ</code> 从 1000 改成 2000。请列出所有需要同步修改的应用代码位置（提示：搜索 <code>osDelay</code>、<code>HAL_Delay</code>、以及所有写死 <code>0.001f</code> 的 <code>dt</code>），并说明为什么 <code>DWT_Delay_ms</code>（<code>ImuTask</code> 里用的）不受影响。</li>
 <li>请设计一套配置检查清单，用 <code>grep</code> 和 <code>arm-none-eabi-size</code> 就能在每次改配置后自动验证：堆够不够、中断一致性是否保持、有没有遗漏的回调。至少给出 5 条可执行的检查命令。</li>
-</ol></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/01-FreeRTOS/02-%E5%90%8C%E6%AD%A5%E4%B8%8EIPC/"><span class="k">← 上一篇</span><span class="t">同步与IPC</span><span class="d">FreeRTOS · 5 个文件</span></a><a class="next" href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><span class="k">下一篇 →</span><span class="t">时钟树与GPIO</span><span class="d">STM32 与 HAL · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+</ol></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/01-FreeRTOS/02-%E5%90%8C%E6%AD%A5%E4%B8%8EIPC/"><span class="k">← 上一篇</span><span class="t">同步与IPC</span><span class="d">FreeRTOS · 5 个文件</span></a><a class="next" href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><span class="k">下一篇 →</span><span class="t">时钟树与GPIO</span><span class="d">STM32 与 HAL · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -1,0 +1,957 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>环境搭建与依赖锁定 · JAX 与 Brax · 王宇翔</title><meta name="description" content="从一次环境重装出发，说明 requirements.txt 里每个被钉住的版本各解决什么问题，两条 GPU 安装路径的差别，以及锁定失效时会出现的现象。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/05-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA%E4%B8%8E%E4%BE%9D%E8%B5%96%E9%94%81%E5%AE%9A/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="环境搭建与依赖锁定 · JAX 与 Brax · 王宇翔"><meta property="og:description" content="从一次环境重装出发，说明 requirements.txt 里每个被钉住的版本各解决什么问题，两条 GPU 安装路径的差别，以及锁定失效时会出现的现象。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/05-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA%E4%B8%8E%E4%BE%9D%E8%B5%96%E9%94%81%E5%AE%9A/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/">JAX 与 Brax</a><span class="sep" aria-hidden="true">/</span><span class="now">环境搭建与依赖锁定</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>环境搭建与依赖锁定</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>依赖清单与版本锁定</span></a><ul class="toc__heads"><li><a href="#1-从零到能跑的三步" data-depth="2" data-heading-j="0">1. 从零到能跑的三步</a></li><li><a href="#2-清单里的每个版本" data-depth="2" data-heading-j="1">2. 清单里的每个版本</a></li><li><a href="#3-为什么要钉住而不是装最新" data-depth="2" data-heading-j="2">3. 为什么要钉住而不是装最新</a></li><li><a href="#4-两条-gpu-安装路径" data-depth="2" data-heading-j="3">4. 两条 GPU 安装路径</a></li><li><a href="#5-版本号之外的三件东西" data-depth="2" data-heading-j="4">5. 版本号之外的三件东西</a></li><li><a href="#6-锁定失效时的现象" data-depth="2" data-heading-j="5">6. 锁定失效时的现象</a></li><li><a href="#7-环境重建后的验收" data-depth="2" data-heading-j="6">7. 环境重建后的验收</a></li><li><a href="#8-版本升级的连锁成本" data-depth="2" data-heading-j="7">8. 版本升级的连锁成本</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>CUDA·驱动·WSL 的装配关系</span></a><ul class="toc__heads"><li><a href="#1-三段信息各说一件事" data-depth="2" data-heading-j="0">1. 三段信息各说一件事</a></li><li><a href="#2-三行版本信息的含义" data-depth="2" data-heading-j="1">2. 三行版本信息的含义</a></li><li><a href="#3-wsl2-下的计算路径与显示路径" data-depth="2" data-heading-j="2">3. WSL2 下的计算路径与显示路径</a></li><li><a href="#4-驱动与轮子的版本关系" data-depth="2" data-heading-j="3">4. 驱动与轮子的版本关系</a></li><li><a href="#4-gpu-可见性的核对方法" data-depth="2" data-heading-j="4">4. GPU 可见性的核对方法</a></li><li><a href="#6-内核缓存与首次启动" data-depth="2" data-heading-j="5">6. 内核缓存与首次启动</a></li><li><a href="#7-排错顺序" data-depth="2" data-heading-j="6">7. 排错顺序</a></li><li><a href="#8-同一张卡上同时开训练与查看器" data-depth="2" data-heading-j="7">8. 同一张卡上同时开训练与查看器</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>显存与渲染的环境变量</span></a><ul class="toc__heads"><li><a href="#1-赋值顺序决定有效性" data-depth="2" data-heading-j="0">1. 赋值顺序决定有效性</a></li><li><a href="#2-显存预留比例管什么" data-depth="2" data-heading-j="1">2. 显存预留比例管什么</a></li><li><a href="#3-各脚本的实际取值" data-depth="2" data-heading-j="2">3. 各脚本的实际取值</a></li><li><a href="#4-渲染驱动与线程限流" data-depth="2" data-heading-j="3">4. 渲染驱动与线程限流</a></li><li><a href="#5-变量设了不等于生效" data-depth="2" data-heading-j="4">5. 变量设了不等于生效</a></li><li><a href="#6-并发实验里的变量组织" data-depth="2" data-heading-j="5">6. 并发实验里的变量组织</a></li><li><a href="#7-显存不足的三类表现" data-depth="2" data-heading-j="6">7. 显存不足的三类表现</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>环境自检与装配错误的现象</span></a><ul class="toc__heads"><li><a href="#1-三个自检入口" data-depth="2" data-heading-j="0">1. 三个自检入口</a></li><li><a href="#2-自检要看的四个点" data-depth="2" data-heading-j="1">2. 自检要看的四个点</a></li><li><a href="#3-四类装配错误" data-depth="2" data-heading-j="2">3. 四类装配错误</a></li><li><a href="#4-从现象到原因的顺序" data-depth="2" data-heading-j="3">4. 从现象到原因的顺序</a></li><li><a href="#5-自检结果要留档" data-depth="2" data-heading-j="4">5. 自检结果要留档</a></li><li><a href="#6-依赖之外的运行时差异" data-depth="2" data-heading-j="5">6. 依赖之外的运行时差异</a></li><li><a href="#7-自检失败的三种归因" data-depth="2" data-heading-j="6">7. 自检失败的三种归因</a></li><li><a href="#8-版本变更后的最小回归集" data-depth="2" data-heading-j="7">8. 版本变更后的最小回归集</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">JAX 与 Brax</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>环境 / 依赖 / JAX / WSL / CUDA / warp / 显存 / 渲染</span></div><h1 class="docs__title">环境搭建与依赖锁定</h1><p class="docs__lead">从一次环境重装出发，说明 requirements.txt 里每个被钉住的版本各解决什么问题，两条 GPU 安装路径的差别，以及锁定失效时会出现的现象。</p></header><section class="dfile" id="file-1" data-file="01-依赖清单与版本锁定"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-依赖清单与版本锁定</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/05-环境搭建与依赖锁定/01-依赖清单与版本锁定.md</span></div><div class="dfile__body"><p>把仓库换到另一台机器上重装环境时，最省事的做法是“装最新的”，结果通常是三种报错里挑一种：JAX 找不到 CUDA 后端、MuJoCo 与 MJX 版本不匹配、或者 brax 的接口签名对不上。这套工程的 <code>requirements.txt</code> 就是为这件事写的第一道防线——它把这次成功运行时的版本逐个钉住，并在注释里写明验证过的平台。</p>
+<p>钉住版本还有一个不常被提到的收益：版本号本身就是一条诊断线索。报错里出现某个包的路径与版本，可以直接对照清单判断是不是环境漂移。</p>
+<p>三步里最容易出错的是第二步：清单不只用版本号，还用注释固定了验证过的平台与两条安装路径。</p>
+<h2 id="1-从零到能跑的三步">1. 从零到能跑的三步</h2>
+<p>第一步建虚拟环境，第二步按清单安装，第三步跑一个只建环境与前向的入口确认后端可用（<code>README.md:53-54</code>、<code>:107</code>）。清单头部还给出了一条带 NVIDIA 索引的安装命令（<code>requirements.txt:5</code>）。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> venv</span><span style="color:#032F62"> .venv</span><span style="color:#24292E"> &#x26;&#x26; </span><span style="color:#005CC5">source</span><span style="color:#032F62"> .venv/bin/activate</span></span>
+<span class="line"><span style="color:#6F42C1">pip</span><span style="color:#032F62"> install</span><span style="color:#005CC5"> -r</span><span style="color:#032F62"> requirements.txt</span><span style="color:#005CC5"> --extra-index-url</span><span style="color:#032F62"> https://pypi.nvidia.com</span></span>
+<span class="line"><span style="color:#6A737D"># 只建环境与前向, 不训练</span></span>
+<span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_getup</span><span style="color:#005CC5"> --dry_run</span></span></code></pre>
+<p>工程里所有脚本都用相对虚拟环境解释器调用（<code>../.venv/bin/python sim/...</code>），因此不需要激活也能运行，只要工作目录在仓库内（<code>当前状态.md:191</code>）。</p>
+<h2 id="2-清单里的每个版本">2. 清单里的每个版本</h2>
+<p>清单从 jax 到 tqdm 共十五个包，分成四组：JAX 计算栈、MuJoCo 运行时、RL 算法栈、以及查看器与工具（<code>requirements.txt:8-22</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组</th><th>包</th><th>版本</th><th>作用</th></tr></thead><tbody><tr><td>计算栈</td><td><code>jax</code> / <code>jaxlib</code></td><td>0.7.2</td><td>数组计算与编译</td></tr><tr><td>计算栈</td><td><code>warp-lang</code></td><td>1.16.0</td><td>MJX 的 warp 后端</td></tr><tr><td>物理</td><td><code>mujoco</code> / <code>mujoco-mjx</code></td><td>3.12.0</td><td>物理引擎与 MJX 绑定</td></tr><tr><td>算法</td><td><code>brax</code></td><td>0.14.2</td><td>PPO 训练循环</td></tr><tr><td>算法</td><td><code>playground</code></td><td>0.2.0</td><td>环境与包装器（PyPI 名 mujoco_playground）</td></tr><tr><td>算法</td><td><code>flax</code> / <code>optax</code></td><td>0.11.2 / 0.2.8</td><td>网络与优化器</td></tr><tr><td>存储</td><td><code>orbax-checkpoint</code></td><td>0.12.4</td><td>检查点读写</td></tr><tr><td>配置</td><td><code>ml_collections</code></td><td>1.1.0</td><td>环境配置对象</td></tr><tr><td>工具</td><td><code>numpy</code> / <code>pillow</code> / <code>pynput</code> / <code>tqdm</code></td><td>2.5.2 / 12.3.0 / 1.8.1 / 4.70.0</td><td>数值、渲染、键盘、进度</td></tr></tbody></table>
+<p><code>playground</code> 那一行带注释说明它在 PyPI 上的发行名是 <code>mujoco_playground</code>，安装名与导入名不一致，这类包最容易在手工安装时装错（<code>requirements.txt:14</code>）。</p>
+<h2 id="3-为什么要钉住而不是装最新">3. 为什么要钉住而不是装最新</h2>
+<p>第一层约束来自 JAX 与 CUDA 轮子的匹配：<code>jaxlib</code> 的 GPU 版本按 CUDA 大版本与驱动能力分开提供，装到不匹配的轮子会退化成 CPU 执行或直接导入失败。清单注释给出了另一条官方轮子路径，版本号同样是 0.7.2（<code>requirements.txt:6-7</code>）。</p>
+<p>第二层约束来自 MJX 内部：<code>mujoco</code> 与 <code>mujoco-mjx</code> 必须同版本，它们共享底层 C 结构体布局。第三层是算法栈之间：brax、playground 与 orbax 的接口在 0.14 / 0.2 / 0.12 这几个版本上才能对上。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["requirements.txt 钉住 15 个包"] --> B["JAX 与 CUDA 轮子匹配"]
+  A --> C["mujoco 与 mujoco-mjx 同版本"]
+  A --> D["brax / playground / orbax 接口对齐"]
+  B --> E["后端可用, warp 初始化成功"]
+  C --> E
+  D --> F["训练循环与包装器可用"]
+  E --> G["dry_run 通过"]
+  F --> G</pre></div>
+<h2 id="4-两条-gpu-安装路径">4. 两条 GPU 安装路径</h2>
+<p>第一条是清单里给出的方式：jaxlib 加 NVIDIA 提供的 CUDA 运行库包，通过额外索引安装（<code>requirements.txt:4-5</code>）。第二条是按官方说明安装聚合包 <code>jax[cuda12]==0.7.2</code>，由官方轮子自带 CUDA 依赖（<code>:6-7</code>）。</p>
+<p>两条路径的差别在依赖来源：前者把 CUDA 运行库交给 NVIDIA 的包，后者交给官方轮子。验证方式相同——跑 <code>--dry_run</code> 看后端是否打印为 gpu（<code>train/train_getup.py:208</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>安装命令要点</th><th>优点</th><th>注意</th></tr></thead><tbody><tr><td>NVIDIA 索引</td><td><code>--extra-index-url https://pypi.nvidia.com</code></td><td>与本仓库验证环境一致</td><td>需要额外索引可达</td></tr><tr><td>官方聚合包</td><td><code>jax[cuda12]==0.7.2</code></td><td>依赖自带</td><td>与 jaxlib 版本需一致</td></tr></tbody></table>
+<h2 id="5-版本号之外的三件东西">5. 版本号之外的三件东西</h2>
+<p>清单头部写明验证过的平台是 Python 3.14、CUDA 12、RTX 5060 Laptop 8GB 与 WSL2（<code>requirements.txt:2</code>）。这三项决定了版本号能不能用：Python 版本影响 wheel 是否存在，CUDA 大版本影响轮子选择，操作系统决定驱动与渲染路径。</p>
+<p>仓库里 <code>当前状态.md</code> 与 <code>docs/status.md</code> 都重复了这几项事实，包括虚拟环境路径与“一个进程独占一个环境”的约束（<code>当前状态.md:189-191</code>、<code>docs/status.md:195-197</code>）。</p>
+<h2 id="6-锁定失效时的现象">6. 锁定失效时的现象</h2>
+<p>装了不匹配的 jaxlib 时，最典型的输出是后端打印为 cpu，训练照常运行但吞吐低一个数量级。mujoco 与 mjx 版本不一致时，报错出现在模型加载或第一次前向，而不是安装阶段。brax 接口变化时，报错出现在训练入口的调用签名上。</p>
+<p>这三类现象分别对应“后端”“物理”“算法”三层，按这个顺序排查可以少走弯路：先看后端打印，再看单步前向，最后看训练入口。</p>
+<p>三层里最难排的是第三层，因为入口报错往往只给出参数名不匹配，而不会直接指出是哪个包升了版本。这时对照 requirements.txt 的逐行版本反而比读报错栈快。</p>
+<h2 id="7-环境重建后的验收">7. 环境重建后的验收</h2>
+<p>验收只有三个观察点：<code>--dry_run</code> 打印的后端是 gpu；warp 初始化输出里设备行显示显卡型号与显存；观测维度打印与预期一致（<code>docs/status.md:196-197</code>）。三项都通过，环境就算装好了，可以进入冒烟训练。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant U as 使用者
+  participant V as 虚拟环境
+  participant J as JAX
+  U->>V: python -m venv 并装 requirements
+  U->>J: 运行 --dry_run
+  J->>U: backend: gpu
+  U->>U: 核对 warp 设备行与观测维度</pre></div>
+<h2 id="8-版本升级的连锁成本">8. 版本升级的连锁成本</h2>
+<p>升级等于一次整组替换，不是改一个版本号：jax 与 jaxlib 同步、warp 与 mjx 跟随、brax 与 playground 与 orbax 再跟着动。任何一处不对，报错都会出现在看起来无关的地方。</p>
+<p>还有一处容易被忽略：orbax 的版本决定检查点的磁盘布局，升级后旧检查点未必能直接读取。升级流程因此必须包含三项回归——重新跑 <code>--dry_run</code>、跑一次小预算冒烟、以及用新环境读一份旧检查点。三项全过才把新版本写回清单。</p>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>requirements.txt 钉住十五个包并写明验证平台。</li>
+<li>JAX 轮子必须与 CUDA 大版本及驱动能力匹配。</li>
+<li>mujoco 与 mujoco-mjx 必须同版本。</li>
+<li>安装名与导入名可能不同，playground 就是一例。</li>
+<li>两条安装路径的差别只在 CUDA 依赖来源。</li>
+<li>锁定失效的现象分后端、物理、算法三层出现。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>版本管理</td><td>全部精确钉住</td><td>可复现</td><td>升级需整组验证</td></tr><tr><td>安装路径</td><td>给出两条</td><td>适配不同网络环境</td><td>文档需要同步维护</td></tr><tr><td>平台记录</td><td>写进清单注释</td><td>一眼看到边界</td><td>换机器要更新注释</td></tr><tr><td>验收方式</td><td>dry_run 三观察点</td><td>快</td><td>不覆盖运行时性能</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出从零安装到验收的三条命令及其作用。</li>
+<li>说明 mujoco 与 mujoco-mjx 为什么必须同版本。</li>
+<li>列出版本号之外还需要记录的三项平台信息。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一份环境自检脚本，覆盖后端、设备与观测维度三项。</li>
+<li>给定一次“后端打印 cpu”的报错，写出从清单到驱动的排查顺序。</li>
+<li>论证全量精确钉住与使用范围约束（如 <code>>=</code>）两种策略的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>requirements.txt</code></td><td>版本清单与安装说明</td></tr><tr><td><code>README.md</code></td><td>安装步骤与入口命令</td></tr><tr><td><code>docs/status.md</code></td><td>环境事实与运行约束</td></tr><tr><td><code>当前状态.md</code></td><td>虚拟环境路径与单进程约束</td></tr><tr><td><code>train/train_getup.py</code></td><td>后端打印与 dry_run</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-CUDA-驱动与WSL的装配关系"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-CUDA-驱动与WSL的装配关系</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/05-环境搭建与依赖锁定/02-CUDA-驱动与WSL的装配关系.md</span></div><div class="dfile__body"><p>一次训练启动会打印三段与硬件有关的信息：脚本自己的后端标记、warp 的初始化块、以及设备行。这三段分别回答“用不用 GPU”“计算栈的版本是什么”“显卡是哪一张”。它们看起来重复，实际上来自三个不同的层，出了问题也各自指向不同的原因。</p>
+<p>在 WSL2 下还需要区分计算路径与显示路径：训练只用计算路径，查看器要用显示路径，而后者在 WSL 里没有常规的显卡设备节点，需要另找通道。</p>
+<p>在 WSL2 下计算与显示走两条不同的通道：训练只用计算通道，查看器才需要显示通道，后者要靠直通驱动而不是常规设备节点。</p>
+<h2 id="1-三段信息各说一件事">1. 三段信息各说一件事</h2>
+<p>第一段是训练脚本打印的 <code>backend: gpu</code>，它只说明 JAX 选中了哪个后端（<code>train/train_getup.py:208</code>）。第二段是 warp 的初始化块，给出 CUDA 工具包、驱动与设备清单（<code>RLcontroller_go1_moreinformation/data/smoke_v23.log:27-33</code>）。</p>
+<p>第三段是设备行，包含显卡型号、显存、计算能力代号与内存池状态。三段的关系是：后端标记看 JAX，工具包与驱动看 warp，型号与显存看设备行。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>Warp 1.16.0 initialized:</span></span>
+<span class="line"><span>   CUDA Toolkit 12.9, Driver 13.2</span></span>
+<span class="line"><span>   Devices:</span></span>
+<span class="line"><span>     "cpu"      : "CPU"</span></span>
+<span class="line"><span>     "cuda:0"   : "NVIDIA GeForce RTX 5060 Laptop GPU" (8 GiB, sm_120, mempool enabled)</span></span>
+<span class="line"><span>   Kernel cache:</span></span>
+<span class="line"><span>     /home/tc63/.cache/warp/1.16.0</span></span></code></pre>
+<h2 id="2-三行版本信息的含义">2. 三行版本信息的含义</h2>
+<p><code>CUDA Toolkit 12.9</code> 是 warp 编译内核时使用的工具包版本，它与 JAX 依赖的 CUDA 运行库版本可以不同。<code>Driver 13.2</code> 是主机上的显卡驱动版本，它决定能跑多新的工具包。</p>
+<p><code>sm_120</code> 是显卡的计算能力代号，对应较新的架构。这一项很重要：编译出的内核按这个代号生成，若工具包不支持该代号，就会在第一次内核加载时报出与设备不匹配的错误（按通用做法，具体报错文案随工具包版本变化）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>信息</th><th>来源</th><th>说明的问题</th></tr></thead><tbody><tr><td>backend: gpu</td><td>JAX 后端选择</td><td>是否在用 GPU</td></tr><tr><td>CUDA Toolkit 12.9</td><td>warp 编译环境</td><td>内核编译可用性</td></tr><tr><td>Driver 13.2</td><td>主机驱动</td><td>支持的工具包上限</td></tr><tr><td>sm_120</td><td>显卡架构</td><td>内核代号匹配</td></tr><tr><td>8 GiB / mempool enabled</td><td>设备行</td><td>显存预算与分配策略</td></tr></tbody></table>
+<h2 id="3-wsl2-下的计算路径与显示路径">3. WSL2 下的计算路径与显示路径</h2>
+<p>计算路径走 CUDA，训练与评估只用这一条。显示路径在 WSL2 下没有常规的显卡设备节点，因此“看不到 <code>/dev/dri</code>”是正常现象，不能据此断定只能用软件渲染（<code>docs/viewer-guide.md:160-161</code>）。</p>
+<p>查看器实测的结论是给渲染库指定直通驱动后帧时间从毫秒级降到 15.3 毫秒（32 环境），设置方式是在导入渲染库之前用 <code>setdefault</code> 写入环境变量，允许使用者覆盖（<code>docs/viewer-guide.md:169-176</code>）。这条经验与训练无关，但同属“环境装配”的一部分。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["启动训练"] --> B["JAX 选后端"]
+  B --> C{"backend: gpu?"}
+  C -->|"否"| D["查 jaxlib 轮子与驱动"]
+  C -->|"是"| E["warp 初始化"]
+  E --> F["读设备行与 sm 代号"]
+  F --> G["进入物理编译"]
+  G --> H["首次内核编译, 写 kernel cache"]</pre></div>
+<h2 id="4-驱动与轮子的版本关系">4. 驱动与轮子的版本关系</h2>
+<p>驱动版本决定能用的 CUDA 工具包上限，工具包版本决定轮子能否加载；JAX 侧需要的是与 CUDA 大版本匹配的 <code>jaxlib</code>（<code>requirements.txt:6-7</code>）。三者构成一条链：驱动够新、工具包与轮子匹配、内核代号被支持。</p>
+<p>升级驱动通常向下兼容，升级工具包或轮子则可能引入不匹配。因此仓库把验证过的组合写在清单里，换机器时优先复现组合，而不是各取最新。</p>
+<h2 id="4-gpu-可见性的核对方法">4. GPU 可见性的核对方法</h2>
+<p>核对分三步：在 WSL 里跑 <code>nvidia-smi</code> 看是否列出显卡；看 warp 设备行里 <code>cuda:0</code> 的型号与显存；再跑一次训练入口的 <code>--dry_run</code> 看后端打印。三步都过，说明计算路径可用。</p>
+<p>诊断时要注意两类容易误导的信号：<code>nvidia-smi</code> 的利用率不高、WSL 内的负载值也很低，都可能出现在 GPU 正忙的情况下，因为 WSL 里的负载统计并不反映 GPU 状态；这时要看的是 GPU 进程与显存占用（<code>docs/viewer-guide.md:235</code>、<code>:402</code>）。</p>
+<p>另一条与环境装配相关的约束是进程数：一个进程只建一个环境实例，两个环境同进程会撞上 warp 的 CUDA graph 地址缓存（<code>当前状态.md:189-190</code>）。并发实验要用两个进程，并为此调低各自的显存预留比例。</p>
+<h2 id="6-内核缓存与首次启动">6. 内核缓存与首次启动</h2>
+<p>warp 把编译好的内核缓存在用户目录下的版本化路径中（<code>RLcontroller_go1_moreinformation/data/smoke_v23.log:32-33</code>）。首次启动会看到一长串 <code>Module ... load ... (cached)</code> 行，其中标注 cached 的表示命中缓存。</p>
+<p>缓存按 warp 版本分目录，因此升级 warp 会重新编译一遍。这一过程只影响启动时间，不影响训练吞吐；但如果缓存目录不可写，每次启动都要重编译，表现是启动明显变慢。</p>
+<h2 id="7-排错顺序">7. 排错顺序</h2>
+<p>遇到与硬件有关的报错，按后端、设备、渲染的顺序排查：先确认 <code>backend</code> 打印为 gpu；再看 warp 的设备行是否列出显卡；训练场景到此为止，只有查看器才需要继续看渲染路径。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant S as 脚本
+  participant J as JAX
+  participant W as warp
+  S->>S: 打印 backend
+  J->>S: 后端选择结果
+  S->>W: 初始化 warp
+  W->>S: 工具包/驱动/设备/缓存目录
+  S->>S: 首次编译并写缓存</pre></div>
+<h2 id="8-同一张卡上同时开训练与查看器">8. 同一张卡上同时开训练与查看器</h2>
+<p>8GB 的笔记本显卡上同时跑训练与查看器会互相拖慢。查看器文档给出一组对照：两个进程各自把显存预留压到 0.25 时，实测每步 27.1 毫秒、36.9 fps；不做限制时同一场景退化到 306.9 毫秒（<code>docs/viewer-guide.md:241-253</code>）。结论是显存分配策略要按“几个进程同时跑”来定，而不是按单个进程的峰值。</p>
+<p>训练侧的同类现象出现在看护脚本上：v21 的看护与训练抢显存，导致某次检查因为显存不足失败，训练速度也被拖慢（<code>RLcontroller_go1_moreinformation/sim/watch_v22_checks.sh:8-10</code>）。因此并发要问的不只是能不能跑，还有跑出来的数字还算不算数。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>进程数</th><th>显存策略</th><th>结果</th></tr></thead><tbody><tr><td>单独训练</td><td>1</td><td>按脚本默认</td><td>参考吞吐</td></tr><tr><td>训练加查看器</td><td>2</td><td>各自压低预留</td><td>27.1 毫秒每步</td></tr><tr><td>训练加查看器</td><td>2</td><td>不限制</td><td>306.9 毫秒每步</td></tr><tr><td>训练加看护</td><td>2</td><td>未协调</td><td>检查失败并拖慢训练</td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>后端标记、warp 初始化块与设备行来自三个不同的层。</li>
+<li>驱动决定工具包上限，工具包与轮子必须匹配，内核按显卡代号编译。</li>
+<li>WSL2 下计算走 CUDA，显示要另找直通驱动。</li>
+<li><code>/dev/dri</code> 为空不能推断只能软件渲染。</li>
+<li>warp 内核缓存按版本分目录，只影响启动时间。</li>
+<li>硬件报错按后端、设备、渲染三层顺序排查。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>版本组合</td><td>固定验证过的搭配</td><td>少踩不匹配</td><td>落后于最新</td></tr><tr><td>渲染驱动</td><td>setdefault 允许覆盖</td><td>可回退</td><td>需要打印实际值</td></tr><tr><td>缓存策略</td><td>按版本分目录</td><td>互不污染</td><td>升级后重编译</td></tr><tr><td>排错入口</td><td>先看后端标记</td><td>定位快</td><td>覆盖不到显示问题</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明三段硬件信息各自回答什么问题。</li>
+<li>解释驱动版本与 CUDA 工具包版本的关系。</li>
+<li>说明 WSL2 下 <code>/dev/dri</code> 为空为什么不能作为软件渲染的证据。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一个启动自检，把三段信息与预期值比对并输出结论。</li>
+<li>给定一次“首次启动很慢、第二次很快”的现象，写出定位到缓存目录的步骤。</li>
+<li>论证把渲染驱动设置写进脚本与写进文档两种做法的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/data/smoke_v23.log</code></td><td>warp 初始化块与内核缓存行</td></tr><tr><td><code>docs/viewer-guide.md</code></td><td>WSL 渲染路径与实测帧时间</td></tr><tr><td><code>requirements.txt</code></td><td>轮子版本与安装路径</td></tr><tr><td><code>train/train_getup.py</code></td><td>后端打印</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-显存与渲染的环境变量"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-显存与渲染的环境变量</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/05-环境搭建与依赖锁定/03-显存与渲染的环境变量.md</span></div><div class="dfile__body"><p>同样一段训练代码，在两个终端里跑出两种结果，原因往往不在代码里，而在启动前设过哪些环境变量。显存预留比例决定 XLA 圈走多少显存、留给 warp 内核池多少；渲染驱动决定查看器用直通还是软件渲染；线程限流只在软件渲染时才需要打开。</p>
+<p>这些变量的共同特点是必须在导入相应库之前设置，设置晚了就完全无效。工程里的脚本因此把赋值放在文件最前面，并用 <code>setdefault</code> 允许外部覆盖（<code>train/train_getup.py:38-42</code>）。</p>
+<h2 id="1-赋值顺序决定有效性">1. 赋值顺序决定有效性</h2>
+<p>显存预留比例由 XLA 在初始化时读取，而 XLA 在 <code>import jax</code> 时初始化，因此这行赋值必须出现在导入之前（<code>docs/status.md:199</code>）。工程里所有需要限制显存的脚本都遵守这一顺序，并在注释里写明原因。</p>
+<p>渲染驱动同理：渲染库在第一次创建上下文时读取环境变量，之前的赋值才有效。用 <code>setdefault</code> 而不是直接赋值，是为了让使用者在命令行外覆盖，方便对照实验（<code>docs/viewer-guide.md:173</code>）。</p>
+<h2 id="2-显存预留比例管什么">2. 显存预留比例管什么</h2>
+<p>这个变量是一个 0 到 1 的比例，XLA 按它一次性预留显存。不设时默认按约 0.75 预留，8 GiB 的卡上就是约 6.1 GiB，留给 warp 内核池的只剩约 2 GiB（<code>train/train_getup.py:39-41</code>）。</p>
+<p>预留不足的表现很直接：训练跑到中途报显存分配失败并退出，报错里带着一个不大的字节数，例如 <code>Failed to allocate 83MB on device 'cuda:0'</code>。这个字节数看起来小，但它是在池已经耗尽时申请的最后一块，不代表真实需求（<code>train/train_getup.py:40-41</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["进程启动"] --> B["读取 MEM_FRACTION"]
+  B --> C["XLA 一次性预留比例份额"]
+  C --> D["剩余显存供 warp 内核池与上下文"]
+  D --> E{"训练中需要新分配?"}
+  E -->|"池够用"| F["正常运行"]
+  E -->|"池耗尽"| G["Failed to allocate 并退出"]</pre></div>
+<h2 id="3-各脚本的实际取值">3. 各脚本的实际取值</h2>
+<p>取值随场景变化：训练入口给 XLA 留 0.45，评估脚本给 0.3，双进程查看器场景用 0.25（<code>train/train_getup.py:42</code>、<code>RLcontroller_go1_moreinformation/sim/eval_v19_checkpoint.py:27</code>、<code>docs/viewer-guide.md:253</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>取值</th><th>理由</th></tr></thead><tbody><tr><td>训练（含频繁重置）</td><td>0.45</td><td>给 warp 池留出足够空间</td></tr><tr><td>单进程评估</td><td>0.3</td><td>评估不需要大池</td></tr><tr><td>双进程查看器</td><td>0.25</td><td>两个进程各自压缩</td></tr><tr><td>未设置</td><td>约 0.75</td><td>默认值，易在长训练中耗尽剩余池</td></tr></tbody></table>
+<p>工程里 21 个模拟脚本中有 19 个显式设了这个变量，剩下两个不需要 GPU 或已在调用方设过（<code>docs/viewer-guide.md:271-272</code>）。</p>
+<p>确认真实预留量的办法是看 GPU 进程与显存占用，而不只是相信脚本里的数字（<code>docs/viewer-guide.md:402</code>）。同一张卡上其他进程占用的部分会从可用显存里扣掉，这解释了为什么同样的比例在不同机器上表现不一样。</p>
+<h2 id="4-渲染驱动与线程限流">4. 渲染驱动与线程限流</h2>
+<p>WSL2 下没有常规显卡设备节点，默认可能落到软件渲染。实测给渲染库指定直通驱动后，32 个环境下的帧时间降到 15.3 毫秒；不指定时明显更慢（<code>docs/viewer-guide.md:169</code>）。变量用 <code>setdefault</code> 写入，回退方式是把它设成空串，此时才需要限制软件渲染线程数（<code>:181-182</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>变量</th><th>作用</th><th>何时需要</th></tr></thead><tbody><tr><td>显存预留比例</td><td>划分 XLA 与 warp 的显存</td><td>每个 GPU 进程</td></tr><tr><td>渲染直通驱动</td><td>让渲染走显卡</td><td>查看器</td></tr><tr><td>软件渲染线程数</td><td>限制 CPU 渲染线程</td><td>回退到软件渲染时</td></tr></tbody></table>
+<h2 id="5-变量设了不等于生效">5. 变量设了不等于生效</h2>
+<p>文档里反复出现的教训是“文档写了、代码没有”：说明中列出的配置项，实际脚本里可能漏设。因此交付前要用一次 grep 核对四个关键配置是否都在代码里出现：图模式、显存预留比例、渲染驱动与软件渲染线程数（<code>docs/viewer-guide.md:448-449</code>）。</p>
+<p>核对之外还要打印实际值。驱动变量被使用者覆盖时，脚本内部的 <code>setdefault</code> 不生效，只有把实际渲染器名称打印出来才能确认真走了哪条路（<code>:441</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant S as 脚本
+  participant E as 环境变量
+  participant X as XLA / 渲染库
+  S->>E: setdefault 显存比例
+  S->>E: setdefault 渲染驱动
+  S->>X: import 触发初始化并读取变量
+  X->>S: 预留显存 / 选择渲染路径
+  S->>S: 打印实际后端与渲染器</pre></div>
+<p>在双进程场景下，这个差额会直接决定第二个进程能不能启动：它按自己的比例预留时，看到的可用显存已经被第一个进程扣掉了一部分。</p>
+<h2 id="6-并发实验里的变量组织">6. 并发实验里的变量组织</h2>
+<p>需要同时跑两个进程做对照时，显存比例要按进程数重新分配，否则两个进程都按单进程的取值去预留，第二个进程会直接失败。查看器文档给出的对照方法可以直接照搬：先用双进程并发复现出慢速场景，再把比例压到 0.25 反证回正常速度（<code>docs/viewer-guide.md:280</code>）。</p>
+<p>并发还有一条与显存无关但同样重要的约束：一个进程只建一个环境实例，两个环境同进程会撞上 warp 的 CUDA graph 地址缓存；需要两个环境时用两个进程，并通过文件交换状态（<code>当前状态.md:189-190</code>、<code>docs/viewer-guide.md:452</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>并发形式</th><th>数量</th><th>需要的变量调整</th><th>状态交换方式</th></tr></thead><tbody><tr><td>单进程单环境</td><td>1</td><td>无</td><td>内存内直接传</td></tr><tr><td>双进程对照</td><td>2</td><td>各自降低显存比例</td><td>文件</td></tr><tr><td>训练加查看器</td><td>2</td><td>各自降低显存比例</td><td>检查点文件</td></tr><tr><td>训练加看护</td><td>2</td><td>建议串行</td><td>检查点目录</td></tr></tbody></table>
+<h2 id="7-显存不足的三类表现">7. 显存不足的三类表现</h2>
+<p>第一类出现在启动阶段：同一张卡上已有进程占着显存，新进程按比例预留时直接失败，报错发生在第一个张量分配上。第二类出现在训练中途：预留本身成功，但留给内核池的余量在长训练与频繁重置中被吃光，报错发生在某一步的分配上（<code>train/train_getup.py:39-41</code>）。</p>
+<p>第三类出现在评估或查看器：这些脚本自己也要预留显存，与训练并发时会互相挤压，表现为检查失败或帧率骤降（<code>RLcontroller_go1_moreinformation/sim/watch_v22_checks.sh:8-10</code>）。三类的处理方式不同——启动阶段要查其他进程，训练中途要调低比例，评估阶段要考虑串行。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表现</th><th>出现时机</th><th>首选处理</th></tr></thead><tbody><tr><td>启动即失败</td><td>第一个分配</td><td>查同卡其他进程</td></tr><tr><td>训练中途失败</td><td>长训练某一步</td><td>调低预留比例</td></tr><tr><td>评估或查看器变慢</td><td>与训练并发时</td><td>改成串行或降比例</td></tr></tbody></table>
+<p>核对的具体做法是拿四个变量名去源码里搜，逐个确认赋值语句存在：图模式、显存预留比例、渲染驱动与软件渲染线程数。文档里记着这条清单的来由——同一类问题在本项目出现过两次，都是“文档写了、代码没有”（<code>docs/viewer-guide.md:448-449</code>）。</p>
+<p>打印时要打印实际生效的值，而不是脚本里写的那一行。对渲染来说就是打印查询到的渲染器名称；如果使用者已经用环境变量覆盖，<code>setdefault</code> 不生效，只有实际值能说明走了哪条路（<code>docs/viewer-guide.md:441</code>）。</p>
+<p>还有一处容易忽略的是子进程继承：训练脚本由启动脚本拉起时，父进程的环境会被继承，脚本内部的 <code>setdefault</code> 因此不会覆盖已有值。排查这类问题时要把父进程的环境一起看，而不只是读脚本内容。</p>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>显存比例与渲染驱动都必须在相应库导入之前设置。</li>
+<li>不设比例时默认按约 0.75 预留，长训练容易耗尽剩余池。</li>
+<li>分配失败报出的字节数不等于真实需求。</li>
+<li>取值随场景变化：训练 0.45、评估 0.3、双进程 0.25。</li>
+<li>渲染默认可能落到软件渲染，需要显式指定直通驱动。</li>
+<li>变量设了不等于生效，要 grep 代码并打印实际值。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>比例取值</td><td>按场景分档</td><td>各自留足余量</td><td>需要记住对应关系</td></tr><tr><td>设置方式</td><td>setdefault</td><td>允许外部覆盖</td><td>覆盖后要打印实际值</td></tr><tr><td>渲染回退</td><td>空串强制软件渲染</td><td>保留可用路径</td><td>需要线程限流</td></tr><tr><td>核对方式</td><td>grep 加打印</td><td>覆盖文档与代码</td><td>需维护核对清单</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明显存预留比例为什么必须在导入之前设置。</li>
+<li>解释分配失败报出的字节数为什么不能当作真实需求。</li>
+<li>列出三个变量的作用与触发场景。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一次对照实验，量化比例取值对训练吞吐与稳定性的影响。</li>
+<li>给定一次“渲染很慢但没有报错”的现象，写出从变量到实际渲染器的排查步骤。</li>
+<li>论证把四个关键变量集中到一个配置模块的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>train/train_getup.py</code></td><td>显存比例设置与注释中的失败症状</td></tr><tr><td><code>docs/viewer-guide.md</code></td><td>渲染驱动实测、比例取值与核对清单</td></tr><tr><td><code>docs/status.md</code></td><td>赋值顺序约束</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/eval_v19_checkpoint.py</code></td><td>评估侧比例取值</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-环境自检与装配错误的现象"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-环境自检与装配错误的现象</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/05-环境搭建与依赖锁定/04-环境自检与装配错误的现象.md</span></div><div class="dfile__body"><p>装完之后总得跑点什么才算确认环境可用。这套工程提供了两个不带训练的入口：一个只建环境与网络，另一个是起身环境自检脚本；再往前一步是短跑评估或查看器。三个入口的开销依次增加，覆盖的问题也依次变多。</p>
+<p>装配错误的现象有很强的欺骗性：装了不匹配的轮子，程序照样启动，只是后端悄悄变成 CPU；显存预留不合理，训练前几千步一切正常，之后突然分配失败。把现象与原因先对应起来，再按入口顺序验证，可以省掉大量试错。</p>
+<h2 id="1-三个自检入口">1. 三个自检入口</h2>
+<p>第一个入口是带 <code>--dry_run</code> 的训练脚本，它只建环境和网络，不进入训练循环（<code>README.md:107</code>）。第二个是起身环境自检脚本，用来确认环境本身的构造与复位（<code>README.md:107-108</code>）。第三个是短跑的评估或查看器，用来确认渲染与推理通路（<code>README.md:66-70</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>入口</th><th>覆盖范围</th><th>开销</th><th>失败时指向</th></tr></thead><tbody><tr><td><code>--dry_run</code></td><td>环境、网络、后端</td><td>最小</td><td>依赖与后端</td></tr><tr><td>环境自检脚本</td><td>环境构造与复位</td><td>小</td><td>环境实现</td></tr><tr><td>短跑评估</td><td>推理与物理</td><td>中</td><td>物理与显存</td></tr><tr><td>查看器</td><td>渲染与交互</td><td>中</td><td>渲染路径</td></tr></tbody></table>
+<h2 id="2-自检要看的四个点">2. 自检要看的四个点</h2>
+<p>第一看后端打印，确认是 gpu；第二看 warp 初始化里的设备行，确认列出显卡与显存；第三看观测维度打印，确认与环境定义一致；第四确认进程数——一个进程只建一个环境实例（<code>当前状态.md:189-190</code>）。</p>
+<p>第三点最容易被跳过。观测维度是环境与网络之间的接口，维度对不上不会立刻报错，而是让策略收到错位的输入；续训时守卫会拦住这种不一致（<code>train/train_go1.py:70-84</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["装完环境"] --> B["--dry_run 只建环境与网络"]
+  B --> C{"backend 是 gpu?"}
+  C -->|"否"| D["查轮子与驱动"]
+  C -->|"是"| E["看 warp 设备行"]
+  E --> F{"列出显卡与显存?"}
+  F -->|"否"| G["查 CUDA 可见性"]
+  F -->|"是"| H["核对观测维度"]
+  H --> I["确认一进程一环境"]
+  I --> J["进入冒烟训练"]</pre></div>
+<h2 id="3-四类装配错误">3. 四类装配错误</h2>
+<p>第一类是导入失败，通常出现在版本不匹配的包上，报错里带包名与路径。第二类是后端退回 CPU，表现为 <code>backend: cpu</code>，训练能跑但吞吐低一个数量级。</p>
+<p>第三类是显存不足，特征是启动阶段或训练中途的分配失败，报错里带一个字节数（<code>train/train_getup.py:39-41</code>）。第四类是渲染变慢，只在查看器出现，训练不受影响，原因是没有指定直通驱动（<code>docs/viewer-guide.md:169</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>出现位置</th><th>常见原因</th><th>排查入口</th></tr></thead><tbody><tr><td>导入失败</td><td>脚本第一行导入</td><td>版本不匹配</td><td>对照依赖清单</td></tr><tr><td>后端退回 CPU</td><td>启动打印</td><td>轮子与驱动不匹配</td><td>核对后端标记</td></tr><tr><td>显存分配失败</td><td>启动或训练中途</td><td>预留比例不合理</td><td>查比例与同卡进程</td></tr><tr><td>渲染变慢</td><td>查看器</td><td>未指定直通驱动</td><td>打印实际渲染器</td></tr><tr><td>观测维度不一致</td><td>续训守卫</td><td>环境改动未同步</td><td>核对维度打印</td></tr></tbody></table>
+<h2 id="4-从现象到原因的顺序">4. 从现象到原因的顺序</h2>
+<p>遇到问题时按“后端、设备、显存、渲染”的顺序排查，因为这四层是依赖关系：后端不对时看不到设备，设备不对时谈显存没有意义，渲染只在最后才涉及。</p>
+<p>这条顺序也适用于改完环境之后的回归：先跑 <code>--dry_run</code> 确认后端与维度，再跑小预算确认物理与显存，最后才开查看器确认渲染。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant U as 使用者
+  participant D as dry_run
+  participant W as warp
+  participant T as 冒烟训练
+  U->>D: 建环境与网络
+  D->>U: backend 与观测维度
+  U->>W: 读设备行
+  W->>U: 显卡型号与显存
+  U->>T: 小预算训练
+  T->>U: 显存与吞吐是否正常</pre></div>
+<h2 id="5-自检结果要留档">5. 自检结果要留档</h2>
+<p>自检的输出不要只看一眼就丢。冒烟训练的完整输出会被启动脚本重定向到日志文件，其中包含配置自述、维度与续训自检；评估的完整输出同样留在 <code>data/</code> 下的日志里。留档的意义在对比：下一次改环境之后，把新的自检输出与旧的对照，差异会直接浮出来。</p>
+<p>留档还有个副作用：日志里记录了当时实际使用的版本与配置，几个月后要解释某个数字时，这份证据比记忆可靠。</p>
+<h2 id="6-依赖之外的运行时差异">6. 依赖之外的运行时差异</h2>
+<p>同一份依赖在不同机器上表现不同，差异来自依赖之外的三样：显卡型号与计算能力代号、驱动版本、以及 CPU 与内存规模。查看器文档在开头就把测试机器写成一行——WSL2、16 核、RTX 5060 Laptop，并注明所有数字都是本机实测（<code>docs/viewer-guide.md:5</code>、<code>:18</code>）。</p>
+<p>因此环境记录里除了版本清单，还应写明机器指纹。这份工程的做法是把平台写进依赖清单的注释里，并在状态文档里重复一次；换机器时这两处都要更新，否则旧数字会被误当成新机器的基线。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>差异来源</th><th>影响</th><th>记录位置</th></tr></thead><tbody><tr><td>显卡与计算能力代号</td><td>内核编译与可用特性</td><td>设备行</td></tr><tr><td>驱动版本</td><td>支持的工具包上限</td><td>warp 初始化块</td></tr><tr><td>CPU 与核数</td><td>数据加载与软件渲染</td><td>机器说明</td></tr><tr><td>操作系统的图形栈</td><td>查看器可用性</td><td>机器说明</td></tr></tbody></table>
+<h2 id="7-自检失败的三种归因">7. 自检失败的三种归因</h2>
+<p>自检失败先归因到三处之一：依赖版本、环境变量、机器条件。依赖问题的特征是报错稳定复现且带包名；环境变量问题的特征是同一条命令换终端结果不同；机器条件的特征是同一份代码在另一台机器上正常。</p>
+<p>归因需要证据。依赖问题要给出报错原文与对应包的版本；变量问题要给出两个终端的变量差异；机器问题要给出两台机器的设备行对照。三类证据都指向“环境”，但处理方式完全不同——换版本、改变量、或调整预期。</p>
+<h2 id="8-版本变更后的最小回归集">8. 版本变更后的最小回归集</h2>
+<p>升级或重装依赖之后，回归不必跑完整训练，三项就够：<code>--dry_run</code> 确认后端与维度；小预算冒烟确认物理与显存；读一份旧检查点确认存储格式仍然兼容。三项的耗时都在分钟级，却覆盖了依赖升级最容易出问题的三个位置。</p>
+<p>三项的结论要写回环境记录，形成“版本组合到结论”的短表，下次升级时先看这张表能省掉一轮试错。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>回归项</th><th>验证对象</th><th>通过标准</th></tr></thead><tbody><tr><td><code>--dry_run</code></td><td>后端与观测维度</td><td>后端为 gpu、维度与预期一致</td></tr><tr><td>小预算冒烟</td><td>物理与显存</td><td>跑到预定步数不报分配失败</td></tr><tr><td>读旧检查点</td><td>存储格式兼容</td><td>守卫通过且能加载参数</td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>三个自检入口的开销与覆盖范围依次增加。</li>
+<li>自检要看后端、设备、观测维度与进程数四项。</li>
+<li>观测维度不一致不会立刻报错，但会让策略读到错位的输入。</li>
+<li>四类装配错误分别出现在导入、后端、显存与渲染环节。</li>
+<li>排查顺序是后端、设备、显存、渲染，与依赖关系一致。</li>
+<li>自检输出要留档，作为环境变更的对照基线。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>自检入口</td><td>三档开销</td><td>快速定位</td><td>需要记住覆盖范围</td></tr><tr><td>验证时机</td><td>改环境后立即</td><td>差异归因清楚</td><td>增加一次运行</td></tr><tr><td>输出处理</td><td>重定向留档</td><td>可对照</td><td>磁盘占用</td></tr><tr><td>排查顺序</td><td>按依赖层次</td><td>少走弯路</td><td>不覆盖偶发问题</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出三个自检入口及其覆盖范围。</li>
+<li>说明观测维度不一致为什么不会立刻报错。</li>
+<li>写出四类装配错误各自的出现位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一份环境自检清单，把四项观察点与通过标准写在一起。</li>
+<li>给定一次“训练中途显存失败”的报告，写出完整的排查步骤与证据要求。</li>
+<li>论证把自检结果做成基线文件（而非日志）的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>README.md</code></td><td>三个自检入口与命令</td></tr><tr><td><code>docs/viewer-guide.md</code></td><td>渲染排错与实测数据</td></tr><tr><td><code>train/train_getup.py</code></td><td>显存失败症状与后端打印</td></tr><tr><td><code>当前状态.md</code></td><td>单进程单环境约束</td></tr><tr><td><code>train/train_go1.py</code></td><td>续训守卫的维度比对</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/04-%E6%A3%80%E6%9F%A5%E7%82%B9%E4%B8%8E%E6%97%A5%E5%BF%97/"><span class="k">← 上一篇</span><span class="t">检查点与日志</span><span class="d">JAX 与 Brax · 4 个文件</span></a><a class="next" href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/01-MJCF%E6%A8%A1%E5%9E%8B/"><span class="k">下一篇 →</span><span class="t">MJCF模型</span><span class="d">MuJoCo 与 MJX · 6 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

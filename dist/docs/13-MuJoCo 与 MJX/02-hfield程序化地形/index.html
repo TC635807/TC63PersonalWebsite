@@ -1,0 +1,911 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>hfield程序化地形 · MuJoCo 与 MJX · 王宇翔</title><meta name="description" content="高度场作为程序化地形载体的理由、16 位 PNG 与高度值的换算、size 四个参数的语义与 base_z 的非零要求、生成器坐标与引擎坐标之间的转置加翻转，以及引擎侧的采样与索引映射。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/02-hfield%E7%A8%8B%E5%BA%8F%E5%8C%96%E5%9C%B0%E5%BD%A2/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="hfield程序化地形 · MuJoCo 与 MJX · 王宇翔"><meta property="og:description" content="高度场作为程序化地形载体的理由、16 位 PNG 与高度值的换算、size 四个参数的语义与 base_z 的非零要求、生成器坐标与引擎坐标之间的转置加翻转，以及引擎侧的采样与索引映射。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/02-hfield%E7%A8%8B%E5%BA%8F%E5%8C%96%E5%9C%B0%E5%BD%A2/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/">MuJoCo 与 MJX</a><span class="sep" aria-hidden="true">/</span><span class="now">hfield程序化地形</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>hfield程序化地形</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>hfield资产格式与坐标约定</span></a><ul class="toc__heads"><li><a href="#高度场为什么适合程序化地形" data-depth="2" data-heading-j="0">高度场为什么适合程序化地形</a></li><li><a href="#png资产的像素与高度关系" data-depth="2" data-heading-j="1">PNG资产的像素与高度关系</a></li><li><a href="#size四个参数的语义" data-depth="2" data-heading-j="2">size四个参数的语义</a></li><li><a href="#base_z不等于零的原因" data-depth="2" data-heading-j="3">base_z不等于零的原因</a></li><li><a href="#坐标约定的转置与翻转" data-depth="2" data-heading-j="4">坐标约定的转置与翻转</a></li><li><a href="#引擎侧的采样与索引映射" data-depth="2" data-heading-j="5">引擎侧的采样与索引映射</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>程序化地形生成器的构造</span></a><ul class="toc__heads"><li><a href="#生成器的输入输出与确定性" data-depth="2" data-heading-j="0">生成器的输入输出与确定性</a></li><li><a href="#平滑随机起伏的实现" data-depth="2" data-heading-j="1">平滑随机起伏的实现</a></li><li><a href="#矩形台地与缓坡" data-depth="2" data-heading-j="2">矩形台地与缓坡</a></li><li><a href="#阶梯剖面的三处修正" data-depth="2" data-heading-j="3">阶梯剖面的三处修正</a></li><li><a href="#原点压平与reset一致性" data-depth="2" data-heading-j="4">原点压平与reset一致性</a></li><li><a href="#生成顺序与互斥约束" data-depth="2" data-heading-j="5">生成顺序与互斥约束</a></li><li><a href="#命令行参数与统计输出" data-depth="2" data-heading-j="6">命令行参数与统计输出</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>地形场景装配与接触约束</span></a><ul class="toc__heads"><li><a href="#场景文件的结构与包含关系" data-depth="2" data-heading-j="0">场景文件的结构与包含关系</a></li><li><a href="#floor几何体名字的绑定约束" data-depth="2" data-heading-j="1">floor几何体名字的绑定约束</a></li><li><a href="#priority为0的接触语义" data-depth="2" data-heading-j="2">priority为0的接触语义</a></li><li><a href="#posz的标定方法" data-depth="2" data-heading-j="3">pos.z的标定方法</a></li><li><a href="#分辨率与接触上限" data-depth="2" data-heading-j="4">分辨率与接触上限</a></li><li><a href="#elevation_z的自动回写" data-depth="2" data-heading-j="5">elevation_z的自动回写</a></li><li><a href="#warp与jax后端的支持差异" data-depth="2" data-heading-j="6">warp与JAX后端的支持差异</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>地形校验与耦合点复核</span></a><ul class="toc__heads"><li><a href="#生成器的自检输出" data-depth="2" data-heading-j="0">生成器的自检输出</a></li><li><a href="#四类校验脚本的分工" data-depth="2" data-heading-j="1">四类校验脚本的分工</a></li><li><a href="#高度图可视化与逐点核对" data-depth="2" data-heading-j="2">高度图可视化与逐点核对</a></li><li><a href="#足端高度奖励与地形的耦合" data-depth="2" data-heading-j="3">足端高度奖励与地形的耦合</a></li><li><a href="#终止阈值随地形抬升的余量" data-depth="2" data-heading-j="4">终止阈值随地形抬升的余量</a></li><li><a href="#接触溢出与约束预算的排查" data-depth="2" data-heading-j="5">接触溢出与约束预算的排查</a></li><li><a href="#已知未修问题与素材冲突" data-depth="2" data-heading-j="6">已知未修问题与素材冲突</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">MuJoCo 与 MJX</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>MuJoCo / hfield / 地形资产 / PNG编码 / 坐标约定 / 地形生成 / 高斯滤波 / 阶梯剖面</span></div><h1 class="docs__title">hfield程序化地形</h1><p class="docs__lead">高度场作为程序化地形载体的理由、16 位 PNG 与高度值的换算、size 四个参数的语义与 base_z 的非零要求、生成器坐标与引擎坐标之间的转置加翻转，以及引擎侧的采样与索引映射。</p></header><section class="dfile" id="file-1" data-file="01-hfield资产格式与坐标约定"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-hfield资产格式与坐标约定</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/02-hfield程序化地形/01-hfield资产格式与坐标约定.md</span></div><div class="dfile__body"><h1 id="hfield资产格式与坐标约定">hfield资产格式与坐标约定</h1>
+<p>程序化地形在物理引擎里需要一个能表达任意起伏、又能被碰撞检测高效处理的载体。用 box 或 mesh 拼出起伏要生成大量几何体，接触对数量随拼接块数上升；用解析平面只能表达水平地面。高度场（hfield）取中间路线：把地面高度存成一张二维网格，引擎按网格生成三角面片参与碰撞，碰撞的窄相位只需要处理足端附近的格子。</p>
+<p>这条路线带来一批格式与坐标上的具体约定：高度值怎么从像素换算、size 的四个参数各表示什么、高度数据在内存里的行列方向与世界坐标如何对应。这些约定出错时地形物理依然合法、训练也不会报错，但布局与采样位置会静默偏离，是这类资产里最难排查的一类问题。</p>
+<h2 id="高度场为什么适合程序化地形">高度场为什么适合程序化地形</h2>
+<p>高度场把地形描述成一张规则网格上的高度值，网格之外的部分由引擎按边界处理。它与 mesh 的区别在于规则性：采样、碰撞与可视化共用同一套索引，不需要为每个地形单独生成拓扑。与拼接几何体相比，高度场的接触对数量只与足端附近的有效格子有关，不随地形总面积增长。</p>
+<p>素材仓库选择高度场的直接理由是后端支持：warp 的碰撞驱动实现了 HFIELD 类型并走凸包路径，因此 MJX 用 warp 后端时可以在地形上训练（<code>mjx-go1-getup/docs/experiment-log.md:1411-1413</code>）。同一节还给出官方对照做法：playground 的 rough_terrain 也用高度场，示例尺寸是 size 取 10 10 0.05 1.0，高度范围只有 5 cm。本仓库把高度范围放大到 30 cm，是把高度场用在更难的地形上。</p>
+<p>另一个理由是渲染与物理的成本可控。素材实测高度场并不比平地慢，离屏渲染的耗时与分辨率无关，n 从 16 到 128 的渲染时间都在 108 ms 量级（<code>experiment-log.md:1455-1457</code> 与 <code>:1473</code>）。这否定了「地形导致物理变慢」的猜测，地形分辨率可以按精度需求选而不必担心帧率。</p>
+<h2 id="png资产的像素与高度关系">PNG资产的像素与高度关系</h2>
+<p>高度场资产是一张灰度 PNG，本仓库用 16 位深度。高度值的换算关系写在生成器里（<code>mjx-go1-getup/sim/gen_terrain.py:288-291</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>height</mtext><mo>=</mo><mtext>base_z</mtext><mo>+</mo><mtext>data</mtext><mo>×</mo><mtext>elevation_z</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>data</mtext><mo>=</mo><mfrac><mtext>pixel</mtext><mn>65535</mn></mfrac></mrow><annotation encoding="application/x-tex">\text{height} = \text{base\_z} + \text{data} \times \text{elevation\_z}, \qquad \text{data} = \frac{\text{pixel}}{65535}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">height</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">base_z</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord">data</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">elevation_z</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">data</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">65535</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">pixel</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>
+<p>生成时先把高度场归一化到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[0, 1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span></span></span></span> 再乘以 65535 取整成 uint16（<code>gen_terrain.py:291-293</code>）。elevation_z 取当前高度场的最大值，即 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>max</mi><mo>⁡</mo></msub><mo>></mo><mn>0</mn></mrow><annotation encoding="application/x-tex">h_{\max} > 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> 时等于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>max</mi><mo>⁡</mo></msub></mrow><annotation encoding="application/x-tex">h_{\max}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，否则取 1.0 兜底（<code>gen_terrain.py:290</code>）。</p>
+<p>16 位的意义在量化误差。以本仓库的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>max</mi><mo>⁡</mo></msub><mo>=</mo><mn>0.3</mn></mrow><annotation encoding="application/x-tex">h_{\max} = 0.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.3</span></span></span></span> m 为例，单像素对应的最小高度差是</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mn>0.3</mn><mn>65535</mn></mfrac><mo>≈</mo><mn>4.6</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup><mtext> m</mtext></mrow><annotation encoding="application/x-tex">\frac{0.3}{65535} \approx 4.6 \times 10^{-6} \text{ m}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">65535</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0.3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4.6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span><span class="mord text"><span class="mord"> m</span></span></span></span></span></span>
+<p>也就是 4.6 微米，远小于格距与足端半径的量级，可以忽略（<code>gen_terrain.py:289</code> 的注释给出的就是这条量化误差估计）。若用 8 位 PNG，同样的高度范围下量化误差会放大到 1.2 毫米，在平滑坡面上会出现可见的台阶。</p>
+<h2 id="size四个参数的语义">size四个参数的语义</h2>
+<p>hfield 的 size 属性有四个数（<code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml:67</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>size</mtext><mo>=</mo><mtext>radius_x</mtext><mspace width="1em"></mspace><mtext>radius_y</mtext><mspace width="1em"></mspace><mtext>elevation_z</mtext><mspace width="1em"></mspace><mtext>base_z</mtext></mrow><annotation encoding="application/x-tex">\text{size} = \text{radius\_x} \quad \text{radius\_y} \quad \text{elevation\_z} \quad \text{base\_z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord text"><span class="mord">size</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">radius_x</span></span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">radius_y</span></span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">elevation_z</span></span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">base_z</span></span></span></span></span></span>
+<p>前两项是高度场半边长，单位米；高度场覆盖 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext> </mtext><msub><mtext>radius</mtext><mi>x</mi></msub></mrow><annotation encoding="application/x-tex">2\,\text{radius}_x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord text"><span class="mord">radius</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext> </mtext><msub><mtext>radius</mtext><mi>y</mi></msub></mrow><annotation encoding="application/x-tex">2\,\text{radius}_y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord text"><span class="mord">radius</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 的范围。第三项是高度缩放，把 PNG 里的归一化像素值映射到米。第四项是几何体的底部基准。</p>
+<p>本仓库当前取值为 size 等于 6 6 0.3000 0.0960，对应半边长 6 m、覆盖 12 m 见方、高度缩放 0.3 m、底部基准 0.096 m（<code>scene_mjx_terrain.xml:67</code>）。这些值与 terrain.json 的前几项一致（<code>models/go1/assets/terrain.json:2-6</code>）。</p>
+<p>需要特别区分两个同名但含义不同的 base_z。terrain.json 里的 base_z 是生成器写入的名义地面高度 NOMINAL_Z 等于 0.0（<code>gen_terrain.py:48-49</code> 与 <code>:301</code>），表示地形在原点处的高度基准；XML 里的 base_z 等于 0.0960，是几何包围盒参数。两者都叫 base_z，读取元数据时不要把 JSON 的值直接搬进 XML。</p>
+<h2 id="base_z不等于零的原因">base_z不等于零的原因</h2>
+<p>MuJoCo 不接受 hfield 的 base_z 取零，因此必须给一个正值（<code>experiment-log.md:1427-1429</code> 与 <code>scene_mjx_terrain.xml:56-60</code>）。它的作用是把几何包围盒撑开，不改变地形形状，形状完全由 PNG 决定。</p>
+<p>包围盒的存在影响碰撞检测的粗筛。引擎用包围盒判断某个几何体是否可能与 hfield 相交，盒子太小会让本应参与的接触被排除。素材记录的几何高度范围是</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">[</mo><mtext>pos.z</mtext><mo separator="true">,</mo><mtext>  </mtext><mtext>pos.z</mtext><mo>+</mo><mtext>elevation_z</mtext><mo>+</mo><mtext>base_z</mtext><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[\text{pos.z}, \; \text{pos.z} + \text{elevation\_z} + \text{base\_z}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord text"><span class="mord">pos.z</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">pos.z</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">elevation_z</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">base_z</span></span><span class="mclose">]</span></span></span></span></span>
+<p>（<code>scene_mjx_terrain.xml:58-59</code>）。当前 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.3</mn><mo>+</mo><mn>0.096</mn><mo>=</mo><mn>0.396</mn></mrow><annotation encoding="application/x-tex">0.3 + 0.096 = 0.396</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.096</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.396</span></span></span></span> m，加上 pos.z 等于零后覆盖到 0.396 m，足够容纳 0.3 m 的最高地形与足端的接触半径。</p>
+<p>官方 rough_terrain 用 base_z 等于 1.0，把包围盒撑到米级，对只有 5 cm 起伏的地形来说是极大的余量。本仓库把 base_z 压到 0.096 m，是因为地形总高已经到 0.3 m，包围盒按实际需要给即可。</p>
+<h2 id="坐标约定的转置与翻转">坐标约定的转置与翻转</h2>
+<p>生成器内部的数组按「行是 x、列是 y」的直觉约定构造，而 MuJoCo 读取 hfield PNG 时把数据组织成行列二维数组，其中列沿 +x、行沿 -y，且图像的第 0 行在顶部（<code>experiment-log.md:1962-1965</code>）。两套约定之间差一次转置与一次 y 方向翻转。</p>
+<p>素材用一个单特征实验把这条关系定死：生成一个只在生成器坐标 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>+</mo><mn>1.5</mn><mo separator="true">,</mo><mo>−</mo><mn>0.9</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(+1.5, -0.9)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1.5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">0.9</span><span class="mclose">)</span></span></span></span> 有高斯凸起的高度场，存成 PNG 后用引擎射线扫描峰值位置，结果落在世界坐标 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>0.9</mn><mo separator="true">,</mo><mo>−</mo><mn>1.5</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-0.9, -1.5)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">0.9</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">1.5</span><span class="mclose">)</span></span></span></span>（<code>experiment-log.md:1944-1965</code>）。七种候选变换的对照如下（<code>experiment-log.md:1952-1961</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>候选变换</th><th>预测落点</th><th>与实测距离</th></tr></thead><tbody><tr><td>不变换</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>+</mo><mn>1.5</mn><mo separator="true">,</mo><mo>−</mo><mn>0.9</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(+1.5, -0.9)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1.5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">0.9</span><span class="mclose">)</span></span></span></span></td><td>2.47</td></tr><tr><td>转置</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>0.9</mn><mo separator="true">,</mo><mo>+</mo><mn>1.5</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-0.9, +1.5)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">0.9</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">+</span><span class="mord">1.5</span><span class="mclose">)</span></span></span></span></td><td>3.00</td></tr><tr><td>x 翻转</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>1.5</mn><mo separator="true">,</mo><mo>−</mo><mn>0.9</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-1.5, -0.9)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1.5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">0.9</span><span class="mclose">)</span></span></span></span></td><td>0.85</td></tr><tr><td>y 翻转</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>+</mo><mn>1.5</mn><mo separator="true">,</mo><mo>+</mo><mn>0.9</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(+1.5, +0.9)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">1.5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">+</span><span class="mord">0.9</span><span class="mclose">)</span></span></span></span></td><td>3.39</td></tr><tr><td>180 度旋转</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>1.5</mn><mo separator="true">,</mo><mo>+</mo><mn>0.9</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-1.5, +0.9)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1.5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">+</span><span class="mord">0.9</span><span class="mclose">)</span></span></span></span></td><td>2.47</td></tr><tr><td>转置加 x 翻转</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>+</mo><mn>0.9</mn><mo separator="true">,</mo><mo>+</mo><mn>1.5</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(+0.9, +1.5)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">+</span><span class="mord">0.9</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">+</span><span class="mord">1.5</span><span class="mclose">)</span></span></span></span></td><td>3.50</td></tr><tr><td>转置加 y 翻转</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>0.9</mn><mo separator="true">,</mo><mo>−</mo><mn>1.5</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-0.9, -1.5)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">0.9</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">1.5</span><span class="mclose">)</span></span></span></span></td><td>0.00</td></tr></tbody></table>
+<p>只有「转置加 y 翻转」的距离为零。修复写法是在写出前做一次转置与上下翻转（<code>gen_terrain.py:292-294</code> 与 <code>experiment-log.md:1978</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>arr</mtext><mo>=</mo><mtext>flipud</mtext><mo stretchy="false">(</mo><msup><mi>h</mi><mi mathvariant="sans-serif">T</mi></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{arr} = \text{flipud}(h^{\mathsf T})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord text"><span class="mord">arr</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1491em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">flipud</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathsf mtight">T</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+<p>修完之后生成器坐标与世界坐标一致，设计的「沿 +x 的楼梯」在世界里也沿 +x，探针实测的位置与设计一致（<code>experiment-log.md:1985-1987</code>）。元数据里用 axis_convention 字段记录这条约定，便于以后核对（<code>terrain.json:11</code>）。</p>
+<p>这条修正的价值在于它修的是静默错误：不修时地形依然物理合法、训练不报错，但按设计坐标推理的位置全错，做地形观测时会采到错误位置的高度（<code>experiment-log.md:1967-1973</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["生成器数组 h 行是 x 列是 y"] --> B["转置 h.T"]
+  B --> C["上下翻转 flipud"]
+  C --> D["16 位灰度 PNG"]
+  D --> E["MuJoCo hfield_data 行沿 -y 列沿 +x"]
+  E --> F["世界坐标与生成器坐标一致"]</pre></div>
+<h2 id="引擎侧的采样与索引映射">引擎侧的采样与索引映射</h2>
+<p>高度场在引擎侧的查询可以用解析方式复现，不必依赖引擎射线。世界点先变换到几何体局部坐标，再映射到行列索引（<code>experiment-log.md:1634-1640</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>local</mtext><mo>=</mo><msup><mi>R</mi><mi mathvariant="sans-serif">T</mi></msup><mo stretchy="false">(</mo><msub><mi>p</mi><mtext>world</mtext></msub><mo>−</mo><mtext>geom_pos</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{local} = R^{\mathsf T} (p_{\text{world}} - \text{geom\_pos})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">local</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1491em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathsf mtight">T</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">world</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">geom_pos</span></span><span class="mclose">)</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>u</mi><mo>=</mo><mfrac><msub><mtext>local</mtext><mi>x</mi></msub><msub><mtext>radius</mtext><mi>x</mi></msub></mfrac><mo>∈</mo><mo stretchy="false">[</mo><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>col</mtext><mo>=</mo><mfrac><mrow><mi>u</mi><mo>+</mo><mn>1</mn></mrow><mn>2</mn></mfrac><mo stretchy="false">(</mo><msub><mi>n</mi><mtext>col</mtext></msub><mo>−</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">u = \frac{\text{local}_x}{\text{radius}_x} \in [-1, 1], \qquad \text{col} = \frac{u + 1}{2} (n_{\text{col}} - 1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.2074em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord text"><span class="mord">radius</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord text"><span class="mord">local</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">col</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">col</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>v</mi><mo>=</mo><mfrac><msub><mtext>local</mtext><mi>y</mi></msub><msub><mtext>radius</mtext><mi>y</mi></msub></mfrac><mo>∈</mo><mo stretchy="false">[</mo><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>row</mtext><mo>=</mo><mfrac><mrow><mi>v</mi><mo>+</mo><mn>1</mn></mrow><mn>2</mn></mfrac><mo stretchy="false">(</mo><msub><mi>n</mi><mtext>row</mtext></msub><mo>−</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">v = \frac{\text{local}_y}{\text{radius}_y} \in [-1, 1], \qquad \text{row} = \frac{v + 1}{2} (n_{\text{row}} - 1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.3435em;vertical-align:-0.9721em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord text"><span class="mord">radius</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord text"><span class="mord">local</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">row</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">row</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>height</mtext><mo>=</mo><mi mathvariant="normal">bilinear</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mtext>data</mtext><mo stretchy="false">[</mo><mtext>row</mtext><mo separator="true">,</mo><mtext>col</mtext><mo stretchy="false">]</mo><mo fence="true">)</mo></mrow><mo>×</mo><msub><mtext>size</mtext><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">\text{height} = \operatorname{bilinear}\left( \text{data}[\text{row}, \text{col}] \right) \times \text{size}_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">height</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop"><span class="mord mathrm">bilinear</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord text"><span class="mord">data</span></span><span class="mopen">[</span><span class="mord text"><span class="mord">row</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">col</span></span><span class="mclose">]</span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8179em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">size</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>
+<p>这套映射与 warp 的 ray_hfield 实现一致，索引行列互换时误差会从亚毫米涨到 14 mm、最大 51 mm，说明朝向正确而不是碰巧（<code>experiment-log.md:1642-1646</code>）。</p>
+<p>两条工程结论。第一，引擎射线对 hfield 是可用的，此前「不可靠」的结论源于没有先调用前向计算，导致几何体实时位姿为零、射线在错误坐标系里运算；补上之后 1681 个采样点与解析值的差为 p99 等于 0.35 mm、max 等于 0.89 mm（<code>experiment-log.md:1603-1615</code>）。第二，MJX 的 JAX 后端不支持 hfield 碰撞与射线，射线的分发表里没有 HFIELD；只有 warp 后端把 hfield_data 与 hfield_nrow/ncol/size/adr 暴露成 JAX 数组，可以在训练循环里做解析采样（<code>experiment-log.md:1617-1631</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["世界坐标点 p"] --> B["局部坐标 R^T (p - geom_pos)"]
+  B --> C["归一化 u v 属于 -1 到 1"]
+  C --> D["行列索引 row col"]
+  D --> E["双线性插值 data"]
+  E --> F["乘 size[2] 得高度"]</pre></div>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>高度场用规则网格表达任意起伏，接触对数量只与足端附近的有效格子有关，warp 后端沿凸包路径支持它。</li>
+<li>高度按 base_z 加 data 乘 elevation_z 换算，16 位 PNG 在 0.3 m 范围内的量化误差约 4.6 微米。</li>
+<li>size 是 radius_x radius_y elevation_z base_z 四个量；base_z 只撑开包围盒、不改变形状，且 MuJoCo 拒绝零值。</li>
+<li>terrain.json 与 XML 里的 base_z 含义不同，前者是名义地面高度 0.0，后者是 0.0960 的几何参数。</li>
+<li>生成器坐标到引擎坐标需要转置加 y 翻转，由单凸起实验在七种候选中唯一匹配确定。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>用高度场而非拼接几何体</td><td>接触对数量与总面积解耦</td><td>网格规则、分辨率受接触上限约束</td></tr><tr><td>用 16 位 PNG</td><td>量化误差可忽略</td><td>资产体积与读写略增</td></tr><tr><td>base_z 取大</td><td>包围盒宽松、粗筛不易误排</td><td>粗筛范围大，无谓的相交测试增多</td></tr><tr><td>修复坐标约定</td><td>生成器坐标与世界一致</td><td>多一次转置与翻转</td></tr><tr><td>用解析采样代替引擎射线</td><td>可 jit、可 vmap</td><td>需要自己核对索引与插值</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出高度值从像素到米的换算式，并计算 0.3 m 范围内 16 位与 8 位编码的量化误差。</li>
+<li>说明 size 四个参数各自的物理含义，以及 base_z 与 pos.z 的关系。</li>
+<li>解释为什么生成器坐标到引擎坐标需要转置加 y 翻转。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用单特征实验的思路设计一套坐标约定验证流程，列出候选变换与判据。</li>
+<li>推导解析双线性采样公式，说明行列互换后误差会如何变化，并解释为什么这能证明朝向正确。</li>
+<li>分析 base_z 取 0.096 与取 1.0 在接触粗筛上的差别，给出按地形高度选值的依据。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/gen_terrain.py</code></td><td>地形生成器：高度换算与 PNG 写出（:287-294）、元数据（:296-308）、坐标约定注释（:269-282）</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>地形场景：hfield 与 geom 定义（:56-67）、约束注释（:1-30）</td></tr><tr><td><code>mjx-go1-getup/models/go1/assets/terrain.json</code></td><td>地形元数据：尺寸、高度统计、坐标约定字段</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>实验记录：地形选型与硬约束（:1409-1439）、hfield 采样（:1601-1646）、坐标轴修正（:1924-2020）</td></tr><tr><td><code>RLcontroller_go1/sim/plot_terrain_heightmap.py</code></td><td>用 hfield_data 画高度图并与引擎射线核对的脚本</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-程序化地形生成器的构造"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-程序化地形生成器的构造</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/02-hfield程序化地形/02-程序化地形生成器的构造.md</span></div><div class="dfile__body"><h1 id="程序化地形生成器的构造">程序化地形生成器的构造</h1>
+<p>第一篇讲的是资产格式与坐标约定，这一篇讲这些资产是怎么算出来的。生成器把三类地形成分叠加到一张网格上：平滑的随机起伏、若干矩形台地、以及带真实爬升的阶梯。三类成分的叠加顺序与边界处理决定了最终地形的可走性，也决定了会不会出现垂直墙、累积超高与重叠陡壁。</p>
+<p>生成器的另一个要求是确定性。训练进程与可视化进程各自加载同一份高度场资产，只有生成结果逐位一致，才能保证「看到的」与「训练的」是同一个地形（<code>mjx-go1-getup/sim/gen_terrain.py:13</code>）。确定性来自固定种子的随机数发生器与纯函数的叠加流程。</p>
+<h2 id="生成器的输入输出与确定性">生成器的输入输出与确定性</h2>
+<p>生成器的入口是 make_terrain，输入分辨率、半边长、起伏幅度、滤波尺度、台阶高度、随机种子与阶梯参数，输出高度场数组与台地中心列表（<code>gen_terrain.py:175-178</code> 与 <code>:263</code>）。随机性只来自一处（<code>gen_terrain.py:195</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>rng</mtext><mo>=</mo><mtext>np.random.default_rng</mtext><mo stretchy="false">(</mo><mtext>seed</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{rng} = \text{np.random.default\_rng}(\text{seed})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">rng</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">np.random.default_rng</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">seed</span></span><span class="mclose">)</span></span></span></span></span>
+<p>其余步骤都是确定性的数组运算。seed 的默认值是 0（<code>gen_terrain.py:372</code>），因此默认档每次生成的结果完全相同；换种子会改变起伏形状与台地布局，但不会改变阶梯的位置，阶梯位置由 ext 与固定比例给出（见后文）。</p>
+<p>高度场的值域是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mtext>step_height</mtext><mo>×</mo><mtext>stair_steps</mtext><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[0, \text{step\_height} \times \text{stair\_steps}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">step_height</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">stair_steps</span></span><span class="mclose">]</span></span></span></span>（<code>gen_terrain.py:179</code>）。只向上抬升是有意设计：平地基准必须与原平面地板等效，若地形在原点处为负值，reset 时机器人会穿地或悬空（<code>gen_terrain.py:6-9</code>）。</p>
+<h2 id="平滑随机起伏的实现">平滑随机起伏的实现</h2>
+<p>随机起伏由白噪声经高斯滤波得到，再做幅度归一化（<code>gen_terrain.py:52-61</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>w</mi><mo>∼</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mi>s</mi><mo>=</mo><mtext>gaussian_filter</mtext><mo stretchy="false">(</mo><mi>w</mi><mo separator="true">,</mo><mi>σ</mi><mo separator="true">,</mo><mtext>mode</mtext><mo>=</mo><mtext>wrap</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">w \sim \mathcal{N}(0, 1), \qquad s = \text{gaussian\_filter}(w, \sigma, \text{mode}=\text{wrap})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathcal" style="margin-right:0.1474em;">N</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">gaussian_filter</span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">mode</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">wrap</span></span><span class="mclose">)</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>h</mi><mo>=</mo><mfrac><mi>s</mi><mrow><mi>max</mi><mo>⁡</mo><mi mathvariant="normal">∣</mi><mi>s</mi><mi mathvariant="normal">∣</mi></mrow></mfrac><mo>×</mo><mtext>amp</mtext></mrow><annotation encoding="application/x-tex">h = \frac{s}{\max |s|} \times \text{amp}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0436em;vertical-align:-0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1076em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">max</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">∣</span><span class="mord mathnormal">s</span><span class="mord">∣</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">amp</span></span></span></span></span></span>
+<p>归一化这一步的作用是把滤波尺度与幅度解耦。高斯滤波会降低信号的标准差与峰值，若直接乘幅度，同一个 amp 在不同 sigma 下会产生不同的实际起伏高度；除以最大绝对值之后，起伏的峰值幅度恒等于 amp，sigma 只负责控制空间尺度（<code>gen_terrain.py:57-61</code> 的注释写明了这一点）。</p>
+<p>边界用环绕模式而不是镜像或补零。地形边缘之外没有机器人活动，边缘的处理方式主要影响视觉，用环绕可以避免边缘出现被滤波削平的人工痕迹（按实现选择，素材注释未展开理由）。</p>
+<p>滤波尺度 sigma 的单位是格数而不是米。这一点在换分辨率时必须换算，否则起伏的物理尺度会变（<code>gen_terrain.py:181-182</code>）：</p>
+<blockquote>
+<p>n 取 384 配 sigma 取 6 与 n 取 128 配 sigma 取 2 才是同一物理尺度</p>
+</blockquote>
+<p>命令行帮助里也重复了这条提醒（<code>gen_terrain.py:353-355</code>）。实际后果是：把 n 提高到 256 而不改 sigma，起伏的物理波长减半，地形看起来更碎。</p>
+<p>起伏只保留正向（<code>gen_terrain.py:197-199</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>h</mi><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mtext>base</mtext><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">h = \max(\text{base}, 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord text"><span class="mord">base</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></span>
+<p>负值被截断，地形因此只有上凸没有下凹。这与「平地基准等效」的约束一致，代价是起伏的均值偏高，terrain.json 里 h_mean 等于 0.0346 m，就是一个非零均值（<code>models/go1/assets/terrain.json:9</code>）。</p>
+<h2 id="矩形台地与缓坡">矩形台地与缓坡</h2>
+<p>台地由矩形区域抬升实现。参数用米给，函数内部换算到网格坐标（<code>gen_terrain.py:64-77</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>X</mi><mo separator="true">,</mo><mi>Y</mi><mo>=</mo><mtext>meshgrid</mtext><mo stretchy="false">(</mo><msub><mi>x</mi><mi>s</mi></msub><mo separator="true">,</mo><msub><mi>y</mi><mi>s</mi></msub><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>inside</mtext><mo>=</mo><mo stretchy="false">(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>≤</mo><mi>X</mi><mo>≤</mo><msub><mi>x</mi><mn>1</mn></msub><mo stretchy="false">)</mo><mo>∧</mo><mo stretchy="false">(</mo><msub><mi>y</mi><mn>0</mn></msub><mo>≤</mo><mi>Y</mi><mo>≤</mo><msub><mi>y</mi><mn>1</mn></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">X, Y = \text{meshgrid}(x_s, y_s), \qquad \text{inside} = (x_0 \le X \le x_1) \wedge (y_0 \le Y \le y_1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">meshgrid</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">inside</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+<p>直接抬升会在边界形成垂直墙。生成器用有符号距离与 smoothstep 做缓坡（<code>gen_terrain.py:82-92</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>d</mi><mo>=</mo><msqrt><mrow><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>−</mo><mi>X</mi><mo separator="true">,</mo><mi>X</mi><mo>−</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mn>0</mn><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>+</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>y</mi><mn>0</mn></msub><mo>−</mo><mi>Y</mi><mo separator="true">,</mo><mi>Y</mi><mo>−</mo><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><mn>0</mn><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow></msqrt></mrow><annotation encoding="application/x-tex">d = \sqrt{\max(x_0 - X, X - x_1, 0)^2 + \max(y_0 - Y, Y - y_1, 0)^2}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.24em;vertical-align:-0.2561em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9839em;"><span class="svg-align" style="top:-3.2em;"><span class="pstrut" style="height:3.2em;"></span><span class="mord" style="padding-left:1em;"><span class="mop">max</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span><span style="top:-2.9439em;"><span class="pstrut" style="height:3.2em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.28em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.28em" viewBox="0 0 400000 1296" preserveAspectRatio="xMinYMin slice"><path d="M263,681c0.7,0,18,39.7,52,119
+c34,79.3,68.167,158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120
+c340,-704.7,510.7,-1060.3,512,-1067
+l0 -0
+c4.7,-7.3,11,-11,19,-11
+H40000v40H1012.3
+s-271.3,567,-271.3,567c-38.7,80.7,-84,175,-136,283c-52,108,-89.167,185.3,-111.5,232
+c-22.3,46.7,-33.8,70.3,-34.5,71c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1
+s-109,-253,-109,-253c-72.7,-168,-109.3,-252,-110,-252c-10.7,8,-22,16.7,-34,26
+c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26s76,-59,76,-59s76,-60,76,-60z
+M1001 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2561em;"><span></span></span></span></span></span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>t</mi><mo>=</mo><mtext>smoothstep</mtext><mrow><mo fence="true">(</mo><mtext>clip</mtext><mrow><mo fence="true">(</mo><mn>1</mn><mo>−</mo><mfrac><mi>d</mi><mi>w</mi></mfrac><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow><mo separator="true">,</mo><mspace width="2em"></mspace><mi>h</mi><mo>+</mo><mo>=</mo><mtext>height</mtext><mo>×</mo><mi>t</mi></mrow><annotation encoding="application/x-tex">t = \text{smoothstep}\left(\text{clip}\left(1 - \frac{d}{w}, 0, 1\right)\right), \qquad h \mathrel{+}= \text{height} \times t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4em;vertical-align:-0.95em;"></span><span class="mord text"><span class="mord">smoothstep</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord text"><span class="mord">clip</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel"><span class="mord">+</span></span></span><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">height</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi></mrow><annotation encoding="application/x-tex">w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span> 等于缓坡格数乘格距。smoothstep 的形式是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>t</mi><mn>2</mn></msup><mo stretchy="false">(</mo><mn>3</mn><mo>−</mo><mn>2</mn><mi>t</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">t^2 (3 - 2t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal">t</span><span class="mclose">)</span></span></span></span>，保证斜率在两端为零、中间平滑过渡（<code>gen_terrain.py:90</code>）。</p>
+<p>台地生成时缓坡格数取 4（<code>gen_terrain.py:245-246</code>），即缓坡宽度为四个格子。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>128</mn></mrow><annotation encoding="application/x-tex">n = 128</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">128</span></span></span></span>、格距 9.4 cm 时缓坡约 38 cm，坡度平缓。台地高度取 0.7 到 1.0 倍台阶高度之间的随机值（<code>gen_terrain.py:244</code>），使台地高度参差而不是等高。</p>
+<h2 id="阶梯剖面的三处修正">阶梯剖面的三处修正</h2>
+<p>阶梯是这份生成器里迭代最多的部分，函数注释记录了三处修正（<code>gen_terrain.py:112-121</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>修正</th><th>旧实现的问题</th><th>实测后果</th></tr></thead><tbody><tr><td>真爬升剖面</td><td>对三段矩形各加同样的台阶高度，三段并排</td><td>等高长平台，不爬升</td></tr><tr><td>绝对高度取 max</td><td>沿用矩形台地的累加语义，每级额外吃到上一级抬升</td><td>5 级乘 6 cm 累积到 0.571 m，坡度 75 度</td></tr><tr><td>侧壁长度由总高反算</td><td>用踏步面长度当淡出长度</td><td>用 18.8 cm 得 58 度陡壁，实测 64 度；用 94 cm 超过半宽、中心升不到顶，实测 0.119 m</td></tr></tbody></table>
+<p>修正后的剖面是逐级爬升（<code>gen_terrain.py:154-160</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>k</mi><mo>=</mo><mi>min</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mrow><mo fence="true">⌊</mo><mfrac><mi>t</mi><mtext>pitch</mtext></mfrac><mo fence="true">⌋</mo></mrow><mo separator="true">,</mo><mtext>stair_steps</mtext><mo>−</mo><mn>1</mn><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">k = \min\left(\left\lfloor \frac{t}{\text{pitch}} \right\rfloor, \text{stair\_steps} - 1\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4em;vertical-align:-0.95em;"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">⌊</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.2921em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">pitch</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">⌋</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">stair_steps</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>rise</mtext><mo>=</mo><mtext>smoothstep</mtext><mrow><mo fence="true">(</mo><mtext>clip</mtext><mrow><mo fence="true">(</mo><mfrac><mrow><mi>t</mi><mo>−</mo><mi>k</mi><mo>⋅</mo><mtext>pitch</mtext><mo>−</mo><mo stretchy="false">(</mo><mtext>pitch</mtext><mo>−</mo><mtext>ramp_len</mtext><mo stretchy="false">)</mo></mrow><mtext>ramp_len</mtext></mfrac><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\text{rise} = \text{smoothstep}\left(\text{clip}\left(\frac{t - k \cdot \text{pitch} - (\text{pitch} - \text{ramp\_len})}{\text{ramp\_len}}, 0, 1\right)\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord text"><span class="mord">rise</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.446em;vertical-align:-0.996em;"></span><span class="mord text"><span class="mord">smoothstep</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord text"><span class="mord">clip</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.45em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">ramp_len</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.7em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">pitch</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mopen">(</span><span class="mord text"><span class="mord">pitch</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">ramp_len</span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.996em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>prof</mtext><mo>=</mo><mtext>step_height</mtext><mo>×</mo><mo stretchy="false">(</mo><mi>k</mi><mo>+</mo><mtext>rise</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{prof} = \text{step\_height} \times (k + \text{rise})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">prof</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">step_height</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">rise</span></span><span class="mclose">)</span></span></span></span></span>
+<p>第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span> 级平台的绝对高度是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span> 乘台阶高度，末级之后不再升。缓坡段长度由格数与格距决定，踏步面进深必须大于缓坡长度，否则相邻坡面叠加成陡壁（<code>gen_terrain.py:204-205</code> 与 <code>:363-364</code>）。</p>
+<p>侧壁淡出长度按目标侧坡角反算，并且补偿 smoothstep 的中段最大斜率为 1.5（<code>gen_terrain.py:132-136</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>side_len</mtext><mo>=</mo><mfrac><mrow><mn>1.5</mn><mo>×</mo><mtext>total_h</mtext></mrow><mrow><mi>tan</mi><mo>⁡</mo><mo stretchy="false">(</mo><mtext>side_deg</mtext><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{side\_len} = \frac{1.5 \times \text{total\_h}}{\tan(\text{side\_deg})}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">side_len</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.3904em;vertical-align:-0.996em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3944em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">tan</span><span class="mopen">(</span><span class="mord text"><span class="mord">side_deg</span></span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.7em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">total_h</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.996em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>
+<p>不补偿时目标 25 度会实测成 34.7 度。函数还会在宽度不足以容纳两侧淡出时自动加宽，而不是报错让使用者手工调参（<code>gen_terrain.py:137-145</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["一维剖面 t"] --> B["k = floor(t / pitch) 截到末级"]
+  B --> C["级内位置 within"]
+  C --> D["rise 用 smoothstep 过渡"]
+  D --> E["prof = step_height 乘 (k + rise)"]
+  E --> F["横向 lat 两侧淡出"]
+  F --> G["入口 entry 淡入"]
+  G --> H["stair = prof 乘 lat 乘 entry 与原高度取 max"]</pre></div>
+<h2 id="原点压平与reset一致性">原点压平与reset一致性</h2>
+<p>原点必须压到零并向外平滑过渡，否则 reset 把机器人放在 home 位姿时会与地形冲突（<code>gen_terrain.py:6-9</code> 与 <code>:95-105</code>）。实现是用径向权重乘整个高度场：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>r</mi><mo>=</mo><msqrt><mrow><msup><mi>X</mi><mn>2</mn></msup><mo>+</mo><msup><mi>Y</mi><mn>2</mn></msup></mrow></msqrt><mo separator="true">,</mo><mspace width="2em"></mspace><mi>t</mi><mo>=</mo><mtext>smoothstep</mtext><mrow><mo fence="true">(</mo><mtext>clip</mtext><mrow><mo fence="true">(</mo><mfrac><mrow><mi>r</mi><mo>−</mo><mtext>radius</mtext></mrow><mtext>blend</mtext></mfrac><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow><mo separator="true">,</mo><mspace width="2em"></mspace><mi>h</mi><mo>←</mo><mi>h</mi><mo>×</mo><mi>t</mi></mrow><annotation encoding="application/x-tex">r = \sqrt{X^2 + Y^2}, \qquad t = \text{smoothstep}\left(\text{clip}\left(\frac{r - \text{radius}}{\text{blend}}, 0, 1\right)\right), \qquad h \leftarrow h \times t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2567em;vertical-align:-0.1944em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0623em;"><span class="svg-align" style="top:-3.2em;"><span class="pstrut" style="height:3.2em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span><span style="top:-3.0223em;"><span class="pstrut" style="height:3.2em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.28em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.28em" viewBox="0 0 400000 1296" preserveAspectRatio="xMinYMin slice"><path d="M263,681c0.7,0,18,39.7,52,119
+c34,79.3,68.167,158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120
+c340,-704.7,510.7,-1060.3,512,-1067
+l0 -0
+c4.7,-7.3,11,-11,19,-11
+H40000v40H1012.3
+s-271.3,567,-271.3,567c-38.7,80.7,-84,175,-136,283c-52,108,-89.167,185.3,-111.5,232
+c-22.3,46.7,-33.8,70.3,-34.5,71c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1
+s-109,-253,-109,-253c-72.7,-168,-109.3,-252,-110,-252c-10.7,8,-22,16.7,-34,26
+c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26s76,-59,76,-59s76,-60,76,-60z
+M1001 80h400000v40h-400000z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1777em;"><span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4em;vertical-align:-0.95em;"></span><span class="mord text"><span class="mord">smoothstep</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord text"><span class="mord">clip</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">blend</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">radius</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">h</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>
+<p>半径以内权重为零，完全压平；半径到半径加过渡带之间平滑升到 1。当前参数是半径 0.5 m、过渡带 0.9 m（<code>gen_terrain.py:260-261</code>），比旧版 0.7 与 1.2 更小；注释说明旧参数把周围 1.9 m 全部抹平，地形感被削掉，新参数只保留 reset 必需的落地区。</p>
+<p>压平也解释了 XML 里 pos.z 取零就能对齐的原因：生成器保证原点高度为零，reset 正落在原点，因此原点被抹平后几何体的零位与平地一致（<code>scene_mjx_terrain.xml:75-78</code>）。若以后去掉压平，pos.z 必须重新标定。</p>
+<h2 id="生成顺序与互斥约束">生成顺序与互斥约束</h2>
+<p>三类成分的叠加顺序影响最终坡度。生成器先确定阶梯占地，再生成台地并排除这些矩形，最后叠加阶梯（<code>gen_terrain.py:201-256</code>）。注释记录了这个顺序的原因：台地与楼梯重叠时，台地的矩形缓坡会叠在台阶侧壁上，实测最大坡度冲到 64 度（<code>gen_terrain.py:202-203</code>）。</p>
+<p>台地放置用拒绝采样，最多尝试 400 次（<code>gen_terrain.py:228-247</code>）。三条拒绝规则：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>规则</th><th>阈值</th><th>目的</th></tr></thead><tbody><tr><td>距原点距离</td><td>小于 1.6 m</td><td>不压在原点平地区</td></tr><tr><td>与阶梯占地</td><td>外扩 0.6 m</td><td>给缓坡留余量</td></tr><tr><td>台地间距</td><td>两轴均小于 2.2 m</td><td>避免叠加成高墙</td></tr></tbody></table>
+<p>阶梯本体用绝对高度剖面与原高度取 max（<code>gen_terrain.py:249-256</code>），因此台地与阶梯即使靠近也不会累加。阶梯的摆放位置由 ext 的固定比例给出，沿 +x 一条、沿 +y 一条（<code>gen_terrain.py:216-218</code>）：第一条起点在 x 等于 0.05 倍 ext、y 等于 -0.80 倍 ext 处，第二条起点在 x 等于 -0.80 倍 ext、y 等于 0.05 倍 ext 处。</p>
+<h2 id="命令行参数与统计输出">命令行参数与统计输出</h2>
+<p>命令行参数按成分分组（<code>gen_terrain.py:344-375</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>默认值</th><th>作用</th></tr></thead><tbody><tr><td>分辨率 n</td><td>128</td><td>网格分辨率，注释警告不要太高</td></tr><tr><td>半边长 ext</td><td>6.0</td><td>地形 12 m 见方</td></tr><tr><td>起伏幅度 bump_amp</td><td>0.05</td><td>起伏峰值幅度，旧默认 0.02</td></tr><tr><td>滤波尺度 sigma</td><td>2.0</td><td>高斯滤波尺度，单位格数</td></tr><tr><td>台阶高 step_height</td><td>0.06</td><td>单级台阶高，旧默认 0.04</td></tr><tr><td>台地数 n_steps</td><td>6</td><td>等高台地数量</td></tr><tr><td>阶梯级数 stair_steps</td><td>5</td><td>阶梯级数，旧实现 3 段等高不爬升</td></tr><tr><td>阶梯条数 n_staircases</td><td>2</td><td>阶梯条数</td></tr><tr><td>每级进深 stair_pitch</td><td>0.55</td><td>必须大于缓坡长度</td></tr><tr><td>踏步面缓坡 stair_ramp</td><td>2</td><td>2 格约 18.8 cm、17.7 度</td></tr><tr><td>压平半径与过渡带</td><td>0.5 与 0.9</td><td>原点压平参数</td></tr><tr><td>种子 seed</td><td>0</td><td>随机种子</td></tr><tr><td>只统计不写文件</td><td>关</td><td>dry_run 开关</td></tr></tbody></table>
+<p>生成完成后打印四项统计（<code>gen_terrain.py:385-401</code>）：格距、起伏与台阶参数、高度最小值与最大值与均值、原点高度、最大坡度。原点高度带一条硬判据</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>h</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo><mo>≈</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">h(0, 0) \approx 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>
+<p>不满足就说明 reset 落地会不一致（<code>gen_terrain.py:394-395</code>）。最大坡度由相邻格差除以格距算得，并同时打印足端半径 2.3 cm 与格距的对比（<code>gen_terrain.py:396-401</code>）：格距远大于足端半径时，足端近似落在单个格子的高度上，采样误差小。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["固定 seed"] --> B["平滑随机起伏"]
+  B --> C["矩形台地 排除阶梯占地"]
+  C --> D["阶梯 绝对剖面取 max"]
+  D --> E["原点压平"]
+  E --> F["写 16 位 PNG 与 JSON"]
+  F --> G["同步 elevation_z 回 XML"]</pre></div>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>生成器只用一处随机源，默认种子 0，其余步骤确定，保证训练与可视化加载同一地形。</li>
+<li>平滑起伏用高斯滤波白噪声再按最大绝对值归一化，使幅度与滤波尺度解耦；sigma 的单位是格数，换 n 必须按比例调。</li>
+<li>台地用矩形掩码加有符号距离与 smoothstep 缓坡，缓坡宽度四个格子。</li>
+<li>阶梯用绝对高度剖面 k 加 rise 并对原高度取 max，侧壁长度由总高与目标坡度反算且补偿 smoothstep 的 1.5 倍峰值斜率。</li>
+<li>原点半径 0.5 m、过渡带 0.9 m 压平，保证原点高度为零；生成顺序把阶梯占地先行排除，避免叠加成 64 度陡壁。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>只保留正向起伏</td><td>平地基准等效</td><td>高度均值非零</td></tr><tr><td>幅度归一化</td><td>幅度与尺度解耦</td><td>峰值固定，分布形状受滤波影响</td></tr><tr><td>用 smoothstep 缓坡</td><td>无垂直墙、可走</td><td>中段斜率 1.5 倍需补偿</td></tr><tr><td>阶梯取绝对高度</td><td>不会累积超高</td><td>需要按总高反算侧壁长度</td></tr><tr><td>原点压平</td><td>reset 落地一致</td><td>原点附近地形感被削弱</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明起伏幅度归一化为什么能让 sigma 只控制尺度，并给出不归一化时的后果。</li>
+<li>写出矩形台地缓坡的 smoothstep 表达式，说明缓坡宽度的计算方式。</li>
+<li>解释阶梯剖面为什么不能用矩形台地的累加语义，给出累积超高的估算。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>推导侧壁淡出长度的公式，说明 1.5 倍补偿的来源，并计算总高 0.3 m、目标 30 度时的侧壁长度。</li>
+<li>设计一条新的阶梯摆放规则，使两条阶梯不占据对称象限，并分析对台地放置成功率的影响。</li>
+<li>把分辨率从 128 改到 384，列出需要同步调整的参数与资产尺寸，说明会触发哪些引擎限制。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/gen_terrain.py</code></td><td>地形生成器：模块约束（:1-49）、起伏（:52-61）、台地（:64-92）、原点压平（:95-105）、阶梯（:108-171）、组合（:175-263）、保存与同步（:266-339）、命令行与统计（:342-422）</td></tr><tr><td><code>mjx-go1-getup/models/go1/assets/terrain.json</code></td><td>默认档参数与高度统计</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>场景约束与 pos.z 对齐说明（:1-30、:56-86）</td></tr><tr><td><code>RLcontroller_go1/sim/gen_terrain.py</code></td><td>同一生成器在另一工作区的副本（426 行，内容一致）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-地形场景装配与接触约束"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-地形场景装配与接触约束</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/02-hfield程序化地形/03-地形场景装配与接触约束.md</span></div><div class="dfile__body"><h1 id="地形场景装配与接触约束">地形场景装配与接触约束</h1>
+<p>有了高度场资产，还要把它装进一个合法的场景，并保证接触语义与平地场景一致。地形场景的写法很轻：包含平地场景、给地面换个几何类型、加一点视觉元素。工作量集中在四条不能动的约束上：几何体名字、接触优先级、位置标定与分辨率上限。任何一条改动都会从「地形看起来正常」变成「训练结果崩坏」，而且大多不会报错。</p>
+<p>素材仓库把这些约束直接写在场景文件头与几何体注释里（<code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml:1-30</code> 与 <code>:56-86</code>）。</p>
+<h2 id="场景文件的结构与包含关系">场景文件的结构与包含关系</h2>
+<p>地形场景通过包含复用平地场景（<code>scene_mjx_terrain.xml:33</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>&#x3C;include file="go1_mjx_position.xml"/></mtext></mrow><annotation encoding="application/x-tex">\text{&#x3C;include file="go1\_mjx\_position.xml"/>}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">&#x3C;include file="go1_mjx_position.xml"/></span></span></span></span></span></span>
+<p>平地场景提供机器人模型、关节、执行器、传感器与默认类设置；地形场景只替换地面几何体并追加视觉设置。这样做的收益是两份场景的机器人定义不可能漂移：改机器人只需改平地场景，地形场景自动跟上。</p>
+<p>地形场景自身包含四块内容。统计范围用于查看器的自动缩放（<code>scene_mjx_terrain.xml:35</code>）。视觉块提供天空与地面纹理（<code>:37-43</code>）。资产块定义纹理、材质与高度场（<code>:45-67</code>）。世界体块放一盏方向光与地面几何体（<code>:69-86</code>）。</p>
+<p>素材的场景头注释写有「加 rocky 贴图材质（纯视觉）」（<code>scene_mjx_terrain.xml:6-7</code>），但资产块里实际定义的材质名是 groundplane，用的是内置棋盘纹理，没有名为 rocky 的材质（<code>:45-54</code>）。这是一处注释与实现的偏差，读这份文件时应按资产块为准。</p>
+<h2 id="floor几何体名字的绑定约束">floor几何体名字的绑定约束</h2>
+<p>地面几何体必须继续叫 floor（<code>scene_mjx_terrain.xml:8-11</code> 与 <code>:85</code>）。理由是平地场景的传感器段里有四个足端接触传感器，它们的 geom2 参数都写死为 floor：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">{</mo><mtext>FR</mtext><mo separator="true">,</mo><mtext>FL</mtext><mo separator="true">,</mo><mtext>RR</mtext><mo separator="true">,</mo><mtext>RL</mtext><mo stretchy="false">}</mo><mi mathvariant="normal">_</mi><mtext>floor_found</mtext></mrow><annotation encoding="application/x-tex">\{\text{FR}, \text{FL}, \text{RR}, \text{RL}\}\_\text{floor\_found}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mopen">{</span><span class="mord text"><span class="mord">FR</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">FL</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">RR</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">RL</span></span><span class="mclose">}</span><span class="mord" style="margin-right:0.0278em;">_</span><span class="mord text"><span class="mord">floor_found</span></span></span></span></span></span>
+<p>把地形几何体改名会让四个足端接触信号全部断开，依赖它们的 feet_air_time、feet_slip 与相关奖励随之失效（<code>experiment-log.md:1417</code> 的硬约束表把它列为第一条）。这类错误不会让仿真报错，只是奖励项恒为零或恒为某个值，训练会朝错误方向收敛。</p>
+<p>改名之外，把地面拆成多块几何体同样会破坏这组传感器。地形只能用单个 hfield 表达，这一点在选型阶段就确定。</p>
+<h2 id="priority为0的接触语义">priority为0的接触语义</h2>
+<p>MuJoCo 判定两个几何体接触参数用哪一侧的规则有两条：两侧 priority 不同时取较高的一方；两侧相同且非零时取两者的最大值（<code>scene_mjx_terrain.xml:79-81</code>）。平地场景里地面的 priority 是默认值 0、足端几何体是 1，因此足端一侧的参数生效：condim 等于 6、摩擦系数 0.6、硬接触的 solimp 设置，这套语义是策略训练的基础。</p>
+<p>地形几何体如果把 priority 写成 1，两侧同级，摩擦、condim 与 solimp 会全部改变。素材记录了实测结果：condim 变成 3、摩擦变成 1.0，足端抓地被改，策略崩坏（<code>scene_mjx_terrain.xml:82-84</code>）。这条改动看起来只是「优先级一致」，实际是把接触模型换了一套。</p>
+<p>当前场景的地面定义没有显式写 priority，取默认的 0（<code>scene_mjx_terrain.xml:85-86</code>），与平地场景一致。文件里唯一显式给出的接触参数是摩擦，取 1.0 0.02 0.01（<code>:86</code>），滑移方向的两个系数是低值，用于表达地面的各向异性。</p>
+<h2 id="posz的标定方法">pos.z的标定方法</h2>
+<p>高度场的几何高度范围是（<code>scene_mjx_terrain.xml:58-59</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">[</mo><mtext>pos.z</mtext><mo separator="true">,</mo><mtext>  </mtext><mtext>pos.z</mtext><mo>+</mo><mtext>elevation_z</mtext><mo>+</mo><mtext>base_z</mtext><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[\text{pos.z}, \; \text{pos.z} + \text{elevation\_z} + \text{base\_z}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord text"><span class="mord">pos.z</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">pos.z</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">elevation_z</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">base_z</span></span><span class="mclose">]</span></span></span></span></span>
+<p>pos.z 决定地形整体抬高多少。它不能从 elevation_z 推导，只能标定：扫描 pos.z 的值，使地形场景下 home keyframe 的沉降高度与平地场景一致（<code>scene_mjx_terrain.xml:70-73</code> 与 <code>experiment-log.md:1423</code>）。</p>
+<p>素材给出的标定流程是物理沉降比对，而不是用引擎射线量高度。早期版本认为射线对 hfield 不可靠、得到自相矛盾的结果（0.502 与 0.600 与全未命中），因此改用「全零高度场」把接触模型的差异单独分离出来：hfield 的三角面片接触与平面解析接触在同样位姿下的接触数是 28 对 4（<code>experiment-log.md:1432-1435</code>）。这条早期结论后来被修正：射线本身是可用的，之前失败是因为没有先调用前向计算（<code>experiment-log.md:1603-1615</code>，详见第一篇）。引用这段历史时要区分两个版本的结论。</p>
+<p>当前的实测结果是 pos.z 取 0 即可对齐，原因是生成器把原点压平、reset 正落在原点（<code>scene_mjx_terrain.xml:75-78</code>）。素材里出现过两组标定数字：一档记录为沉降 0.2760 m 对平地 0.2756 m、差 0.4 mm（<code>experiment-log.md:1428-1429</code>），另一处写平地基准 0.2777 m、差 0.2 mm（<code>scene_mjx_terrain.xml:70-73</code> 与 <code>RLcontroller_go1/sim/probe_terrain_recalib.py:1-10</code>）。两处来自不同时期与不同地形的测量，量级一致但数值不同，引用时按各自上下文取用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["平地场景 go1_mjx_position.xml"] --> B["地形场景 include 复用机器人定义"]
+  B --> C["地面几何体改为 hfield"]
+  C --> D["geom 名保持 floor"]
+  C --> E["priority 保持 0"]
+  C --> F["pos.z 按沉降标定"]
+  C --> G["分辨率受 50 接触上限约束"]</pre></div>
+<h2 id="分辨率与接触上限">分辨率与接触上限</h2>
+<p>MuJoCo 对每个几何体与高度场的组合最多生成 50 个接触（<code>scene_mjx_terrain.xml:18-22</code> 与 <code>experiment-log.md:1424</code>）。超过上限时引擎静默截断并打印 height field collision overflow 警告，被丢弃的接触会让机器人在局部区域穿透或打滑。</p>
+<p>上限与格距直接相关：格距越小，足端一次覆盖的格子越多，参与碰撞的三角棱柱越多。每格含两个三角棱柱，每个都要跑一次凸碰撞，因此局部棱柱数超过 50 就溢出。素材的实测是 n 取 384、格距 3.1 cm 时持续溢出，n 取 128、格距 9.4 cm 时正常（<code>experiment-log.md:1438-1439</code>）。坡度统计也支持这个选择：大于 30 度的格子从 813 个降到 49 个，占比 0.033%。</p>
+<p>窄相位并非遍历整张高度场。warp 的实现用支撑函数算出紧包围盒，只遍历机器人覆盖的几十个格子（<code>experiment-log.md:1457-1462</code>），因此地形不会因为总面积大而变慢。素材的物理基准显示地形 9.5 ms 每步、平地 10.9 ms 每步，地形反而略快（<code>experiment-log.md:1449-1456</code>）。</p>
+<p>需要标注一处素材内部的不一致：物理基准脚本的文件头写「HFIELD 走通用凸碰撞而 PLANE 走解析碰撞，这就是地形卡顿的根因」（<code>RLcontroller_go1/sim/bench_terrain.py:1-12</code>），而实验记录的结论是地形不比平地慢，查看器卡顿的根因是 llvmpipe 占满 CPU、饿死 JAX 分发线程（<code>experiment-log.md:1464-1474</code>）。两处说法冲突，正文按有数据支撑的实验记录取用。</p>
+<h2 id="elevation_z的自动回写">elevation_z的自动回写</h2>
+<p>更换地形后高度范围会变，XML 里 hfield 的第三项必须同步，否则高度缩放错误、地形整体被压扁或拉高。这一步由生成器自动完成（<code>gen_terrain.py:316-339</code>）：用正则匹配 hfield 标签的 size 属性，把前两项写成 ext、第三项写成新的 elevation_z、第四项保持原值（<code>gen_terrain.py:328-332</code>），匹配失败时打印警告并提示手工核对。</p>
+<p>自动回写只覆盖 elevation_z，不改 pos.z 与 base_z。这两项仍需人工检查，原因是它们与接触模型耦合：pos.z 影响落地高度，base_z 影响包围盒。生成器在保存后立刻调用回写并打印结果（<code>gen_terrain.py:415-421</code>），形成「生成资产、同步缩放、复测位置」三步流程。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["改生成参数"] --> B["重跑生成器"]
+  B --> C["写 terrain.png 与 terrain.json"]
+  C --> D["正则回写 hfield size 的 elevation_z"]
+  D --> E["复测 pos.z 与终止阈值"]
+  E --> F["跑标定与稳健性探针"]</pre></div>
+<h2 id="warp与jax后端的支持差异">warp与JAX后端的支持差异</h2>
+<p>同一份 MJCF 在两种 MJX 后端上的能力不同。warp 后端的碰撞驱动实现了高度场并沿凸包路径处理，因此可以在地形上训练（<code>experiment-log.md:1411-1412</code>）。JAX 后端直接抛出未实现错误：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>NotImplementedError: collisions not implemented</mtext></mrow><annotation encoding="application/x-tex">\text{NotImplementedError: collisions not implemented}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">NotImplementedError: collisions not implemented</span></span></span></span></span></span>
+<p>这就是本项目必须用 warp 后端的原因（<code>experiment-log.md:1626-1631</code>）。射线也有同样的差别：MJX 的射线的分发表里只有平面、球、胶囊、椭球、盒子与网格六类，没有高度场，官方明确表示不计划支持（<code>experiment-log.md:1617-1624</code>）。</p>
+<p>warp 后端把高度场数据暴露成 JAX 数组，包括数据本体与行列数、尺寸、地址，全部可以用闭包捕获。因此在训练循环里做地形高度采样不需要引擎射线，直接按第一篇的解析双线性公式实现即可，并且完全可 jit（<code>RLcontroller_go1/sim/probe_terrain_scan_jax.py:1-12</code>）。这条路径是地形观测（height scan）能进训练循环的前提。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>地形场景通过 include 复用平地场景，只替换地面几何体，避免两份机器人定义漂移。</li>
+<li>地面几何体必须保持名字 floor，否则四个足端接触传感器断开、相关奖励失效。</li>
+<li>priority 必须保持 0，与平地一致时足端参数生效；写成 1 会把 condim 与摩擦换成另一套值。</li>
+<li>pos.z 不能推导，只能用沉降高度标定；当前 pos.z 取 0 能对齐，依赖生成器的原点压平。</li>
+<li>每个几何体与高度场最多 50 个接触，格距过小会溢出；elevation_z 由生成器自动回写，pos.z 与 base_z 仍需人工复测。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>用 include 复用平地场景</td><td>机器人定义单点维护</td><td>地形差异都集中在一处，改动需谨慎</td></tr><tr><td>保持名字 floor</td><td>足端传感器与奖励可用</td><td>命名自由度受限</td></tr><tr><td>priority 取 0</td><td>接触语义与平地一致</td><td>地面参数无法覆盖足端参数</td></tr><tr><td>格距取大（n=128）</td><td>不触发接触溢出</td><td>地形细节分辨率下降</td></tr><tr><td>用 warp 后端</td><td>支持高度场碰撞与数据暴露</td><td>绑定后端，JAX 后端不可用</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明地形场景 include 平地场景的好处，以及地形场景自身需要覆盖哪些块。</li>
+<li>解释 priority 的两条判定规则，并说明地面写成 1 时接触参数会变成什么。</li>
+<li>计算 n 取 128、ext 取 6 时的格距，并说明它为什么能避开接触溢出。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>设计一套换地形后的复测流程，列出需要重新标定的量与判据。</li>
+<li>说明为什么每个几何体与高度场最多 50 个接触，分析格距与局部棱柱数的关系。</li>
+<li>比较 warp 后端解析采样与引擎射线两条地形高度获取路径，给出在训练循环中的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>地形场景：约束注释（:1-30）、资产与 hfield（:45-67）、地面几何体（:69-86）</td></tr><tr><td><code>mjx-go1-getup/sim/gen_terrain.py</code></td><td>生成器：自动回写 size（:316-339）、调用与提示（:415-421）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>实验记录：硬约束表（:1409-1439）、物理代价与卡顿根因（:1441-1474）、后端支持（:1601-1646）</td></tr><tr><td><code>RLcontroller_go1/sim/bench_terrain.py</code></td><td>地形与平地的物理基准脚本（文件头说法与实验记录冲突，已标注）</td></tr><tr><td><code>RLcontroller_go1/sim/probe_terrain_recalib.py</code></td><td>换地形后的耦合点重标定脚本（:1-10 列出四项必查）</td></tr><tr><td><code>RLcontroller_go1/sim/probe_terrain_scan_jax.py</code></td><td>纯 JAX 解析高度采样器（:1-12 说明动机）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-地形校验与耦合点复核"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-地形校验与耦合点复核</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/02-hfield程序化地形/04-地形校验与耦合点复核.md</span></div><div class="dfile__body"><h1 id="地形校验与耦合点复核">地形校验与耦合点复核</h1>
+<p>换地形之后最容易出问题的往往是与地形耦合的那些量，而不是地形本身：机器人落地高度、终止判据、足端高度奖励、接触数量。这些量在平地场景里有固定取值，地形抬升之后它们不再成立，但代码不会报错，只会让训练慢慢跑偏。素材仓库的做法是为每个耦合点配一个探针脚本，把「改地形」变成「跑一组固定检查」。</p>
+<p>素材明确标注为未修的问题不影响地形本身的物理合法性，但会直接影响训练目标，动手训练之前必须先处理。</p>
+<h2 id="生成器的自检输出">生成器的自检输出</h2>
+<p>生成器在写文件之前打印一组统计（<code>mjx-go1-getup/sim/gen_terrain.py:385-401</code>）：网格分辨率与格距、起伏幅度与滤波尺度、台阶高度与台地数、阶梯条数与级数、种子、高度最小值与最大值与均值、原点高度、最大坡度。</p>
+<p>其中两条是硬判据。第一条是原点高度必须约等于零（<code>gen_terrain.py:394-395</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>h</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo><mo>≈</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">h(0, 0) \approx 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>
+<p>不满足时 reset 的落地高度会与平地不一致，机器人会穿地或悬空。第二条是最大坡度与足端半径的对比（<code>gen_terrain.py:396-401</code>）：坡度由相邻格差除以格距算得，脚本同时打印足端半径 2.3 cm 与格距。格距远大于足端半径时足端近似落在单个格子上，采样误差小；两者接近时需要关注足端跨格造成的接触抖动。</p>
+<p>自检输出可以用 dry_run 开关只打印不写文件（<code>gen_terrain.py:403-405</code>），调参阶段用它快速预览地形统计而不覆盖现有资产。</p>
+<h2 id="四类校验脚本的分工">四类校验脚本的分工</h2>
+<p>素材仓库为地形准备了一组探针脚本，分布在两个工作区。按用途分类如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>脚本</th><th>行数</th><th>职责</th></tr></thead><tbody><tr><td>probe_terrain_recalib</td><td>192</td><td>换地形后的耦合点重标定，覆盖 pos.z、终止阈值、接触溢出、奖励耦合四项</td></tr><tr><td>probe_terrain_robust</td><td>154</td><td>物理健壮性：是否 NaN、是否接触溢出、平地策略在新地形上的基线表现</td></tr><tr><td>probe_terrain_layout</td><td>89</td><td>只用引擎射线打网格调查实际布局，不依赖任何索引假设</td></tr><tr><td>plot_terrain_heightmap</td><td>100</td><td>直接用高度场数据画高度图，并与引擎射线逐点核对</td></tr><tr><td>probe_terrain_scan_jax</td><td>168</td><td>纯 JAX 解析高度采样器，验证并敲定行列朝向</td></tr><tr><td>bench_terrain</td><td>94</td><td>高度场与平地的单步物理耗时基准</td></tr></tbody></table>
+<p>这组脚本覆盖了「位置对齐、数值稳定、布局正确、采样正确、性能可接受」五个方面。它们是脚本而非测试框架，需要手工执行并读输出；脚本路径与用途在实验记录的地形一节开头集中列出（<code>experiment-log.md:1400-1406</code>）。</p>
+<h2 id="高度图可视化与逐点核对">高度图可视化与逐点核对</h2>
+<p>高度场数据可以直接读出并画图，不需要引擎渲染。核对方式是把数据画出的高度与引擎射线扫描的高度逐点比对，差值来自两种求值的差异：数据画图用双线性插值，射线用三角面片求交（<code>experiment-log.md:2005-2020</code>）。</p>
+<p>素材给出的对照样本如下（<code>experiment-log.md:2010-2016</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>射线高度</th><th>数据高度</th><th>差值</th></tr></thead><tbody><tr><td>点 (1.5, -3.6)</td><td>0.1186</td><td>0.1200</td><td>0.0014</td></tr><tr><td>点 (-4.0, 4.4)</td><td>0.3000</td><td>0.3000</td><td>0.0000</td></tr><tr><td>点 (3.0, -3.6)</td><td>0.2819</td><td>0.2800</td><td>0.0019</td></tr><tr><td>点 (-4.0, 5.5)</td><td>0.3000</td><td>0.3000</td><td>0.0000</td></tr><tr><td>点 (5.0, 1.0)</td><td>0.0055</td><td>0.0094</td><td>0.0039</td></tr></tbody></table>
+<p>差值都不超过 4 毫米，且最高点处完全一致。核对时有一个操作要点：射线打在原点会命中机器人自身，必须按几何体编号过滤，否则会得到看起来像「高度算错」的结果（<code>experiment-log.md:2003-2005</code> 与 <code>:1613-1615</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["读取 hfield_data"] --> B["画高度图"]
+  C["引擎射线打网格"] --> D["过滤机器人自身几何体"]
+  B --> E["逐点比对"]
+  D --> E
+  E --> F{"差值是否在毫米量级"}
+  F -- "是" --> G["索引与朝向正确"]
+  F -- "否" --> H["检查转置约定与是否先做前向计算"]</pre></div>
+<h2 id="足端高度奖励与地形的耦合">足端高度奖励与地形的耦合</h2>
+<p>足端高度奖励用足端的世界 z 与一个固定目标比较，目标是 0.08 m（<code>scene_mjx_terrain.xml:49-52</code>）。平地场景下这个设计成立：地面高度为零，足端抬高到 0.08 m 就是抬腿。地形最高抬到 0.30 m 之后，站在高处的足端世界 z 本来就超过 0.08 m，拖地惩罚几乎归零。</p>
+<p>素材给出的量化影响是：高度大于等于 0.08 m 的部分占地形高度范围的 73%，在这些区域策略可以拖地而不受罚，于是会学到「在高处拖地」（<code>scene_mjx_terrain.xml:49-52</code>）。这属于奖励定义问题，与泛化能力无关，地形越大越严重。修法在实验记录里给出：把足端高度改为相对足下地形高度的量，而不是世界绝对 z（<code>scene_mjx_terrain.xml:52</code> 指向实验记录第十六节）。重标定脚本把这一项列为四项必查之一，并注明训练前必须处理（<code>RLcontroller_go1/sim/probe_terrain_recalib.py:1-14</code>）。</p>
+<p>同类耦合还包括落脚点检测与滑移判据：这些判据若也使用世界 z 或平地假设，都需要随地形改动复核。素材只明确标注了足端高度这一项，其余按通用做法处理。</p>
+<h2 id="终止阈值随地形抬升的余量">终止阈值随地形抬升的余量</h2>
+<p>终止判据里的躯干高度区间是 0.22 到 0.65 m，取的是躯干绝对 z（<code>scene_mjx_terrain.xml:23-25</code>）。地形总高差 0.30 m 时，站在最高台上的躯干 z 约为 0.58 m，距上界只剩 0.07 m。继续加大地形就必须放宽上界或改用相对足底平面的高度，否则「爬高」会被终止判据误判为「摔倒」（<code>scene_mjx_terrain.xml:23-25</code>）。</p>
+<p>重标定脚本把这条列为第二项必查，并给出误判机理：站在 30 cm 台阶顶时躯干上浮约 0.30 m，逼近甚至越界，于是爬高被当作摔倒（<code>RLcontroller_go1/sim/probe_terrain_recalib.py:6-9</code>）。这条余量只有 0.07 m，是全套耦合点里最紧张的一项。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["地形总高差 0.30 m"] --> B["最高台躯干 z 约 0.58 m"]
+  B --> C["终止上界 0.65 m"]
+  C --> D["余量 0.07 m"]
+  D --> E{"继续加大地形"}
+  E -- "是" --> F["放宽上界或改用相对高度"]
+  E -- "否" --> G["维持并监测误判"]</pre></div>
+<h2 id="接触溢出与约束预算的排查">接触溢出与约束预算的排查</h2>
+<p>高度场每个几何体对最多生成 50 个接触，超过会截断并打印警告（<code>scene_mjx_terrain.xml:18-22</code>）。排查方式是看仿真的接触计数：当前地形的接触数峰值是 11，而约束上限设为 256，因此没有溢出（<code>scene_mjx_terrain.xml:44-46</code>）。接触数峰值随地形坡度与高差上升，改地形后需要重新观察。</p>
+<p>接触溢出与约束预算是两个相关但不同的量：接触对数量受 50 的上限约束，总约束数受 njmax 约束。素材记录了约束溢出（nefc overflow）的后果：越界写入会破坏广义加速度与传感器数据，进而让奖励变成 NaN、参数爆炸（<code>experiment-log.md:190</code> 与 <code>:407</code>）。同一份记录里统计过全程零次溢出与零次 NaN 是数值稳定的判据（<code>experiment-log.md:35</code> 与 <code>:311</code>）。</p>
+<p>排查顺序建议先看接触数峰值是否逼近 50，再看总约束数是否逼近 njmax，最后确认 NaN 护栏是否在持续触发。稳健性探针脚本把「是否 NaN」与「是否接触溢出」列在前两项，并把平地策略在新地形上的表现作为基线（<code>RLcontroller_go1/sim/probe_terrain_robust.py:1-10</code>）。</p>
+<h2 id="已知未修问题与素材冲突">已知未修问题与素材冲突</h2>
+<p>素材里明确标注为未修或有冲突的问题如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>问题</th><th>位置</th><th>影响</th></tr></thead><tbody><tr><td>足端高度奖励用世界 z 对固定 0.08 m 结算</td><td><code>scene_mjx_terrain.xml:49-52</code></td><td>高处拖地不罚，训练前必须处理</td></tr><tr><td>终止阈值余量仅 0.07 m</td><td><code>scene_mjx_terrain.xml:23-25</code></td><td>继续加大地形会误判爬高为摔倒</td></tr><tr><td>场景头注释称有 rocky 贴图材质</td><td><code>scene_mjx_terrain.xml:6-7</code></td><td>资产块实际只有棋盘材质 groundplane</td></tr><tr><td>基准脚本文档称地形是卡顿根因</td><td><code>RLcontroller_go1/sim/bench_terrain.py:1-12</code></td><td>与实验记录的地形不比平地慢结论冲突</td></tr><tr><td>标定数值出现两组</td><td><code>experiment-log.md:1428-1429</code> 与 <code>scene_mjx_terrain.xml:70-73</code></td><td>0.2760 对 0.2777 的平地基准不同</td></tr></tbody></table>
+<p>这五条里前两条影响训练，必须处理；后三条属于文档与记录的一致性问题，读到时应按有实测数据的一方取用，并在改动时顺手订正注释。按任务约定，凡素材没有给出实现的处置（例如落脚点检测是否也依赖地形高度）都按通用做法处理，正文会明确标注。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>生成器自检包含原点高度约等于零与最大坡度对比两条硬判据，可用 dry_run 预览。</li>
+<li>校验脚本覆盖位置对齐、数值稳定、布局正确、采样正确与性能五个方面，需要手工执行读输出。</li>
+<li>高度图与引擎射线逐点核对的差值在 4 毫米以内，来自双线性插值与三角面片求交的差异。</li>
+<li>足端高度奖励用世界 z 对固定 0.08 m 结算，地形抬高后在高处失效，必须改为相对足下地形高度。</li>
+<li>终止阈值的躯干绝对 z 上界余量仅 0.07 m；接触数峰值 11 相对上限 256 有充足余量，nefc 溢出会破坏奖励。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>为每个耦合点配探针</td><td>改地形后可复核</td><td>需要手工执行并读输出</td></tr><tr><td>用绝对高度做奖励与终止</td><td>实现简单、与平地一致</td><td>地形抬升后语义失效</td></tr><tr><td>用相对足下高度</td><td>与地形无关的语义</td><td>需要在线采样地形高度</td></tr><tr><td>格距取大</td><td>避开接触溢出</td><td>地形细节减少</td></tr><tr><td>保留已知问题的注释</td><td>后来者可追溯</td><td>文档与实现存在已知偏差</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出生成器自检的两条硬判据，并说明不满足时的后果。</li>
+<li>说明高度图与引擎射线核对时差值来源，以及过滤机器人自身几何体的必要性。</li>
+<li>解释足端高度奖励在地形抬升后为什么失效，给出量化依据。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>设计一套换地形后的完整检查清单，按必查项与可选分档，并给出每项的判据与预期输出。</li>
+<li>把足端高度奖励改为相对足下地形高度，给出在线采样位置与实现成本估算。</li>
+<li>分析终止阈值余量只剩 0.07 m 时的风险，设计一种用相对足底平面高度替代绝对 z 的方案。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/gen_terrain.py</code></td><td>生成器自检输出（:385-401）与 dry_run（:403-405）</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>耦合点与已知问题注释（:18-30、:44-52、:70-78）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>实验记录：脚本清单（:1400-1406）、物理与卡顿（:1441-1474）、溢出后果（:190、:311、:407）、采样核对（:2005-2020）</td></tr><tr><td><code>RLcontroller_go1/sim/probe_terrain_recalib.py</code></td><td>重标定脚本（:1-14 列出四项必查）</td></tr><tr><td><code>RLcontroller_go1/sim/probe_terrain_robust.py</code></td><td>稳健性脚本（:1-10 列出必查项）</td></tr><tr><td><code>RLcontroller_go1/sim/probe_terrain_layout.py</code></td><td>引擎射线布局探针（:1-11）</td></tr><tr><td><code>RLcontroller_go1/sim/plot_terrain_heightmap.py</code></td><td>高度图绘制与核对</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/01-MJCF%E6%A8%A1%E5%9E%8B/"><span class="k">← 上一篇</span><span class="t">MJCF模型</span><span class="d">MuJoCo 与 MJX · 6 个文件</span></a><a class="next" href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/03-warp%E5%90%8E%E7%AB%AF%E4%B8%8Egraph_mode/"><span class="k">下一篇 →</span><span class="t">warp后端与graph_mode</span><span class="d">MuJoCo 与 MJX · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

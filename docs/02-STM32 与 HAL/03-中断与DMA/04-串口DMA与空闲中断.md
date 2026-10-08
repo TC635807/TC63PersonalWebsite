@@ -7,11 +7,12 @@ updated: 2026-10-07
 
 # 串口 DMA 与空闲中断
 
-> 本页的对象是 `Communication/Src/usart_dma.cpp` 这一个文件，共 202 行。
-> 它用 `DMA` 加空闲中断实现串口整帧接收，两块板的遥控与裁判系统都走它。
-> 与之配套的协议解帧属于 04-串口通信与协议 单元，本页只讲到"把整块缓冲交给解码回调"这一层。
+`Communication/Src/usart_dma.cpp` 这一个文件共 202 行，是把 DMA 与空闲中断接起来的地方。它用 DMA 加空闲中断实现串口整帧接收，两块板的遥控与裁判系统都走它。与之配套的协议解帧属于 04-串口通信与协议 单元，这里只讲到「把整块缓冲交给解码回调」这一层。
 
-## 1. 概念：串口接收为什么要空闲中断
+串口是字节流设备，帧边界要靠接收侧自己判断。空闲中断给出帧结束的硬件信号，DMA 负责把字节搬进缓冲，两者配合就能在不占用 CPU 的前提下收整帧。
+
+
+## 1. 串口接收为什么要空闲中断
 
 UART 是字节流设备。收到一帧数据的时刻不确定、帧与帧之间还有静默间隔，接收侧必须自己判断"这一帧到头了"。三种常见做法：
 
@@ -25,7 +26,7 @@ UART 是字节流设备。收到一帧数据的时刻不确定、帧与帧之间
 
 IDLE 的硬件语义是"接收线在最后一个停止位之后保持空闲的时间超过一个完整帧"。检测到之后，硬件置起 `USART_SR.IDLE`，使能 `CR1.IDLEIE` 时产生中断。空闲时间不足一个帧时间不会置位，所以它天然不会把帧内的高频字节误判为帧尾。
 
-## 2. 机制：UsartDma 的完整流程
+## 2. UsartDma 的完整流程
 
 ### 2.1 初始化：五步
 
@@ -244,7 +245,7 @@ flowchart TD
   K -->|"会 手动切换与硬件切换叠加"| L["两个缓冲区反复被覆盖 需缩短帧长或加大缓冲"]
 ```
 
-## 3. 落到本项目
+## 3. 两个串口的参数与预算
 
 ### 3.1 两个串口的参数与实例注册
 
@@ -423,13 +424,13 @@ static void UART_DMATransmitCplt(DMA_HandleTypeDef *hdma)
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 初始化（:33-48）、中断入口（:50-72）、发送（:74-79）、IDLE 回调（:81-99）、缓冲区切换（:106-116）、双缓冲启动（:118-178）、C 接口（:180-202） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Inc/usart_dma.h` | 缓冲长度与实例上限（:8-14）、类成员与静态实例表（:35-63）、C 接口声明（:66-85） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | USART3 参数与接收流（:75-90、:178-199）、USART6 参数与收发送流（:104-119、:224-263） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | `USART3_IRQHandler` 的自定义调用（:247-256）、`USART6_IRQHandler`（:359-368） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 实例注册（:126）、解码回调（:72-76） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/dbus.cpp` | DBUS 解码与长度检查（:11-34） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c` | 两个实例的注册（:126-127） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理（:359-368） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c` | IDLE 分支的进入条件（:2484-2486）、错误分支条件（:2376-2377、:1524-1526）、发送完成分流（:3015-3041） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | 双缓冲回调选择（:878-898）、中止等待（:924-945） |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 初始化（:33-48）、中断入口（:50-72）、发送（:74-79）、IDLE 回调（:81-99）、缓冲区切换（:106-116）、双缓冲启动（:118-178）、C 接口（:180-202） |
+| `2026OmniSentryGimbal/Communication/Inc/usart_dma.h` | 缓冲长度与实例上限（:8-14）、类成员与静态实例表（:35-63）、C 接口声明（:66-85） |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 参数与接收流（:75-90、:178-199）、USART6 参数与收发送流（:104-119、:224-263） |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | `USART3_IRQHandler` 的自定义调用（:247-256）、`USART6_IRQHandler`（:359-368） |
+| `2026OmniSentryGimbal/Core/Src/main.c` | 实例注册（:126）、解码回调（:72-76） |
+| `2026OmniSentryGimbal/Communication/Src/dbus.cpp` | DBUS 解码与长度检查（:11-34） |
+| `2026OmniSentryChassis/Core/Src/main.c` | 两个实例的注册（:126-127） |
+| `2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理（:359-368） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c` | IDLE 分支的进入条件（:2484-2486）、错误分支条件（:2376-2377、:1524-1526）、发送完成分流（:3015-3041） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | 双缓冲回调选择（:878-898）、中止等待（:924-945） |

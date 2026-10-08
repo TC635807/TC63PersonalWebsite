@@ -15,7 +15,7 @@ updated: 2026-10-07
 > `arm-none-eabi-gcc` 拿本工程的 `FreeRTOSConfig.h` 和 port 头文件编译探针量出来的；
 > 堆地址和 `ucHeap` 大小取自 `build/Debug/sentriomeni2026.map`。
 
-## 1. 开篇：40 KB 从哪来
+## 1. 40 KB 从哪来
 
 `Core/Inc/FreeRTOSConfig.h` 第 67 行：
 
@@ -46,7 +46,7 @@ updated: 2026-10-07
 
 下面要看的是这 40 KB 装下了什么、还剩多少、够不够。
 
-## 2. 核心概念：heap_4 的块结构
+## 2. heap_4 的块结构
 
 ### 2.1 每个块前面都有 8 字节的块头
 
@@ -126,7 +126,7 @@ if( ( xWantedSize & xBlockAllocatedBit ) == 0 )   /* 申请的太大就直接放
 
 这条规则叫"不许出现小于 `heapMINIMUM_BLOCK_SIZE` 的碎片"，是 heap_4 抑制碎片的第二道防线。
 
-## 3. 机制/原理
+## 3. 分配、释放与碎片的形成条件
 
 ### 3.1 分配：首次适配 + 分割
 
@@ -319,11 +319,11 @@ $$U = H - a_{\text{head}} - S_{\text{link}} - a_{\text{tail}} = 40960 - 4 - 8 - 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `usbRxQueue` | `freertos.c:114` | — | 128 | — | — | 208 |
 | 2 | `defaultTask` | `freertos.c:123` | 256 | 1024 | 1032 | 92 | 1124 |
-| 3 | `StartFireTask` | `FireTask.cpp:217` | 512 | 2048 | 2056 | 92 | 2148 |
-| 4 | `imuTask` | `ImuTask.cpp:112` | 1024 | 4096 | 4104 | 92 | 4196 |
-| 5 | `gimbalTask` | `GimbalTask.cpp:120` | 2048 | 8192 | 8200 | 92 | 8292 |
-| 6 | `StartControlCenterTask` | `ControlCenterTask.cpp:149` | 1024 | 4096 | 4104 | 92 | 4196 |
-| 7 | `StartUsbConnectTask` | `UsbConnectTask.cpp:118` | 2048 | 8192 | 8200 | 92 | 8292 |
+| 3 | `StartFireTask` | `FireTask.cpp:80` | 512 | 2048 | 2056 | 92 | 2148 |
+| 4 | `imuTask` | `ImuTask.cpp:123` | 1024 | 4096 | 4104 | 92 | 4196 |
+| 5 | `gimbalTask` | `GimbalTask.cpp:110` | 2048 | 8192 | 8200 | 92 | 8292 |
+| 6 | `StartControlCenterTask` | `ControlCenterTask.cpp:122` | 1024 | 4096 | 4104 | 92 | 4196 |
+| 7 | `StartUsbConnectTask` | `UsbConnectTask.cpp:177` | 2048 | 8192 | 8200 | 92 | 8292 |
 | | 合计 | | 6912 | 27648 | 27696 | 552 | 28456 |
 
 其中队列的 208 字节是这样来的：队列体大小 = `sizeof(Queue_t)` + 消息存储 = $72 + (128 \times 1) = 200$，再加上 8 字节块头 = 208。
@@ -487,7 +487,7 @@ void StartDefaultTask(void const * argument)
 
 `configTOTAL_HEAP_SIZE = 40960` 这句话的真实含义是可用 40944 字节，其中 28456 字节被 6 个任务和 1 个队列一次性占掉，剩 12488 字节。把这个数算清楚，比背任何 API 都更有助于改配置时不慌。
 
-## 9. 练习题
+## 9. 练习
 
 ### 基础题
 

@@ -1,0 +1,2127 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>UART+DMA收发 · 串口通信与协议 · 王宇翔</title><meta name="description" content="从异步串口的帧结构与 BRR 推导讲到 STM32F4 DMA 控制器的流、通道、循环模式与双缓冲，并给出本项目三路串口的配置落点"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/01-UART+DMA%E6%94%B6%E5%8F%91/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="UART+DMA收发 · 串口通信与协议 · 王宇翔"><meta property="og:description" content="从异步串口的帧结构与 BRR 推导讲到 STM32F4 DMA 控制器的流、通道、循环模式与双缓冲，并给出本项目三路串口的配置落点"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/01-UART+DMA%E6%94%B6%E5%8F%91/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/">串口通信与协议</a><span class="sep" aria-hidden="true">/</span><span class="now">UART+DMA收发</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>UART+DMA收发</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>UART 与 DMA 基础</span></a><ul class="toc__heads"><li><a href="#一帧的逐位结构与三类错误标志" data-depth="2" data-heading-j="0">一帧的逐位结构与三类错误标志</a></li><li><a href="#过采样与波特率容差" data-depth="2" data-heading-j="1">过采样与波特率容差</a></li><li><a href="#brr-由分频值换算而来" data-depth="2" data-heading-j="2">BRR 由分频值换算而来</a></li><li><a href="#10-万波特为什么能精确命中" data-depth="2" data-heading-j="3">10 万波特为什么能精确命中</a></li><li><a href="#三路串口的帧格式与校验口径" data-depth="2" data-heading-j="4">三路串口的帧格式与校验口径</a></li><li><a href="#dma-控制器的流与通道" data-depth="2" data-heading-j="5">DMA 控制器的流与通道</a></li><li><a href="#普通模式循环模式与双缓冲" data-depth="2" data-heading-j="6">普通模式、循环模式与双缓冲</a></li><li><a href="#自研-init-如何覆盖-cubemx-的缓冲模式" data-depth="2" data-heading-j="7">自研 Init 如何覆盖 CubeMX 的缓冲模式</a></li><li><a href="#基础层面的易错点" data-depth="2" data-heading-j="8">基础层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>空闲中断与双缓冲接收</span></a><ul class="toc__heads"><li><a href="#帧结束信号有四种取法" data-depth="2" data-heading-j="0">帧结束信号有四种取法</a></li><li><a href="#idle-标志何时置位如何清零" data-depth="2" data-heading-j="1">IDLE 标志何时置位、如何清零</a></li><li><a href="#双缓冲把-ndtr-变成当前块的进度" data-depth="2" data-heading-j="2">双缓冲把 NDTR 变成当前块的进度</a></li><li><a href="#启动路径的五步" data-depth="2" data-heading-j="3">启动路径的五步</a></li><li><a href="#中断里的分派与重入保护" data-depth="2" data-heading-j="4">中断里的分派与重入保护</a></li><li><a href="#空闲回调的九个动作" data-depth="2" data-heading-j="5">空闲回调的九个动作</a></li><li><a href="#边界与失效条件" data-depth="2" data-heading-j="6">边界与失效条件</a></li><li><a href="#接收层面的易错点" data-depth="2" data-heading-j="7">接收层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>本项目 USART 外设分配</span></a><ul class="toc__heads"><li><a href="#三路串口各自接什么" data-depth="2" data-heading-j="0">三路串口各自接什么</a></li><li><a href="#时钟域引脚复用与中断优先级" data-depth="2" data-heading-j="1">时钟域、引脚复用与中断优先级</a></li><li><a href="#三路串口的完整参数对照" data-depth="2" data-heading-j="2">三路串口的完整参数对照</a></li><li><a href="#初始化顺序与两块板的注册差异" data-depth="2" data-heading-j="3">初始化顺序与两块板的注册差异</a></li><li><a href="#五个中断入口" data-depth="2" data-heading-j="4">五个中断入口</a></li><li><a href="#未接线的三处" data-depth="2" data-heading-j="5">未接线的三处</a></li><li><a href="#外设分配相关的易错点" data-depth="2" data-heading-j="6">外设分配相关的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>收发实现与回调链</span></a><ul class="toc__heads"><li><a href="#自研类承担什么" data-depth="2" data-heading-j="0">自研类承担什么</a></li><li><a href="#实例表按句柄指针登记与查找" data-depth="2" data-heading-j="1">实例表按句柄指针登记与查找</a></li><li><a href="#init-直接改寄存器而绕过-hal" data-depth="2" data-heading-j="2">Init 直接改寄存器而绕过 HAL</a></li><li><a href="#自研启动函数与-hal-的-_it-版对照" data-depth="2" data-heading-j="3">自研启动函数与 HAL 的 _IT 版对照</a></li><li><a href="#一次接收的完整路径" data-depth="2" data-heading-j="4">一次接收的完整路径</a></li><li><a href="#中断里的标志分派" data-depth="2" data-heading-j="5">中断里的标志分派</a></li><li><a href="#发送链的三层与回调分支" data-depth="2" data-heading-j="6">发送链的三层与回调分支</a></li><li><a href="#收发链层面的易错点" data-depth="2" data-heading-j="7">收发链层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#症状按四类分层的判据" data-depth="2" data-heading-j="0">症状按四类分层的判据</a></li><li><a href="#可观测的寄存器与软件断点" data-depth="2" data-heading-j="1">可观测的寄存器与软件断点</a></li><li><a href="#关键寄存器" data-depth="3" data-heading-j="2">关键寄存器</a></li><li><a href="#软件侧" data-depth="3" data-heading-j="3">软件侧</a></li><li><a href="#十二项真实易错点的判据" data-depth="2" data-heading-j="4">十二项真实易错点的判据</a></li><li><a href="#从波形到解析函数的调试顺序" data-depth="2" data-heading-j="5">从波形到解析函数的调试顺序</a></li><li><a href="#十二项易错点的源码位置" data-depth="2" data-heading-j="6">十二项易错点的源码位置</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">串口通信与协议</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>UART / DMA / BRR / 双缓冲 / STM32F4 / USART / IDLE中断 / NDTR</span></div><h1 class="docs__title">UART+DMA收发</h1><p class="docs__lead">从异步串口的帧结构与 BRR 推导讲到 STM32F4 DMA 控制器的流、通道、循环模式与双缓冲，并给出本项目三路串口的配置落点</p></header><section class="dfile" id="file-1" data-file="01-UART与DMA基础"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-UART与DMA基础</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/01-UART+DMA收发/01-UART与DMA基础.md</span></div><div class="dfile__body"><h1 id="uart-与-dma-基础">UART 与 DMA 基础</h1>
+<p>遥控接收每 1 ms 送来一帧数据。如果主循环里轮询着逐字节去读，留给控制环的时间会被这串字节吃掉；改成每来一个字节进一次中断，CPU 又要为中断进出和 HAL 状态判断付费。云台板固件 <code>2026OmniSentryGimbal</code> 与底盘板固件 <code>2026OmniSentryChassis</code> 的串口参数逐字相同，初始化都在 <code>Core/Src/usart.c</code>，两边的取舍完全一样。三路串口各自接什么、引脚与 DMA 流怎么分在 <code>03-本项目USART外设分配</code>，空闲中断与双缓冲的运行时行为在 <code>02-空闲中断与双缓冲接收</code>。</p>
+<p>异步串口没有时钟线。收发双方约定同一个波特率，每个字节用起始位做相位对齐，用停止位保证线路上有确定的空闲电平。发送方按位串出，接收方按位采样，一位一位地还原。</p>
+<p>这条链路上有两个独立的成本。协议成本是每个字节实际占用的线时间，8 数据位、无校验、1 停止位的一帧是 10 个位时间；搬运成本是 CPU 在接收或发送缓冲之间搬字节的开销，每来一个字节就进一次中断，中断进出与 HAL 的状态判断会随字节率线性增长。</p>
+<p>DMA 消掉的是第二项：外设的每次数据请求由 DMA 控制器直接读写内存，CPU 只在整帧结束时处理一次。串口协议本身（帧格式、波特率、校验）不因 DMA 改变。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧格式</th><th>每位字节的位时间</th><th>100000 波特下每字节时间</th><th>每秒字节数上限</th></tr></thead><tbody><tr><td>8N1</td><td>10</td><td>100 微秒</td><td>10000</td></tr><tr><td>8E1</td><td>11</td><td>110 微秒</td><td>9090</td></tr><tr><td>9N1</td><td>11</td><td>110 微秒</td><td>9090</td></tr></tbody></table>
+<p>DBUS 的 18 字节一帧按 8E1 计算，线上占用约 <code>18 × 110 = 1980</code> 微秒，帧周期按 DJI 公布的约 14 毫秒（按手册），线路占用率约 14%。这个量级说明串口侧的余量很大，瓶颈从不在波特率上。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/usart.c</code></td><td>三路 USART 的帧格式与 DMA 配置</td></tr><tr><td><code>Core/Src/main.c</code></td><td>时钟树与初始化调用</td></tr><tr><td><code>Core/Src/dma.c</code></td><td>DMA 控制器时钟与 NVIC</td></tr><tr><td><code>Communication/Src/usart_dma.cpp</code></td><td>自研接收启动与双缓冲入口</td></tr><tr><td>HAL 头文件与源码</td><td>BRR 宏、CR1 写入、双缓冲回调</td></tr></tbody></table>
+<h2 id="一帧的逐位结构与三类错误标志">一帧的逐位结构与三类错误标志</h2>
+<p>一帧从空闲态（线上为高）开始，发送方拉低一个位时间作为起始位，接收方在起始位的下降沿同步自己的位采样时钟。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    IDLE["线路空闲&#x3C;br/>RX 保持高电平"]
+    SB["起始位&#x3C;br/>1 位低电平"]
+    D0["数据位 bit0&#x3C;br/>低位先发"]
+    D1["数据位 bit1 到 bit6&#x3C;br/>低位先发"]
+    D7["数据位 bit7&#x3C;br/>8 数据位时的最高位"]
+    PB["校验位&#x3C;br/>偶校验时补足偶数个 1"]
+    ST["停止位&#x3C;br/>1 位高电平"]
+    IDLE --> SB --> D0 --> D1 --> D7 --> PB --> ST --> IDLE
+    PB -. "8N1 时跳过校验位" .-> ST</pre></div>
+<p>接收方在每个位时间的中间采样，避免边沿抖动。停止位为高说明本帧正常结束；停止位为低置帧错误 <code>FE</code>；校验位不符置校验错误 <code>PE</code>；上一个字节还没被读走又来了新字节置溢出错误 <code>ORE</code>。三个错误位在同一状态寄存器里，HAL 的 <code>__HAL_UART_CLEAR_IDLEFLAG</code> 会先读 <code>SR</code> 再读 <code>DR</code>，这一对读操作同时清掉了 <code>IDLE</code>、<code>RXNE</code>、<code>ORE</code>、<code>FE</code>、<code>NE</code>（<code>Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:502-508</code>、<code>:540</code>）。</p>
+<p>三类错误的共同点是都由硬件置位、都需要软件读写寄存器清除。漏清的后果是标志长期挂起，中断反复进入或状态判断失真。</p>
+<h2 id="过采样与波特率容差">过采样与波特率容差</h2>
+<p>USART 的接收采样时钟由 <code>PCLK</code> 分频得到。过采样 16 倍时，每个位时间被切成 16 个采样时钟；接收方取第 8、9、10 个采样点做多数表决，因此对波特率偏差的容忍度约为正负 3%。过采样 8 倍把采样点压缩到 3 个，容忍度下降到一半，最高可用速率提高到 <code>PCLK/8</code>。</p>
+<p>两个板都取 <code>UART_OVERSAMPLING_16</code>（<code>Core/Src/usart.c:53</code>、<code>:82</code>、<code>:111</code>），所以 <code>CR1</code> 的 <code>OVER8</code> 位为 0。选 16 倍的理由是容差更大，代价是相同 <code>PCLK</code> 下的最高波特率减半。本工程三路串口的波特率都不超过 115200，远未触及上限。</p>
+<h2 id="brr-由分频值换算而来">BRR 由分频值换算而来</h2>
+<p>过采样 16 倍时，分频值由波特率反推：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>U</mi><mi>S</mi><mi>A</mi><mi>R</mi><mi>T</mi><mi>D</mi><mi>I</mi><mi>V</mi><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mn>16</mn><mo>⋅</mo><mi>B</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">USARTDIV = \frac{f_{PCLK}}{16 \cdot Baud}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">U</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2772em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">16</span><span class="mbin mtight">⋅</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><code>USARTDIV</code> 的高 12 位是整数部分（尾数），低 4 位是小数部分。HAL 不直接用浮点，而是把公式放大 100 倍后用整数运算，再拆回尾数和小数（<code>stm32f4xx_hal_uart.h:860-868</code>）：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi><mi>I</mi><mi>V</mi><mn>100</mn><mo>=</mo><mrow><mo fence="true">⌊</mo><mfrac><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mo>×</mo><mn>25</mn></mrow><mrow><mn>4</mn><mo>⋅</mo><mi>B</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></mfrac><mo fence="true">⌋</mo></mrow><mo separator="true">,</mo><mspace width="1em"></mspace><mi>m</mi><mi>a</mi><mi>n</mi><mi>t</mi><mo>=</mo><mrow><mo fence="true">⌊</mo><mi>D</mi><mi>I</mi><mi>V</mi><mn>100</mn><mi mathvariant="normal">/</mi><mn>100</mn><mo fence="true">⌋</mo></mrow><mo separator="true">,</mo><mspace width="1em"></mspace><mi>f</mi><mi>r</mi><mi>a</mi><mi>c</mi><mo>=</mo><mrow><mo fence="true">⌊</mo><mfrac><mrow><mo stretchy="false">(</mo><mi>D</mi><mi>I</mi><mi>V</mi><mn>100</mn><mo>−</mo><mn>100</mn><mo>⋅</mo><mi>m</mi><mi>a</mi><mi>n</mi><mi>t</mi><mo stretchy="false">)</mo><mo>×</mo><mn>16</mn><mo>+</mo><mn>50</mn></mrow><mn>100</mn></mfrac><mo fence="true">⌋</mo></mrow></mrow><annotation encoding="application/x-tex">DIV100 = \left\lfloor \frac{f_{PCLK} \times 25}{4 \cdot Baud} \right\rfloor, \quad mant = \left\lfloor DIV100 / 100 \right\rfloor, \quad frac = \left\lfloor \frac{(DIV100 - 100 \cdot mant) \times 16 + 50}{100} \right\rfloor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mord">100</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">⌊</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4</span><span class="mbin mtight">⋅</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span><span class="mbin mtight">×</span><span class="mord mtight">25</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">⌋</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">man</span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">⌊</span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mord">100/100</span><span class="mclose delimcenter" style="top:0em;">⌋</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">a</span><span class="mord mathnormal">c</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">⌊</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">100</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">D</span><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span><span class="mord mtight">100</span><span class="mbin mtight">−</span><span class="mord mtight">100</span><span class="mbin mtight">⋅</span><span class="mord mathnormal mtight">man</span><span class="mord mathnormal mtight">t</span><span class="mclose mtight">)</span><span class="mbin mtight">×</span><span class="mord mtight">16</span><span class="mbin mtight">+</span><span class="mord mtight">50</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">⌋</span></span></span></span></span></span></p>
+<p>写寄存器的值 <code>BRR = (mant &#x3C;&#x3C; 4) + frac</code>。<code>UART_SetConfig</code> 在判断外设挂在哪条总线上之后调用这组宏：<code>USART1</code> 与 <code>USART6</code> 取 <code>PCLK2</code>，<code>USART2/3</code> 等取 <code>PCLK1</code>（<code>stm32f4xx_hal_uart.c:3764-3792</code>）。</p>
+<p>云台板的时钟链是 HSE 12 MHz 经 <code>PLLM=6</code> 得 2 MHz，<code>PLLN=168</code> 得 336 MHz，<code>PLLP=2</code> 得 SYSCLK 168 MHz；<code>APB1CLKDivider = RCC_HCLK_DIV4</code> 得 <code>PCLK1 = 42 MHz</code>，<code>APB2CLKDivider = RCC_HCLK_DIV2</code> 得 <code>PCLK2 = 84 MHz</code>（<code>Core/Src/main.c:165-185</code>）。两条总线的分频比不同，同一个波特率算出的 <code>BRR</code> 也不同。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th>总线</th><th><code>PCLK</code></th><th>目标波特率</th><th><code>USARTDIV</code></th><th>尾数</th><th>小数</th><th><code>BRR</code></th><th>实际波特率</th><th>偏差</th></tr></thead><tbody><tr><td>USART3</td><td>APB1</td><td>42 MHz</td><td>100000</td><td>26.25</td><td>26</td><td>4</td><td>0x1A4</td><td>100000</td><td>0</td></tr><tr><td>USART1</td><td>APB2</td><td>84 MHz</td><td>115200</td><td>45.5729</td><td>45</td><td>9</td><td>0x2D9</td><td>115226</td><td>+0.023%</td></tr><tr><td>USART6</td><td>APB2</td><td>84 MHz</td><td>115200</td><td>45.5729</td><td>45</td><td>9</td><td>0x2D9</td><td>115226</td><td>+0.023%</td></tr></tbody></table>
+<h2 id="10-万波特为什么能精确命中">10 万波特为什么能精确命中</h2>
+<p>常被引用的 9600、115200 都是 2 的整数次幂分频能命中的值，而 100000 不是。它在 F4 上能配得干净，靠的是小数分频：42 MHz 下 <code>USARTDIV = 26.25</code>，小数 0.25 正好是 4/16，不需要舍入，实际波特率与目标完全一致。</p>
+<p>换一条 <code>PCLK</code> 就未必。若 <code>PCLK1</code> 从 42 MHz 变成 36 MHz，同样的 <code>BRR</code> 会得到 <code>36e6 / 420 = 85714</code> 波特，与 100000 差 14.3%。串口与 CAN 共享同一个时钟树，改 <code>APB1CLKDivider</code> 会同时打坏两者，这一点在 <code>03-CAN 与电机/01-CAN外设与过滤器</code> 的排查记录里有完整案例。</p>
+<h2 id="三路串口的帧格式与校验口径">三路串口的帧格式与校验口径</h2>
+<p>三路串口的帧格式来自 <code>Core/Src/usart.c</code>，逐项如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th>波特率</th><th><code>WordLength</code></th><th><code>Parity</code></th><th><code>StopBits</code></th><th><code>Mode</code></th><th>出处</th></tr></thead><tbody><tr><td>USART1</td><td>115200</td><td><code>UART_WORDLENGTH_8B</code></td><td><code>UART_PARITY_NONE</code></td><td>1</td><td><code>UART_MODE_TX_RX</code></td><td><code>usart.c:47-51</code></td></tr><tr><td>USART3</td><td>100000</td><td><code>UART_WORDLENGTH_8B</code></td><td><code>UART_PARITY_EVEN</code></td><td>1</td><td><code>UART_MODE_RX</code></td><td><code>usart.c:76-80</code></td></tr><tr><td>USART6</td><td>115200</td><td><code>UART_WORDLENGTH_8B</code></td><td><code>UART_PARITY_NONE</code></td><td>1</td><td><code>UART_MODE_TX_RX</code></td><td><code>usart.c:105-109</code></td></tr></tbody></table>
+<p>这三个字段由 <code>UART_SetConfig</code> 拼进 <code>CR1</code>：<code>WordLength</code> 决定 <code>M</code> 位，<code>Parity</code> 决定 <code>PCE</code> 与 <code>PS</code> 位（<code>stm32f4xx_hal_uart.c:3754-3757</code>）。USART3 写进去的组合是 <code>M=0</code>、<code>PCE=1</code>、<code>PS=0</code>，即偶校验。</p>
+<p>需要标出的一处口径冲突（按手册推断，待实测）：</p>
+<ul>
+<li>按 STM32F4 的 USART 手册，<code>M=0</code> 且 <code>PCE=1</code> 的帧是 7 数据位加 1 个校验位，校验位在数据寄存器里占最高位。HAL 的中断接收路径也按这个理解，对 8 位字长加校验的组合只取 <code>DR</code> 的低 7 位（<code>stm32f4xx_hal_uart.c:3650-3657</code>）。</li>
+<li>DBUS 规定的是 8 数据位加偶校验。若严格按手册，USART3 的 <code>M=0</code> 少了一个数据位。</li>
+<li>本工程的接收走 DMA，DMA 按字节搬 <code>DR</code> 的低 8 位，会把校验位所在的那一位一并搬进缓冲区。由此推断 8 个原始数据位仍可能被完整重组，但这条推断没有在硬件上验证，标为待实测。</li>
+<li>若要和 DBUS 的 8 数据位严格对齐，正确组合是 9 位字长加偶校验（<code>M=1</code>、<code>PCE=1</code>，即 8 数据位加 1 校验位）。同批次其它 RoboMaster 工程在相同波特率下普遍用这个组合。</li>
+</ul>
+<h2 id="dma-控制器的流与通道">DMA 控制器的流与通道</h2>
+<p>STM32F4 有 DMA1 与 DMA2 两个控制器，每个控制器 8 条流（stream），每条流 8 个通道（channel）。三个概念的关系是：</p>
+<ul>
+<li>流是独立的传输引擎，有自己的外设地址寄存器 <code>PAR</code>、内存地址寄存器 <code>M0AR</code> 与 <code>M1AR</code>、剩余计数 <code>NDTR</code>、配置寄存器 <code>CR</code> 和 FIFO 控制寄存器 <code>FCR</code>。一条流同一时刻只能服务一个请求。</li>
+<li>通道是请求源的选择器。外设的 DMA 请求接到哪条流的哪个通道由硬件走线固定，软件只能通过 <code>CR</code> 的 <code>CHSEL</code> 位从该流可选的请求里挑一个，不能任意改接。</li>
+<li>同一条流不能同时被两个外设占用。选流时先查请求映射表，再看该流的通道是否已被占用。</li>
+</ul>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    subgraph PERIPH["外设请求"]
+        U3RX["USART3_RX"]
+        U6RX["USART6_RX"]
+        U6TX["USART6_TX"]
+        SPI1RX["SPI1_RX"]
+        SPI1TX["SPI1_TX"]
+    end
+    subgraph DMA1["DMA1 控制器"]
+        S1["Stream1"]
+    end
+    subgraph DMA2["DMA2 控制器"]
+        S2["Stream1"]
+        S3["Stream2"]
+        S4["Stream3"]
+        S5["Stream6"]
+    end
+    U3RX --> S1
+    U6RX --> S2
+    U6TX --> S5
+    SPI1RX --> S3
+    SPI1TX --> S4
+    S1 --> C4["通道 4"]
+    S2 --> C5["通道 5"]
+    S5 --> C5b["通道 5"]
+    S3 --> C3["通道 3"]
+    S4 --> C3b["通道 3"]</pre></div>
+<p>图中同时画出 SPI1 的两条请求，是为了说明 DMA2 上多外设共存时的通道占用（SPI1_RX 走 <code>DMA2_Stream2</code>、SPI1_TX 走 <code>DMA2_Stream3</code>，都属于通道 3；本单元正文只讨论串口三条，SPI1 的配置在 <code>Core/Src/spi.c</code>）。</p>
+<p>映射关系按外设数据手册的 DMA 请求表确定，不来自代码。本工程实际用到的三对是 <code>USART3_RX → DMA1_Stream1 通道 4</code>、<code>USART6_RX → DMA2_Stream1 通道 5</code>、<code>USART6_TX → DMA2_Stream6 通道 5</code>（<code>Core/Src/usart.c:180-181</code>、<code>:226-227</code>、<code>:244-245</code>，以及 <code>2026sentriomeni.ioc</code> 的 <code>Dma.*</code> 项）。</p>
+<h2 id="普通模式循环模式与双缓冲">普通模式、循环模式与双缓冲</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th><code>NDTR</code> 归零后的行为</th><th><code>EN</code> 位</th><th>适用场景</th></tr></thead><tbody><tr><td>普通 Normal</td><td>停止，等软件重装 <code>NDTR</code></td><td>硬件清零</td><td>定长块传输</td></tr><tr><td>循环 Circular</td><td>自动重装为初值，继续覆盖同一缓冲区</td><td>保持 1</td><td>连续数据流、环形缓冲</td></tr></tbody></table>
+<p>循环模式省掉了软件重装，代价是缓冲区被反复覆盖，软件必须在下一次回卷前把数据取走。外设地址不递增（<code>PINC=0</code>），内存地址递增（<code>MINC=1</code>），所以 DMA 每响应一次请求就把外设寄存器的一个字节搬到内存的下一个位置。</p>
+<p>双缓冲（<code>DMA_SxCR_DBM</code>）在一条流上准备两块内存 <code>M0AR</code> 与 <code>M1AR</code>，<code>CT</code> 位指出当前正在写入哪一块，写满时硬件自动翻转并重装 <code>NDTR</code>。<code>CT</code> 的逐拍时序、回调时刻它指向哪一块、以及 <code>NDTR</code> 为什么变成当前块进度，完整推导在 <code>02-空闲中断与双缓冲接收</code>；本页只保留上面的模式层面结论。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> M0写入 : 使能流，CT=0，NDTR=初值
+    M0写入 --> M1写入 : NDTR 归零，硬件翻转 CT 并重装 NDTR
+    M1写入 --> M0写入 : NDTR 归零，硬件翻转 CT 并重装 NDTR
+    M0写入 --> M0写入 : 软件取走 M0，置 CT=1
+    M1写入 --> M1写入 : 软件取走 M1，清 CT=0</pre></div>
+<h2 id="自研-init-如何覆盖-cubemx-的缓冲模式">自研 Init 如何覆盖 CubeMX 的缓冲模式</h2>
+<p>本工程没有走 HAL 的 DMA 收发接口，而是自建 <code>UsartDma</code> 类。它的 <code>Init()</code> 先把 <code>CR3</code> 的 <code>DMAR</code> 与 <code>DMAT</code> 位置上，再用 <code>DMAEx_MultiBufferStart_NoIT</code> 打开 <code>DBM</code> 并启动流（<code>Communication/Src/usart_dma.cpp:33-48</code>、<code>:118-178</code>）。因此 CubeMX 生成时给每条流选的循环或普通模式，在启动后不再决定运行时行为，<code>DBM</code> 成为实际的缓冲策略。细节见 <code>02-空闲中断与双缓冲接收</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>句柄</th><th>外设</th><th>流与通道</th><th>CubeMX 写入的模式</th><th>自研 <code>Init()</code> 之后的实际行为</th></tr></thead><tbody><tr><td><code>hdma_usart3_rx</code></td><td>USART3 RX</td><td>DMA1_Stream1 通道 4</td><td><code>DMA_CIRCULAR</code></td><td>打开 <code>DBM</code>，按空闲中断手动切块</td></tr><tr><td><code>hdma_usart6_rx</code></td><td>USART6 RX</td><td>DMA2_Stream1 通道 5</td><td><code>DMA_NORMAL</code></td><td>同样被打开 <code>DBM</code>，与 USART3 走同一条代码路径</td></tr><tr><td><code>hdma_usart6_tx</code></td><td>USART6 TX</td><td>DMA2_Stream6 通道 5</td><td><code>DMA_CIRCULAR</code></td><td>未被 <code>Init()</code> 触碰，若走 HAL 发送则保持循环</td></tr></tbody></table>
+<p><code>hdma_usart6_tx</code> 的 <code>DMA_CIRCULAR</code> 在发送侧是不合适的取值：循环模式下发送流写满缓冲后自动重发，HAL 的传输完成回调会被反复触发，发送没有自然终点。本工程全工程没有 <code>Uart_Transmit_DMA</code> 的调用点，所以这条配置目前只是潜在问题，未在线路上表现（<code>04-收发实现与回调链</code> 有完整核对）。</p>
+<p>HAL 的 <code>HAL_DMA_Init</code> 负责把 <code>CR</code> 的其余字段写进去（<code>stm32f4xx_hal_dma.c:227-250</code>），自研启动函数只在此之后改 <code>DBM</code> 与地址，不改通道号。<code>__HAL_DMA_ENABLE</code> 与 <code>__HAL_DMA_SET_COUNTER</code> 是后续重装用到的两个宏（<code>stm32f4xx_hal_dma.h:417</code>、<code>:627</code>）。</p>
+<h2 id="基础层面的易错点">基础层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把 <code>BRR</code> 当波特率</td><td>直接用目标值或整数分频写寄存器</td><td><code>stm32f4xx_hal_uart.c:3784-3792</code> 由宏算出分频值</td></tr><tr><td>忽略 <code>PCLK</code> 来源</td><td>USART1/6 与 USART3 用了同一条总线的分频假设</td><td><code>stm32f4xx_hal_uart.c:3764-3783</code> 区分 <code>PCLK1</code> 与 <code>PCLK2</code></td></tr><tr><td>8 位字长加校验等于 8 数据位</td><td>DBUS 口径按 8 数据位理解</td><td>按手册 <code>M=0</code>、<code>PCE=1</code> 为 7 数据位加校验，待实测</td></tr><tr><td>认为 <code>NDTR</code> 是已传输字节数</td><td>用 <code>NDTR</code> 直接当长度</td><td><code>NDTR</code> 是剩余数，已传输数为 <code>初值 - NDTR</code></td></tr><tr><td>认为 DMA 通道可自由选择</td><td>把请求接到任意流的任意通道</td><td>流与通道的对应由硬件固定，只能查表</td></tr><tr><td>忽略流的独占性</td><td>两个外设抢同一条流</td><td>同一条流同一时刻只服务一个请求</td></tr><tr><td>认为 CubeMX 的 DMA 模式在运行时生效</td><td>按 <code>CIRCULAR</code> 推演接收行为</td><td>自研 <code>Init()</code> 置 <code>DBM</code>，模式被覆盖</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>异步串口靠起始位对齐，靠停止位收尾；8E1 每字节 11 个位时间。</li>
+<li>过采样 16 倍时 <code>USARTDIV = PCLK / (16 × Baud)</code>，BRR 是尾数左移 4 位加 4 位小数；小数分频让 100000 这类非标波特率也能精确命中原值。</li>
+<li>USART1 与 USART6 挂 APB2 取 <code>PCLK2</code>，USART3 挂 APB1 取 <code>PCLK1</code>，两块板分别是 84 MHz 与 42 MHz。</li>
+<li>STM32F4 的 DMA 由流与通道两层构成：流是传输引擎，通道是固定的请求选择；一条流同一时刻只服务一个请求。</li>
+<li>普通模式停在 <code>NDTR</code> 归零，循环模式自动重装；双缓冲用两块内存与 <code>CT</code> 位，把 <code>NDTR</code> 语义从总长度变成当前块的进度。</li>
+<li>本工程的接收 DMA 由自研 <code>Init()</code> 打开 <code>DBM</code>，CubeMX 的循环或普通模式在启动后不再生效。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>搬运方式</td><td>DMA 而非逐字节中断</td><td>CPU 只在帧结束时介入</td><td>引入 <code>NDTR</code>、<code>CT</code> 等状态，出错更难复现</td></tr><tr><td>接收策略</td><td>双缓冲加空闲中断</td><td>不丢字节，帧结束即回调</td><td>依赖空闲间隙，超过缓冲长度的连续流会失效</td></tr><tr><td>波特率</td><td>100000 小数分频</td><td>与 DBUS 规定一致，无舍入误差</td><td>换 <code>PCLK</code> 后偏差会被放大</td></tr><tr><td>帧格式</td><td>8 位字长加偶校验</td><td>与 CubeMX 常见写法一致</td><td>按手册少一个数据位，口径待实测</td></tr><tr><td>过采样</td><td>16 倍</td><td>波特率容差约正负 3%</td><td>最高可用速率减半</td></tr><tr><td>发送 DMA</td><td>USART6 TX 配循环</td><td>未接线，暂无影响</td><td>一旦启用会反复发送，需要改回普通模式</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 8E1 一帧的位序列，并计算 100000 波特下每字节的线时间与每秒字节数上限。</li>
+<li>云台板 <code>PCLK1 = 42 MHz</code>，目标是 200000 波特、过采样 16 倍。写出 <code>USARTDIV</code>、尾数、小数与 <code>BRR</code>，并判断实际波特率是否精确。</li>
+<li>说明 <code>NDTR</code> 与本次已传输字节数的关系，并给出从 <code>NDTR</code> 还原长度的表达式。</li>
+<li>列出本工程三对串口 DMA 的流与通道，并说明为什么不能把 <code>USART6_TX</code> 改接到 DMA1。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>若 USART3 改用 <code>M=1</code>、<code>PCE=1</code>，同样的 100000 波特下 <code>BRR</code> 是否需要改？说明理由，并写出数据位数与校验位的分布。</li>
+<li>一条流被配置为普通模式、<code>NDTR=18</code>、内存不递增。分析它能服务哪种串口用法，以及在什么条件下会丢失数据。</li>
+<li>在保持 <code>PCLK1=42 MHz</code> 的前提下，列出 100000 附近 1% 以内所有能被过采样 16 倍精确表示的波特率，并说明取值间隔。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>三路 USART 的帧格式（:46-53、:75-82、:104-111）与 DMA/NVIC 配置（:180-199、:226-263）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>时钟树（:165-185）与 <code>Uart_Init</code> 调用（:125）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/dma.c</code></td><td>DMA 控制器时钟与 NVIC 使能（:39-63）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>自研接收启动与双缓冲入口（:33-48、:118-178）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c</code></td><td>BRR 与 <code>CR1</code> 写入（:3731-3792）、中断接收的位宽处理（:3650-3657）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h</code></td><td>BRR 宏（:860-878）、清空闲标志序列（:502-508、:540）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c</code></td><td><code>HAL_DMA_Init</code> 写 <code>CR</code>（:227-250）、双缓冲中断回调（:804-825、:878-898）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h</code></td><td><code>__HAL_DMA_ENABLE</code>（:417）、<code>__HAL_DMA_SET_COUNTER</code>（:627）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/usart.c</code></td><td>与云台板逐字相同的串口配置</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-空闲中断与双缓冲接收"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-空闲中断与双缓冲接收</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/01-UART+DMA收发/02-空闲中断与双缓冲接收.md</span></div><div class="dfile__body"><h1 id="空闲中断与双缓冲接收">空闲中断与双缓冲接收</h1>
+<blockquote>
+<p>代码来自云台板固件 <code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code> 与头文件 <code>Communication/Inc/usart_dma.h</code>，底盘板同名文件内容相同。中断入口在两块板的 <code>Core/Src/stm32f4xx_it.c</code>。</p>
+<p>串口外设与 DMA 的寄存器背景见 <code>01-UART与DMA基础</code>；本页只讲接收运行时的定帧与切缓冲。</p>
+</blockquote>
+<p>接收方要处理的数据单元是一帧，而不是单个字节。界定帧结束有几种做法，本工程对 USART3 与 USART6 的接收都选了空闲间隔：线路持续一个字符时间的高电平即认为本帧结束。这个判据与协议无关，也不需要帧头带长度，代价是要求帧与帧之间存在可测的间隙。</p>
+<p>定帧之后是缓冲策略。单块 DMA 缓冲在软件取走数据之前会被覆盖，双缓冲把内存分成两块，用 <code>CT</code> 位指出当前写入目标，软件处理完一块再翻转 <code>CT</code> 归还控制权。本工程的帧长 18 字节远小于 256 字节的缓冲，因此硬件永远不会写满自动切块，<code>CT</code> 的控制权完全在软件手里。</p>
+<p>本页按帧结束信号的取法、<code>IDLE</code> 的置位与清零、<code>NDTR</code> 与 <code>CT</code> 的语义、启动与空闲回调的逐步动作、以及失效条件展开。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Communication/Src/usart_dma.cpp</code></td><td>接收启动、中断分派、空闲处理、切块回调</td></tr><tr><td><code>Communication/Inc/usart_dma.h</code></td><td>缓冲长度、双缓冲成员与重入标志</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>中断入口</td></tr><tr><td>HAL 头文件与源码</td><td>清标志序列与双缓冲回调</td></tr></tbody></table>
+<h2 id="帧结束信号有四种取法">帧结束信号有四种取法</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>做法</th><th>依据</th><th>前提</th><th>本工程</th></tr></thead><tbody><tr><td>固定长度</td><td>数满 N 个字节即一帧</td><td>所有帧等长</td><td>DBUS 是 18 字节，可变长协议不适用</td></tr><tr><td>分隔符</td><td>收到约定的结束字节</td><td>结束字节不出现在载荷中</td><td>未使用</td></tr><tr><td>长度字段</td><td>帧头自带长度</td><td>需要先解析头部</td><td>裁判系统用，见 <code>05-裁判系统协议</code></td></tr><tr><td>空闲间隔</td><td>线路出现一段空闲即认为一帧结束</td><td>帧与帧之间有可测的间隙</td><td>USART3 与 USART6 接收都用这一条</td></tr></tbody></table>
+<p>空闲间隔之所以能当帧结束信号，是因为异步串口在空闲态持续为高，而连续发送的两个字节之间没有低于一个位时间的空隙。接收方一旦检测到线路上持续一个字符时间的高电平，就说明本帧的数据字节已经发完。</p>
+<p>四种做法的可靠性依赖不同：固定长度最省事但只适配一种帧；分隔符要求载荷不出现特殊字节；长度字段需要先成功解析头部；空闲间隔依赖发送方的帧间隔。DBUS 的 18 字节恰好也是定长的，所以这一路即使不用空闲中断，理论上也能靠固定长度收帧，但换成裁判系统那种变长协议就不成立。</p>
+<h2 id="idle-标志何时置位如何清零">IDLE 标志何时置位、如何清零</h2>
+<p>STM32F4 的 USART 提供 <code>IDLE</code> 标志。接收方在收到最后一个停止位之后，若 RX 线保持空闲达到一个字符时间（约 10 到 11 个位时间，随帧格式而定，按手册），且数据寄存器尚未产生新的 <code>RXNE</code>，硬件就置 <code>IDLE</code>。使能 <code>CR1</code> 的 <code>IDLEIE</code> 位后，该标志会产生中断。</p>
+<p><code>IDLE</code> 的清零是一次两段读：先读状态寄存器 <code>SR</code>，再读数据寄存器 <code>DR</code>。HAL 把这一对读封装成 <code>__HAL_UART_CLEAR_PEFLAG</code>，并在 <code>__HAL_UART_CLEAR_IDLEFLAG</code> 里复用（<code>Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:502-508</code>、<code>:540</code>）。同一对读还会清掉 <code>RXNE</code>、<code>ORE</code>、<code>FE</code>、<code>NE</code>。</p>
+<p>100000 波特、8E1 时，一个字符时间是 11 个位时间即 110 微秒。DBUS 的 18 字节在本帧内连续发出，耗时约 1980 微秒，之后到下一帧有约 12 毫秒的空闲（帧间隔按 DJI 公布的约 14 毫秒计，按手册），<code>IDLE</code> 的检测窗口远小于帧间隔。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant TX as 遥控器发送方
+    participant RX as USART3 接收器
+    participant DMA as DMA1_Stream1
+    participant IRQ as USART3_IRQHandler
+    TX->>RX: 起始位与 byte0 到 byte17，连续发送
+    Note over RX: 每个字节产生一次 RXNE 请求
+    RX->>DMA: 第 1 到第 18 次 DMA 请求
+    DMA->>DMA: 每搬 1 字节 NDTR 减 1
+    TX->>RX: 最后一个停止位结束，线路保持高
+    Note over RX: 线路空闲达到一个字符时间，且无新 RXNE
+    RX->>IRQ: 置 IDLE 标志，若 IDLEIE 使能则产生中断
+    IRQ->>RX: 读 SR 再读 DR，清 IDLE 与 RXNE</pre></div>
+<h2 id="双缓冲把-ndtr-变成当前块的进度">双缓冲把 NDTR 变成当前块的进度</h2>
+<p>普通接收 DMA 只朝一块内存写，软件取走数据必须在下一次回卷前完成，否则旧数据被覆盖。双缓冲（<code>DMA_SxCR_DBM</code>）把内存分成 <code>M0AR</code> 与 <code>M1AR</code> 两块，用 <code>CR</code> 的 <code>CT</code> 位标记当前写入目标：</p>
+<ul>
+<li><code>NDTR</code> 在 <code>DBM</code> 下表示当前那一块的剩余计数，不是两块的总长度。</li>
+<li>当前块写满（<code>NDTR</code> 归零）时，硬件自动翻转 <code>CT</code>、把 <code>NDTR</code> 重装为初值，继续写另一块。软件不必重装计数。</li>
+<li>软件要主动切块时，翻转 <code>CT</code> 即可，下一字节写向新目标；已写满或半满的块可以安全读取，只要 DMA 不在写它。</li>
+</ul>
+<p>HAL 在中断回调里对 <code>CT</code> 的取值解释了它的方向：传输完成且 <code>DBM</code> 置位时，<code>CT</code> 为 0 调用 <code>XferM1CpltCallback</code>，<code>CT</code> 为 1 调用 <code>XferCpltCallback</code>（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c:878-898</code>）。回调发生时硬件已经切到下一块，所以 <code>CT</code> 指向下一块，刚写完的是另一块。本工程不依赖这两个回调，而是自己在空闲中断里读 <code>CT</code> 并翻转。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant SW as 软件
+    participant DMA as DMA 流
+    participant M0 as 缓冲 M0
+    participant M1 as 缓冲 M1
+    SW->>DMA: 置 DBM，写 M0AR/M1AR，NDTR=256，使能
+    Note over DMA: CT=0，当前目标 M0
+    DMA->>M0: 写入 18 字节，NDTR 从 256 减到 238
+    Note over M0: 本帧结束，M1 尚为空闲
+    SW->>DMA: 空闲中断：禁用流
+    SW->>SW: len = 256 − NDTR = 18
+    SW->>M0: 解码 rx_buf_[0] 的 18 字节
+    SW->>DMA: 置 CT=1，切换当前目标
+    SW->>DMA: NDTR 重装 256，使能
+    DMA->>M1: 写入下一帧，NDTR 从 256 减到 238
+    SW->>DMA: 空闲中断：禁用流，len=18
+    SW->>M1: 解码 rx_buf_[1] 的 18 字节
+    SW->>DMA: 清 CT=0，NDTR 重装 256，使能</pre></div>
+<h2 id="启动路径的五步">启动路径的五步</h2>
+<p>自研类的接收启动与空闲处理集中在 <code>Communication/Src/usart_dma.cpp</code>。启动路径（<code>:33-48</code> <code>Init()</code>）：</p>
+<ol>
+<li><code>__HAL_UART_CLEAR_IDLEFLAG(huart_)</code> 先清一次可能残留的 <code>IDLE</code>。</li>
+<li><code>__HAL_UART_ENABLE_IT(huart_, UART_IT_IDLE)</code> 打开 <code>IDLEIE</code>。</li>
+<li><code>SET_BIT(huart_->Instance->CR3, USART_CR3_DMAR)</code> 让 USART 的接收请求接到 DMA。</li>
+<li><code>DMAEx_MultiBufferStart_NoIT(huart_->hdmarx, &#x26;DR, rx_buf_[0], rx_buf_[1], UART_RX_BUF_LEN)</code> 置 <code>DBM</code>、写两个内存地址与 <code>NDTR</code>、使能流。</li>
+<li><code>SET_BIT(huart_->Instance->CR3, USART_CR3_DMAT)</code> 打开发送请求，发送侧目前没有使用。</li>
+</ol>
+<p>五步的顺序有依赖：<code>IDLE</code> 必须在 <code>IDLEIE</code> 之前清，否则上一次运行残留的标志会立即触发中断；<code>DMAR</code> 必须在流使能之前置位，否则最早的几个字节不会产生 DMA 请求而直接进 <code>DR</code>。</p>
+<h2 id="中断里的分派与重入保护">中断里的分派与重入保护</h2>
+<p>中断入口与分派（<code>:50-72</code> <code>IRQHandler</code>、<code>Core/Src/stm32f4xx_it.c:247-256</code>）：</p>
+<ol>
+<li><code>USART3_IRQHandler</code> 先调用 <code>Uart_IRQHandler(&#x26;huart3)</code>，随后调用 <code>HAL_UART_IRQHandler(&#x26;huart3)</code>。</li>
+<li><code>Uart_IRQHandler</code> 转发到 <code>UsartDma::IRQHandler</code>，后者用 <code>findInstance</code> 按 <code>huart</code> 找回实例。</li>
+<li>若 <code>IDLE</code> 标志与 <code>IDLEIE</code> 都成立，且 <code>callback_busy_</code> 为 0，调用 <code>uartRxIdleCallback</code>。</li>
+<li>若 <code>TC</code> 标志与 <code>TCIE</code> 都成立，调用 <code>uartTxCpltCallback</code> 清 <code>tx_busy_</code>。</li>
+</ol>
+<p><code>callback_busy_</code> 是一个单字节重入标志。它在空闲回调开头置 1、结尾置 0，作用是挡住在处理过程中再次进入空闲回调。它挡不住的是更早到达的下一次 <code>IDLE</code>：那时标志已复位，新的一次中断会正常处理。</p>
+<p>HAL 的 <code>HAL_UART_IRQHandler</code> 也被调用，但它只在 <code>ReceptionType == UART_RECEPTION_TOIDLE</code> 时处理 <code>IDLE</code>（<code>stm32f4xx_hal_uart.c:2484-2486</code>），本工程从未设置该字段，所以 <code>IDLE</code> 的实际处理完全落在自研函数里。</p>
+<h2 id="空闲回调的九个动作">空闲回调的九个动作</h2>
+<p>（<code>:81-99</code>）</p>
+<ol>
+<li><code>callback_busy_ = 1</code> 置重入保护。</li>
+<li><code>__HAL_UART_CLEAR_IDLEFLAG(huart_)</code> 清 <code>IDLE</code>。</li>
+<li><code>__HAL_DMA_DISABLE(huart_->hdmarx)</code> 停流，保证接下来读的缓冲不再被写。</li>
+<li><code>rx_data_len_ = UART_RX_BUF_LEN - huart_->hdmarx->Instance->NDTR</code>，<code>NDTR</code> 是剩余数，相减得到本块已写入的字节数。</li>
+<li>读 <code>CR</code> 的 <code>CT</code> 位：为 1 走 <code>dmaM1RxCpltCallback</code>，为 0 走 <code>dmaM0RxCpltCallback</code>。</li>
+<li><code>dmaM0RxCpltCallback</code> 置 <code>CT</code> 并解码 <code>rx_buf_[0]</code>（<code>:106-110</code>）；<code>dmaM1RxCpltCallback</code> 清 <code>CT</code> 并解码 <code>rx_buf_[1]</code>（<code>:112-116</code>）。</li>
+<li><code>__HAL_DMA_SET_COUNTER(huart_->hdmarx, UART_RX_BUF_LEN)</code> 把 <code>NDTR</code> 重装为 256。</li>
+<li><code>__HAL_DMA_ENABLE(huart_->hdmarx)</code> 重新使能流。</li>
+<li><code>callback_busy_ = 0</code>。</li>
+</ol>
+<p>第 3 步的停流是整个过程里唯一的排他手段。停流之前不读缓冲，停流之后到重新使能之间的这段窗口里到达的字节不会被 DMA 接收。对 100000 波特来说，一个字节时间 110 微秒，窗口只要短于这个量级就不会丢字节；解析耗时越长，风险越大。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> M0写入 : Init 使能，CT=0，NDTR=256
+    M0写入 --> M0已读 : 空闲中断，禁用流并解码 rx_buf_0
+    M0已读 --> M1写入 : 置 CT=1，NDTR=256，使能流
+    M1写入 --> M1已读 : 空闲中断，禁用流并解码 rx_buf_1
+    M1已读 --> M0写入 : 清 CT=0，NDTR=256，使能流
+    note right of M0写入
+        本工程的 18 字节远小于 256
+        硬件不会因写满而自动切块
+        CT 始终由软件翻转
+    end note</pre></div>
+<h2 id="边界与失效条件">边界与失效条件</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>条件</th><th>行为</th><th>依据</th></tr></thead><tbody><tr><td>一帧短于 256 字节</td><td>空闲中断先到，软件按实际长度解码并切块</td><td><code>usart_dma.cpp:88-96</code></td></tr><tr><td>连续流超过 256 字节且没有空闲</td><td>硬件自动翻转 <code>CT</code> 并重装 <code>NDTR</code>，软件的 <code>CT</code> 假设与硬件错位，可能解码正在写入的那一块</td><td>按手册，属推断，待实测</td></tr><tr><td>禁用流到重新使能之间到达字节</td><td>流未响应请求，<code>DR</code> 未被读走，可能置 <code>ORE</code> 或丢字节</td><td>属推断，待实测</td></tr><tr><td><code>callback_busy_</code> 为 1 时空闲到达</td><td>本次不处理，<code>IDLE</code> 未清，退出后中断挂起并再次进入</td><td><code>usart_dma.cpp:61-63</code></td></tr><tr><td>没有实例注册</td><td><code>findInstance</code> 返回空，直接返回，不处理</td><td><code>usart_dma.cpp:52-55</code></td></tr></tbody></table>
+<p>四类边界里只有第一类在本工程的正常帧格式下经常发生。第二类需要连续流长度超过 256 字节，第三类需要解析耗时接近一个字节时间，都属异常工况。</p>
+<h2 id="接收层面的易错点">接收层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把 <code>NDTR</code> 当已传输数</td><td>长度算成剩余数本身</td><td>正确式为 <code>256 - NDTR</code></td></tr><tr><td>用 <code>IDLE</code> 标志判断却不清标志</td><td>中断反复触发</td><td><code>usart_dma.cpp:85</code> 先清再处理</td></tr><tr><td>在 DBM 下用两块的合计长度</td><td><code>NDTR</code> 被当成 512</td><td><code>DBM</code> 下 <code>NDTR</code> 只覆盖当前块</td></tr><tr><td>依赖硬件自动切块</td><td>连续大流量下解码写一半的缓冲</td><td>本工程帧长 18，远小于 256，实际不会触发</td></tr><tr><td>认为 <code>HAL_UART_IRQHandler</code> 会处理 <code>IDLE</code></td><td>找不到处理代码</td><td>HAL 只在 <code>ReceptionType==TOIDLE</code> 时处理（<code>stm32f4xx_hal_uart.c:2484-2486</code>），本工程从未设置该字段</td></tr><tr><td>在空闲中断里做长耗时的解析</td><td>解析期间后续中断被同一优先级阻塞</td><td>解析当前在 <code>decode_cb_</code> 内同步执行，见 <code>05-易错点与调试</code></td></tr><tr><td>认为 <code>callback_busy_</code> 能挡住所有重入</td><td>标志在回调结尾已复位</td><td>它只挡住回调执行期间的重入</td></tr><tr><td>只清 <code>IDLE</code> 不管 <code>ORE</code></td><td>溢出错误长期挂起</td><td>同一对读会一并清 <code>ORE</code>、<code>FE</code>、<code>NE</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>空闲中断用线路空闲一个字符时间作为帧结束信号，适配变长协议；100000 波特、8E1 下窗口是 110 微秒。</li>
+<li><code>IDLE</code> 由读 <code>SR</code> 再读 <code>DR</code> 清零，同一对读一并清 <code>RXNE</code> 与各类错误标志。</li>
+<li>双缓冲在一条流上提供两块内存，<code>CT</code> 指向当前写入目标，<code>NDTR</code> 是当前块的剩余计数。</li>
+<li>本工程在空闲中断里禁用流、算长度、解码、翻转 <code>CT</code>、重装 <code>NDTR</code>、再使能，硬件自动切块没有参与。</li>
+<li>帧长 18 字节远小于缓冲 256 字节，因此每帧必然由空闲中断收尾，软件独占 <code>CT</code> 的控制权。</li>
+<li>启动路径的五步有依赖顺序，清标志先于使能中断，置 <code>DMAR</code> 先于使能流。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>定帧方式</td><td>空闲中断</td><td>不需要长度字段或分隔符</td><td>依赖帧间空闲，连续流会失效</td></tr><tr><td>缓冲策略</td><td>两块各 256 字节</td><td>解码时另一块可继续收</td><td>占用 512 字节静态内存</td></tr><tr><td>切块时机</td><td>在空闲中断里手动翻转 <code>CT</code></td><td>与解码边界严格对齐</td><td>逻辑依赖帧长小于缓冲这一前提</td></tr><tr><td>计数重装</td><td>每次处理完重装 256</td><td>每帧长度从零起算</td><td>处理窗口内不能丢字节</td></tr><tr><td>重入保护</td><td><code>callback_busy_</code> 单字节标志</td><td>实现简单</td><td>只挡空闲回调，不挡解析耗时</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>NDTR</code> 初值 256、当前值 238 时本块的已写入字节数，并说明为什么用减法。</li>
+<li>100000 波特、8E1 下，空闲检测窗口是多少微秒？与 DBUS 的帧间隔相比差几个数量级？</li>
+<li>说明 <code>__HAL_UART_CLEAR_IDLEFLAG</code> 为什么是一次读 <code>SR</code> 加一次读 <code>DR</code>，并列出它同时清掉的标志。</li>
+<li>画出一次完整接收中 <code>CT</code> 的取值变化，从 <code>Init</code> 到第二帧解码结束。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>若把缓冲长度从 256 改成 16，DBUS 的 18 字节一帧会发生什么？给出至少两种可能的失败形式。</li>
+<li>在空闲中断里把解码改为投递到队列、由任务处理，需要动哪几行？说明这样改之后 <code>CT</code> 翻转与 <code>NDTR</code> 重装是否还必须留在中断里。</li>
+<li>设计一种机制，在不改动帧格式的前提下检测连续流超过 256 字节导致的 <code>CT</code> 错位，并写出判据。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_dma.h</code></td><td>缓冲长度 256（:8-10）、双缓冲与 <code>callback_busy_</code>（:40-46）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>接收启动（:33-48）、中断分派（:50-72）、空闲处理（:81-99）、切块回调（:106-116）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td><code>USART3_IRQHandler</code> 调用自研处理（:247-256）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h</code></td><td>清 <code>IDLE</code> 的读序列（:502-508、:540）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c</code></td><td>HAL 只在待空闲接收时处理 <code>IDLE</code>（:2484-2486）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c</code></td><td>双缓冲下 <code>CT</code> 与回调的对应（:878-898）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-本项目USART外设分配"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-本项目USART外设分配</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/01-UART+DMA收发/03-本项目USART外设分配.md</span></div><div class="dfile__body"><h1 id="本项目-usart-外设分配">本项目 USART 外设分配</h1>
+<blockquote>
+<p>本页对照云台板固件 <code>2026OmniSentryGimbal</code> 与底盘板固件 <code>2026OmniSentryChassis</code>。两块板的 <code>Core/Src/usart.c</code> 逐字相同，差异全部出现在 <code>Core/Src/main.c</code> 的注册调用与 <code>Core/Src/stm32f4xx_it.c</code> 的中断入口。</p>
+<p>帧格式与 DMA 原理见 <code>01-UART与DMA基础</code>，接收运行时见 <code>02-空闲中断与双缓冲接收</code>。</p>
+</blockquote>
+<p>两块板都初始化了 USART1、USART3、USART6 三个实例，各自面向一条独立链路：调试打印、遥控器接收机、裁判系统。三路里只有 USART3 的接收链路在两块板上都在工作；USART1 没有配 DMA 也没有开中断，USART6 在云台板上没有注册回调。</p>
+<p>分配表本身很短，容易出错的是它的三个隐含约束：外设挂在哪条总线上决定 <code>PCLK</code> 与 <code>BRR</code>，引脚复用号决定是否要改 <code>GPIO_AF</code>，中断优先级必须落在 FreeRTOS 允许调用内核接口的区间里。本文按这三条约束展开。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/usart.c</code></td><td>三路 USART 参数、引脚与优先级</td></tr><tr><td><code>Core/Src/dma.c</code></td><td>DMA 时钟与流中断使能</td></tr><tr><td><code>Core/Src/main.c</code></td><td>初始化顺序与注册调用</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>五个中断入口</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>优先级位宽与 syscall 门槛</td></tr><tr><td><code>Communication/Src/*.cpp</code></td><td>回调与未接线链路</td></tr></tbody></table>
+<h2 id="三路串口各自接什么">三路串口各自接什么</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th>角色</th><th>链路</th><th>数据方向</th><th>说明</th></tr></thead><tbody><tr><td>USART1</td><td><code>DebugUART</code></td><td>调试串口</td><td>双向，实际只发</td><td>在 IMU 任务里初始化，用于打印</td></tr><tr><td>USART3</td><td>DBUS 接收</td><td>遥控器接收机</td><td>只收</td><td>云台与底盘都注册</td></tr><tr><td>USART6</td><td>裁判系统</td><td>裁判系统串口</td><td>双向</td><td>底盘注册，云台板预留未注册</td></tr></tbody></table>
+<p>USART1 的初始化不在 <code>main.c</code> 里，而是由 <code>Task/Src/ImuTask.cpp:34</code> 的 <code>DebugUART_Init(&#x26;huart1)</code> 触发。因此它的初始化时机晚于 USART3 与 USART6，这也解释了初始化顺序表里它排在最后。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    subgraph GIMBAL["云台板"]
+        G1["USART1&#x3C;br/>DebugUART"]
+        G3["USART3&#x3C;br/>DBUS 接收"]
+        G6["USART6&#x3C;br/>裁判系统预留"]
+    end
+    subgraph CHASSIS["底盘板"]
+        C3["USART3&#x3C;br/>DBUS 接收"]
+        C6["USART6&#x3C;br/>裁判系统"]
+    end
+    DR16["遥控器接收机&#x3C;br/>100000 8E1"]
+    REF["裁判系统串口&#x3C;br/>115200 8N1"]
+    PC["上位机调试&#x3C;br/>115200 8N1"]
+    DR16 --> G3
+    DR16 --> C3
+    REF --> C6
+    PC --> G1
+    G3 --> D1["DMA1_Stream1 通道 4&#x3C;br/>NVIC 优先级 5"]
+    G6 --> D2["DMA2_Stream1 通道 5&#x3C;br/>流中断未使能，处理函数不会触发"]
+    C6 --> D3["DMA2_Stream1 通道 5&#x3C;br/>NVIC 优先级 5"]
+    C6 --> D4["DMA2_Stream6 通道 5&#x3C;br/>TX 循环模式"]</pre></div>
+<h2 id="时钟域引脚复用与中断优先级">时钟域、引脚复用与中断优先级</h2>
+<p>USART1 与 USART6 挂 APB2，USART3 挂 APB1。云台板的 <code>APB2CLKDivider = RCC_HCLK_DIV2</code>、<code>APB1CLKDivider = RCC_HCLK_DIV4</code>（<code>Core/Src/main.c:184-185</code>），对应 <code>PCLK2 = 84 MHz</code> 与 <code>PCLK1 = 42 MHz</code>。HAL 在 <code>UART_SetConfig</code> 里按实例判断取哪个 <code>PCLK</code>（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c:3764-3783</code>）。</p>
+<p>三个实例都走 GPIO 复用功能模式：<code>GPIO_MODE_AF_PP</code>、<code>GPIO_NOPULL</code>、<code>GPIO_SPEED_FREQ_VERY_HIGH</code>。复用号按外设分布：USART1 与 USART3 用 <code>GPIO_AF7</code>，USART6 用 <code>GPIO_AF8</code>（<code>Core/Src/usart.c:144</code>、<code>:175</code>、<code>:221</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th>RX 引脚</th><th>TX 引脚</th><th>复用号</th><th>出处</th></tr></thead><tbody><tr><td>USART1</td><td>PB7</td><td>PA9</td><td><code>GPIO_AF7_USART1</code></td><td><code>usart.c:137-152</code></td></tr><tr><td>USART3</td><td>PC11</td><td>PC10</td><td><code>GPIO_AF7_USART3</code></td><td><code>usart.c:171-176</code></td></tr><tr><td>USART6</td><td>PG9</td><td>PG14</td><td><code>GPIO_AF8_USART6</code></td><td><code>usart.c:217-222</code></td></tr></tbody></table>
+<p>USART1 的引脚分布需要单记：RX 在 PB7、TX 在 PA9，不在同一个端口上。这是 CubeMX 按可用复用功能自动选出的组合，迁移到别的板子时不一定能原样保留。</p>
+<p>中断优先级方面，所有外设中断的抢占优先级都是 5，由 <code>usart.c</code> 与 <code>dma.c</code> 里的 <code>HAL_NVIC_SetPriority</code> 写入（<code>Core/Src/usart.c:198</code>、<code>:262</code>；<code>Core/Src/dma.c:48-61</code>）。FreeRTOS 侧的门槛值 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code> 也是 5（<code>Core/Inc/FreeRTOSConfig.h:110</code>），<code>configPRIO_BITS</code> 为 4（<code>:99</code>），<code>configLIBRARY_LOWEST_INTERRUPT_PRIORITY</code> 为 15（<code>:104</code>）。</p>
+<p>数值大于等于 5 的中断才允许调用 FreeRTOS 的 <code>FromISR</code> 接口，5 是允许调用的边界值。本工程的串口与 DMA 中断正好卡在这个边界上，优先级不能再调小，否则在 ISR 里调用内核接口会触发断言。</p>
+<h2 id="三路串口的完整参数对照">三路串口的完整参数对照</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项目</th><th>USART1</th><th>USART3</th><th>USART6</th></tr></thead><tbody><tr><td>波特率</td><td>115200</td><td>100000</td><td>115200</td></tr><tr><td>字长</td><td><code>UART_WORDLENGTH_8B</code></td><td><code>UART_WORDLENGTH_8B</code></td><td><code>UART_WORDLENGTH_8B</code></td></tr><tr><td>校验</td><td><code>UART_PARITY_NONE</code></td><td><code>UART_PARITY_EVEN</code></td><td><code>UART_PARITY_NONE</code></td></tr><tr><td>停止位</td><td>1</td><td>1</td><td>1</td></tr><tr><td>模式</td><td><code>UART_MODE_TX_RX</code></td><td><code>UART_MODE_RX</code></td><td><code>UART_MODE_TX_RX</code></td></tr><tr><td>过采样</td><td>16 倍</td><td>16 倍</td><td>16 倍</td></tr><tr><td>DMA</td><td>无</td><td>RX：DMA1_Stream1 通道 4，循环</td><td>RX：DMA2_Stream1 通道 5，普通；TX：DMA2_Stream6 通道 5，循环</td></tr><tr><td>NVIC</td><td>未使能</td><td>优先级 5</td><td>优先级 5</td></tr><tr><td>帧格式出处</td><td><code>usart.c:47-53</code></td><td><code>usart.c:76-82</code></td><td><code>usart.c:105-111</code></td></tr><tr><td>DMA 出处</td><td>无</td><td><code>usart.c:180-199</code></td><td><code>usart.c:226-263</code></td></tr></tbody></table>
+<p>USART3 的 <code>Init.Mode = UART_MODE_RX</code> 只置了接收使能位，发送引脚 PC10 虽然配成复用，但 <code>TE</code> 位没有打开，硬件不发数据。</p>
+<p>表中 USART3 的 <code>UART_WORDLENGTH_8B</code> 加 <code>UART_PARITY_EVEN</code> 不能单读成已核实的 8E1：按 STM32F4 手册，<code>M=0</code> 且 <code>PCE=1</code> 实为 7 数据位加 1 个校验位，HAL 的中断接收路径也只取 <code>DR</code> 的低 7 位（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c:3650-3657</code>）。本工程接收走 DMA，按字节搬 <code>DR</code> 低 8 位，8 个数据位能否完整重组属按手册推断，标为待实测；完整分析见 <code>01-UART与DMA基础</code> 的「三路串口的帧格式与校验口径」。</p>
+<p>表中 DMA 一列的循环与普通模式来自 CubeMX，运行时会被自研 <code>Init()</code> 的 <code>DBM</code> 覆盖（<code>02-空闲中断与双缓冲接收</code> 有完整推导）。排查接收行为时以 <code>CR</code> 的 <code>DBM</code> 与 <code>CT</code> 为准，不按这里的模式推演。</p>
+<h2 id="初始化顺序与两块板的注册差异">初始化顺序与两块板的注册差异</h2>
+<p><code>MX_DMA_Init</code> 先于 USART 初始化执行（<code>Core/Src/main.c:110-118</code>），顺序是 <code>MX_DMA_Init</code>、<code>MX_CAN1_Init</code>、<code>MX_USART3_UART_Init</code>、<code>MX_USART6_UART_Init</code>、<code>MX_CAN2_Init</code>、<code>MX_SPI1_Init</code>、<code>MX_I2C3_Init</code>、<code>MX_TIM10_Init</code>、<code>MX_USART1_UART_Init</code>。DMA 控制器时钟与 NVIC 在 <code>MX_DMA_Init</code> 里打开（<code>Core/Src/dma.c:39-63</code>），USART 的 <code>HAL_UART_MspInit</code> 随后才引用 <code>hdma_usart3_rx</code> 等句柄。</p>
+<p>初始化完成后进入自研注册。两块板的差别只有一处：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant M as main()
+    participant U as Uart_Init
+    participant D as UsartDma 实例表
+    participant I as stm32f4xx_it.c
+    M->>M: MX_DMA_Init 打开 DMA1/DMA2 与 NVIC
+    M->>M: MX_USART3_UART_Init 与 MX_USART6_UART_Init
+    alt 云台板
+        M->>U: Uart_Init(&#x26;huart3, MyUartCallbackFun)
+        U->>D: new UsartDma，注册为第 1 个实例
+        Note over D: 实例表只有 1 项
+        I->>D: USART3_IRQHandler 调 Uart_IRQHandler(&#x26;huart3)
+        Note over I: USART6_IRQHandler 只调 HAL_UART_IRQHandler，无自研处理
+    else 底盘板
+        M->>U: Uart_Init(&#x26;huart3, MyUartCallbackFun)
+        M->>U: Uart_Init(&#x26;huart6, RefereeUartCallback)
+        U->>D: 注册两个实例
+        I->>D: USART3 与 USART6 中断都调 Uart_IRQHandler
+    end</pre></div>
+<p>云台板的注册在 <code>Core/Src/main.c:125</code>，回调 <code>MyUartCallbackFun</code> 在 <code>main.c:72-76</code>，函数体只有一句 <code>DBUS_Decode(buf, len)</code>。底盘板的注册在 <code>Core/Src/main.c:131-132</code>，回调分别是 <code>main.c:72-76</code> 的 <code>MyUartCallbackFun</code> 与 <code>main.c:79-81</code> 的 <code>RefereeUartCallback</code>。</p>
+<p><code>MX_DMA_Init</code> 排在最前的原因不是习惯：<code>HAL_UART_MspInit</code> 内部要把 DMA 句柄挂到 <code>huart->hdmarx</code> 上，而这些句柄的时钟与中断使能在 <code>MX_DMA_Init</code> 里完成。顺序颠倒会让 USART 的 DMA 通道没有时钟。</p>
+<h2 id="五个中断入口">五个中断入口</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>中断</th><th>云台板处理函数</th><th>底盘板处理函数</th><th>出处</th></tr></thead><tbody><tr><td><code>USART3_IRQn</code></td><td>先 <code>Uart_IRQHandler(&#x26;huart3)</code>，再 <code>HAL_UART_IRQHandler(&#x26;huart3)</code></td><td>同左</td><td>云台 <code>stm32f4xx_it.c:247-256</code></td></tr><tr><td><code>USART6_IRQn</code></td><td>只有 <code>HAL_UART_IRQHandler(&#x26;huart6)</code></td><td>先 <code>Uart_IRQHandler(&#x26;huart6)</code>，再 <code>HAL_UART_IRQHandler(&#x26;huart6)</code></td><td>云台 <code>stm32f4xx_it.c:359-368</code>，底盘 <code>stm32f4xx_it.c:359-368</code></td></tr><tr><td><code>DMA1_Stream1_IRQn</code></td><td><code>HAL_DMA_IRQHandler(&#x26;hdma_usart3_rx)</code></td><td>同左</td><td>云台与底盘 <code>stm32f4xx_it.c:177-186</code></td></tr><tr><td><code>DMA2_Stream1_IRQn</code></td><td><code>HAL_DMA_IRQHandler(&#x26;hdma_usart6_rx)</code></td><td>同左</td><td>云台与底盘 <code>stm32f4xx_it.c:261-270</code></td></tr><tr><td><code>DMA2_Stream6_IRQn</code></td><td><code>HAL_DMA_IRQHandler(&#x26;hdma_usart6_tx)</code></td><td>同左</td><td>云台与底盘 <code>stm32f4xx_it.c:345-354</code></td></tr></tbody></table>
+<p>DMA 流的 NVIC 虽然使能，但自研启动函数只置了 <code>CR</code> 的 <code>EN</code> 位，没有打开 <code>TCIE</code>、<code>HTIE</code>，所以三条流的传输完成与半传输中断不会产生，<code>HAL_DMA_IRQHandler</code> 目前不会被调用。相关调用链见 <code>04-收发实现与回调链</code>。</p>
+<p>两处顺序需要留意。第一，<code>USART3_IRQHandler</code> 里自研处理排在 HAL 处理之前，<code>USART6_IRQHandler</code> 在云台板上没有自研处理。第二，回调链是先按句柄找实例，找不到就直接返回，因此底盘板注册了 <code>huart6</code> 之后，同一个 <code>Uart_IRQHandler</code> 能同时服务两个串口。</p>
+<h2 id="未接线的三处">未接线的三处</h2>
+<ol>
+<li>云台板没有注册 <code>huart6</code>。<code>Communication/Src/referee_decode.cpp:159-165</code> 定义了 <code>RefereeCallback</code>，<code>referee_decode.cpp:10-11</code> 有全局的 <code>refereeproto</code> 与 <code>referee_decode</code>，但云台板上没有任何 <code>Uart_Init(&#x26;huart6, ...)</code> 调用，也没有 <code>Uart_IRQHandler(&#x26;huart6)</code>，裁判系统数据在云台板上没有接收通路。底盘板由 <code>Core/Src/main.c:132</code> 补上这一环。</li>
+<li><code>Communication/Src/usart_decode.cpp</code> 定义 <code>MyUartCallback</code>、<code>proto6</code>、<code>decoder6</code>（<code>usart_decode.cpp:14-16</code>、<code>:48-52</code>），全工程没有调用点：<code>Uart_Init</code> 只收到 <code>MyUartCallbackFun</code>（<code>main.c:125</code>）。这条链路属于未接线实现。</li>
+<li><code>Communication_Summary.md</code> 里出现的 <code>Uart_Init(&#x26;huart1, DBUS_Decode)</code>、<code>Uart_Init(&#x26;huart6, MyUartCallback)</code> 是说明文档中的示例，不是实际调用点。</li>
+</ol>
+<h2 id="外设分配相关的易错点">外设分配相关的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>认为两块板串口配置不同</td><td>去底盘板找不同的波特率</td><td>两个 <code>usart.c</code> 逐字相同</td></tr><tr><td>在云台板上找裁判系统数据</td><td>数据全为初始值</td><td>云台板未注册 <code>huart6</code></td></tr><tr><td>忽略 <code>PCLK</code> 差异</td><td>用同一 <code>BRR</code> 套三个实例</td><td>USART3 取 42 MHz，USART1/6 取 84 MHz</td></tr><tr><td>认为 USART3 能发</td><td>写发送函数等数据</td><td><code>UART_MODE_RX</code> 未置 <code>TE</code></td></tr><tr><td>认为 DMA 流中断在跑</td><td>在 <code>HAL_DMA_IRQHandler</code> 里设断点等命中</td><td>自研启动未开 <code>TCIE</code>/<code>HTIE</code></td></tr><tr><td>把示例文档当调用点</td><td>顺着 <code>Communication_Summary.md</code> 找注册</td><td>实际注册只在 <code>main.c</code></td></tr><tr><td>调低中断优先级</td><td>串口中断改成 4 后内核接口断言</td><td>所有外设中断都是 5，等于门槛值</td></tr><tr><td>按 <code>usart.c</code> 的 DMA 模式推演接收</td><td>与运行时行为不符</td><td>模式被自研 <code>Init()</code> 的 <code>DBM</code> 覆盖</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>两块板的三路 USART 参数逐字相同，差异只在注册与中断入口。</li>
+<li>USART1 是调试口，无 DMA 无中断；USART3 是 DBUS 只收口，双缓冲加空闲中断；USART6 是裁判系统口，底盘板使用，云台板预留。</li>
+<li>USART1 与 USART6 挂 APB2 取 84 MHz，USART3 挂 APB1 取 42 MHz。</li>
+<li>USART1 与 USART3 用 <code>GPIO_AF7</code>，USART6 用 <code>GPIO_AF8</code>；USART1 的 RX 与 TX 分布在不同端口。</li>
+<li>所有外设中断优先级为 5，等于 FreeRTOS 的 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code>。</li>
+<li>云台板没有注册 <code>huart6</code>，<code>usart_decode.cpp</code> 的协议链路与裁判链路在云台板上未接线。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>调试口</td><td>USART1 轮询式收发、无 DMA</td><td>不占 DMA 流与中断</td><td>打印量大时会阻塞</td></tr><tr><td>DBUS 口</td><td>USART3 只收</td><td>省一条发送链路与 DMA 流</td><td>无法向遥控器回发</td></tr><tr><td>裁判口</td><td>USART6 收发均配 DMA</td><td>为双向预留</td><td>云台板未注册，代码空转</td></tr><tr><td>DMA 资源</td><td>USART3 占 DMA1_Stream1，USART6 占 DMA2</td><td>分散在两个控制器</td><td>流与通道固定，重映射时要查表</td></tr><tr><td>中断优先级</td><td>全部取 5</td><td>与 FreeRTOS 门槛一致，允许调 <code>FromISR</code></td><td>无优先级区分，串口与 DMA 互不抢占</td></tr><tr><td>初始化位置</td><td>三路都在 <code>main.c</code>，调试口在任务里</td><td>早期链路一次配齐</td><td>USART1 的初始化时机隐式依赖任务启动顺序</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出三路 USART 的总线归属、<code>PCLK</code>、引脚与复用号。</li>
+<li>说明云台板与底盘板在 <code>Uart_Init</code> 调用上的唯一差异，并指出差异所在的文件与行号。</li>
+<li>解释为什么 <code>HAL_DMA_IRQHandler</code> 在三条流的中断入口里却不会被触发。</li>
+<li>写出 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code> 的取值与含义，并说明串口中断能否在 ISR 里调用 <code>xQueueSendFromISR</code>。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>若把 <code>huart6</code> 在云台板上按底盘板的方式注册，需要新增哪几处代码？说明回调应指向哪个函数。</li>
+<li>USART1 若要改成 DMA 发送，在不与现有 CAN、SPI、USART 冲突的前提下，列出可选流与通道，并说明依据。</li>
+<li>设计一个上电自检，判断 <code>huart3</code> 的 <code>BRR</code> 是否与 <code>PCLK1=42 MHz</code>、100000 波特一致，写出判据与容差。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>三路 USART 参数与引脚（:46-120、:126-267）、优先级（:198、:262）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/dma.c</code></td><td>DMA 时钟与流中断使能（:39-63）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>外设初始化顺序（:109-118）、<code>Uart_Init</code>（:125）、回调（:72-76）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td>五个中断入口（:177-186、:247-256、:261-270、:345-354、:359-368）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td><code>configPRIO_BITS</code>（:99）、最低优先级（:104）、syscall 门槛（:110）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td><code>DebugUART_Init(&#x26;huart1)</code>（:34）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>裁判对象与回调（:10-11、:159-165）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_decode.cpp</code></td><td>未接线的协议链路（:14-16、:48-52）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘板注册 <code>huart3</code> 与 <code>huart6</code>（:131-132）、<code>RefereeUartCallback</code>（:79-81）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/stm32f4xx_it.c</code></td><td>底盘板 <code>USART6_IRQHandler</code> 调 <code>Uart_IRQHandler</code>（:359-368）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-收发实现与回调链"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-收发实现与回调链</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/01-UART+DMA收发/04-收发实现与回调链.md</span></div><div class="dfile__body"><h1 id="收发实现与回调链">收发实现与回调链</h1>
+<blockquote>
+<p>代码来自 <code>2026OmniSentryGimbal/Communication/Inc/usart_dma.h</code> 与 <code>Communication/Src/usart_dma.cpp</code>，两块板同名文件内容相同。中断入口在 <code>Core/Src/stm32f4xx_it.c</code>。</p>
+<p>双缓冲的寄存器语义见 <code>01-UART与DMA基础</code> 与 <code>02-空闲中断与双缓冲接收</code>；本页只追踪代码路径。</p>
+</blockquote>
+<p>HAL 提供了 <code>HAL_UART_Receive_DMA</code> 与 <code>HAL_UART_Transmit_DMA</code>，但两者都不直接支持用空闲中断给每帧定界、用双缓冲换块的组合。本工程保留了 UART 句柄与 DMA 句柄，自己写一个薄封装 <code>UsartDma</code>：按句柄登记实例，打开 <code>CR3</code> 的请求位与 <code>IDLEIE</code>，把接收 DMA 置于双缓冲并启动，在空闲中断里算长度、切块、重装计数，另提供一个带忙标志的发送入口。</p>
+<p>这套封装的关键取舍是绕过 HAL 的收发状态机，直接改寄存器。好处是能精确控制 <code>DBM</code> 与中断使能，代价是与 HAL 的状态判断脱节：流被置为忙态后不复位，HAL 的完成回调也不会被触发。本文按实例表、<code>Init</code>、双缓冲启动函数、接收链、分派与发送链的顺序逐段追踪。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Communication/Inc/usart_dma.h</code></td><td>类接口、实例表与缓冲成员</td></tr><tr><td><code>Communication/Src/usart_dma.cpp</code></td><td>全部实现</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>中断入口与调用顺序</td></tr><tr><td><code>Core/Src/usart.c</code></td><td>发送流的循环模式</td></tr><tr><td>HAL 源码</td><td><code>HAL_UART_Transmit_DMA</code> 与发送完成分支</td></tr></tbody></table>
+<h2 id="自研类承担什么">自研类承担什么</h2>
+<p><code>UsartDma</code> 的职责有四项：</p>
+<ol>
+<li>按 UART 句柄登记实例，中断里能由句柄反查回对象。</li>
+<li>打开 <code>CR3</code> 的 <code>DMAR</code>/<code>DMAT</code>，打开 <code>IDLEIE</code>，把接收 DMA 置于双缓冲并启动。</li>
+<li>在空闲中断里算出本帧长度、切块、重装计数、重新使能。</li>
+<li>提供 DMA 发送入口，并用忙标志挡住重入。</li>
+</ol>
+<p>类只暴露一个构造入口与三个 C 接口（<code>usart_dma.h:72-81</code>）：<code>Uart_Init</code>、<code>Uart_IRQHandler</code>、<code>Uart_Transmit_DMA</code>。前两个是必需接线，第三个当前无调用点。</p>
+<p>四项职责里前三项都围绕接收。第三项的算法依赖一个前提：帧长必须小于缓冲长度，否则硬件会自动切块，软件对 <code>CT</code> 的判断不再成立。本工程帧长 18、缓冲 256，前提成立。</p>
+<h2 id="实例表按句柄指针登记与查找">实例表按句柄指针登记与查找</h2>
+<p>类的实例表是固定长度 3 的静态数组（<code>DT7DMA_MAX_INSTANCES</code>，<code>usart_dma.h:12-14</code>、<code>:46</code>）。构造时先登记再初始化（<code>usart_dma.cpp:3-11</code>）：</p>
+<ul>
+<li><code>registerInstance</code> 从下标 0 开始找第一个空槽写入，返回下标；表满返回 -1（<code>:13-21</code>）。</li>
+<li>构造函数收到 -1 后只做 <code>(void)idx</code> 丢弃，不做断言也不阻止后续初始化（<code>:8</code>）。</li>
+<li><code>findInstance</code> 遍历表，按 <code>huart_</code> 指针相等匹配，返回对象指针或空（<code>:23-31</code>）。</li>
+<li>对象由 <code>Uart_Init</code> 里的 <code>new UsartDma(...)</code> 在堆上创建（<code>:184</code>），返回值同样未判空。</li>
+</ul>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["Uart_Init(huart, decode_func)"] --> B["new UsartDma(huart, cb)"]
+    B --> C["registerInstance 找空槽"]
+    C -->|"找到"| D["instances_[i] = this"]
+    C -->|"表满"| E["返回 -1，构造函数忽略"]
+    D --> F["Init() 打开 IDLEIE 与 DMAR/DMAT"]
+    E --> F
+    F --> G["运行期 Uart_IRQHandler(huart)"]
+    G --> H["findInstance(huart) 按指针查表"]
+    H -->|"命中"| I["调用 uartRxIdleCallback"]
+    H -->|"未命中"| J["直接返回，不处理"]</pre></div>
+<p>查找按句柄指针，不按外设编号。同一个句柄重复 <code>Uart_Init</code> 会占用两个槽，两个对象各自持有同一组 DMA 句柄并先后启动，后启动者覆盖前者的内存地址配置。全工程每个句柄只注册一次，这个情形不会出现。</p>
+<p>固定长度静态表省掉了动态容器的内存管理，代价是容量写死在头文件里。当前云台板注册 1 个、底盘板注册 2 个，都在上限之内；新增链路时第 4 个对象不会登记，中断里查不到，表现为静默无收。</p>
+<h2 id="init-直接改寄存器而绕过-hal">Init 直接改寄存器而绕过 HAL</h2>
+<p><code>Init()</code> 没有调用任何 HAL 的收发函数，直接改寄存器（<code>usart_dma.cpp:33-48</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>代码</th><th>作用</th></tr></thead><tbody><tr><td>1</td><td><code>__HAL_UART_CLEAR_IDLEFLAG(huart_)</code></td><td>清可能残留的 <code>IDLE</code></td></tr><tr><td>2</td><td><code>__HAL_UART_ENABLE_IT(huart_, UART_IT_IDLE)</code></td><td>置 <code>CR1</code> 的 <code>IDLEIE</code></td></tr><tr><td>3</td><td><code>SET_BIT(huart_->Instance->CR3, USART_CR3_DMAR)</code></td><td>接收请求接到 DMA</td></tr><tr><td>4</td><td><code>DMAEx_MultiBufferStart_NoIT(...)</code></td><td>置 <code>DBM</code>、写两块地址与 <code>NDTR</code>、使能流</td></tr><tr><td>5</td><td><code>SET_BIT(huart_->Instance->CR3, USART_CR3_DMAT)</code></td><td>发送请求接到 DMA</td></tr></tbody></table>
+<p>五步里没有一步经过 HAL 的 <code>gState</code>/<code>RxState</code> 状态判断，因此调用 <code>Init()</code> 之前必须先完成 <code>HAL_UART_Init</code>，否则 <code>CR1</code> 的使能位与波特率都还没配好。本工程的调用顺序由 <code>main.c</code> 的初始化段保证。</p>
+<h2 id="自研启动函数与-hal-的-_it-版对照">自研启动函数与 HAL 的 _IT 版对照</h2>
+<p>自研的 <code>DMAEx_MultiBufferStart_NoIT</code>（<code>:118-178</code>）是 HAL <code>HAL_DMAEx_MultiBufferStart_IT</code> 的裁剪版：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项目</th><th>HAL 的 <code>_IT</code> 版本</th><th>本工程的 <code>_NoIT</code> 版本</th></tr></thead><tbody><tr><td>参数校验</td><td>有，含方向与对齐</td><td>只拒绝 <code>MEMORY_TO_MEMORY</code>（<code>:127-131</code>）</td></tr><tr><td>加锁</td><td><code>__HAL_LOCK</code></td><td>同样加锁（<code>:133</code>）</td></tr><tr><td>置 <code>DBM</code> 与两块地址</td><td>有</td><td>有（<code>:148-155</code>）</td></tr><tr><td>使能 <code>TCIE</code>/<code>HTIE</code>/<code>TEIE</code></td><td>有</td><td>没有，只置 <code>EN</code>（<code>:173</code>）</td></tr><tr><td>状态机</td><td>结束时回到 <code>READY</code></td><td>置为 <code>BUSY</code> 后不复位（<code>:144</code>）</td></tr><tr><td>完成回调</td><td>由 HAL 的 DMA 中断调用</td><td>不用，切块在空闲中断里做</td></tr></tbody></table>
+<p>因为没有打开 DMA 流的中断，<code>DMA1_Stream1</code>、<code>DMA2_Stream1</code>、<code>DMA2_Stream6</code> 虽然 NVIC 已使能，<code>HAL_DMA_IRQHandler</code> 却不会被触发。切块完全靠 USART 的空闲中断。</p>
+<p>这一处裁剪同时消掉了 HAL 的完成回调链。如果以后改用 <code>_IT</code> 版本，回调与空闲中断都会尝试切块，需要先决定由谁主导。</p>
+<h2 id="一次接收的完整路径">一次接收的完整路径</h2>
+<p>从线路到解析函数的每一跳如下。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant RX as 遥控器接收机
+    participant U as USART3 外设
+    participant DM as DMA1_Stream1
+    participant IV as USART3_IRQHandler
+    participant H as Uart_IRQHandler
+    participant C as UsartDma 实例
+    participant CB as MyUartCallbackFun
+    RX->>U: 连续 18 字节，每字节 11 位时间
+    U->>DM: 每次 RXNE 产生一次 DMA 请求
+    DM->>DM: 写入 rx_buf_，NDTR 递减
+    Note over U: 线路上空闲一个字符时间
+    U->>IV: 置 IDLE 并产生中断
+    IV->>H: 先调用 Uart_IRQHandler(&#x26;huart3)
+    H->>C: findInstance 命中实例
+    C->>C: callback_busy_ 为 0，进入 uartRxIdleCallback
+    C->>U: 清 IDLE，禁用 DMA 流
+    C->>C: len = 256 - NDTR = 18
+    C->>C: 按 CT 选择 dmaM0 或 dmaM1 回调
+    C->>CB: decode_cb_(buf, 18)
+    CB->>CB: DBUS_Decode 解析 18 字节
+    C->>DM: 翻转 CT，重装 NDTR=256，使能流
+    IV->>U: 随后 HAL_UART_IRQHandler(&#x26;huart3)</pre></div>
+<h2 id="中断里的标志分派">中断里的标志分派</h2>
+<p>中断内的标志分派在 <code>UsartDma::IRQHandler</code>（<code>usart_dma.cpp:50-72</code>）：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["UsartDma::IRQHandler(huart)"] --> B["findInstance(huart)"]
+    B -->|"空"| Z["返回"]
+    B -->|"命中"| C{"IDLE 标志且 IDLEIE 置位"}
+    C -->|"是"| D{"callback_busy_ 为 0"}
+    D -->|"是"| E["uartRxIdleCallback"]
+    D -->|"否"| F["跳过，IDLE 保持置位，退出后再次进入"]
+    C -->|"否"| G{"TC 标志且 TCIE 置位"}
+    G -->|"是"| H["uartTxCpltCallback 清 tx_busy_"]
+    G -->|"否"| Z</pre></div>
+<p>注意调用顺序：<code>USART3_IRQHandler</code> 先执行自研处理，再执行 <code>HAL_UART_IRQHandler</code>（<code>Core/Src/stm32f4xx_it.c:249-252</code>）。自研处理已经清掉 <code>IDLE</code>，而 HAL 只在 <code>ReceptionType</code> 为待空闲接收时才处理 <code>IDLE</code>（<code>stm32f4xx_hal_uart.c:2484-2486</code>），本工程从未设置该字段，所以两者没有重复处理。</p>
+<p>分派里的两条分支各对应一个标志位：<code>IDLE</code> 走接收空闲处理，<code>TC</code> 走发送完成处理。<code>TC</code> 分支只有在 <code>TCIE</code> 被打开时才可能进入，而自研启动函数没有打开任何 DMA 流中断；发送侧的 <code>TCIE</code> 由 HAL 在普通模式的发送完成回调里打开，见下一节。</p>
+<h2 id="发送链的三层与回调分支">发送链的三层与回调分支</h2>
+<p>发送入口有三层（<code>usart_dma.cpp:74-79</code>、<code>:192-201</code>）：</p>
+<ol>
+<li>C 接口 <code>Uart_Transmit_DMA</code> 用 <code>GetInstance</code> 找实例，找不到返回 <code>HAL_ERROR</code>。</li>
+<li><code>UsartDma::Transmit_DMA</code> 先查 <code>tx_busy_</code>，为 1 返回 <code>HAL_BUSY</code>，否则置 1 后调用 <code>HAL_UART_Transmit_DMA</code>。</li>
+<li><code>HAL_UART_Transmit_DMA</code> 配置 <code>hdmatx</code> 的三个回调，再用 <code>HAL_DMA_Start_IT</code> 启动发送流，最后置 <code>CR3</code> 的 <code>DMAT</code>（<code>stm32f4xx_hal_uart.c:1399-1429</code>）。</li>
+</ol>
+<p>完成侧存在一条容易漏看的条件分支。HAL 的 DMA 发送完成回调 <code>UART_DMATransmitCplt</code> 按流的模式分流（<code>stm32f4xx_hal_uart.c:3015-3042</code>）：</p>
+<ul>
+<li>普通模式：清 <code>DMAT</code>，打开 UART 的 <code>TCIE</code>，等最后一个字节移出后由 <code>TC</code> 中断收尾。</li>
+<li>循环模式：直接调用 <code>HAL_UART_TxCpltCallback</code>，不打开 <code>TCIE</code>，也不结束 <code>gState</code>。</li>
+</ul>
+<p>USART6 的 <code>hdma_usart6_tx</code> 恰好是 <code>DMA_CIRCULAR</code>（<code>Core/Src/usart.c:251</code>）。一旦真的调用发送，走的是循环分支，<code>TC</code> 中断不会产生，自研的 <code>uartTxCpltCallback</code> 也就不会执行，<code>tx_busy_</code> 会停在 1，后续所有发送返回 <code>HAL_BUSY</code>。同时流会反复重发同一缓冲。发送侧当前无调用点，这条问题处于潜伏状态。</p>
+<p>发送链的其余两处薄弱点：</p>
+<ul>
+<li><code>Transmit_DMA</code> 在调用 HAL 之前就把 <code>tx_busy_</code> 置 1。若 HAL 返回 <code>HAL_BUSY</code> 或 <code>HAL_ERROR</code>，<code>tx_busy_</code> 不会复位（<code>:76-78</code>）。</li>
+<li>USART3 只链接了 <code>hdmarx</code>，<code>hdmatx</code> 为空。对 <code>huart3</code> 调用 <code>Uart_Transmit_DMA</code> 会在 HAL 里解引用空指针。</li>
+</ul>
+<h2 id="收发链层面的易错点">收发链层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>在空闲中断外重装 <code>NDTR</code></td><td>与 DMA 写指针竞争</td><td>重装只在 <code>uartRxIdleCallback</code> 内，且流已禁用</td></tr><tr><td>认为 DMA 流中断在跑</td><td>在 <code>HAL_DMA_IRQHandler</code> 设断点不命中</td><td>自研启动未开 <code>TCIE</code>/<code>HTIE</code></td></tr><tr><td>忽略 <code>tx_busy_</code> 的复位条件</td><td>发送一次后一直 <code>HAL_BUSY</code></td><td>循环模式下 <code>TCIE</code> 不被打开</td></tr><tr><td>把失败返回留在忙态</td><td>HAL 返回错误后 <code>tx_busy_</code> 不复位</td><td><code>usart_dma.cpp:76-78</code></td></tr><tr><td>对 USART3 调用发送</td><td>空 <code>hdmatx</code> 解引用</td><td><code>huart3</code> 只链接了 <code>hdmarx</code></td></tr><tr><td>实例表溢出后静默</td><td>第 4 个对象不登记，中断里查不到</td><td><code>usart_dma.cpp:8</code> 丢弃 -1</td></tr><tr><td><code>new</code> 失败未判空</td><td>后续 <code>Init()</code> 解引用空对象</td><td><code>usart_dma.cpp:184</code></td></tr><tr><td>以为 HAL 会处理 <code>IDLE</code></td><td>找不到对应分支</td><td><code>stm32f4xx_hal_uart.c:2484-2486</code> 要求 <code>ReceptionType</code></td></tr><tr><td>重复登记同一句柄</td><td>两个对象先后启动，内存配置被覆盖</td><td>全工程每句柄只注册一次</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>UsartDma</code> 用固定长度 3 的静态实例表按 <code>huart</code> 指针登记与查找，构造即初始化。</li>
+<li><code>Init()</code> 直接改寄存器：清 <code>IDLE</code>、开 <code>IDLEIE</code>、置 <code>DMAR</code>/<code>DMAT</code>，并调用自研双缓冲启动函数。</li>
+<li>自研启动函数与 HAL 的 <code>_IT</code> 版本差别在于：不打开 DMA 流中断，状态停在 <code>BUSY</code>，切块交给空闲中断。</li>
+<li>接收链是 <code>USART3_IRQHandler → Uart_IRQHandler → UsartDma::IRQHandler → 空闲回调 → decode_cb_ → DBUS_Decode</code>。</li>
+<li>发送链是 <code>Uart_Transmit_DMA → UsartDma::Transmit_DMA → HAL_UART_Transmit_DMA</code>，当前没有调用点。</li>
+<li>USART6 发送流是循环模式，HAL 在循环模式下不打开 <code>TCIE</code>，自研的 <code>tx_busy_</code> 无法复位。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>封装粒度</td><td>按 UART 句柄建对象</td><td>中断里可由句柄反查</td><td>静态表上限 3，超出即静默失效</td></tr><tr><td>实例存储</td><td>堆上 <code>new</code></td><td>构造参数直接传入</td><td>未判空，失败后仍继续初始化</td></tr><tr><td>启动方式</td><td>绕过 HAL 直接改寄存器</td><td>完全控制 <code>DBM</code> 与中断使能</td><td>与 HAL 状态机脱节，<code>State</code> 停在 <code>BUSY</code></td></tr><tr><td>切块时机</td><td>空闲中断里手动翻转 <code>CT</code></td><td>与帧边界对齐</td><td>依赖帧长小于缓冲</td></tr><tr><td>发送忙标志</td><td>单字节 <code>tx_busy_</code></td><td>挡住重入</td><td>失败或循环模式下不复位</td></tr><tr><td>中断顺序</td><td>自研先于 HAL</td><td>自研能抢先清 <code>IDLE</code></td><td>两套状态判断需要分别理解</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出从 <code>USART3_IRQHandler</code> 到 <code>DBUS_Decode</code> 的完整调用链，标出每一跳所在文件与行号。</li>
+<li>说明 <code>DMAEx_MultiBufferStart_NoIT</code> 与 HAL 的 <code>HAL_DMAEx_MultiBufferStart_IT</code> 在中断使能上的差别，以及由此产生的行为差异。</li>
+<li><code>tx_busy_</code> 在什么情况下会被清 0？在循环模式发送下会怎样？</li>
+<li>解释实例表按指针查找而不是按外设编号查找的原因，并说明表满时的行为。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>发送侧若要投入使用，列出需要修改的点，使 <code>tx_busy_</code> 在普通与循环两种模式下都能正确复位。</li>
+<li>在 <code>Init()</code> 里把 <code>HDMA</code> 的中断也打开、并改用 HAL 的回调切块，会与现有的空闲中断切块产生什么冲突？给出两种消除冲突的方案。</li>
+<li>设计一个不改变类接口的实例表扩容方案，说明为什么扩容后仍要保留“找不到实例就返回”的行为。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_dma.h</code></td><td>类接口与静态实例表（:12-14、:20-62、:72-81）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>构造与登记（:3-31）、<code>Init</code>（:33-48）、中断分派（:50-72）、收发回调（:74-116）、双缓冲启动（:118-178）、C 接口（:180-202）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td><code>USART3_IRQHandler</code> 的调用顺序（:247-256）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>USART6 发送流循环模式（:251）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c</code></td><td><code>HAL_UART_Transmit_DMA</code>（:1379-1435）、循环模式的发送完成分支（:3015-3042）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c</code></td><td>双缓冲回调与 <code>CT</code> 的对应（:878-898）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>云台板唯一注册点（:125）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/01-UART+DMA收发/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<blockquote>
+<p>排查对象是云台板 <code>2026OmniSentryGimbal</code> 与底盘板 <code>2026OmniSentryChassis</code> 的 USART3 接收链，以及 USART6 的预留链。所有行号都已按两块板的当前源码核对。</p>
+<p>机制背景见 <code>01-UART与DMA基础</code>、<code>02-空闲中断与双缓冲接收</code>、<code>04-收发实现与回调链</code>。本页只讲判断与定位。</p>
+</blockquote>
+<p>串口接收失效的表现可以按数据走到哪一层断掉来分类，每类指向不同的层次。先定位层次再进寄存器，比一上来怀疑物理层有效得多：从线路上有波形到解析函数被调用，中间要连续成立六七个条件，逐个排除远比换线缆快。</p>
+<p>本页先把症状分成四类并给出各自的观测点，再逐项列出十二项真实易错点，最后给出从现象入手的调试流程图与取值核对表。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Communication/Src/usart_dma.cpp</code></td><td>实例登记、Init、空闲处理与 C 接口</td></tr><tr><td><code>Communication/Inc/usart_dma.h</code></td><td>实例表上限与缓冲长度</td></tr><tr><td><code>Communication/Src/dbus.cpp</code></td><td>全局 <code>dbus</code> 定义与写入</td></tr><tr><td><code>Task/Src/ControlCenterTask.cpp</code></td><td>任务侧读写 <code>dbus</code></td></tr><tr><td><code>Core/Src/usart.c</code></td><td>帧格式、DMA 模式与优先级</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>中断入口</td></tr></tbody></table>
+<h2 id="症状按四类分层的判据">症状按四类分层的判据</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>症状</th><th>可能层次</th><th>先查什么</th></tr></thead><tbody><tr><td>完全没有回调</td><td>外设使能、DMA 请求、中断入口</td><td><code>CR1</code> 的 <code>RE</code>、<code>CR3</code> 的 <code>DMAR</code>、<code>NDTR</code> 是否在减</td></tr><tr><td>回调有但长度不对</td><td>空闲检测、缓冲切换</td><td><code>NDTR</code> 与 <code>IDLE</code> 标志</td></tr><tr><td>长度对但数据错</td><td>位宽、校验、字节序</td><td><code>CR1</code> 的 <code>M</code>/<code>PCE</code> 与解析函数</td></tr><tr><td>偶发丢帧或数值跳变</td><td>中断上下文、数据竞争</td><td>解析耗时与共享变量的读写方</td></tr></tbody></table>
+<p>四类症状与源码位置一一对应：第一类落在 <code>CR1</code>/<code>CR3</code> 与 NVIC，第二类落在 <code>usart_dma.cpp</code> 的长度计算与切块，第三类落在帧格式配置与 <code>DBUS_Decode</code>，第四类落在中断优先级与临界区。分类的意义是把“没有数据”这类模糊描述映射到唯一的入口函数上。</p>
+<h2 id="可观测的寄存器与软件断点">可观测的寄存器与软件断点</h2>
+<h3 id="关键寄存器">关键寄存器</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>寄存器</th><th>位或字段</th><th>观察点</th></tr></thead><tbody><tr><td><code>USART_SR</code></td><td><code>IDLE</code>、<code>RXNE</code>、<code>ORE</code>、<code>FE</code>、<code>PE</code></td><td>是否有未清的错误标志</td></tr><tr><td><code>USART_CR1</code></td><td><code>RE</code>、<code>IDLEIE</code>、<code>M</code>、<code>PCE</code>、<code>PS</code>、<code>OVER8</code></td><td>接收使能与帧格式</td></tr><tr><td><code>USART_CR3</code></td><td><code>DMAR</code>、<code>DMAT</code></td><td>DMA 请求是否接通</td></tr><tr><td><code>USART_BRR</code></td><td>尾数与小数</td><td>反算实际波特率</td></tr><tr><td><code>DMA_SxCR</code></td><td><code>EN</code>、<code>DBM</code>、<code>CT</code>、<code>CHSEL</code>、<code>CIRC</code></td><td>流是否在跑、当前写哪块</td></tr><tr><td><code>DMA_SxNDTR</code></td><td>当前块剩余计数</td><td>本帧已写入的字节数</td></tr><tr><td><code>DMA_SxM0AR</code>/<code>M1AR</code></td><td>两块内存地址</td><td>是否与类里缓冲区一致</td></tr></tbody></table>
+<p><code>BRR</code> 与波特率的关系在 <code>01-UART与DMA基础</code> 第 3 节，反算时用 <code>PCLK1 = 42 MHz</code>（USART3）或 <code>PCLK2 = 84 MHz</code>（USART1/6）。</p>
+<h3 id="软件侧">软件侧</h3>
+<ul>
+<li><code>USART3_IRQHandler</code> 的第一条语句是 <code>Uart_IRQHandler(&#x26;huart3)</code>，在这里下断点能区分“没进中断”与“进了但没回调”（<code>Core/Src/stm32f4xx_it.c:247-256</code>）。</li>
+<li><code>UsartDma::IRQHandler</code> 的 <code>findInstance</code> 返回空会直接退出，实例表满或未注册时表现为静默无收（<code>Communication/Src/usart_dma.cpp:52-55</code>）。</li>
+<li><code>NDTR</code> 只在空闲中断里被重装，运行中看到它接近初值说明本帧刚开始，接近 0 说明快写满。</li>
+</ul>
+<p>软件侧的三个断点覆盖了硬件寄存器解释不了的部分：中断入口、实例查找、长度计算。三者依次下断，能定位到具体是哪一跳断掉。</p>
+<h2 id="十二项真实易错点的判据">十二项真实易错点的判据</h2>
+<p>下面按条目给出判据，源码位置集中在 <code>十二项易错点的源码位置</code> 一节。</p>
+<ul>
+<li>
+<p>CubeMX 的 DMA 模式被自研 <code>Init()</code> 覆盖：判据取运行期 <code>DMA_SxCR</code> 的 <code>DBM</code> 与 <code>CT</code>，不按 <code>usart.c</code> 的 <code>Init.Mode</code> 推演（<code>Core/Src/usart.c:187</code>、<code>:233</code>；<code>usart_dma.cpp:148-155</code>）。</p>
+</li>
+<li>
+<p><code>NDTR</code> 是当前块的剩余计数：长度 <code>len = 256 - NDTR</code>（<code>usart_dma.cpp:88</code>），把它当已传输数会让长度方向相反；它在 <code>DBM</code> 下只覆盖当前块，完整推导见 <code>02-空闲中断与双缓冲接收</code>。</p>
+</li>
+<li>
+<p>解析在中断上下文里执行：<code>decode_cb_</code> 在空闲中断内同步调用（<code>usart_dma.cpp:109</code>、<code>:115</code>），<code>MyUartCallbackFun</code> 调 <code>DBUS_Decode</code>（<code>Core/Src/main.c:72-76</code>），18 字节解析与 <code>dbus</code> 写入都发生在 <code>USART3_IRQHandler</code> 里。优先级 5 等于 FreeRTOS 的 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code>（<code>Core/Inc/FreeRTOSConfig.h:110</code>），ISR 内只能调用 <code>FromISR</code> 接口；<code>dbus</code> 由中断写、任务读且无临界区（<code>Communication/Src/dbus.cpp:9</code>；<code>Task/Src/ControlCenterTask.cpp:46-109</code>）。</p>
+</li>
+</ul>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant ISR as USART3 中断，优先级 5
+    participant T as 控制中心任务，优先级低于中断
+    participant G as 全局 dbus 结构体
+    ISR->>G: DBUS_Decode 逐字段写入 18 字节结果
+    Note over T: 任务调度被该中断打断，直到 ISR 返回
+    T->>G: ControlCenterTask 读取 dbus.ch 与 dbus.s1
+    Note over ISR,T: 两者无临界区、无队列，写入不原子时任务可能读到半新半旧的一帧</pre></div>
+<ul>
+<li>
+<p>发送入口无调用点：<code>Uart_Transmit_DMA</code> 只有定义、声明与文档示例（<code>Communication/Src/usart_dma.cpp:192</code>、<code>Communication/Inc/usart_dma.h:79</code>），两块板都没有调用点。</p>
+</li>
+<li>
+<p>分配与容量：<code>new UsartDma(...)</code> 的返回值未判空（<code>usart_dma.cpp:184</code>），实例表上限 <code>DT7DMA_MAX_INSTANCES = 3</code>（<code>usart_dma.h:12-13</code>），登记失败返回 -1 后被 <code>(void)idx</code> 丢弃（<code>usart_dma.cpp:8</code>），新增链路时不会报错。</p>
+</li>
+<li>
+<p>校验位与字长口径：USART3 的 <code>M=0</code>、<code>PCE=1</code> 按手册是 7 数据位加校验位（<code>Core/Src/usart.c:77</code>、<code>:79</code>；<code>stm32f4xx_hal_uart.c:3650-3657</code>），DMA 按字节搬 <code>DR</code> 低 8 位，8 个数据位能否完整重组待实测。</p>
+</li>
+<li>
+<p>中断使能与注册：三条流的 NVIC 已使能但自研启动未开 <code>TCIE</code>/<code>HTIE</code>，<code>HAL_DMA_IRQHandler</code> 不会触发（<code>Core/Src/dma.c:47-61</code>）；云台板未注册 <code>huart6</code> 且 <code>USART6_IRQHandler</code> 只调 <code>HAL_UART_IRQHandler</code>（<code>Core/Src/stm32f4xx_it.c:359-368</code>）；<code>usart_decode.cpp</code> 的 <code>MyUartCallback</code>、<code>proto6</code>、<code>decoder6</code> 无调用点（<code>Communication/Src/usart_decode.cpp:14-16</code>、<code>:48-52</code>）。</p>
+</li>
+<li>
+<p>缓冲重装与写指针：<code>NDTR</code> 与 <code>CT</code> 的重装必须发生在流已禁用之后（<code>usart_dma.cpp:88</code> 前后），否则与写指针竞争，现象是偶发数据错位。</p>
+</li>
+<li>
+<p>实例表与句柄重复：实例表按 <code>huart_</code> 指针匹配，同一句柄注册两次会占两个槽并互相覆盖地址配置，只有新增链路时才会触发。</p>
+</li>
+<li>
+<p>波特率随总线分频变化：USART3 取 <code>PCLK1</code>、USART1/6 取 <code>PCLK2</code>，改 <code>APB1CLKDivider</code> 会同时改串口与 CAN 的速率，核对方式是读出 <code>BRR</code> 反算。</p>
+</li>
+<li>
+<p>中断优先级被调小：优先级 5 是调用 <code>FromISR</code> 的边界，调成 4 后在内核接口处触发断言；同级之间不互相抢占，长 ISR 会排队。</p>
+</li>
+</ul>
+<h2 id="从波形到解析函数的调试顺序">从波形到解析函数的调试顺序</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["现象：无人喂数据或数据异常"] --> B{"进 USART3_IRQHandler 了吗"}
+    B -->|"否"| C["查 CR1.RE、CR3.DMAR、NVIC 使能与优先级"]
+    B -->|"是"| D{"Uart_IRQHandler 里 findInstance 命中吗"}
+    D -->|"否"| E["查实例表是否满、Uart_Init 是否执行"]
+    D -->|"是"| F{"IDLE 标志在置位吗"}
+    F -->|"否"| G["查波特率 BRR 与线路空闲时间"]
+    F -->|"是"| H{"len 等于帧长吗"}
+    H -->|"否"| I["查 NDTR 与是否被硬件自动切块"]
+    H -->|"是"| J{"字节内容正确吗"}
+    J -->|"否"| K["查 M、PCE 与解析函数的位域"]
+    J -->|"是"| L["查任务侧读写共享变量是否被中断打断"]</pre></div>
+<p>配套的取值核对：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>期望</th><th>依据</th></tr></thead><tbody><tr><td><code>CR1</code></td><td><code>RE=1</code>、<code>IDLEIE=1</code></td><td><code>usart_dma.cpp:37</code> 与 USART3 的初始化</td></tr><tr><td><code>CR3</code></td><td><code>DMAR=1</code></td><td><code>usart_dma.cpp:38</code></td></tr><tr><td><code>DMA_SxCR</code></td><td><code>EN=1</code>、<code>DBM=1</code></td><td><code>usart_dma.cpp:148</code>、<code>:173</code></td></tr><tr><td><code>NDTR</code></td><td>每帧结束前在 238 附近</td><td>18 字节已写入 256 的缓冲</td></tr><tr><td><code>BRR</code></td><td>USART3 为 0x1A4</td><td>42 MHz 与 100000 波特</td></tr><tr><td>中断优先级</td><td>全为 5</td><td><code>Core/Src/usart.c:198</code>、<code>Core/Src/dma.c:48</code></td></tr></tbody></table>
+<h2 id="十二项易错点的源码位置">十二项易错点的源码位置</h2>
+<p>上一节给出判据，本表只补充各自的源码位置，不重复现象描述。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>源码位置</th></tr></thead><tbody><tr><td>1</td><td>按 CubeMX 模式推演</td><td><code>usart_dma.cpp:148</code>；<code>Core/Src/usart.c:187</code>、<code>:233</code></td></tr><tr><td>2</td><td>把 <code>NDTR</code> 当已传输数</td><td><code>usart_dma.cpp:88</code></td></tr><tr><td>3</td><td>忽略解析在中断里</td><td><code>usart_dma.cpp:109-115</code>；<code>Core/Src/main.c:72-76</code></td></tr><tr><td>4</td><td>共享结构无保护</td><td><code>dbus.cpp:9</code> 与 <code>ControlCenterTask.cpp:46-109</code></td></tr><tr><td>5</td><td>找串口发送调用点</td><td><code>usart_dma.cpp:192</code>；<code>usart_dma.h:79</code></td></tr><tr><td>6</td><td>忽略实例表上限</td><td><code>usart_dma.h:12-13</code></td></tr><tr><td>7</td><td><code>new</code> 不判空</td><td><code>usart_dma.cpp:184</code></td></tr><tr><td>8</td><td>8 位字长加校验的位宽</td><td><code>Core/Src/usart.c:77</code>、<code>:79</code>；<code>stm32f4xx_hal_uart.c:3650-3657</code>（待实测）</td></tr><tr><td>9</td><td>在 DMA 流中断设断点</td><td>自研启动未开流中断（<code>usart_dma.cpp:33-48</code>）</td></tr><tr><td>10</td><td>在云台板找裁判数据</td><td><code>Core/Src/stm32f4xx_it.c:359-368</code>；<code>Core/Src/main.c:125</code></td></tr><tr><td>11</td><td>把说明文档当调用点</td><td><code>usart_decode.cpp:14-16</code>、<code>:48-52</code> 无调用点</td></tr><tr><td>12</td><td>在流使能期间重装 <code>NDTR</code></td><td>重装须在禁用流之后（<code>usart_dma.cpp:88</code> 前后的顺序）</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>排查按层次进行：中断入口、实例查找、空闲标志、长度、内容、上下文，每一层都有明确的寄存器或函数可查。</li>
+<li><code>NDTR</code> 是剩余计数，本帧已写入数是 <code>256 - NDTR</code>。</li>
+<li>解析在 <code>USART3_IRQHandler</code> 内同步执行，全局 <code>dbus</code> 由中断与任务共同访问且无保护。</li>
+<li>CubeMX 的 DMA 模式被自研 <code>Init()</code> 覆盖，运行时应读 <code>DBM</code> 与 <code>CT</code>。</li>
+<li>发送入口无调用点，USART6 发送流是循环模式，<code>tx_busy_</code> 的复位条件在循环模式下不成立。</li>
+<li>8 位字长加偶校验与 DBUS 的 8 数据位口径存在按手册的冲突，待实测。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>解析位置</td><td>ISR 内同步解析</td><td>无队列、无拷贝</td><td>中断时长随解析增长</td></tr><tr><td>数据传递</td><td>全局结构体</td><td>读写直接</td><td>无原子性保证，需自行加临界区</td></tr><tr><td>中断优先级</td><td>全部 5</td><td>与 FreeRTOS 门槛一致</td><td>同级之间不抢占，长 ISR 会排队</td></tr><tr><td>实例容量</td><td>固定 3</td><td>静态内存可控</td><td>超限静默失败</td></tr><tr><td>发送</td><td>只定义不调用</td><td>不占总线与中断</td><td>循环模式与忙标志的问题被掩盖</td></tr><tr><td>DMA 启动</td><td>绕过 HAL</td><td>精确控制 <code>DBM</code> 与中断</td><td>与 HAL 状态机脱节，调试需同时理解两套</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>收到 18 字节的一帧后，<code>DMA_SxNDTR</code> 应接近什么值？写出推导。</li>
+<li>列出从“线路上有波形”到“<code>DBUS_Decode</code> 被调用”需要成立的六个条件。</li>
+<li>说明为什么在 <code>HAL_DMA_IRQHandler</code> 设断点不会命中。</li>
+<li><code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code> 为 5 时，在 <code>DBUS_Decode</code> 里能否调用 <code>xQueueSendFromISR</code>？能否调用 <code>xQueueSend</code>？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>任务读到的 <code>dbus</code> 是半新半旧的。给出两种修复方式，分别说明对中断时长与内存占用的影响。</li>
+<li>若要给 USART3 增加一条回发链路，列出需要处理的问题，包括 DMA 流选择、模式、<code>tx_busy_</code> 复位与总线方向切换。</li>
+<li>设计一个运行期自检：在不停止接收的前提下，周期性核对 <code>BRR</code> 反算的波特率与 100000 的偏差，偏差超过 1% 时置位告警。写出判据与放置位置。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>实例登记（:8、:52-55）、<code>Init</code>（:33-48）、空闲处理（:88-115）、C 接口（:184、:192）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_dma.h</code></td><td>实例表上限（:12-13）、缓冲长度（:8-10）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/dbus.cpp</code></td><td>全局 <code>dbus</code> 定义（:9）与写入（:16-32）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>任务侧读写 <code>dbus</code>（:46-109）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>回调 <code>MyUartCallbackFun</code>（:72-76）、注册（:125）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>USART3 帧格式（:77-79）、DMA 模式（:187、:233、:251）、优先级（:198）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/dma.c</code></td><td>流中断使能（:47-61）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td><code>USART3_IRQHandler</code>（:247-256）、<code>USART6_IRQHandler</code>（:359-368）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td>syscall 门槛（:110）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_decode.cpp</code></td><td>未接线链路（:14-16、:48-52）</td></tr><tr><td><code>2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c</code></td><td>中断接收按字长取位（:3650-3657）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘板注册差异（:131-132）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/03-CAN%20%E4%B8%8E%E7%94%B5%E6%9C%BA/06-%E5%8A%9F%E7%8E%87%E6%8E%A7%E5%88%B6/"><span class="k">← 上一篇</span><span class="t">功率控制</span><span class="d">CAN 与电机 · 5 个文件</span></a><a class="next" href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/02-%E5%8D%8F%E8%AE%AE%E7%8A%B6%E6%80%81%E6%9C%BA%E8%A7%A3%E5%B8%A7/"><span class="k">下一篇 →</span><span class="t">协议状态机解帧</span><span class="d">串口通信与协议 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -1,0 +1,1168 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>sqlite-vec向量检索 · RAG 与向量检索 · 王宇翔</title><meta name="description" content="每个会话一个 SQLite 文件，扩展按连接加载，cards_vec 是 vec0 虚拟表并带四张影子表，映射表把 card_id 与 rowid 对上"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/03-sqlite-vec%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="sqlite-vec向量检索 · RAG 与向量检索 · 王宇翔"><meta property="og:description" content="每个会话一个 SQLite 文件，扩展按连接加载，cards_vec 是 vec0 虚拟表并带四张影子表，映射表把 card_id 与 rowid 对上"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/03-sqlite-vec%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/">RAG 与向量检索</a><span class="sep" aria-hidden="true">/</span><span class="now">sqlite-vec向量检索</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>sqlite-vec向量检索</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>vec0 虚拟表与会话库布局</span></a><ul class="toc__heads"><li><a href="#每个会话一个数据库文件" data-depth="2" data-heading-j="0">每个会话一个数据库文件</a></li><li><a href="#扩展按连接加载" data-depth="2" data-heading-j="1">扩展按连接加载</a></li><li><a href="#cards_vec-的建表语句" data-depth="2" data-heading-j="2">cards_vec 的建表语句</a></li><li><a href="#vec0-的影子表" data-depth="2" data-heading-j="3">vec0 的影子表</a></li><li><a href="#映射表-card_vec_map" data-depth="2" data-heading-j="4">映射表 card_vec_map</a></li><li><a href="#真实库的现状统计" data-depth="2" data-heading-j="5">真实库的现状统计</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>映射替换、增量索引与重建入口</span></a><ul class="toc__heads"><li><a href="#一次写入的四个动作" data-depth="2" data-heading-j="0">一次写入的四个动作</a></li><li><a href="#配对靠下标长度不符会静默截断" data-depth="2" data-heading-j="1">配对靠下标，长度不符会静默截断</a></li><li><a href="#旧行替换为什么不能用-update" data-depth="2" data-heading-j="2">旧行替换为什么不能用 UPDATE</a></li><li><a href="#增量索引的触发链" data-depth="2" data-heading-j="3">增量索引的触发链</a></li><li><a href="#后台线程里的编码" data-depth="2" data-heading-j="4">后台线程里的编码</a></li><li><a href="#重建索引接口的运行期阻塞" data-depth="2" data-heading-j="5">重建索引接口的运行期阻塞</a></li><li><a href="#删除单卡向量" data-depth="2" data-heading-j="6">删除单卡向量</a></li><li><a href="#打包格式与维度" data-depth="2" data-heading-j="7">打包格式与维度</a></li><li><a href="#易错点" data-depth="2" data-heading-j="8">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="15">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>MATCH、k 与距离过滤的查询路径</span></a><ul class="toc__heads"><li><a href="#一条查询语句的三层结构" data-depth="2" data-heading-j="0">一条查询语句的三层结构</a></li><li><a href="#match-与-k-的分工" data-depth="2" data-heading-j="1">MATCH 与 k 的分工</a></li><li><a href="#距离过滤与度量" data-depth="2" data-heading-j="2">距离过滤与度量</a></li><li><a href="#结果重组与卡片读取" data-depth="2" data-heading-j="3">结果重组与卡片读取</a></li><li><a href="#就绪探测与锁" data-depth="2" data-heading-j="4">就绪探测与锁</a></li><li><a href="#失败模式与降级" data-depth="2" data-heading-j="5">失败模式与降级</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>核对脚本、迁移与静默失败清单</span></a><ul class="toc__heads"><li><a href="#只读打开与扩展加载" data-depth="2" data-heading-j="0">只读打开与扩展加载</a></li><li><a href="#行号偏差rowid-与-vec_rowid" data-depth="2" data-heading-j="1">行号偏差：rowid 与 vec_rowid</a></li><li><a href="#向量字节与块分配" data-depth="2" data-heading-j="2">向量字节与块分配</a></li><li><a href="#重建索引的入口与阻塞点" data-depth="2" data-heading-j="3">重建索引的入口与阻塞点</a></li><li><a href="#换模型后的迁移顺序" data-depth="2" data-heading-j="4">换模型后的迁移顺序</a></li><li><a href="#静默失败清单" data-depth="2" data-heading-j="5">静默失败清单</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="12">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">RAG 与向量检索</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>RAG / sqlite-vec / vec0 / 虚拟表 / SQLite / 索引写入 / 增量索引 / asyncio</span></div><h1 class="docs__title">sqlite-vec向量检索</h1><p class="docs__lead">每个会话一个 SQLite 文件，扩展按连接加载，cards_vec 是 vec0 虚拟表并带四张影子表，映射表把 card_id 与 rowid 对上</p></header><section class="dfile" id="file-1" data-file="01-vec0虚拟表与会话库布局"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-vec0虚拟表与会话库布局</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/03-sqlite-vec向量检索/01-vec0虚拟表与会话库布局.md</span></div><div class="dfile__body"><h1 id="vec0-虚拟表与会话库布局">vec0 虚拟表与会话库布局</h1>
+<p>KnowledgeDiver 的向量不走外部向量库，而是和卡片放在同一个 SQLite 文件里：每个会话一份 <code>session.db</code>，路径是 <code>cards/{username}/{session_id}/session.db</code>（<code>backend/storage/session_database.py:101-104</code>）。向量表由 sqlite-vec 扩展提供，类型是 <code>vec0</code>，列名 <code>embedding</code>，维度 512，度量 cosine（<code>:149-152</code>）。卡片表、原始页表、映射表与向量表共用一个连接，也共用事务。</p>
+<p>这种布局的取舍很明确：部署只依赖一个文件，备份与迁移跟着会话走；代价是向量能力依赖扩展加载，而扩展是进程内的，每个新连接都要重新加载一次。加载失败时建表语句不会执行，向量表不存在，检索静默返回空结果。</p>
+<p>文中的统计数字来自对 <code>cards/</code> 下全部 <code>session.db</code> 的只读盘点，是某一时刻的快照，会随使用变化。</p>
+<h2 id="每个会话一个数据库文件">每个会话一个数据库文件</h2>
+<p>路径由用户名与会话 ID 拼出，构造时先建目录再连文件（<code>backend/storage/session_database.py:96-104</code>）。连接参数有三个要点：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数或语句</th><th>取值</th><th>作用</th></tr></thead><tbody><tr><td><code>check_same_thread</code></td><td><code>False</code></td><td>允许连接跨线程使用</td></tr><tr><td><code>row_factory</code></td><td><code>sqlite3.Row</code></td><td>查询结果可按列名取值</td></tr><tr><td><code>PRAGMA journal_mode</code></td><td><code>WAL</code></td><td>读写并发，读不阻塞写</td></tr></tbody></table>
+<p>目录不可写时抛出的异常被改写成一整段包含目录归属与权限的提示（<code>:107-118</code>），原因是该目录可能由 root 创建过。这一段是仓库里少见的把常见环境问题的修复命令写进异常的做法，排查权限问题时直接看异常文本即可。</p>
+<p>实例被登记在类级字典里，按 <code>(username, session_id)</code> 分组（<code>:77</code>、<code>:123</code>），关闭时按分组清理（<code>:79-85</code>）。同一个会话可能同时存在多个连接对象，这与 SQLite 的多连接行为一致，但 WAL 模式下的写并发仍由数据库锁控制。</p>
+<h2 id="扩展按连接加载">扩展按连接加载</h2>
+<p>加载放在建表之前，顺序是先建表结构、再迁移列、最后初始化向量表（<code>backend/storage/session_database.py:125-131</code>）。向量表初始化内部做三件事：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">import</span><span style="color:#24292E"> sqlite_vec</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.enable_load_extension(</span><span style="color:#005CC5">True</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">sqlite_vec.load(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.conn)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.execute(</span></span>
+<span class="line"><span style="color:#032F62">    "CREATE VIRTUAL TABLE IF NOT EXISTS cards_vec USING vec0("</span></span>
+<span class="line"><span style="color:#032F62">    "  embedding FLOAT[512] distance_metric=cosine"</span></span>
+<span class="line"><span style="color:#032F62">    ")"</span></span>
+<span class="line"><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.enable_load_extension(</span><span style="color:#005CC5">False</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.commit()</span></span></code></pre>
+<p>先开 <code>enable_load_extension</code>，加载完立刻关掉（<code>:146-153</code>）。整个块包在 try 里，失败只记一条警告 <code>Vector extension load failed</code>（<code>:155-156</code>），不抛出。这意味着缺少扩展的环境里其余功能照常，向量表不存在，检索与索引都退化为空操作。</p>
+<p>连接是进程级的：每个 <code>SessionDatabaseManager</code> 各自打开一个连接并各自加载扩展。没有全局一次性加载的入口，因此“扩展装好了”这句话只对加载过它的连接成立。新建连接、换会话、重建连接都要重新走一遍这段代码。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["SessionDatabaseManager 构造"] --> B["建目录并连 session.db"]
+  B --> C["PRAGMA journal_mode=WAL"]
+  C --> D["建 cards 与 raw_pages 与 card_vec_map"]
+  D --> E["补 parent_id 列"]
+  E --> F{"import sqlite_vec 成功"}
+  F -- 否 --> G["记警告&#x3C;br/>无向量表"]
+  F -- 是 --> H["enable_load_extension"]
+  H --> I["sqlite_vec.load"]
+  I --> J["CREATE VIRTUAL TABLE cards_vec"]
+  J --> K["关闭扩展加载并提交"]
+  G --> L["检索与索引静默跳过"]</pre></div>
+<h2 id="cards_vec-的建表语句">cards_vec 的建表语句</h2>
+<p>向量表的完整定义只有两行（<code>backend/storage/session_database.py:149-151</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#D73A49">CREATE</span><span style="color:#24292E"> VIRTUAL </span><span style="color:#D73A49">TABLE</span><span style="color:#D73A49"> IF</span><span style="color:#D73A49"> NOT</span><span style="color:#D73A49"> EXISTS</span><span style="color:#24292E"> cards_vec </span><span style="color:#D73A49">USING</span><span style="color:#24292E"> vec0(</span></span>
+<span class="line"><span style="color:#24292E">  embedding </span><span style="color:#D73A49">FLOAT</span><span style="color:#24292E">[512] distance_metric</span><span style="color:#D73A49">=</span><span style="color:#24292E">cosine</span></span>
+<span class="line"><span style="color:#24292E">)</span></span></code></pre>
+<p>三个信息都写在语句里：列名 <code>embedding</code>、元素类型 <code>FLOAT</code>、长度 512，以及度量 <code>cosine</code>。<code>IF NOT EXISTS</code> 让重复打开会话幂等，也意味着换模型后不会自动改建表，旧表会继续按 512 维接受数据。</p>
+<p>建表语句与实际存储的绑定比普通表更紧：向量维度写进模块参数后，写入长度不符会报错；度量方式写进索引结构后，改度量需要重建表。模型目录里输出 512 维（<code>models/bge-small-zh-v1.5/config.json:11</code>），这个数与 <code>FLOAT[512]</code> 必须一起改。</p>
+<h2 id="vec0-的影子表">vec0 的影子表</h2>
+<p>vec0 是虚拟表，数据实际落在几张由扩展创建并维护的普通表里。在真实会话库上可以读到它们：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表名</th><th>作用</th></tr></thead><tbody><tr><td><code>cards_vec</code></td><td>虚拟表本身，对外提供 <code>MATCH</code> 查询与 <code>distance</code> 列</td></tr><tr><td><code>cards_vec_rowids</code></td><td>行号与数据块位置的映射</td></tr><tr><td><code>cards_vec_chunks</code></td><td>数据块登记</td></tr><tr><td><code>cards_vec_vector_chunks00</code></td><td>实际的向量字节</td></tr><tr><td><code>cards_vec_info</code></td><td>扩展写入的元信息</td></tr><tr><td><code>cards_vec_chunks</code>、<code>cards_vec_rowids</code> 上的自动索引</td><td>支撑按行号与块定位</td></tr></tbody></table>
+<p>影子表名带 <code>_chunks</code> 与 <code>_vector_chunks00</code> 后缀，直接读它们是绕过扩展的内部结构，只在诊断时用。核对工具脚本读的是虚拟表而不是影子表（<code>scripts/quality_audit.py:65-67</code>），这是更稳的做法：影子表的布局随扩展版本变化。</p>
+<h2 id="映射表-card_vec_map">映射表 card_vec_map</h2>
+<p>虚拟表对外只认 <code>rowid</code>，卡片用字符串 ID，两者之间靠映射表衔接（<code>backend/storage/session_database.py:55-60</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#D73A49">CREATE</span><span style="color:#D73A49"> TABLE</span><span style="color:#6F42C1"> IF</span><span style="color:#D73A49"> NOT</span><span style="color:#D73A49"> EXISTS</span><span style="color:#24292E"> card_vec_map (</span></span>
+<span class="line"><span style="color:#24292E">    card_id </span><span style="color:#D73A49">TEXT</span><span style="color:#D73A49"> PRIMARY KEY</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    vec_rowid </span><span style="color:#D73A49">INTEGER</span><span style="color:#D73A49"> UNIQUE</span></span>
+<span class="line"><span style="color:#24292E">);</span></span></code></pre>
+<p><code>card_id</code> 是主键，说明一张卡最多一行向量；<code>vec_rowid</code> 加了唯一约束，说明一个向量行号最多被一张卡引用。两个约束合起来把关系限定成一对一，写入侧因此需要“先删旧行再插新行”的替换流程，而不是覆盖更新。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  C["cards&#x3C;br/>id TEXT 主键"] --> M["card_vec_map&#x3C;br/>card_id 主键"]
+  M --> V["cards_vec&#x3C;br/>vec0 虚拟表"]
+  V --> R["cards_vec_rowids"]
+  V --> K["cards_vec_chunks"]
+  K --> B["cards_vec_vector_chunks00&#x3C;br/>512 维字节"]</pre></div>
+<p>映射表是普通表，与虚拟表在同一个会话库里，事务一起提交。查询时用 <code>JOIN</code> 把距离结果换成卡片 ID（<code>backend/storage/sqlite_card_store.py:443-449</code>）。映射表缺行时向量即便存在也不会被检索到，这一条是排查“库里有向量但搜不到”的第一个检查点。</p>
+<h2 id="真实库的现状统计">真实库的现状统计</h2>
+<p>对 <code>cards/</code> 下全部 <code>session.db</code> 做只读盘点（某一时刻快照）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>指标</th><th>数值</th></tr></thead><tbody><tr><td>会话库数量</td><td>222</td></tr><tr><td>存在 <code>cards_vec</code> 的库</td><td>222</td></tr><tr><td>映射表有行的库</td><td>195</td></tr><tr><td>映射表总行数</td><td>2917</td></tr><tr><td>卡片总数</td><td>3297</td></tr></tbody></table>
+<p>所有库都建出了向量表，说明扩展在这些连接上加载成功过；映射表总行数比卡片总数少 380 行，差值是尚未建立向量的卡片。抽样库 <code>cards/1111/default/session.db</code> 有 82 张卡而映射表 0 行，对应一个从未触发索引的会话。</p>
+<p>向量表存在不等于有向量。判断某个会话的检索能力，要看映射表行数与卡片数的比值，而不是看表是否存在。<code>_auto_build_vectors</code> 的比较逻辑正是这两张表的计数（<code>backend/storage/sqlite_card_store.py:80-89</code>）。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为扩展是全局加载的。每个连接独立加载，新连接必须重新执行。</li>
+<li>把 <code>cards_vec</code> 存在当成有向量。空的映射表会让检索返回空结果。</li>
+<li>直接读写影子表。内部布局随扩展版本变化，诊断可以看，业务代码不要依赖。</li>
+<li>换模型时只改建表语句。已存在的表不会被 <code>IF NOT EXISTS</code> 重建，需要先删表或新建会话库。</li>
+<li>忽略扩展加载失败只记警告。缺少扩展的部署里，索引与检索都不报错。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值</th><th>来源</th></tr></thead><tbody><tr><td>库路径</td><td><code>cards/{username}/{session_id}/session.db</code></td><td><code>backend/storage/session_database.py:101-104</code></td></tr><tr><td>并发模式</td><td>WAL，连接允许跨线程</td><td><code>:106</code>、<code>:120</code></td></tr><tr><td>扩展加载</td><td>按连接加载，失败只记警告</td><td><code>:145-156</code></td></tr><tr><td>向量表</td><td><code>vec0</code> 虚拟表，<code>FLOAT[512]</code>，cosine</td><td><code>:149-152</code></td></tr><tr><td>影子表</td><td>rowids、chunks、vector_chunks00、info</td><td>真实库 schema</td></tr><tr><td>映射表</td><td><code>card_id</code> 主键与 <code>vec_rowid</code> 唯一</td><td><code>:55-60</code></td></tr><tr><td>现状比例</td><td>222 库中 195 库有向量行，2917/3297 张卡已索引</td><td>只读盘点快照</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>向量与卡片同库</td><td>一个文件备份，事务一致</td><td>库文件随向量增长，且依赖扩展</td></tr><tr><td>每连接加载扩展</td><td>不依赖全局状态</td><td>加载失败只影响当前连接，问题分散</td></tr><tr><td><code>IF NOT EXISTS</code> 建表</td><td>打开会话幂等</td><td>维度与度量变更不会自动生效</td></tr><tr><td>一对一的映射表</td><td>card_id 与 rowid 双向可查</td><td>写入必须走删除加插入</td></tr><tr><td>失败降级为无向量</td><td>其余功能可用</td><td>检索变空没有显式错误</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出打开一个会话库时会执行的建表语句，并指出向量表与普通表的创建时机差别。</li>
+<li>说明 <code>card_vec_map</code> 的两个约束分别限制了哪种重复。</li>
+<li>给定卡片总数与映射表行数，说明如何判断该会话还缺多少张卡的向量。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>写一段只读盘点脚本，统计多个会话库的卡片数、映射行数与向量表是否存在，并说明为什么不能直接读影子表取向量。</li>
+<li>把扩展加载从“每连接”改为“进程启动时一次”，列出需要改动的文件与调用顺序，并分析多线程下的风险。</li>
+<li>设计一个把模型换到 768 维的迁移方案：要求给出建表、数据与代码三部分的顺序，并说明中途失败时如何回滚。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/session_database.py</code></td><td>库路径、连接参数、扩展加载与建表（:55-60、:96-120、:125-156）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>映射表使用与就绪探测（:75-89、:405-434、:443-449）</td></tr><tr><td><code>scripts/quality_audit.py</code></td><td>只读读取向量表（:39、:55-67）</td></tr><tr><td><code>models/bge-small-zh-v1.5/config.json</code></td><td>输出维度 512（:11）</td></tr><tr><td><code>cards/1111/default/session.db</code></td><td>抽样会话库（82 张卡，映射 0 行）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-映射替换与增量索引"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-映射替换与增量索引</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/03-sqlite-vec向量检索/02-映射替换与增量索引.md</span></div><div class="dfile__body"><h1 id="映射替换增量索引与重建入口">映射替换、增量索引与重建入口</h1>
+<p>向量写入由三个入口触发：流水线保存卡片后批量写入、进程内第一次构造卡片存储时自动补齐、以及重建索引接口。三条路的终点都是 <code>index_vectors</code>，它做的事固定：删旧行、插新行、更新映射、提交（<code>backend/storage/sqlite_card_store.py:412-434</code>）。虚拟表与映射表在同一个事务里，写入失败不会留下半条关系。</p>
+<p>增量索引的触发点很隐蔽：它在 <code>SqliteCardStore</code> 的构造函数里（<code>:62-63</code>）。任何代码构造一个卡片存储对象，都会顺带检查当前会话的索引完整度；不完整就起一个后台线程去补。这个设计让检索能力随使用自动补齐，代价是索引的启动时机不在业务代码的显式调用里，排查时要在构造点与线程日志两处找证据。</p>
+<p>重建接口一节指出了一个按 asyncio 语义推导出的运行期错误，已给出代码位置与触发条件。</p>
+<h2 id="一次写入的四个动作">一次写入的四个动作</h2>
+<p><code>index_vectors</code> 的输入是两个等长列表：卡片 ID 与向量（<code>backend/storage/sqlite_card_store.py:412</code>）。函数先做两个前置判断，任一不成立就直接返回：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> card_ids </span><span style="color:#D73A49">or</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._vec_ready():</span></span>
+<span class="line"><span style="color:#D73A49">    return</span></span></code></pre>
+<p><code>_vec_ready</code> 用 <code>SELECT 1 FROM cards_vec LIMIT 0</code> 探测表是否可查（<code>:405-410</code>）。扩展未加载、表不存在、连接失效三种情况都在这里被归并成“不可用”，调用方拿不到区分信息。</p>
+<p>通过判断后，在 <code>_vec_lock</code> 保护下逐张处理（<code>:415-433</code>）。单张卡的动作是四步：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>语句</th><th>目的</th></tr></thead><tbody><tr><td>1</td><td><code>SELECT vec_rowid FROM card_vec_map WHERE card_id = ?</code></td><td>查旧行号</td></tr><tr><td>2</td><td><code>DELETE FROM cards_vec WHERE rowid = ?</code> 与 <code>DELETE FROM card_vec_map</code></td><td>删旧向量与旧映射</td></tr><tr><td>3</td><td><code>INSERT INTO cards_vec(embedding) VALUES (?)</code></td><td>写入新向量</td></tr><tr><td>4</td><td><code>INSERT INTO card_vec_map(card_id, vec_rowid) VALUES (?, ?)</code></td><td>记录新行号</td></tr></tbody></table>
+<p>四步在一个循环里，循环结束后提交一次（<code>:433</code>）。中间失败会留下未提交的事务，由连接关闭或后续回滚处理。逐张删除加插入而不是批量 UPSERT，原因是虚拟表没有主键约束可以用在卡片 ID 上。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["index_vectors(card_ids, embeddings)"] --> B{"card_ids 为空或向量表不可用"}
+  B -- 是 --> Z["静默返回"]
+  B -- 否 --> C["获取 _vec_lock"]
+  C --> D["zip 配对逐张处理"]
+  D --> E{"映射表有旧行吗"}
+  E -- 有 --> F["删除旧向量行与映射行"]
+  E -- 无 --> G["直接写入"]
+  F --> G
+  G --> H["插入新向量并取 last_insert_rowid"]
+  H --> I["写入映射表新行号"]
+  I --> J{"还有下一张吗"}
+  J -- 有 --> D
+  J -- 无 --> K["提交事务"]</pre></div>
+<h2 id="配对靠下标长度不符会静默截断">配对靠下标，长度不符会静默截断</h2>
+<p>写入用 <code>zip(card_ids, embeddings)</code> 配对（<code>:416</code>）。<code>zip</code> 在最短列表处停止，因此两个列表长度不一致时不会报错，只会少写若干张卡。长度差可能来自调用方的切片错误，也可能来自编码阶段抛异常后被上层截断；两种都会表现成“部分卡片没有向量”。</p>
+<p>编码侧的返回条数与输入条数一致（<code>backend/ai/embedder.py:65-70</code> 的 <code>tolist()</code>），所以正常路径不会出现长度差。要防的是调用方在异常分支里返回了部分结果。核对办法是比较 <code>card_ids</code> 长度与映射表新增行数，或者直接用映射表行数与卡片数比较（<code>:80-89</code> 用的就是后者）。</p>
+<h2 id="旧行替换为什么不能用-update">旧行替换为什么不能用 UPDATE</h2>
+<p>向量表是 <code>vec0</code> 虚拟表，卡片 ID 不是它的列，唯一可以定位行的是 <code>rowid</code>。写入端先用映射表把 <code>card_id</code> 换成 <code>rowid</code>，再按行操作，于是替换流程被拆成删除与插入两段。</p>
+<p>这样做的副作用是行号会变化。旧行号被删除后，新插入的行拿到新的 <code>last_insert_rowid()</code>（<code>:427-432</code>），映射表必须同步更新。只删向量不删映射、或只更新映射不删向量，都会让一对一约束或检索结果出错。诊断时可以直接数映射表行数与向量表行数，两边不等说明替换流程中途失败过。</p>
+<h2 id="增量索引的触发链">增量索引的触发链</h2>
+<p><code>SqliteCardStore</code> 构造时若 <code>auto_index</code> 为真，调用 <code>_auto_build_vectors</code>（<code>backend/storage/sqlite_card_store.py:60-63</code>）。触发链分四步：</p>
+<ol>
+<li>进程级集合 <code>_INDEXED_SESSIONS</code> 记录已经检查过的会话（<code>:29</code>、<code>:69-72</code>）。同一个会话在一个进程内只检查一次，第二次构造直接返回。</li>
+<li>探测向量表是否可查，不可用就记一条调试日志并返回（<code>:74-78</code>）。</li>
+<li>比较 <code>card_vec_map</code> 行数与 <code>cards</code> 行数（<code>:80-89</code>）。卡片为零或两者相等都直接返回，不启动线程。</li>
+<li>计数不等时打印缺失数量，启动一个守护线程执行 <code>_build_vectors_sync</code>（<code>:91-97</code>）。</li>
+</ol>
+<p>第三步只比较总数，不逐卡比较差集，两者在中间状态会不一致：删过卡片、向量行没清理时，总数可能相等而具体卡片对不上。<code>_build_vectors_sync</code> 内部改用逐卡差集：取出映射表里已有的卡片 ID 集合，与卡片列表相减（<code>:104-107</code>），只编码缺失的那些。两级判断分别服务“要不要干活”和“干哪些活”。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["构造 SqliteCardStore(auto_index=True)"] --> B{"会话在 _INDEXED_SESSIONS 里"}
+  B -- 是 --> Z["返回"]
+  B -- 否 --> C["登记会话"]
+  C --> D{"cards_vec 可查吗"}
+  D -- 否 --> E["记调试日志并返回"]
+  D -- 是 --> F{"卡片数为 0 或映射数等于卡片数"}
+  F -- 是 --> Z
+  F -- 否 --> G["记缺失数量"]
+  G --> H["启动守护线程 _build_vectors_sync"]
+  H --> I["取映射集合与卡片差集"]
+  I --> J["编码缺失卡片"]
+  J --> K["index_vectors 写入"]</pre></div>
+<h2 id="后台线程里的编码">后台线程里的编码</h2>
+<p><code>_build_vectors_sync</code> 在守护线程里加载嵌入模型并编码（<code>:99-128</code>）。它用 <code>asyncio.get_event_loop()</code> 取事件循环，取不到就新建一个并设为当前循环，然后 <code>run_until_complete</code> 等编码完成（<code>:119-124</code>）。在非主线程里新建循环是可行的，但这条路径与 <code>encode_sync</code> 的设计意图相反：<code>encode_sync</code> 的文档字符串明确说不要用事件循环加 PyTorch 的组合，以避免非主线程清理时卡死（<code>backend/ai/embedder.py:88-92</code>）。</p>
+<p>风险因此分成两层：线程里新建的事件循环不会被关闭，只被丢弃；编码本身通过嵌入模型的锁串行化，不会与其他调用并发写模型，但会把锁占用时间拉长。编码失败时异常被外层捕获，记一条 <code>自动索引失败</code> 的警告（<code>:127-128</code>），线程结束，映射表保持不完整，下一次构造时计数不等会再试一次。</p>
+<h2 id="重建索引接口的运行期阻塞">重建索引接口的运行期阻塞</h2>
+<p>重建接口是 <code>POST /api/cards/reindex</code>，处理函数是异步的（<code>backend/routes/cards.py:94-104</code>），内部直接调用同步的 <code>store.reindex_all()</code>。<code>reindex_all</code> 的实现是取事件循环再 <code>run_until_complete</code>（<code>backend/storage/sqlite_card_store.py:468-473</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    loop </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.get_event_loop()</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#005CC5"> RuntimeError</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    loop </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.new_event_loop()</span></span>
+<span class="line"><span style="color:#24292E">    asyncio.set_event_loop(loop)</span></span>
+<span class="line"><span style="color:#24292E">embeddings </span><span style="color:#D73A49">=</span><span style="color:#24292E"> loop.run_until_complete(embedder.encode(texts))</span></span></code></pre>
+<p>在异步处理函数里，<code>get_event_loop()</code> 返回的是正在运行的事件循环。对正在运行的循环调用 <code>run_until_complete</code> 会抛 <code>RuntimeError: This event loop is already running</code>。按 asyncio 语义推导，这条路径在事件循环线程里不可用；异常会冒泡到路由层，请求以 500 结束。要规避，需要在 <code>reindex_all</code> 里改用线程池桥接，或把处理函数改成同步函数让框架放进线程池执行。这一处标注为按语义推导，未在本机触发复现。</p>
+<p>同一个 <code>reindex_all</code> 由其他同步上下文调用时反而正常：主线程没有运行中的循环，<code>get_event_loop</code> 抛 <code>RuntimeError</code>（Python 3.12 起无当前循环时如此），代码随后新建循环并执行。也就是说，这个函数的正确性与调用线程强相关，接口路径恰好落在会失败的那一侧。</p>
+<h2 id="删除单卡向量">删除单卡向量</h2>
+<p><code>delete_vector</code> 与写入共用同一把锁，按映射表查到行号后删两张表再提交（<code>backend/storage/sqlite_card_store.py:478-486</code>）。映射表没有该卡时整段跳过，不报错，这是删除幂等的实现方式。</p>
+<p>删除与自动索引之间有一个顺序关系：删除后映射表行数减一，卡片数也减一，两者仍然相等，增量索引不会因为删除而重跑。若只删了卡片没有调用 <code>delete_vector</code>，映射表会多出一行，检索结果里可能出现指向已删卡片的 ID，随后读取卡片时返回空并被过滤（<code>backend/storage/sqlite_card_store.py:450-455</code>）。</p>
+<h2 id="打包格式与维度">打包格式与维度</h2>
+<p>向量以字节写入：<code>struct.pack(f'{len(embedding)}f', *embedding)</code>（<code>:33-34</code>）。格式字符串按实际长度生成，<code>f</code> 是 4 字节浮点，默认使用本机字节序。x86_64 与 ARM64 上都是小端，与读取脚本里的 <code>&#x3C;512f</code> 一致（<code>scripts/quality_audit.py:67</code>）。换到大端平台时两侧会一起读错，属于潜在的可移植性问题，当前部署不受影响。</p>
+<p>写入端不校验长度是否为 512。长度不等于建表维度时，错误由扩展内部抛出，再被上层吞掉。核对维度只能在换模型时主动做，例如比较 <code>len(embedding)</code> 与 512 的断言，或在重建后数映射表行数是否等于卡片数。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为索引只在显式调用时发生。构造存储对象就会触发一次检查与可能的后台索引。</li>
+<li>只看总数比较，不看差集。删卡后总数相等也会漏掉不一致。</li>
+<li>用 <code>zip</code> 配对却不校验长度。长度不等时部分卡片静默没有向量。</li>
+<li>在异步路由里直接调用 <code>reindex_all</code>。运行中的事件循环会拒绝 <code>run_until_complete</code>。</li>
+<li>删除卡片不删向量。检索会拿到指向已删卡片的行。</li>
+<li>把映射表行数当成向量数量的唯一判据。还要确认向量表本身有对应行。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>做法</th><th>位置</th></tr></thead><tbody><tr><td>写入前置判断</td><td>空列表或向量表不可用则返回</td><td><code>backend/storage/sqlite_card_store.py:413-414</code></td></tr><tr><td>替换流程</td><td>删旧向量与旧映射，再插新行</td><td><code>:417-432</code></td></tr><tr><td>配对方式</td><td><code>zip</code>，长度不等静默截断</td><td><code>:416</code></td></tr><tr><td>触发点</td><td>构造函数里检查会话完整度</td><td><code>:60-63</code></td></tr><tr><td>进程级去重</td><td><code>_INDEXED_SESSIONS</code> 集合</td><td><code>:29</code>、<code>:69-72</code></td></tr><tr><td>差集编码</td><td>映射集合与卡片列表相减</td><td><code>:104-107</code></td></tr><tr><td>后台执行</td><td>守护线程加新建事件循环</td><td><code>:96-97</code>、<code>:119-124</code></td></tr><tr><td>重建接口</td><td>异步路由里调用同步函数，按语义会抛错</td><td><code>backend/routes/cards.py:94-104</code>、<code>sqlite_card_store.py:468-473</code></td></tr><tr><td>字节打包</td><td><code>struct.pack</code> 本机字节序</td><td><code>:33-34</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>构造时自动索引</td><td>检索能力自动补齐</td><td>启动时机隐式，难以从业务调用追踪</td></tr><tr><td>进程级只检查一次</td><td>避免重复扫描</td><td>索引失败后本进程不再重试该会话</td></tr><tr><td>后台线程编码</td><td>不阻塞调用方</td><td>新建事件循环，异常只记警告</td></tr><tr><td>删旧行再插新行</td><td>一对一的映射始终成立</td><td>行号变化，需要同步更新映射</td></tr><tr><td>重建接口同步实现</td><td>代码短，逻辑集中</td><td>在异步路由里不可用</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>index_vectors</code> 的四步动作，并说明哪一步失败会导致映射表与向量表不一致。</li>
+<li>说明 <code>_auto_build_vectors</code> 为什么先比较总数，而 <code>_build_vectors_sync</code> 还要取差集。</li>
+<li>说明 <code>zip</code> 在长度不等时的行为，以及它会造成什么现象。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>修复 <code>reindex_all</code> 在异步路由下的错误：给出两种改法、各自的调用链影响与需要补的测试。</li>
+<li>为 <code>index_vectors</code> 增加长度校验与部分失败回滚，说明事务边界应该画在哪里。</li>
+<li>设计一个迁移脚本：把某个会话的向量从 512 维重建为 768 维，要求给出删表、重建、重索引与校验的顺序，并说明中途失败后的恢复方式。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>写入、增量索引、重建与删除（:29、:33-34、:60-63、:68-128、:405-434、:456-486）</td></tr><tr><td><code>backend/storage/session_database.py</code></td><td>映射表结构（:55-60）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>重建接口（:94-104）</td></tr><tr><td><code>backend/ai/embedder.py</code></td><td>编码入口与同步桥接说明（:65-70、:88-98）</td></tr><tr><td><code>scripts/quality_audit.py</code></td><td>读取脚本的小端解包（:67）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-MATCH与距离过滤查询"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-MATCH与距离过滤查询</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/03-sqlite-vec向量检索/03-MATCH与距离过滤查询.md</span></div><div class="dfile__body"><h1 id="matchk-与距离过滤的查询路径">MATCH、k 与距离过滤的查询路径</h1>
+<p>检索的入口是 <code>vector_search</code>，输入一条查询向量、返回条数上限与距离阈值，输出若干 <code>(card_id, distance)</code>（<code>backend/storage/sqlite_card_store.py:436-454</code>）。函数体不长，但一条 SQL 里叠了三层约束：向量匹配、候选条数、距离过滤。三者顺序与含义不同，混在一起看容易把 <code>k</code> 当成返回条数上限。</p>
+<p>返回结果拿到的是距离，不是卡片。调用方要用卡片 ID 再读一次卡片表，把不存在的 ID 过滤掉（<code>backend/routes/cards.py:76-80</code>、<code>backend/pipeline/api.py:451-455</code>）。向量表与卡片表在同一个 SQLite 文件里，这个重组是一次本地查询，成本很低。</p>
+<p>文中 <code>k</code> 的候选语义按 sqlite-vec 的 KNN 查询约定说明，仓库代码只给出用法。</p>
+<h2 id="一条查询语句的三层结构">一条查询语句的三层结构</h2>
+<p>完整语句如下（<code>backend/storage/sqlite_card_store.py:443-449</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#D73A49">SELECT</span><span style="color:#005CC5"> m</span><span style="color:#24292E">.</span><span style="color:#005CC5">card_id</span><span style="color:#24292E">, </span><span style="color:#005CC5">v</span><span style="color:#24292E">.</span><span style="color:#005CC5">distance</span></span>
+<span class="line"><span style="color:#D73A49">FROM</span><span style="color:#24292E"> card_vec_map m </span><span style="color:#D73A49">JOIN</span><span style="color:#24292E"> cards_vec v </span><span style="color:#D73A49">ON</span><span style="color:#005CC5"> m</span><span style="color:#24292E">.</span><span style="color:#005CC5">vec_rowid</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> v</span><span style="color:#24292E">.</span><span style="color:#005CC5">rowid</span></span>
+<span class="line"><span style="color:#D73A49">WHERE</span><span style="color:#005CC5"> v</span><span style="color:#24292E">.</span><span style="color:#005CC5">embedding</span><span style="color:#D73A49"> MATCH</span><span style="color:#24292E"> ? </span><span style="color:#D73A49">AND</span><span style="color:#24292E"> k </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ? </span><span style="color:#D73A49">AND</span><span style="color:#005CC5"> v</span><span style="color:#24292E">.</span><span style="color:#005CC5">distance</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#24292E"> ?</span></span>
+<span class="line"><span style="color:#D73A49">ORDER BY</span><span style="color:#005CC5"> v</span><span style="color:#24292E">.</span><span style="color:#005CC5">distance</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>子句</th><th>作用</th><th>参数</th></tr></thead><tbody><tr><td><code>JOIN</code></td><td>把向量行号换成卡片 ID</td><td>无</td></tr><tr><td><code>MATCH ?</code></td><td>查询向量</td><td><code>_encode_blob(embedding)</code></td></tr><tr><td><code>k = ?</code></td><td>候选条数</td><td><code>limit</code></td></tr><tr><td><code>v.distance &#x3C; ?</code></td><td>距离过滤</td><td><code>threshold</code></td></tr><tr><td><code>ORDER BY v.distance</code></td><td>最近优先</td><td>无</td></tr></tbody></table>
+<p>连接键是 <code>m.vec_rowid = v.rowid</code>，不是 <code>m.rowid</code>。映射表的隐藏 <code>rowid</code> 与 <code>vec_rowid</code> 是两个独立列，写入代码记录的是 <code>vec_rowid</code>（<code>:430</code>、<code>:481</code>）；用错列会在部分会话上取到别的向量或取不到向量。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["查询向量 512 维"] --> B["_encode_blob 打包为字节"]
+  B --> C["cards_vec MATCH 候选"]
+  C --> D["按 k 截取最近的候选"]
+  D --> E{"distance 小于阈值吗"}
+  E -- 否 --> F["被过滤"]
+  E -- 是 --> G["按 distance 升序"]
+  G --> H["JOIN card_vec_map 换成 card_id"]
+  H --> I["返回 card_id 与 distance"]</pre></div>
+<h2 id="match-与-k-的分工">MATCH 与 k 的分工</h2>
+<p><code>MATCH</code> 是 vec0 虚拟表的查询运算符，后面跟的是查询向量本身，而不是文本或 ID。传给它的必须是字节形式的浮点数组，长度与建表维度一致；用字符串或长度不符的字节会让扩展报错。</p>
+<p><code>k = ?</code> 限定这次 KNN 搜索取多少条候选。按 sqlite-vec 的查询约定，<code>k</code> 是最近邻候选数，作用于距离排序的截取；它不是最终返回条数，因为后面还有阈值过滤。当阈值很严时，实际返回可能远少于 <code>k</code> 条。查询里把 <code>k</code> 与阈值写在一起，读代码时要按“先取 k 条、再过阈值、最后排序”理解。</p>
+<p><code>ORDER BY v.distance</code> 在过滤之后仍然保留，是为了让返回顺序与距离一致。即便扩展内部已按距离产出候选，显式排序也让调用方不必依赖内部顺序。</p>
+<h2 id="距离过滤与度量">距离过滤与度量</h2>
+<p><code>distance_metric=cosine</code> 写在建表语句里（<code>backend/storage/session_database.py:150</code>），因此 <code>v.distance</code> 是余弦距离，取值 0 到 2，越小越像。过滤条件是 <code>v.distance &#x3C; threshold</code>，是严格小于，距离恰好等于阈值的结果不返回。</p>
+<p>阈值默认 0.7（<code>backend/storage/sqlite_card_store.py:436</code>），但真实取值由调用方传入：语义搜索接口用自身参数（<code>backend/pipeline/api.py:450</code>），卡片搜索路由传 2.0 相当于不过滤（<code>backend/routes/cards.py:75</code>），主题合并预检传 0.40（<code>backend/pipeline/pipeline.py:422</code>）。查询函数只负责执行，不在内部改写阈值。</p>
+<p>向量与阈值都是调用方给的，函数不校验二者是否匹配业务含义。给一个未归一化的查询向量，余弦距离仍能算，但数值口径与库存向量不一致；库存向量在编码时已归一化（<code>backend/ai/embedder.py:67</code>），查询侧走同一个编码入口，这一点由调用链保证。</p>
+<h2 id="结果重组与卡片读取">结果重组与卡片读取</h2>
+<p>查询返回的是 <code>[(card_id, distance)]</code>，构造在 <code>return [(r[0], r[1]) for r in rows]</code>（<code>backend/storage/sqlite_card_store.py:454</code>）。之后各调用方做同一件事：按 ID 读卡片，跳过读不到的：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>调用方</th><th>读卡后的处理</th><th>位置</th></tr></thead><tbody><tr><td>卡片搜索路由</td><td>转成字典，得分取 <code>1 - dist</code></td><td><code>backend/routes/cards.py:76-81</code></td></tr><tr><td>语义搜索接口</td><td>组装卡片与相似度</td><td><code>backend/pipeline/api.py:451-455</code></td></tr><tr><td>主题合并预检</td><td>比较源卡 ID 后判定是否覆盖</td><td><code>backend/pipeline/pipeline.py:423-425</code></td></tr></tbody></table>
+<p>读不到的卡片通常来自删除不彻底：卡片已删、映射表还有行。查询结果里出现这类 ID 不算异常，调用方按空结果跳过即可；若日志里频繁出现，要去查 <code>delete_vector</code> 是否被调用（<code>backend/storage/sqlite_card_store.py:478-486</code>）。</p>
+<h2 id="就绪探测与锁">就绪探测与锁</h2>
+<p>每次查询先探测向量表（<code>backend/storage/sqlite_card_store.py:437-439</code>）。探测失败直接返回空列表并记一条调试日志，不抛异常。探测成功后在 <code>_vec_lock</code> 内执行查询（<code>:441-449</code>），与写入共用同一把锁，因此查询不会读到正在替换的中间状态。</p>
+<p>用锁串行化读写在 WAL 模式下不是必需的：SQLite 本身允许读写并发。这把锁保护的是另一半状态，即映射表与向量表的成对更新。若写入侧删了向量尚未更新映射，查询会看到不一致；锁把这段时间屏蔽掉。代价是一次查询要等一次写入完成，长批次索引会拖慢查询，这一点与编码锁的排队效应叠加。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant R as 调用方
+  participant S as SqliteCardStore
+  participant L as _vec_lock
+  participant DB as session.db
+  R->>S: vector_search(embedding, limit, threshold)
+  S->>DB: 探测 SELECT 1 FROM cards_vec LIMIT 0
+  DB-->>S: 成功或异常
+  S->>L: 获取锁
+  S->>DB: MATCH 查询与 JOIN
+  DB-->>S: card_id 与 distance
+  S-->>L: 释放锁
+  S-->>R: 距离升序的结果列表
+  R->>DB: 按 card_id 读卡片并过滤空结果</pre></div>
+<h2 id="失败模式与降级">失败模式与降级</h2>
+<p>查询把所有异常压成一个分支：记警告 <code>向量搜索失败</code> 并返回空列表（<code>backend/storage/sqlite_card_store.py:450-452</code>）。可能的触发原因有：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>原因</th><th>表现</th><th>判别办法</th></tr></thead><tbody><tr><td>扩展未加载</td><td>探测阶段就返回空</td><td>看启动期是否有扩展加载警告</td></tr><tr><td>表不存在</td><td>探测失败</td><td><code>cards/</code> 下的库文件里查 schema</td></tr><tr><td>查询向量维度不符</td><td>查询抛异常</td><td>比对编码输出与建表维度</td></tr><tr><td>映射表为空</td><td>查询成功但无行</td><td>数映射表行数</td></tr><tr><td>数据库被占用</td><td>查询超时或锁等待</td><td>看是否有长写入并发</td></tr></tbody></table>
+<p>这些原因在外层表现完全一致，都是空结果。区分它们只能看两侧证据：启动日志与数据库内容。检索结果异常时，先确认向量表可查、映射表非空，再检查查询向量本身。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>把 <code>k</code> 当成返回条数。阈值过滤后条数可能更少。</li>
+<li>连接用 <code>m.rowid</code> 而不是 <code>m.vec_rowid</code>。两者在替换过的会话上会分叉。</li>
+<li>把 <code>distance</code> 当相似度。距离越小越像，阈值是上界。</li>
+<li>认为查询失败会抛异常。所有异常都降级为空列表。</li>
+<li>忽略锁的排队成本。写入批次越长，查询等待越久。</li>
+<li>不做维度校验。维度不符只在扩展内部报错，随后被吞掉。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>查询入口</td><td><code>vector_search(embedding, limit, threshold)</code></td><td><code>backend/storage/sqlite_card_store.py:436</code></td></tr><tr><td>匹配运算符</td><td><code>v.embedding MATCH ?</code>，参数是字节</td><td><code>:446</code></td></tr><tr><td>候选条数</td><td><code>k = ?</code> 取 <code>limit</code></td><td><code>:446</code></td></tr><tr><td>距离过滤</td><td><code>v.distance &#x3C; ?</code>，度量 cosine</td><td><code>:446</code>、<code>backend/storage/session_database.py:150</code></td></tr><tr><td>排序</td><td><code>ORDER BY v.distance</code> 升序</td><td><code>:447</code></td></tr><tr><td>连接键</td><td><code>m.vec_rowid = v.rowid</code></td><td><code>:445</code></td></tr><tr><td>返回值</td><td><code>(card_id, distance)</code> 列表</td><td><code>:454</code></td></tr><tr><td>失败行为</td><td>记警告并返回空列表</td><td><code>:450-452</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>阈值由调用方传入</td><td>一个函数服务三种业务</td><td>口径分散，容易混淆松紧</td></tr><tr><td><code>k</code> 用调用方 <code>limit</code></td><td>查询计划稳定</td><td>阈值严时实际返回偏少，需上层补召回</td></tr><tr><td>读写共用一把锁</td><td>不会读到替换中间态</td><td>长写入阻塞查询</td></tr><tr><td>异常降级为空</td><td>检索不会拖垮请求</td><td>失败原因要靠日志与库内容自行判别</td></tr><tr><td>结果只返回距离</td><td>函数与卡片模型解耦</td><td>每个调用方都要重复读卡与过滤</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明 <code>k = ?</code> 与 <code>v.distance &#x3C; ?</code> 在语句里的先后作用，并给出阈值很严时返回条数变少的例子。</li>
+<li>写出 <code>JOIN</code> 的连接键，并说明用 <code>m.rowid</code> 会有什么后果。</li>
+<li>列出查询失败被降级为空结果的三种可能原因与各自的判别证据。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给 <code>vector_search</code> 增加返回条数的下界保障：在阈值过滤后不足 <code>limit</code> 时放宽阈值补足，说明改动的 SQL 或调用层逻辑与风险。</li>
+<li>设计一个并发测试，验证写入替换期间查询不会返回不一致的映射，要求给出观测点与断言。</li>
+<li>统计某个会话里 <code>distance</code> 的分布，据此给出一个比 0.7 更贴合该会话的阈值，并说明样本量与判据。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>查询实现与失败降级（:33-34、:405-410、:436-454、:478-486）</td></tr><tr><td><code>backend/storage/session_database.py</code></td><td>建表维度与度量（:143-156）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>路由侧查询与重组（:65-81）</td></tr><tr><td><code>backend/pipeline/api.py</code></td><td>搜索接口的查询与重组（:436-455）</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td>合并预检的查询（:416-425）</td></tr><tr><td><code>backend/ai/embedder.py</code></td><td>查询向量编码（:65-70、:83-85）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-核对脚本与迁移与静默失败"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-核对脚本与迁移与静默失败</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/03-sqlite-vec向量检索/04-核对脚本与迁移与静默失败.md</span></div><div class="dfile__body"><h1 id="核对脚本迁移与静默失败清单">核对脚本、迁移与静默失败清单</h1>
+<p>向量检索的问题大多不报错：扩展没加载、映射表为空、脚本用错行号、维度不符，外在表现都是“搜不到”或“分数不对”。定位它们需要从库文件直接取数，而不是从接口返回推断。仓库里有两个脚本在做这件事，都用只读方式打开会话库，再借扩展读取向量（<code>scripts/quality_audit.py:39</code>、<code>scripts/monthly_eval/metrics.py:55-79</code>）。</p>
+<p>核对脚本本身也有一处偏差：它们从映射表取的是隐藏 <code>rowid</code>，而写入端记录的是 <code>vec_rowid</code> 列。在真实库上盘点发现，2917 行映射里有 101 行的两个值不同（约 3.5%），这些行按脚本的取法会读成别的向量。这个偏差不影响业务检索，业务查询用的连接键是正确的 <code>vec_rowid</code>（<code>backend/storage/sqlite_card_store.py:445</code>），但会让评分核对与月度指标在这部分数据上失真。</p>
+<p>统计数字来自对 <code>cards/</code> 下 222 个会话库的只读盘点，是某一时刻的快照。</p>
+<h2 id="只读打开与扩展加载">只读打开与扩展加载</h2>
+<p>核对脚本的第一件事是把库打开成只读，用 URI 参数实现（<code>scripts/quality_audit.py:39</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">con </span><span style="color:#D73A49">=</span><span style="color:#24292E"> sqlite3.connect(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"file:</span><span style="color:#005CC5">{</span><span style="color:#24292E">path</span><span style="color:#005CC5">}</span><span style="color:#032F62">?mode=ro"</span><span style="color:#24292E">, </span><span style="color:#E36209">uri</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">con.row_factory </span><span style="color:#D73A49">=</span><span style="color:#24292E"> sqlite3.Row</span></span></code></pre>
+<p>只读模式避免核对过程改动生产数据，也让脚本可以在服务运行时执行。第二件事是加载 sqlite-vec：导入失败时把模块置为 <code>None</code>，脚本继续跑但不读向量（<code>:22-25</code>）；读取前再判断一次，只有模块可用才加载扩展（<code>:55-60</code>）。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> sqlite_vec </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    con.enable_load_extension(</span><span style="color:#005CC5">True</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    sqlite_vec.load(con)</span></span>
+<span class="line"><span style="color:#24292E">    con.enable_load_extension(</span><span style="color:#005CC5">False</span><span style="color:#24292E">)</span></span></code></pre>
+<p>整个读取块包在 try 里，任何异常都把向量结果清空（<code>:55-69</code>）。因此脚本输出“没有向量”时，可能是库里没有，也可能是扩展没装上、行号对不上或解包失败。核对脚本的返回值不带区分信息，需要人工分层确认。</p>
+<h2 id="行号偏差rowid-与-vec_rowid">行号偏差：rowid 与 vec_rowid</h2>
+<p>脚本从映射表取行号时用的是隐藏 <code>rowid</code>（<code>scripts/quality_audit.py:61</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#D73A49">SELECT</span><span style="color:#24292E"> card_id, rowid </span><span style="color:#D73A49">FROM</span><span style="color:#24292E"> card_vec_map</span></span></code></pre>
+<p>写入端记录的是显式列 <code>vec_rowid</code>（<code>backend/storage/sqlite_card_store.py:430</code>、<code>:481</code>）。两个值在顺序插入时相等，在发生过替换后会分叉：替换流程删掉旧映射行再插入新行，映射表的隐藏 <code>rowid</code> 单调递增，而 <code>vec_rowid</code> 跟随向量表的 <code>last_insert_rowid()</code>，两者递增节奏不同。</p>
+<p>真实库盘点结果：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>指标</th><th>数值</th></tr></thead><tbody><tr><td>有向量行的会话库</td><td>195</td></tr><tr><td>映射表总行数</td><td>2917</td></tr><tr><td><code>rowid</code> 与 <code>vec_rowid</code> 不同的行</td><td>101</td></tr><tr><td>占比</td><td>约 3.5%</td></tr></tbody></table>
+<p>对这 101 行，脚本查到的向量行要么是另一张卡的，要么超出范围返回空。按脚本的行号取法，评分结果在这部分卡片上不可信。业务侧的 <code>vector_search</code> 使用 <code>m.vec_rowid = v.rowid</code>（<code>backend/storage/sqlite_card_store.py:445</code>），不受影响。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["card_vec_map 一行"] --> B{"取哪一列"}
+  B -- "rowid（脚本）" --> C["可能指向别的向量行"]
+  B -- "vec_rowid（业务）" --> D["指向写入时记录的行"]
+  C --> E["101/2917 行上读错"]
+  D --> F["距离结果与卡片对应"]
+  E --> G["评分与月度指标失真"]
+  F --> H["检索与合并正常"]</pre></div>
+<h2 id="向量字节与块分配">向量字节与块分配</h2>
+<p>向量以 512 个 float32 存储，单条 2048 字节（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>512</mn><mo>×</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">512 \times 4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">512</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span>）。脚本按 <code>&#x3C;512f</code> 解包（<code>scripts/quality_audit.py:67</code>），与写入端的 <code>struct.pack</code> 在小端平台上一致（<code>backend/storage/sqlite_card_store.py:33-34</code>）。</p>
+<p>真实库的抽样结果（会话 <code>cards/7.26/8f0ea712-5a11-4108-bb04-e797428f24b5</code>，37 条映射行）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表</th><th>观察值</th></tr></thead><tbody><tr><td><code>cards_vec_rowids</code></td><td>37 行</td></tr><tr><td><code>cards_vec_vector_chunks00</code></td><td>1 行，长度 2,097,152 字节</td></tr><tr><td>单条向量</td><td>2048 字节</td></tr><tr><td>单个块容量</td><td>2,097,152 ÷ 2048 = 1024 条（算术推导）</td></tr></tbody></table>
+<p>块大小固定为 2 MiB，与当前向量条数无关：37 条向量也只占 1 个块，其中约 75,776 字节有效，其余为预留。这让小会话的向量存储开销有下限，也解释了为什么删除向量不会立即缩小库文件。</p>
+<p>读向量时必须走虚拟表或按块解码，不能假定块内第 N 条就是第 N 行。脚本用 <code>SELECT rowid, * FROM cards_vec WHERE rowid=?</code> 让扩展解码（<code>scripts/quality_audit.py:65</code>），这是稳妥的做法；它随后断言第三列是字节（<code>:66</code>），列下标依赖当前扩展版本的列顺序，换版本需要重新核对。</p>
+<h2 id="重建索引的入口与阻塞点">重建索引的入口与阻塞点</h2>
+<p>业务侧的重建入口是 <code>POST /api/cards/reindex</code>（<code>backend/routes/cards.py:94-104</code>），它构造卡片存储后调用 <code>store.reindex_all()</code>（<code>:102</code>）。<code>reindex_all</code> 取全部卡片、编码、再走 <code>index_vectors</code>（<code>backend/storage/sqlite_card_store.py:456-476</code>）。</p>
+<p>这条路径按 asyncio 语义不可用：处理函数是异步的，<code>reindex_all</code> 内部对正在运行的事件循环调用 <code>run_until_complete</code>，会抛 <code>RuntimeError: This event loop is already running</code>（<code>:468-473</code>）。核对或运维需要重建时，可靠的方式是在同步脚本里直接调用 <code>reindex_all</code>，或临时把接口改成同步函数交给线程池。该结论按语义推导，未在本机触发复现。</p>
+<p>注意 <code>reindex_all</code> 只写入缺失与全部卡片，不做差集：它编码所有卡片并逐张替换（<code>:467</code>、<code>:474</code>）。对已有向量的卡也会重新编码，因此重建耗时与卡片总数成正比。</p>
+<h2 id="换模型后的迁移顺序">换模型后的迁移顺序</h2>
+<p>模型输出维度写在三处：模型目录的配置、向量表建表语句、脚本的解包格式。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>当前值</th><th>换模型时需要</th></tr></thead><tbody><tr><td><code>models/bge-small-zh-v1.5/config.json:11</code></td><td>512</td><td>换成新权重目录</td></tr><tr><td><code>backend/storage/session_database.py:150</code></td><td><code>FLOAT[512]</code></td><td>改维度并重建表</td></tr><tr><td><code>scripts/quality_audit.py:67</code>、<code>scripts/monthly_eval/metrics.py:77</code></td><td><code>&#x3C;512f</code></td><td>改解包长度</td></tr><tr><td><code>backend/ai/embedder.py:20-21</code></td><td>本地目录或 HF 回落</td><td>换目录名</td></tr></tbody></table>
+<p>迁移顺序建议为：先确认新模型输出维度，再改建表语句，然后是脚本解包格式，最后重建向量。原因是 <code>IF NOT EXISTS</code> 不会改动已存在的表，必须在重建前显式删除 <code>cards_vec</code> 与 <code>card_vec_map</code>；否则旧表按 512 维继续接受 768 维的写入，错误被扩展抛出后又被吞掉。</p>
+<p>重建后核对三个数：卡片数、映射表行数、向量表行数。三者相等才算完成。会话库是逐个文件独立的，迁移要对 <code>cards/</code> 下的每个库执行。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["确认新模型维度"] --> B["改配置与建表语句"]
+  B --> C["改脚本解包长度"]
+  C --> D["删除旧 cards_vec 与映射表"]
+  D --> E["重建索引"]
+  E --> F{"卡片数等于映射数等于向量行数"}
+  F -- 否 --> G["按会话逐个排查"]
+  F -- 是 --> H["迁移完成"]</pre></div>
+<h2 id="静默失败清单">静默失败清单</h2>
+<p>以下位置失败时不抛异常，只记日志或直接返回：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>失败表现</th><th>日志或返回值</th><th>代码位置</th></tr></thead><tbody><tr><td>扩展加载</td><td>无向量表</td><td><code>Vector extension load failed</code></td><td><code>backend/storage/session_database.py:155-156</code></td></tr><tr><td>自动索引探测</td><td>跳过索引</td><td>调试级日志</td><td><code>backend/storage/sqlite_card_store.py:74-78</code></td></tr><tr><td>后台索引异常</td><td>映射表不完整</td><td><code>自动索引失败</code></td><td><code>:127-128</code></td></tr><tr><td>写入前置判断</td><td>不写入</td><td>无</td><td><code>:413-414</code></td></tr><tr><td>查询异常</td><td>空结果</td><td><code>向量搜索失败</code></td><td><code>:450-452</code></td></tr><tr><td>进程级去重</td><td>本进程不再重试</td><td>无</td><td><code>:70-72</code></td></tr></tbody></table>
+<p>排查顺序建议是：看启动期扩展加载日志，数映射表行数，再查查询日志。三者都正常但检索为空时，问题在阈值或查询向量本身，而不在存储层。</p>
+<p>仓库的 <code>tests/</code> 下没有直接引用 <code>cards_vec</code>、<code>sqlite_vec</code> 或 <code>vector_search</code> 的测试（对 test 目录的检索结果为空），向量存储的行为目前只能靠脚本核对与手工盘点验证。与阈值相关的测试存在（如 <code>tests/backend/test_thresholds.py</code>），但覆盖的不是向量层。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>只读打开</td><td><code>file:{path}?mode=ro</code> 加 URI</td><td><code>scripts/quality_audit.py:39</code></td></tr><tr><td>扩展可选导入</td><td>失败置 <code>None</code>，脚本继续</td><td><code>:22-25</code></td></tr><tr><td>脚本取行号</td><td>隐藏 <code>rowid</code>，与 <code>vec_rowid</code> 有偏差</td><td><code>:61</code></td></tr><tr><td>偏差规模</td><td>2917 行中 101 行不同</td><td>只读盘点快照</td></tr><tr><td>单条向量</td><td>2048 字节，<code>&#x3C;512f</code> 解包</td><td><code>:67</code></td></tr><tr><td>块分配</td><td>固定 2 MiB，约 1024 条向量</td><td>影子表观察加算术推导</td></tr><tr><td>重建接口</td><td>异步路由调用同步函数，按语义会抛错</td><td><code>backend/routes/cards.py:94-104</code></td></tr><tr><td>迁移核对</td><td>卡片数、映射数、向量行数三者相等</td><td>无自动化测试</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>脚本只读访问</td><td>可在服务运行时核对</td><td>无法就地修复数据</td></tr><tr><td>异常统一清空向量</td><td>核对不会中断</td><td>失败原因不分层，需人工判别</td></tr><tr><td>影子表分块存储</td><td>写入与大块 I/O 友好</td><td>小会话也占 2 MiB，删除不缩文件</td></tr><tr><td>无自动化测试覆盖</td><td>无</td><td>行为变更靠手工盘点发现</td></tr><tr><td>重建按全量执行</td><td>逻辑简单，覆盖所有卡</td><td>耗时与卡片总数成正比</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出一条只读打开会话库并统计两个表行数的 SQL 或脚本片段。</li>
+<li>说明脚本用 <code>rowid</code> 取向量与业务用 <code>vec_rowid</code> 的差别，并指出哪一侧正确。</li>
+<li>计算 37 条 512 维向量占用的有效字节数与块预留字节数。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>修正核对脚本的行号取值，说明改动后月度指标会变化多少（给出核对方法，不要求真实数据）。</li>
+<li>设计一个换模型的迁移脚本：要求包含删表、重建、三数核对与失败恢复，并说明如何处理正在运行的会话。</li>
+<li>为向量存储补一组最小测试（建表、写入、替换、查询、删除），说明每个用例需要的环境前提与断言。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>scripts/quality_audit.py</code></td><td>只读核对与解包（:22-25、:39、:55-69）</td></tr><tr><td><code>scripts/monthly_eval/metrics.py</code></td><td>月度指标的同一取法（:55-79）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>写入、查询、重建与自动索引（:33-34、:70-128、:405-486）</td></tr><tr><td><code>backend/storage/session_database.py</code></td><td>建表维度与扩展加载（:143-156）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>重建接口（:94-104）</td></tr><tr><td><code>backend/ai/embedder.py</code></td><td>模型路径与维度来源（:20-21、:65-70）</td></tr><tr><td><code>models/bge-small-zh-v1.5/config.json</code></td><td>输出维度（:11）</td></tr><tr><td><code>cards/7.26/8f0ea712-5a11-4108-bb04-e797428f24b5/session.db</code></td><td>抽样库（37 条映射，块 2 MiB）</td></tr><tr><td><code>tests/backend/test_thresholds.py</code></td><td>阈值相关测试（不覆盖向量层）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/02-%E5%B5%8C%E5%85%A5%E6%A8%A1%E5%9E%8B/"><span class="k">← 上一篇</span><span class="t">嵌入模型</span><span class="d">RAG 与向量检索 · 4 个文件</span></a><a class="next" href="/tc63/docs/23-MCP/01-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E6%B6%88%E6%81%AF/"><span class="k">下一篇 →</span><span class="t">协议与消息</span><span class="d">MCP · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

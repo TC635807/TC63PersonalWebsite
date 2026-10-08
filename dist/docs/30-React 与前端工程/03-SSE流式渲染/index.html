@@ -1,0 +1,875 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>SSE流式渲染 · React 与前端工程 · 王宇翔</title><meta name="description" content="useSSE 用 fetch 读流并手工解析 data 行、结束时的缓冲区刷新、回调引用转存与卸载中止，以及它对比 Agent 侧流读取的异同。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/30-React%20%E4%B8%8E%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B/03-SSE%E6%B5%81%E5%BC%8F%E6%B8%B2%E6%9F%93/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="SSE流式渲染 · React 与前端工程 · 王宇翔"><meta property="og:description" content="useSSE 用 fetch 读流并手工解析 data 行、结束时的缓冲区刷新、回调引用转存与卸载中止，以及它对比 Agent 侧流读取的异同。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/30-React%20%E4%B8%8E%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B/03-SSE%E6%B5%81%E5%BC%8F%E6%B8%B2%E6%9F%93/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/30-React%20%E4%B8%8E%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B/">React 与前端工程</a><span class="sep" aria-hidden="true">/</span><span class="now">SSE流式渲染</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>SSE流式渲染</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>SSE 客户端与流解析</span></a><ul class="toc__heads"><li><a href="#用-fetch-代替-eventsource" data-depth="2" data-heading-j="0">用 fetch 代替 EventSource</a></li><li><a href="#解码切行与缓冲区" data-depth="2" data-heading-j="1">解码、切行与缓冲区</a></li><li><a href="#回调引用与效果依赖" data-depth="2" data-heading-j="2">回调引用与效果依赖</a></li><li><a href="#与-agent-侧流读取的差别" data-depth="2" data-heading-j="3">与 Agent 侧流读取的差别</a></li><li><a href="#易错点" data-depth="2" data-heading-j="4">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>采集流水线的事件与阶段状态机</span></a><ul class="toc__heads"><li><a href="#五种事件与五个阶段" data-depth="2" data-heading-j="0">五种事件与五个阶段</a></li><li><a href="#阶段状态机与进度映射" data-depth="2" data-heading-j="1">阶段状态机与进度映射</a></li><li><a href="#日志与-ai-输出" data-depth="2" data-heading-j="2">日志与 AI 输出</a></li><li><a href="#完成与回放" data-depth="2" data-heading-j="3">完成与回放</a></li><li><a href="#易错点" data-depth="2" data-heading-j="4">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>Agent 流的取消与卡死超时</span></a><ul class="toc__heads"><li><a href="#三百秒无数据的判定" data-depth="2" data-heading-j="0">三百秒无数据的判定</a></li><li><a href="#外部信号与主动中止的合并" data-depth="2" data-heading-j="1">外部信号与主动中止的合并</a></li><li><a href="#两条生成器的差别" data-depth="2" data-heading-j="2">两条生成器的差别</a></li><li><a href="#hook-侧的取消接线" data-depth="2" data-heading-j="3">Hook 侧的取消接线</a></li><li><a href="#易错点" data-depth="2" data-heading-j="4">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>流式渲染的节流与上限</span></a><ul class="toc__heads"><li><a href="#增量文本的解析成本" data-depth="2" data-heading-j="0">增量文本的解析成本</a></li><li><a href="#引用与状态两份数据" data-depth="2" data-heading-j="1">引用与状态两份数据</a></li><li><a href="#采集日志为什么逐条追加" data-depth="2" data-heading-j="2">采集日志为什么逐条追加</a></li><li><a href="#三处内存上限" data-depth="2" data-heading-j="3">三处内存上限</a></li><li><a href="#列表没有记忆化时的放大" data-depth="2" data-heading-j="4">列表没有记忆化时的放大</a></li><li><a href="#markdown-解析发生在什么时候" data-depth="2" data-heading-j="5">Markdown 解析发生在什么时候</a></li><li><a href="#阶段数组与翻译表的重复工作" data-depth="2" data-heading-j="6">阶段数组与翻译表的重复工作</a></li><li><a href="#怎么验证这些判断" data-depth="2" data-heading-j="7">怎么验证这些判断</a></li><li><a href="#易错点" data-depth="2" data-heading-j="8">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">React 与前端工程</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>React / 前端工程 / SSE / 流式 / Hook / KnowledgeDiver / 状态机 / 流水线</span></div><h1 class="docs__title">SSE流式渲染</h1><p class="docs__lead">useSSE 用 fetch 读流并手工解析 data 行、结束时的缓冲区刷新、回调引用转存与卸载中止，以及它对比 Agent 侧流读取的异同。</p></header><section class="dfile" id="file-1" data-file="01-SSE客户端与流解析"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-SSE客户端与流解析</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/03-SSE流式渲染/01-SSE客户端与流解析.md</span></div><div class="dfile__body"><h1 id="sse-客户端与流解析">SSE 客户端与流解析</h1>
+<p>采集任务的进度靠后端推送的事件流拿到，不走轮询。前端只有一个 Hook 负责读这条流：<code>src/hooks/useSSE.ts</code>，124 行，被流式输出组件使用（<code>src/components/StreamingOutput.tsx:193</code>）。</p>
+<p>它没有使用浏览器的 <code>EventSource</code>，改用 <code>fetch</code> 拿到响应体后自己解码、切行、解析。这样做的主要原因是鉴权头：<code>EventSource</code> 不能自定义请求头，而所有采集流都需要带 token。 它与 Agent 侧那份流读取实现结构相似，卡死保护上不同：采集流没有超时，Agent 流在 300 秒没有数据时自动中止（<code>src/api/agent.ts:135-142</code>）。</p>
+<h2 id="用-fetch-代替-eventsource">用 fetch 代替 EventSource</h2>
+<p>连接从一次 <code>fetch</code> 开始，token 以请求头方式带上（<code>src/hooks/useSSE.ts:23-31</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> token</span><span style="color:#D73A49"> =</span><span style="color:#6F42C1"> getToken</span><span style="color:#24292E">()</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> abortController</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> new</span><span style="color:#6F42C1"> AbortController</span><span style="color:#24292E">()</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> response</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> await</span><span style="color:#6F42C1"> fetch</span><span style="color:#24292E">(url, {</span></span>
+<span class="line"><span style="color:#24292E">  headers: token </span><span style="color:#D73A49">?</span><span style="color:#24292E"> { </span><span style="color:#032F62">'Authorization'</span><span style="color:#24292E">: </span><span style="color:#032F62">`Bearer ${</span><span style="color:#24292E">token</span><span style="color:#032F62">}`</span><span style="color:#24292E"> } </span><span style="color:#D73A49">:</span><span style="color:#24292E"> {},</span></span>
+<span class="line"><span style="color:#24292E">  signal: abortController.signal,</span></span>
+<span class="line"><span style="color:#24292E">})</span></span></code></pre>
+<p>响应非 2xx 时先尝试解析错误体取 <code>detail</code>，解析失败则回落到状态码（<code>src/hooks/useSSE.ts:34-41</code>）。连接建立后立刻把状态置为已连接（<code>src/hooks/useSSE.ts:43</code>），再取读取器；没有响应体则抛错（<code>src/hooks/useSSE.ts:44-45</code>）。</p>
+<p>取消用一个 <code>AbortController</code> 实现，清理函数里中止它并把引用置空（<code>src/hooks/useSSE.ts:108-112</code>），也对外暴露一个手动断开函数（<code>src/hooks/useSSE.ts:115-121</code>）。中止触发的异常在捕获处被识别为 <code>AbortError</code> 并静默返回（<code>src/hooks/useSSE.ts:100</code>），不会走错误回调。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant C as StreamingOutput
+    participant S as useSSE
+    participant L as localStorage
+    participant B as 后端
+    C->>S: 传入 streamUrl 与两个回调
+    S->>L: getToken()
+    S->>B: fetch(url, Authorization)
+    alt 响应不 ok
+        B-->>S: detail 或状态码
+        S-->>C: onError
+    else 响应 ok
+        S->>S: setIsConnected(true)
+        S->>B: reader.read() 循环
+        B-->>S: data 行
+        S-->>C: onMessage(解析后的事件)
+    end</pre></div>
+<h2 id="解码切行与缓冲区">解码、切行与缓冲区</h2>
+<p>读取循环维护一个字符串缓冲（<code>src/hooks/useSSE.ts:47-48</code>）。每次读到块后解码并追加到缓冲，按换行切分，最后一段不完整的行留在缓冲里等下一次（<code>src/hooks/useSSE.ts:84-85</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> lines</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> buffer.</span><span style="color:#6F42C1">split</span><span style="color:#24292E">(</span><span style="color:#032F62">'</span></span>
+<span class="line"><span style="color:#032F62">'</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">buffer </span><span style="color:#D73A49">=</span><span style="color:#24292E"> lines.</span><span style="color:#6F42C1">pop</span><span style="color:#24292E">() </span><span style="color:#D73A49">||</span><span style="color:#032F62"> ''</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> (</span><span style="color:#D73A49">const</span><span style="color:#005CC5"> line</span><span style="color:#D73A49"> of</span><span style="color:#24292E"> lines) {</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (line.</span><span style="color:#6F42C1">startsWith</span><span style="color:#24292E">(</span><span style="color:#032F62">'data: '</span><span style="color:#24292E">)) {</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E"> { onMessageRef.</span><span style="color:#6F42C1">current</span><span style="color:#24292E">(</span><span style="color:#005CC5">JSON</span><span style="color:#24292E">.</span><span style="color:#6F42C1">parse</span><span style="color:#24292E">(line.</span><span style="color:#6F42C1">slice</span><span style="color:#24292E">(</span><span style="color:#005CC5">6</span><span style="color:#24292E">))) }</span></span>
+<span class="line"><span style="color:#D73A49">    catch</span><span style="color:#24292E"> (e) { console.</span><span style="color:#6F42C1">warn</span><span style="color:#24292E">(</span><span style="color:#032F62">'SSE line parse failed:'</span><span style="color:#24292E">, e) }</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>流结束时还有一次特殊处理：先对解码器做最终刷新，再解析缓冲里剩下的内容（<code>src/hooks/useSSE.ts:61-82</code>）。注释说明了原因：不做这一步会丢掉最后一条事件，界面停在”正在生成”（<code>src/hooks/useSSE.ts:57-60</code>）。解析失败只打警告，不中断整个流（<code>src/hooks/useSSE.ts:74-77</code>、<code>src/hooks/useSSE.ts:93-95</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A[reader.read] --> B{"done?"}
+    B -->|否| C[解码块并追加到缓冲区]
+    C --> D[按换行切分, 最后一段留回缓冲]
+    D --> E["以 data 开头的行解析为事件"]
+    E --> A
+    B -->|是| F[解码器最终刷新]
+    F --> G[解析缓冲区剩余行]
+    G --> H[结束循环]</pre></div>
+<h2 id="回调引用与效果依赖">回调引用与效果依赖</h2>
+<p>两个回调被存进引用，并在每次渲染时同步更新（<code>src/hooks/useSSE.ts:14-18</code>）。读取循环里统一调用引用上的函数（<code>src/hooks/useSSE.ts:73</code>、<code>src/hooks/useSSE.ts:92</code>、<code>src/hooks/useSSE.ts:102</code>），因此父组件传入新的回调函数不会重启连接。</p>
+<p>效果的依赖只有地址一项（<code>src/hooks/useSSE.ts:113</code>），地址变化才会重新连接。回调通过引用取最新值，这个组合意味着：地址不变时连接不重建，但每次事件都调用最新的处理函数。</p>
+<h2 id="与-agent-侧流读取的差别">与 Agent 侧流读取的差别</h2>
+<p>Agent 侧另有一份流读取实现（<code>src/api/agent.ts:123-192</code>），两者结构相似，差别在三处：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th><code>useSSE</code></th><th>Agent 侧读取函数</th></tr></thead><tbody><tr><td>形态</td><td>React Hook，依赖地址与清理函数</td><td>异步生成器，逐条 <code>yield</code> 事件</td></tr><tr><td>空数据保护</td><td>无</td><td>300 秒无数据自动中止（<code>src/api/agent.ts:135-142</code>）</td></tr><tr><td>结束刷新</td><td>有缓冲刷新（<code>src/hooks/useSSE.ts:61-82</code>）</td><td>有同样处理（<code>src/api/agent.ts:158-172</code>）</td></tr><tr><td>错误体</td><td>解析 <code>detail</code>（<code>src/hooks/useSSE.ts:34-41</code>）</td><td>读文本整体作为错误（<code>src/api/agent.ts:223-226</code>）</td></tr></tbody></table>
+<p>两份实现都按行切分并跳过不以 <code>data: </code> 开头的内容，也都在解析失败时继续。采集流没有卡死超时，Agent 流有；这是两处最需要注意的差别。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/hooks/useSSE.ts:3</code></td><td>导入了 <code>parseSSEMessage</code> 却在循环里手写解析，导入未被使用</td><td>删掉导入，或改用该函数统一解析</td></tr><tr><td><code>src/hooks/useSSE.ts:81</code></td><td>流正常结束后直接跳出循环，没有把连接状态置为假</td><td>结束分支里同步 <code>setIsConnected(false)</code></td></tr><tr><td><code>src/hooks/useSSE.ts:100-103</code></td><td>只有中止会被静默；网络中断会走错误回调并置为未连接，但不会自动重连</td><td>需要重试场景时补退避重连，或明确告知用户</td></tr><tr><td><code>src/hooks/useSSE.ts:47-48</code></td><td>缓冲区只有字符串拼接，没有上限；后端若持续推送超长行会占用内存</td><td>单行长度设上限，超限丢弃并记日志</td></tr><tr><td><code>src/api/stream.ts:5-8</code></td><td><code>startCollection</code> 用 <code>EventSource</code> 且不带 token，当前没有调用点</td><td>删除或改为与 <code>useSSE</code> 一致的实现</td></tr><tr><td><code>src/hooks/useTaskManager.ts:4</code></td><td>导入了 <code>startCollection</code> 但未调用</td><td>删掉未使用的导入</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>采集流用 <code>fetch</code> 加读取器实现，因为需要自定义鉴权头（<code>src/hooks/useSSE.ts:29-31</code>）。</li>
+<li>每行以 <code>data: </code> 前缀识别，JSON 解析失败只打警告（<code>src/hooks/useSSE.ts:88-95</code>）。</li>
+<li>缓冲区保留不完整行，流结束时先刷新解码器再解析剩余内容（<code>src/hooks/useSSE.ts:61-85</code>）。</li>
+<li>回调存进引用并按渲染更新，连接只依赖地址（<code>src/hooks/useSSE.ts:14-18</code>、<code>:113</code>）。</li>
+<li>中止与卸载都通过 <code>AbortController</code>，中止异常静默处理（<code>src/hooks/useSSE.ts:100-112</code>）。</li>
+<li>Agent 侧有对应实现，多一层 300 秒无数据中止（<code>src/api/agent.ts:135-142</code>）。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>不用 <code>EventSource</code></td><td>可以自定义请求头与中止方式</td><td>需要自己处理切行、解码与结束刷新</td></tr><tr><td>回调放引用</td><td>父组件换回调不重启连接</td><td>事件处理逻辑对连接生命周期不可见</td></tr><tr><td>解析失败继续</td><td>单条坏数据不影响整条流</td><td>坏数据被静默跳过，排查需要看控制台</td></tr><tr><td>连接只依赖地址</td><td>行为可预期</td><td>地址不变时无法通过其他参数重连</td></tr><tr><td>无自动重连</td><td>实现简单，不会无声重试</td><td>网络抖动后需要用户重新触发任务</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明为什么这里用 <code>fetch</code> 而不用 <code>EventSource</code>。</li>
+<li>缓冲区的作用是什么，为什么最后一段要留回缓冲区。</li>
+<li>流结束时的那次解码器刷新解决了什么问题。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给 <code>useSSE</code> 加自动重连，写出退避策略、重连上限与状态复位逻辑，并说明如何避免重复插入同一条事件。</li>
+<li>把 <code>useSSE</code> 与 Agent 侧的读取函数统一成一份实现，列出两份代码的差异点与合并后的接口设计。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/hooks/useSSE.ts</code></td><td>采集流读取与连接状态</td></tr><tr><td><code>src/api/agent.ts</code></td><td>Agent 侧的流读取与卡死判定</td></tr><tr><td><code>src/api/stream.ts</code></td><td>早期 <code>EventSource</code> 帮助函数与消息解析</td></tr><tr><td><code>src/hooks/useTaskManager.ts</code></td><td>采集流地址的来源</td></tr><tr><td><code>src/components/StreamingOutput.tsx</code></td><td>本 Hook 的唯一消费方</td></tr><tr><td><code>src/types/pipeline.ts</code></td><td>事件与阶段类型</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-采集流水线的事件与阶段状态机"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-采集流水线的事件与阶段状态机</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/03-SSE流式渲染/02-采集流水线的事件与阶段状态机.md</span></div><div class="dfile__body"><h1 id="采集流水线的事件与阶段状态机">采集流水线的事件与阶段状态机</h1>
+<p>流式输出组件 <code>src/components/StreamingOutput.tsx</code>（276 行）是采集任务的界面主体：标题行、终端样式的日志、五个阶段的进度条、AI 生成内容的实时面板与已生成卡片网格。它订阅一条 SSE 流，把事件翻译成这五块界面。</p>
+<p>组件的状态比它订阅的 Hook 多得多：七个状态加八个引用（<code>src/components/StreamingOutput.tsx:38-48</code>）。 事件类型、阶段状态、日志与输出、完成与回放这四段决定了这些状态如何被驱动。</p>
+<h2 id="五种事件与五个阶段">五种事件与五个阶段</h2>
+<p>流水线阶段有五个，加完成与错误共七个取值（<code>src/types/pipeline.ts:3</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> type</span><span style="color:#6F42C1"> PipelineStage</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> 'searching'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'scraping'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'summarizing'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'generating'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'expanding'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'complete'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'error'</span></span></code></pre>
+<p>事件类型有五种：进度、卡片、错误、完成与状态（<code>src/types/pipeline.ts:13-16</code>）。进度事件的载荷结构最完整，带阶段、文案、进度值、时间戳，以及可选的在处理项与 AI 输出（<code>src/types/pipeline.ts:5-11</code>）。卡片事件直接携带一张卡片，完成事件带卡片数，状态事件带任务 ID 与状态字符串。</p>
+<p>任务类型另有五个取值，其中采集与扩展是这条流最常用的两种（<code>src/types/pipeline.ts:20</code>）。状态字符串与任务状态枚举一致（<code>src/types/pipeline.ts:18</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A[SSE 事件] --> B{"type"}
+    B -->|status| C[取 task_id 通知上层并判断回放]
+    B -->|progress| D[更新阶段百分比与日志]
+    B -->|card| E[追加到卡片网格]
+    B -->|complete| F[交回父组件并清空本地卡片]
+    B -->|error| G[写错误并上报]</pre></div>
+<h2 id="阶段状态机与进度映射">阶段状态机与进度映射</h2>
+<p>五个阶段的初始状态都是待开始（<code>src/components/StreamingOutput.tsx:51-57</code>）。进度事件到达时按阶段名匹配并更新（<code>src/components/StreamingOutput.tsx:131-141</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> progressPercent</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">round</span><span style="color:#24292E">(p.progress </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 100</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6F42C1">setStages</span><span style="color:#24292E">((</span><span style="color:#E36209">prev</span><span style="color:#24292E">) </span><span style="color:#D73A49">=></span><span style="color:#24292E"> prev.</span><span style="color:#6F42C1">map</span><span style="color:#24292E">((</span><span style="color:#E36209">s</span><span style="color:#24292E">) </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (s.stage </span><span style="color:#D73A49">===</span><span style="color:#24292E"> p.stage) {</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> newStatus</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> progressPercent </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> 100</span><span style="color:#D73A49"> ?</span><span style="color:#032F62"> 'complete'</span><span style="color:#D73A49"> :</span><span style="color:#032F62"> 'running'</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> { </span><span style="color:#D73A49">...</span><span style="color:#24292E">s, progress: progressPercent, status: newStatus, message: p.message }</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> s</span></span>
+<span class="line"><span style="color:#24292E">}))</span></span></code></pre>
+<p>进度值是零到一的小数，界面用百分比整数显示，到达一百即标记该阶段完成。阶段列表里没有”完成”与”错误”两个取值，因此进度事件若带着这两个阶段名，更新不会命中任何一项。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> pending
+    pending --> running: 收到该阶段进度且百分比小于 100
+    running --> running: 进度继续增加
+    running --> complete: 百分比达到 100
+    complete --> complete: 后续进度
+    note right of running
+        阶段名不匹配时状态不变
+    end note</pre></div>
+<h2 id="日志与-ai-输出">日志与 AI 输出</h2>
+<p>终端区域显示的是拼接后的日志行。每条进度消息先按阶段名加前缀，再经过一个英文到中文的替换表（<code>src/components/StreamingOutput.tsx:65-105</code>）。替换表按关键词长度降序匹配，避免短词先替换掉长词的一部分（<code>src/components/StreamingOutput.tsx:99-103</code>）。</p>
+<p>写入日志前有两道过滤（<code>src/components/StreamingOutput.tsx:146-152</code>）：生成阶段的文案不重复写，与其他阶段重复的整行也跳过。行数上限是两百，超出后保留最后两百行。</p>
+<p>AI 输出面板按处理项聚合（<code>src/components/StreamingOutput.tsx:154-163</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> next</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> { </span><span style="color:#D73A49">...</span><span style="color:#24292E">prev, [p.current_item</span><span style="color:#D73A49">!</span><span style="color:#24292E">]: p.ai_output</span><span style="color:#D73A49">!</span><span style="color:#24292E"> }</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> keys</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> Object.</span><span style="color:#6F42C1">keys</span><span style="color:#24292E">(next)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (keys.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> ></span><span style="color:#005CC5"> 20</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">  keys.</span><span style="color:#6F42C1">slice</span><span style="color:#24292E">(</span><span style="color:#005CC5">0</span><span style="color:#24292E">, keys.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> 20</span><span style="color:#24292E">).</span><span style="color:#6F42C1">forEach</span><span style="color:#24292E">(</span><span style="color:#E36209">k</span><span style="color:#D73A49"> =></span><span style="color:#D73A49"> delete</span><span style="color:#24292E"> next[k])</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>同一处理项的流式文本反复覆盖同一个键，因此面板数量取决于并发处理项；上限二十条，超出后按插入顺序删除最早的项目。</p>
+<h2 id="完成与回放">完成与回放</h2>
+<p>“完成”有两种来源：进度事件里阶段名为完成，以及独立的完成事件。前者只把进度条补齐（<code>src/components/StreamingOutput.tsx:165-168</code>），后者才触发回调（<code>src/components/StreamingOutput.tsx:169-173</code>）。回调有一次保护，重复的完成事件不会重复上报（<code>src/components/StreamingOutput.tsx:59-63</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> handleComplete</span><span style="color:#D73A49"> =</span><span style="color:#6F42C1"> useCallback</span><span style="color:#24292E">((</span><span style="color:#E36209">finalCards</span><span style="color:#D73A49">:</span><span style="color:#6F42C1"> Card</span><span style="color:#24292E">[]) </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (completedRef.current) </span><span style="color:#D73A49">return</span></span>
+<span class="line"><span style="color:#24292E">  completedRef.current </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> true</span></span>
+<span class="line"><span style="color:#6F42C1">  onComplete</span><span style="color:#24292E">(searchId, finalCards)</span></span>
+<span class="line"><span style="color:#24292E">}, [onComplete, searchId])</span></span></code></pre>
+<p>卡片由组件自己累积，不从完成事件里取：卡片事件把新卡片加入数组，同时写进一个引用（<code>src/components/StreamingOutput.tsx:174-180</code>），完成时读引用交给父组件，再清空本地列表。之所以需要引用，是因为完成事件的处理函数与卡片状态之间隔着渲染周期，直接读状态会拿到旧值。</p>
+<p>回放是给已经结束的任务准备的。状态事件里出现已完成、已取消或出错时，组件标记为回放（<code>src/components/StreamingOutput.tsx:116-123</code>），之后完成事件不再上报、自动删除也不会发生，按钮文案从”取消”变成”关闭”（<code>src/components/StreamingOutput.tsx:269-273</code>）。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/components/StreamingOutput.tsx:107</code></td><td>事件参数写成 <code>any</code> 再断言，类型检查在这一层失效</td><td>直接声明为 <code>PipelineEvent</code>，由 Hook 保证类型</td></tr><tr><td><code>src/components/StreamingOutput.tsx:182-184</code></td><td>错误事件的数据被断言成 <code>Error</code>，服务端若只给字符串则 <code>message</code> 为空</td><td>兼容字符串与对象两种形态</td></tr><tr><td><code>src/components/StreamingOutput.tsx:99-103</code></td><td>替换表用 <code>RegExp</code> 直接拼接关键词，关键词含正则符号时会误替换</td><td>转义关键词，或用字符串替换</td></tr><tr><td><code>src/components/StreamingOutput.tsx:165-168</code></td><td>阶段名为完成时不更新任何阶段，进度条靠完成事件兜底</td><td>给完成阶段单独处理，或在事件到达时把全部阶段置满</td></tr><tr><td><code>src/components/StreamingOutput.tsx:47</code></td><td>回放标记同时存在引用与状态两份，容易不同步</td><td>只保留状态，读取时用状态或改成单一引用</td></tr><tr><td><code>src/components/StreamingOutput.tsx:195-199</code></td><td>取消只断开连接并上报，本地阶段状态保持不变</td><td>取消时把进行中的阶段标记为已取消或保留日志说明</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>流水线有五个阶段与七种取值（<code>src/types/pipeline.ts:3</code>）。</li>
+<li>事件有进度、卡片、错误、完成与状态五类（<code>src/types/pipeline.ts:13-16</code>）。</li>
+<li>进度值乘以一百取整后显示，达到一百标记阶段完成（<code>src/components/StreamingOutput.tsx:130-140</code>）。</li>
+<li>日志行去重且上限两百条，AI 输出按处理项聚合并上限二十条（<code>src/components/StreamingOutput.tsx:146-163</code>）。</li>
+<li>完成回调只触发一次，卡片从本地累积的引用里取（<code>src/components/StreamingOutput.tsx:59-63</code>、<code>:174-180</code>）。</li>
+<li>回放任务不触发完成回调，按钮改为关闭（<code>src/components/StreamingOutput.tsx:116-123</code>、<code>:269-273</code>）。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>阶段与事件分成两套枚举</td><td>界面阶段与协议事件各自清晰</td><td>需要映射，出现新阶段要同步两处</td></tr><tr><td>日志在前端翻译</td><td>后端文案可以直接展示</td><td>替换表要维护，长句可能被部分替换</td></tr><tr><td>卡片本地累积再加引用</td><td>完成回调不依赖渲染时机</td><td>状态与引用两份数据需要一起维护</td></tr><tr><td>日志与输出都设上限</td><td>长时间任务不会占满内存</td><td>更早的内容不可回溯</td></tr><tr><td>回放与实时共用组件</td><td>少写一个只读视图</td><td>多出回放标记与分支判断</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出五类事件与五个界面阶段，并说明进度事件的载荷包含哪些字段。</li>
+<li>说明日志写入前的两道过滤分别过滤什么。</li>
+<li>完成事件与阶段为完成的进度事件分别做什么。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>让阶段状态在取消时也反映界面上，写出需要新增的阶段取值与渲染改动，并说明如何保证已有回放逻辑不受影响。</li>
+<li>把日志翻译表改成配置数据（不写死在组件里），列出数据结构与加载方式，并说明如何避免关键词互相覆盖。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/components/StreamingOutput.tsx</code></td><td>流式输出界面与事件处理</td></tr><tr><td><code>src/types/pipeline.ts</code></td><td>阶段、事件与任务类型</td></tr><tr><td><code>src/hooks/useSSE.ts</code></td><td>事件来源</td></tr><tr><td><code>src/components/ProgressIndicator.tsx</code></td><td>阶段进度条</td></tr><tr><td><code>src/components/GeneratedCard.tsx</code></td><td>已生成卡片展示</td></tr><tr><td><code>src/components/StreamingOutput.css</code></td><td>终端与面板样式</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-Agent流的取消与卡死超时"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-Agent流的取消与卡死超时</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/03-SSE流式渲染/03-Agent流的取消与卡死超时.md</span></div><div class="dfile__body"><h1 id="agent-流的取消与卡死超时">Agent 流的取消与卡死超时</h1>
+<p>Agent 的两条流都实现在 <code>src/api/agent.ts</code> 里：聊天流是 POST，订阅后台循环流是 GET（<code>src/api/agent.ts:194-228</code>、<code>src/api/agent.ts:230-255</code>）。它们共用一份读取循环（<code>src/api/agent.ts:123-192</code>），差别只在请求方式与错误信息。</p>
+<p>与采集流相比，这条链路多了一个明确的时间约束：三百秒没有任何数据就判定卡死并主动中止（<code>src/api/agent.ts:4</code>）。 这个判定如何计时、取消信号如何合并，以及 Hook 侧如何避免两个订阅者抢同一队列，是这条链路的关键。</p>
+<h2 id="三百秒无数据的判定">三百秒无数据的判定</h2>
+<p>判定按两次读取之间的间隔计时，不给整条流设总时长。每次进入读取前先重置定时器（<code>src/api/agent.ts:135-142</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#6F42C1"> armStall</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> () </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">stallMs) </span><span style="color:#D73A49">return</span></span>
+<span class="line"><span style="color:#6F42C1">  clearTimeout</span><span style="color:#24292E">(stallTimer)</span></span>
+<span class="line"><span style="color:#24292E">  stallTimer </span><span style="color:#D73A49">=</span><span style="color:#24292E"> window.</span><span style="color:#6F42C1">setTimeout</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#24292E">    stallFired </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> true</span></span>
+<span class="line"><span style="color:#6F42C1">    onStall</span><span style="color:#24292E">?.()</span></span>
+<span class="line"><span style="color:#24292E">  }, stallMs)</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>循环里每次 <code>read</code> 之前调用一次（<code>src/api/agent.ts:146</code>），读到数据后立即清除（<code>src/api/agent.ts:154</code>）。因此只要持续有数据，计时会不断被重置，不会误判；一旦卡住，定时器触发，把标记置真并调用回调，回调再中止请求（<code>src/api/agent.ts:227</code>）。中止会让正在等待的 <code>read</code> 抛异常，读取处根据标记判断是超时还是普通中断，并把提示语换成更明确的一条（<code>src/api/agent.ts:148-152</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E"> { chunk </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> reader.</span><span style="color:#6F42C1">read</span><span style="color:#24292E">() }</span></span>
+<span class="line"><span style="color:#D73A49">catch</span><span style="color:#24292E"> (err) {</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (stallFired) </span><span style="color:#D73A49">throw</span><span style="color:#D73A49"> new</span><span style="color:#6F42C1"> Error</span><span style="color:#24292E">(</span><span style="color:#032F62">`Agent 响应超时（${</span><span style="color:#032F62">(</span><span style="color:#24292E">stallMs</span><span style="color:#D73A49"> ??</span><span style="color:#005CC5"> 0</span><span style="color:#032F62">) </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 1000</span><span style="color:#032F62">}s 无数据），已自动中止`</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">  throw</span><span style="color:#24292E"> err</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>无论正常结束还是抛错，定时器都在 <code>finally</code> 里清理（<code>src/api/agent.ts:189-191</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant G as 流生成器
+    participant R as 读取循环
+    participant T as 超时定时器
+    participant B as 后端
+    loop 每次读取
+        R->>T: 重置 300 秒计时
+        R->>B: reader.read()
+        B-->>R: 数据块
+        R->>T: 清除计时
+    end
+    Note over B,T: 长时间无数据
+    T->>T: 标记超时并回调
+    T->>G: 中止请求
+    R-->>G: 抛出超时提示</pre></div>
+<h2 id="外部信号与主动中止的合并">外部信号与主动中止的合并</h2>
+<p>两个生成器都接受可选的 <code>AbortSignal</code>，内部再建一个控制器，把外部信号与自身的超时中止合并到一起（<code>src/api/agent.ts:200-207</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> controller</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> new</span><span style="color:#6F42C1"> AbortController</span><span style="color:#24292E">()</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#6F42C1"> onAbort</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> () </span><span style="color:#D73A49">=></span><span style="color:#24292E"> controller.</span><span style="color:#6F42C1">abort</span><span style="color:#24292E">()</span></span>
+<span class="line"><span style="color:#24292E">signal?.</span><span style="color:#6F42C1">addEventListener</span><span style="color:#24292E">(</span><span style="color:#032F62">'abort'</span><span style="color:#24292E">, onAbort)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (signal?.aborted) controller.</span><span style="color:#6F42C1">abort</span><span style="color:#24292E">()</span></span></code></pre>
+<p>外部信号已经处于已中止状态时补一次主动中止（<code>src/api/agent.ts:206</code>），覆盖”调用前就被取消”的情况。请求结束后在 <code>finally</code> 里移除监听（<code>src/api/agent.ts:228-230</code>），避免控制器被长期引用。</p>
+<p>采集流那个 Hook 用同样的方式处理取消，但只在清理函数里中止（<code>src/hooks/useSSE.ts:108-112</code>），没有外部信号参数。两处的差别在于 Agent 流被多处复用，取消源更多。</p>
+<h2 id="两条生成器的差别">两条生成器的差别</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>聊天流</th><th>订阅后台循环流</th></tr></thead><tbody><tr><td>方法与端点</td><td>POST <code>/api/agent/chat</code>（<code>src/api/agent.ts:212-221</code>）</td><td>GET <code>/api/agent/stream</code>（<code>src/api/agent.ts:240-246</code>）</td></tr><tr><td>请求体</td><td>消息与会话 ID</td><td>无，会话 ID 在查询串里</td></tr><tr><td>无 token 时</td><td>抛”未认证”（<code>src/api/agent.ts:199-200</code>）</td><td>同样抛出（<code>src/api/agent.ts:232-233</code>）</td></tr><tr><td>错误信息</td><td>读响应文本（<code>src/api/agent.ts:223-226</code>）</td><td>只有状态码（<code>src/api/agent.ts:247</code>）</td></tr><tr><td>卡死判定</td><td>启用（<code>src/api/agent.ts:227</code>）</td><td>未启用（<code>src/api/agent.ts:248</code>）</td></tr></tbody></table>
+<p>订阅后台循环这条流没有卡死判定，因为它的语义是”有循环就推、没有就结束”，长期无数据属于正常情况（<code>src/hooks/useAgent.ts:175</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["agentChatSSE 或 agentStreamSSE"] --> B[getToken 并校验]
+    B --> C[建立控制器并合并外部信号]
+    C --> D{"chat 还是 stream"}
+    D -->|chat| E["POST /api/agent/chat"]
+    D -->|stream| F["GET /api/agent/stream"]
+    E --> G["readAgentSSEStream 带 300 秒判定"]
+    F --> H["readAgentSSEStream 不带判定"]
+    G --> I[逐条 yield 事件]
+    H --> I</pre></div>
+<h2 id="hook-侧的取消接线">Hook 侧的取消接线</h2>
+<p><code>useAgent</code> 持有两个控制器引用：一个给聊天流，一个给后台循环订阅（<code>src/hooks/useAgent.ts:49-50</code>）。发送新消息前会中止后台订阅（<code>src/hooks/useAgent.ts:247-249</code>），注释写明是为了避免两个订阅者抢同一队列。</p>
+<p>取消函数只中止聊天流的控制器（<code>src/hooks/useAgent.ts:286-288</code>），后台订阅不受影响。组件卸载时两个都中止，并取消尚未执行的动画帧（<code>src/hooks/useAgent.ts:207-211</code>）。聊天流捕获到中止异常时按 <code>AbortError</code> 名称识别并静默收尾（<code>src/hooks/useAgent.ts:260-261</code>），与超时错误区分开：超时会作为一条错误消息追加到对话里。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/agent.ts:138-141</code></td><td>超时回调在中止后仍会触发异常路径，提示依赖标记判断</td><td>保留标记方案，但把提示语集中到一处常量</td></tr><tr><td><code>src/api/agent.ts:206</code></td><td>只有已中止的情况补一次，其他异常状态未检查</td><td>属防御性写法，可保留</td></tr><tr><td><code>src/api/agent.ts:247</code></td><td>订阅流错误只有状态码，缺少服务端文案</td><td>与其他路径一致地读取响应文本</td></tr><tr><td><code>src/api/agent.ts:230-255</code></td><td>订阅流没有卡死判定，服务端异常保持连接时会一直挂着</td><td>视后端心跳约定决定是否补判定</td></tr><tr><td><code>src/hooks/useAgent.ts:247-249</code></td><td>发送新消息会静默中止后台订阅，正在显示的工具事件会停止刷新</td><td>中止前记录原因，或保留订阅改为队列合并</td></tr><tr><td><code>src/hooks/useAgent.ts:260-261</code></td><td>所有 <code>AbortError</code> 都静默，包括超时中止之外的异常中断</td><td>保留名称判断，同时把非用户取消的原因写进控制台</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>两条 Agent 流共用一份读取循环，差别在请求方式与错误信息（<code>src/api/agent.ts:194-255</code>）。</li>
+<li>卡死判定按两次读取之间的间隔计时，每次读取前重置、读到数据后清除（<code>src/api/agent.ts:135-154</code>）。</li>
+<li>超时后主动中止并抛出带秒数的提示（<code>src/api/agent.ts:148-152</code>、<code>:227</code>）。</li>
+<li>外部信号通过监听器合并到内部控制器，并在结束时移除（<code>src/api/agent.ts:200-207</code>、<code>:228-230</code>）。</li>
+<li>订阅后台循环流不启用卡死判定（<code>src/api/agent.ts:248</code>）。</li>
+<li>Hook 侧两个控制器分别管聊天流与后台订阅（<code>src/hooks/useAgent.ts:49-50</code>、<code>:207-211</code>）。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>按读取间隔而非总时长计超时</td><td>长回答不会被总时长误杀</td><td>每次读取都要重置定时器，逻辑分散在循环里</td></tr><tr><td>内部控制器合并外部信号</td><td>一处发起请求，多处可取消</td><td>监听器要及时移除，否则控制器被引用</td></tr><tr><td>订阅流不设卡死</td><td>语义简单，空闲即结束</td><td>服务端异常保持连接时会一直挂着</td></tr><tr><td>中止异常静默</td><td>用户主动取消不产生错误消息</td><td>非用户原因的异常中断也被吞掉</td></tr><tr><td>时间常量与后端对齐</td><td>前后端判定一致</td><td>后端调整时需要同步修改前端常量</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明卡死判定的计时起止点，为什么不是给整条流设总时长。</li>
+<li>外部信号是怎么合并进内部控制器的，结束时做了什么清理。</li>
+<li>两条生成器在错误信息与卡死判定上的差别。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给订阅后台循环流加上心跳判定，写出心跳事件的形态与前端判定逻辑，并说明怎样避免把”正常空闲”误判为卡死。</li>
+<li>把”静默中止”改成能区分用户取消与超时中止，列出需要传递的状态与界面呈现方式。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/api/agent.ts</code></td><td>两条流生成器与共用读取循环</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>取消接线与订阅管理</td></tr><tr><td><code>src/hooks/useSSE.ts</code></td><td>采集流的取消实现对照</td></tr><tr><td><code>src/types/pipeline.ts</code></td><td>事件类型定义</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-流式渲染的节流与上限"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-流式渲染的节流与上限</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/03-SSE流式渲染/04-流式渲染的节流与上限.md</span></div><div class="dfile__body"><h1 id="流式渲染的节流与上限">流式渲染的节流与上限</h1>
+<p>一条较长的 Agent 回复在界面上是逐段出现的。后端每生成一小段文本就推一个事件，前端收到后把这段内容追加到对应的消息上。看起来只是往字符串末尾接东西，代价却不在拼接本身：消息用 Markdown 渲染，每次更新都要重新解析累积后的全文，于是文本越长单次解析越贵，而事件在整段回复期间持续到达。</p>
+<p>采集任务的日志走的是同一套事件通道，处理方式却不一样——它按事件逐条追加，没有做按帧合并。决定策略的是两个量：事件到达的频率，和单次渲染的成本。把三条流式路径放在一起，能看清它们各自被哪个量主导。</p>
+<h2 id="增量文本的解析成本">增量文本的解析成本</h2>
+<p>Agent 的文本事件处理里，增量先累加到一个引用对象上，渲染交给动画帧回调（<code>src/hooks/useAgent.ts:124-141</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#24292E">streamMsgRef.current.content </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> event.data.content</span></span>
+<span class="line"><span style="color:#6A737D">// throttle to max 1 render per frame — ReactMarkdown re-parses</span></span>
+<span class="line"><span style="color:#6A737D">// the full accumulated text on every render, crushing the browser</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">textRafRef.current) {</span></span>
+<span class="line"><span style="color:#24292E">  textRafRef.current </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> requestAnimationFrame</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#24292E">    textRafRef.current </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> null</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> msg</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> streamMsgRef.current</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">msg) </span><span style="color:#D73A49">return</span></span>
+<span class="line"><span style="color:#6F42C1">    setMessages</span><span style="color:#24292E">(</span><span style="color:#E36209">prev</span><span style="color:#D73A49"> =></span><span style="color:#24292E"> { </span><span style="color:#D73A49">...</span><span style="color:#24292E"> 用 msg.content 覆盖对应消息 </span><span style="color:#D73A49">...</span><span style="color:#24292E"> })</span></span>
+<span class="line"><span style="color:#24292E">  })</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>代码里的注释写明了动机：Markdown 渲染器每次都要重新解析累积的全文（<code>src/hooks/useAgent.ts:125-126</code>）。不合并的话，一个字符一个事件就会触发一次解析；第 i 次解析的范围约等于当时的文本长度，整段回复累计下来，解析量随长度按平方增长。按帧合并把解析次数压到”每帧至多一次”，把这条平方曲线拉回与时长成正比。</p>
+<h2 id="引用与状态两份数据">引用与状态两份数据</h2>
+<p>合并的实现用的是”引用存最新、状态存已渲染”的分工：引用对象始终持有最新文本，状态里的消息只在帧回调里被覆盖（<code>src/hooks/useAgent.ts:132-139</code>）。帧回调做的事情是复制整个消息数组、按编号找到对应消息、替换它的内容。</p>
+<p>这个分工带来两个直接后果。中间态不会出现在界面上：一帧内到达的多个增量只渲染最后一次，用户看到的是跳变而不是逐字动画。另一个后果是同一份内容存在两处，读代码时需要判断当前看到的是哪一份——引用里的值比状态里的值新。</p>
+<p>帧回调本身也不便宜：每帧复制数组并做一次查找，消息数量越多，这一步的固定开销越大。它把更新频率降下来了，但没有让单次更新的规模变小。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant S as 文本事件
+    participant R as 引用对象
+    participant F as 动画帧回调
+    participant M as Markdown 渲染
+    S->>R: 追加增量
+    R->>F: 本帧尚未登记则登记一次
+    S->>R: 同帧内继续到达的增量只累加
+    F->>F: 复制数组并按编号替换消息
+    F->>M: 用最新累积文本解析</pre></div>
+<h2 id="采集日志为什么逐条追加">采集日志为什么逐条追加</h2>
+<p>采集流的进度处理做了两道过滤再追加：生成阶段的文案不写入日志，与上一条完全相同的整行也跳过（<code>src/components/StreamingOutput.tsx:146-152</code>）。追加后如果行数超过两百，只保留最后两百行（<code>src/components/StreamingOutput.tsx:149</code>）。</p>
+<p>终端区域在渲染时把数组拼成字符串（<code>src/components/StreamingOutput.tsx:202</code>）。拼接虽然发生在每次渲染，但输入长度被两百行上限约束，频率又远低于文本增量，因此不需要按帧合并。</p>
+<p>事件条数与渲染次数也不相等。读取回调会一次性处理缓冲区里已经完整的若干行（<code>src/hooks/useSSE.ts:87-97</code>），同一批事件落在同一次渲染里；分布在两个读取块里的事件才各自触发一次。实际渲染次数因此取决于网络分块方式。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A[流式数据到达] --> B{"事件属于哪条路径"}
+    B -->|Agent 文本| C[累加到引用对象]
+    C --> D{"本帧已登记回调?"}
+    D -->|否| E[登记动画帧]
+    D -->|是| F[只累加, 等本帧回调]
+    E --> G[每帧至多解析一次]
+    B -->|采集进度| H[过滤生成阶段与重复行]
+    H --> I{"超过 200 行?"}
+    I -->|是| J[保留最后 200 行]
+    B -->|AI 输出面板| K{"超过 20 项?"}
+    K -->|是| L[删除最早插入的键]</pre></div>
+<h2 id="三处内存上限">三处内存上限</h2>
+<p>三处上限分散在不同文件里，处理方式一致：超出后保留最新内容。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>上限</th><th>超出后的处理</th></tr></thead><tbody><tr><td>Agent 消息数组</td><td>100 条</td><td>截取最后 100 条（<code>src/hooks/useAgent.ts:56-60</code>）</td></tr><tr><td>采集日志行</td><td>200 行</td><td>截取最后 200 行（<code>src/components/StreamingOutput.tsx:149</code>）</td></tr><tr><td>AI 输出面板</td><td>20 项</td><td>删除最早插入的键（<code>src/components/StreamingOutput.tsx:158-160</code>）</td></tr></tbody></table>
+<p>消息上限那条注释写的是防止无限增长导致浏览器内存溢出（<code>src/hooks/useAgent.ts:55</code>）。代价是早期内容不可回看：一场长任务跑下来，终端里最早几个阶段的输出会被挤掉，而阶段进度条仍在，因为它保存在另一个数组里。</p>
+<p>截断发生在追加之后，也就是说每新增一条消息都会触发一次”复制加截取”。数量达到上限后，这个动作的频率等于消息新增频率。</p>
+<h2 id="列表没有记忆化时的放大">列表没有记忆化时的放大</h2>
+<p>消息列表用映射直接展开，没有做记忆化（<code>src/components/AgentPanel.tsx:71-91</code>）。在整个前端目录里检索记忆化相关写法没有命中，说明列表项没有独立的比较逻辑。于是任何一次消息数组更新，都会重新渲染列表里的每一条消息。</p>
+<p>流式光标让这件事更明显：它与消息内容在同一个元素里（<code>src/components/AgentPanel.tsx:91</code>），光标闪烁引起的变化会带动整条消息重新渲染。移动端抽屉用同样的结构渲染 Agent 消息（<code>src/components/AgentDrawer.tsx:94-104</code>），因此两种形态的成本特征一致。</p>
+<p>按帧合并降低的是更新频率，不是单次更新的条目数。对话越长，单帧里要渲染的消息越多，这正是”节流之后仍然卡”的来源。</p>
+<h2 id="markdown-解析发生在什么时候">Markdown 解析发生在什么时候</h2>
+<p>卡片内容的渲染点在主外壳里，插件组合与元素覆盖都写在一处（<code>src/App.tsx:362-374</code>），它只在选中卡片变化或保存之后重新渲染（<code>src/App.tsx:359-377</code>）。因此这条路径的解析成本发生在用户交互时，与推送频率无关。</p>
+<p>Agent 那条路径的解析则由推送驱动：每帧合并出一次更新，就重解析一次流式消息的全文。两条路径用同一套插件与渲染器，成本却由完全不同的时机决定。</p>
+<h2 id="阶段数组与翻译表的重复工作">阶段数组与翻译表的重复工作</h2>
+<p>每次进度事件都会把阶段数组整体映射一遍，生成一个新数组（<code>src/components/StreamingOutput.tsx:131-140</code>）。阶段数量固定且很少，这个复制目前可以接受；如果阶段变多，就该改成按索引更新。</p>
+<p>翻译环节的重复更明显：每条消息进来时都把翻译表按长度降序排序一遍，再为每个条目构造正则做替换（<code>src/components/StreamingOutput.tsx:99-103</code>）。表是常量，排序结果完全可以提到组件外，正则也可以预先构造。</p>
+<p>这两处与流式本身无关，属于”事件驱动路径上顺手做的小计算”。事件一密集，它们的总量就会跟上来。</p>
+<h2 id="怎么验证这些判断">怎么验证这些判断</h2>
+<p>上面的结论来自静态阅读，能验证的是代码结构与调用点，不能确认实际帧率。要确认量级，可以在浏览器性能面板里观察一次长回复期间的渲染次数与长任务，或临时去掉按帧合并、对比同一段回复的渲染次数变化。日志上限的效果更直接：跑一个阶段较多的任务，看终端里最早阶段是否消失。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/hooks/useAgent.ts:132-139</code></td><td>帧回调按编号查找并复制整个数组，消息多时每帧一次全量复制</td><td>流式消息单独渲染，或对列表项做记忆化</td></tr><tr><td><code>src/components/AgentPanel.tsx:71-91</code></td><td>列表未记忆化，任意一条消息变化都会重渲染全部消息</td><td>给消息项加记忆化，回调保持稳定引用</td></tr><tr><td><code>src/components/AgentPanel.tsx:91</code></td><td>光标与消息体同元素，闪烁带动整条消息的比较</td><td>把光标拆成独立元素</td></tr><tr><td><code>src/components/StreamingOutput.tsx:202</code></td><td>每次渲染都重新拼接日志字符串</td><td>日志变化时再拼接，或直接渲染数组</td></tr><tr><td><code>src/components/StreamingOutput.tsx:99-103</code></td><td>每条消息都重新排序翻译表并构造正则</td><td>排序结果与正则提到组件外</td></tr><tr><td><code>src/hooks/useAgent.ts:56-60</code></td><td>达到上限后每新增一条都触发一次截断复制</td><td>用环形缓冲，或按需截断</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>Agent 文本先累加到引用，再用动画帧把渲染压到每帧最多一次（<code>src/hooks/useAgent.ts:124-141</code>）。</li>
+<li>不合并时，解析量随回复长度按平方增长；合并后与时长成正比。</li>
+<li>采集日志按事件追加，生成阶段不写入、完全重复的行跳过，超过两百行保留最新（<code>src/components/StreamingOutput.tsx:146-152</code>）。</li>
+<li>三处上限分别是消息一百条、日志两百行、AI 输出二十项。</li>
+<li>消息列表没有记忆化，单帧成本随对话长度增长（<code>src/components/AgentPanel.tsx:71-91</code>）。</li>
+<li>卡片内容的 Markdown 只在交互时解析，Agent 消息的解析由推送驱动（<code>src/App.tsx:359-377</code>）。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>按帧合并文本更新</td><td>长回复不再逐字符重解析</td><td>引用与状态两份数据，中间态不可见</td></tr><tr><td>采集日志不节流</td><td>实现简单，进度可见</td><td>事件密集时渲染次数等于事件数</td></tr><tr><td>上限保留最新</td><td>内存可控，界面显示最近状态</td><td>早期内容不可回看</td></tr><tr><td>列表不记忆化</td><td>代码直白</td><td>对话变长后单帧成本上升</td></tr><tr><td>插件组合分处声明</td><td>每处可独立调整</td><td>升级插件要改多个文件</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明 Agent 文本为什么必须按帧合并，而采集日志可以按事件追加。</li>
+<li>列出三处内存上限的位置与超出后的处理方式。</li>
+<li>为什么采集流的渲染次数与事件条数不直接对应。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给消息列表加记忆化并保证流式消息仍能逐帧更新，写出需要稳定的属性与比较函数，并说明如何验证长对话下的渲染次数下降。</li>
+<li>设计一个统一的流式渲染节流工具，让采集日志与 Agent 文本共用，列出接口与背压策略，并说明进度类事件与文本类事件如何区别处理。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>文本增量的按帧合并与消息上限</td></tr><tr><td><code>src/components/StreamingOutput.tsx</code></td><td>采集日志、阶段数组与上限</td></tr><tr><td><code>src/hooks/useSSE.ts</code></td><td>读取回调与批量处理</td></tr><tr><td><code>src/components/AgentPanel.tsx</code></td><td>桌面 Agent 消息列表</td></tr><tr><td><code>src/components/AgentDrawer.tsx</code></td><td>移动端 Agent 消息列表</td></tr><tr><td><code>src/App.tsx</code></td><td>卡片内容的 Markdown 渲染</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/30-React%20%E4%B8%8E%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B/02-Hooks%E4%B8%8EAPI%E5%B1%82/"><span class="k">← 上一篇</span><span class="t">Hooks与API层</span><span class="d">React 与前端工程 · 5 个文件</span></a><a class="next" href="/tc63/docs/30-React%20%E4%B8%8E%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B/04-%E5%9B%BE%E8%B0%B1%E5%8F%AF%E8%A7%86%E5%8C%96/"><span class="k">下一篇 →</span><span class="t">图谱可视化</span><span class="d">React 与前端工程 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

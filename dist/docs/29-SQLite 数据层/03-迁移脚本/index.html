@@ -1,0 +1,1832 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>迁移脚本 · SQLite 数据层 · 王宇翔</title><meta name="description" content="仓库里四个把文件数据搬进 SQLite 或整理旧目录的脚本，各自负责的范围、执行顺序与共同的幂等约定"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/03-%E8%BF%81%E7%A7%BB%E8%84%9A%E6%9C%AC/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="迁移脚本 · SQLite 数据层 · 王宇翔"><meta property="og:description" content="仓库里四个把文件数据搬进 SQLite 或整理旧目录的脚本，各自负责的范围、执行顺序与共同的幂等约定"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/03-%E8%BF%81%E7%A7%BB%E8%84%9A%E6%9C%AC/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/">SQLite 数据层</a><span class="sep" aria-hidden="true">/</span><span class="now">迁移脚本</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>迁移脚本</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>迁移脚本总览</span></a><ul class="toc__heads"><li><a href="#1-四个工具的分工" data-depth="2" data-heading-j="0">1. 四个工具的分工</a></li><li><a href="#2-共同的幂等写法" data-depth="2" data-heading-j="1">2. 共同的幂等写法</a></li><li><a href="#3-数据来源的判断顺序" data-depth="2" data-heading-j="2">3. 数据来源的判断顺序</a></li><li><a href="#4-输出与核对" data-depth="2" data-heading-j="3">4. 输出与核对</a></li><li><a href="#5-执行顺序上的约束" data-depth="2" data-heading-j="4">5. 执行顺序上的约束</a></li><li><a href="#6-谁来触发" data-depth="2" data-heading-j="5">6. 谁来触发</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="9">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>文件到 SQLite 迁移</span></a><ul class="toc__heads"><li><a href="#1-执行结构与单例处理" data-depth="2" data-heading-j="0">1. 执行结构与单例处理</a></li><li><a href="#2-用户迁移" data-depth="2" data-heading-j="1">2. 用户迁移</a></li><li><a href="#3-卡片与会话迁移" data-depth="2" data-heading-j="2">3. 卡片与会话迁移</a></li><li><a href="#4-自带的前端解析工具" data-depth="2" data-heading-j="3">4. 自带的前端解析工具</a></li><li><a href="#5-订单迁移" data-depth="2" data-heading-j="4">5. 订单迁移</a></li><li><a href="#6-论坛与分享令牌" data-depth="2" data-heading-j="5">6. 论坛与分享令牌</a></li><li><a href="#7-末尾核对" data-depth="2" data-heading-j="6">7. 末尾核对</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>中心库到会话库迁移</span></a><ul class="toc__heads"><li><a href="#1-执行入口与三段结构" data-depth="2" data-heading-j="0">1. 执行入口与三段结构</a></li><li><a href="#2-来源与分组读取" data-depth="2" data-heading-j="1">2. 来源与分组读取</a></li><li><a href="#3-每会话建表" data-depth="2" data-heading-j="2">3. 每会话建表</a></li><li><a href="#4-逐张判重写入" data-depth="2" data-heading-j="3">4. 逐张判重写入</a></li><li><a href="#5-计数同步" data-depth="2" data-heading-j="4">5. 计数同步</a></li><li><a href="#6-逐库核对" data-depth="2" data-heading-j="5">6. 逐库核对</a></li><li><a href="#7-与文件迁移脚本的分工" data-depth="2" data-heading-j="6">7. 与文件迁移脚本的分工</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>卡片目录整理与父子回填</span></a><ul class="toc__heads"><li><a href="#1-目录布局的前后对比" data-depth="2" data-heading-j="0">1. 目录布局的前后对比</a></li><li><a href="#2-整理脚本的三个分支" data-depth="2" data-heading-j="1">2. 整理脚本的三个分支</a></li><li><a href="#3-无主卡片的兜底" data-depth="2" data-heading-j="2">3. 无主卡片的兜底</a></li><li><a href="#4-树结构为什么需要固化" data-depth="2" data-heading-j="3">4. 树结构为什么需要固化</a></li><li><a href="#5-四条推断规则" data-depth="2" data-heading-j="4">5. 四条推断规则</a></li><li><a href="#6-幂等与试运行" data-depth="2" data-heading-j="5">6. 幂等与试运行</a></li><li><a href="#7-会话级入口" data-depth="2" data-heading-j="6">7. 会话级入口</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-风险清单" data-depth="2" data-heading-j="0">1. 风险清单</a></li><li><a href="#2-排查顺序" data-depth="2" data-heading-j="1">2. 排查顺序</a></li><li><a href="#3-执行目录的影响" data-depth="2" data-heading-j="2">3. 执行目录的影响</a></li><li><a href="#4-幂等带来的增量缺失" data-depth="2" data-heading-j="3">4. 幂等带来的增量缺失</a></li><li><a href="#5-事务粒度与中断" data-depth="2" data-heading-j="4">5. 事务粒度与中断</a></li><li><a href="#6-计数与核对的分离" data-depth="2" data-heading-j="5">6. 计数与核对的分离</a></li><li><a href="#7-单例重建的副作用" data-depth="2" data-heading-j="6">7. 单例重建的副作用</a></li><li><a href="#8-容易走错的方向" data-depth="2" data-heading-j="7">8. 容易走错的方向</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">SQLite 数据层</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>迁移 / 脚本 / 幂等 / SQLite / 数据搬迁 / frontmatter / 全局库 / 会话库</span></div><h1 class="docs__title">迁移脚本</h1><p class="docs__lead">仓库里四个把文件数据搬进 SQLite 或整理旧目录的脚本，各自负责的范围、执行顺序与共同的幂等约定</p></header><section class="dfile" id="file-1" data-file="01-迁移脚本总览"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-迁移脚本总览</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/03-迁移脚本/01-迁移脚本总览.md</span></div><div class="dfile__body"><h1 id="迁移脚本总览">迁移脚本总览</h1>
+<p>数据层从文件迁到 SQLite 不是一步完成的：卡片先按会话分目录，再从卡片目录进每会话的数据库，用户与订单等数据另有一条进全局库的路径，树结构的父子关系还要单独回填。仓库把这几件事拆成四个脚本，放在 <code>backend/scripts</code> 与 <code>backend/storage</code> 下，可以按需分别执行。</p>
+<p>四个脚本都遵守同一条约定：先判断来源是否存在、目标是否已有，能跳就跳。因此重复执行不会产生重复数据，这是判断一个脚本属于哪一批迁移时最直接的线索。</p>
+<h2 id="1-四个工具的分工">1. 四个工具的分工</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>工具</th><th>位置</th><th>从</th><th>到</th></tr></thead><tbody><tr><td>会话目录整理</td><td><code>backend/scripts/migrate_sessions.py</code></td><td><code>cards/{用户}/*.md</code></td><td><code>cards/{用户}/default/*.md</code></td></tr><tr><td>中心库拆分</td><td><code>backend/scripts/migrate_central_db_to_sessions.py</code></td><td>全局库的 <code>cards</code> 表</td><td>每会话 <code>session.db</code></td></tr><tr><td>文件进全局库</td><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>users.json、orders、Hub、tokens.json、卡片</td><td>全局库与每会话库</td></tr><tr><td>父子关系回填</td><td><code>backend/storage/parent_migration.py</code></td><td>卡片已有的 links 与 backlinks</td><td><code>cards.parent_id</code></td></tr></tbody></table>
+<p>前两个是历史阶段的产物：早期卡片直接放在用户目录下，后来变成每会话一个目录，再后来进数据库。第三个是当前的主力迁移脚本，覆盖的数据类型最多。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph LR
+  A["cards/用户/*.md"] -->|"migrate_sessions"| B["cards/用户/default/*.md"]
+  B -->|"migrate_to_sqlite"| C["每会话 session.db"]
+  D["全局库 cards 表"] -->|"migrate_central_db_to_sessions"| C
+  E["users.json orders Hub tokens.json"] -->|"migrate_to_sqlite"| F["全局库五张表"]
+  C -->|"parent_migration"| G["parent_id 回填"]</pre></div>
+<h2 id="2-共同的幂等写法">2. 共同的幂等写法</h2>
+<p>四个脚本的幂等判断都在「写入前查一次」这一步：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>脚本</th><th>判重条件</th><th>命中后</th></tr></thead><tbody><tr><td><code>migrate_users</code></td><td><code>users</code> 表有同名用户</td><td>跳过并打印</td></tr><tr><td><code>migrate_sessions_and_cards</code></td><td>目录下已有 <code>session.db</code>，或卡片 ID 已存在</td><td>跳过该会话或该卡片</td></tr><tr><td><code>migrate_orders</code></td><td><code>order_id</code> 已存在</td><td>跳过该订单</td></tr><tr><td><code>migrate_hub</code></td><td><code>(creator, name)</code> 已存在</td><td>跳过该会话</td></tr><tr><td><code>migrate_share_tokens</code></td><td><code>token</code> 已存在</td><td>跳过</td></tr><tr><td><code>migrate_central_db_to_sessions</code></td><td>目标库已有同 ID 卡片</td><td>跳过该卡片</td></tr><tr><td><code>parent_migration</code></td><td>卡片已有 <code>parent_id</code></td><td>跳过该卡片</td></tr></tbody></table>
+<p>判重放在写入侧而不是「先清空再导入」，意味着脚本不会覆盖已经被人改过的数据。代价是修正过的旧数据不会被重新导入，改数据要手工处理。</p>
+<h2 id="3-数据来源的判断顺序">3. 数据来源的判断顺序</h2>
+<p>每个脚本先确认来源路径存在，不存在就打印一行说明并返回：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">cards_dir </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> PROJECT_ROOT</span><span style="color:#D73A49"> /</span><span style="color:#032F62"> "cards"</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> cards_dir.exists():</span></span>
+<span class="line"><span style="color:#24292E">    log(</span><span style="color:#032F62">"cards/ 目录不存在，跳过"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span></span></code></pre>
+<p>这段是 <code>migrate_to_sqlite.py</code> 里会话与卡片迁移的开头，其余脚本形态一致。它让脚本可以在任意机器上跑完而不报错：没有旧数据的机器只会输出一串「跳过」。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>来源</th><th>路径</th></tr></thead><tbody><tr><td>用户</td><td><code>data/users.json</code></td></tr><tr><td>订单</td><td><code>data/orders/*.json</code></td></tr><tr><td>论坛</td><td><code>Hub/{创建者}/{会话}/manifest.json</code></td></tr><tr><td>分享令牌</td><td><code>backend/share/tokens.json</code></td></tr><tr><td>卡片</td><td><code>cards/{用户}/{会话}/*.md</code></td></tr></tbody></table>
+<h2 id="4-输出与核对">4. 输出与核对</h2>
+<p>四个脚本都以打印为主，没有返回值供程序判断。<code>migrate_to_sqlite.py</code> 在最后统计四张表的行数（<code>users</code>、<code>orders</code>、<code>hub_sessions</code>、<code>share_tokens</code>），卡片数量则在迁移过程中按会话累加。</p>
+<p><code>migrate_central_db_to_sessions.py</code> 的核对更完整，分成三个阶段：迁移、同步 <code>sessions.json</code> 的卡片数量、逐会话统计数据库里的卡片总数。<code>parent_migration.py</code> 不打印表，只记日志，支持 <code>dry_run</code> 只统计不写入。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>脚本</th><th>有无 dry-run</th><th>末尾核对</th></tr></thead><tbody><tr><td><code>migrate_sessions.py</code></td><td>无</td><td>打印移动数量</td></tr><tr><td><code>migrate_central_db_to_sessions.py</code></td><td>无</td><td>三阶段，含逐库统计</td></tr><tr><td><code>migrate_to_sqlite.py</code></td><td>无</td><td>四张全局表行数</td></tr><tr><td><code>parent_migration.py</code></td><td>有</td><td>日志记录更新数量</td></tr></tbody></table>
+<h2 id="5-执行顺序上的约束">5. 执行顺序上的约束</h2>
+<p>按数据流向，合理的顺序是先整理目录，再进会话库，最后回填父子关系；全局库那一部分与卡片无关，可以独立跑。跨步骤的重复执行是安全的，但顺序颠倒会出问题：卡片还没进库时执行父子回填，脚本读到的会话库是空的，结果为「无更新」而不是报错。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>执行</th><th>原因</th></tr></thead><tbody><tr><td>1</td><td><code>migrate_sessions.py</code></td><td>先把散落的 Markdown 归到会话目录</td></tr><tr><td>2</td><td><code>migrate_to_sqlite.py</code> 或 <code>migrate_central_db_to_sessions.py</code></td><td>把卡片送入会话库</td></tr><tr><td>3</td><td><code>parent_migration.py</code></td><td>卡片已在库里才能回填</td></tr><tr><td>任意</td><td><code>migrate_to_sqlite.py</code> 的全局库部分</td><td>与卡片无关</td></tr></tbody></table>
+<h2 id="6-谁来触发">6. 谁来触发</h2>
+<p>四个脚本都可以直接运行（<code>__main__</code> 入口），没有接进启动流程。<code>migrate_to_sqlite.py</code> 的 <code>main</code> 会在开始时强制重建全局单例：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">db_path </span><span style="color:#D73A49">=</span><span style="color:#24292E"> os.path.join(os.getcwd(), </span><span style="color:#032F62">"data"</span><span style="color:#24292E">, </span><span style="color:#032F62">"knowledgediver.db"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> DatabaseManager._instance </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    DatabaseManager._instance.close()</span></span>
+<span class="line"><span style="color:#24292E">db </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DatabaseManager(db_path)</span></span></code></pre>
+<p>先关闭已有单例再以显式路径新建，确保拿到的是最新表结构。代价是同一个进程里若有其他代码持有旧连接，会在脚本结束后继续操作已关闭的连接，因此这类脚本适合单独进程运行。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["执行迁移脚本"] --> B{"来源路径存在"}
+  B -->|否| C["打印跳过并返回"]
+  B -->|是| D["逐条判重"]
+  D --> E{"目标已存在"}
+  E -->|是| F["跳过该条"]
+  E -->|否| G["写入并计数"]
+  F --> H{"还有下一条"}
+  G --> H
+  H -->|是| D
+  H -->|否| I["提交并打印汇总"]
+  I --> J["末尾统计表行数"]</pre></div>
+<h2 id="7-易错点">7. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为脚本会覆盖旧数据</td><td>判重命中即跳过</td><td>各 <code>migrate_*</code> 函数</td></tr><tr><td>在服务进程里跑迁移</td><td>单例被关闭，旧连接失效</td><td><code>migrate_to_sqlite.py</code> <code>main</code></td></tr><tr><td>顺序颠倒后期待报错</td><td>只输出零更新</td><td><code>parent_migration.py</code></td></tr><tr><td>把打印当成程序可判断的结果</td><td>无返回值，只看输出</td><td>四个脚本</td></tr><tr><td>缺 dry-run 时直接跑</td><td>改动立即落盘</td><td>仅父子回填支持 <code>dry_run</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>四个工具</td><td>目录整理、中心库拆分、文件进全局库、父子回填</td></tr><tr><td>幂等</td><td>写入前判重，命中即跳过</td></tr><tr><td>来源判断</td><td>路径不存在就跳过，不报错</td></tr><tr><td>输出</td><td>以打印为主，无返回值</td></tr><tr><td>触发</td><td>手工执行，独立进程</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>判重位置</td><td>写入前查询</td><td>不覆盖人工修正</td><td>旧数据不会被重新导入</td></tr><tr><td>入口形态</td><td>独立脚本</td><td>与启动流程解耦</td><td>需要人工记得执行</td></tr><tr><td>结果反馈</td><td>打印</td><td>实现简单</td><td>无法被其他程序消费</td></tr><tr><td>回填安全</td><td>只有回填支持 <code>dry_run</code></td><td>改关系前可预演</td><td>迁移脚本本身无预演</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>四个迁移工具各自负责什么范围？</li>
+<li>四个脚本共同的幂等做法是什么？</li>
+<li>来源路径不存在时脚本会怎样？</li>
+<li>哪个脚本支持 <code>dry_run</code>？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>为 <code>migrate_to_sqlite.py</code> 增加 <code>dry_run</code>，说明需要改动的判重与写入分支。</li>
+<li>把四个脚本串成一个带顺序与校验的命令，说明每步的失败处理。</li>
+<li>设计迁移结果的可机读输出（例如 JSON 汇总），说明要包含哪些计数与错误信息。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scripts/migrate_sessions.py</code></td><td>卡片目录整理与无主卡片处理</td></tr><tr><td><code>backend/scripts/migrate_central_db_to_sessions.py</code></td><td>中心库拆到每会话库、计数同步与核对</td></tr><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>文件系统到全局库与会话库的五段迁移加末尾核对</td></tr><tr><td><code>backend/storage/parent_migration.py</code></td><td><code>parent_id</code> 推断与回填</td></tr><tr><td><code>backend/storage/database.py</code></td><td>迁移脚本使用的全局单例</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-文件到SQLite迁移"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-文件到SQLite迁移</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/03-迁移脚本/02-文件到SQLite迁移.md</span></div><div class="dfile__body"><h1 id="文件到-sqlite-迁移">文件到 SQLite 迁移</h1>
+<p>老部署升级时，数据以文件形态存在：用户在一个 JSON 字典里，订单在按用户分文件的目录里，论坛每个会话一个 <code>manifest.json</code>，分享令牌一个文件，卡片是散在会话目录里的 Markdown。数据库建好了但里面是空的，<code>migrate_to_sqlite.py</code> 就是把这些文件一次性倒进去的脚本。</p>
+<p>它的模块注释列出了五组来源与目标，并声明可重复执行。脚本不依赖应用进程，直接打开数据库写入，末尾打印四张表的行数供人工核对。</p>
+<h2 id="1-执行结构与单例处理">1. 执行结构与单例处理</h2>
+<p><code>main</code> 先确定数据库路径并把全局单例重建一次，然后按编号依次执行五个迁移段，最后统计行数。编号从 1 到 5 却写成 <code>[x/6]</code>：脚本里实际是五段迁移加一段核对，分母是历史上六段结构的残留。</p>
+<p>数据库路径用当前工作目录拼出（<code>os.getcwd()</code> 加 <code>data/knowledgediver.db</code>），因此必须在仓库根目录执行，否则会新建一个空库并「迁移成功」。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>段</th><th>内容</th><th>来源</th></tr></thead><tbody><tr><td><code>[1/6]</code></td><td>用户</td><td><code>data/users.json</code></td></tr><tr><td><code>[2/6]</code></td><td>会话与卡片</td><td><code>cards/{用户}/{会话}/*.md</code></td></tr><tr><td><code>[3/6]</code></td><td>订单</td><td><code>data/orders/*.json</code></td></tr><tr><td><code>[4/6]</code></td><td>论坛</td><td><code>Hub/{创建者}/{会话}/manifest.json</code></td></tr><tr><td><code>[5/6]</code></td><td>分享令牌</td><td><code>backend/share/tokens.json</code></td></tr><tr><td>核对</td><td>四张表行数</td><td>无</td></tr></tbody></table>
+<h2 id="2-用户迁移">2. 用户迁移</h2>
+<p>用户来自一个以用户名为键的字典（<code>migrate_users</code>）。逐条查 <code>users</code> 表判断是否已存在，已存在打印跳过。插入时对缺字段给默认值：会员等级 <code>free</code>、积分 48、创建时间取当前时间。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>缺省值</th></tr></thead><tbody><tr><td><code>hashed_password</code></td><td>空字符串</td></tr><tr><td><code>membership</code></td><td><code>free</code></td></tr><tr><td><code>points</code></td><td>48</td></tr><tr><td><code>created_at</code></td><td>当前时间</td></tr></tbody></table>
+<p>时间字段统一经过 <code>fmt</code> 转换，把 <code>datetime</code> 对象转成字符串后写入。积分默认值与配置、模型里的默认值重复，三处一致但需要一起改。</p>
+<h2 id="3-卡片与会话迁移">3. 卡片与会话迁移</h2>
+<p>卡片迁移的目标是每个会话自己的 <code>session.db</code>，全局库不接收卡片（<code>migrate_sessions_and_cards</code>）。它遍历 <code>cards</code> 下的用户目录与会话目录，对每个会话做两件事之一：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>处理</th></tr></thead><tbody><tr><td>目录里已有 <code>session.db</code></td><td>只统计库里的卡片数，不读 Markdown</td></tr><tr><td>目录里没有 <code>session.db</code></td><td>新建库并逐张导入 Markdown</td></tr></tbody></table>
+<p>逐张导入时先查卡片 ID 是否已存在，已存在就跳过；读文件失败与 frontmatter 解析失败都只打印一行「跳过」，不中断整个会话。脚本只匹配会话目录顶层的 <code>*.md</code>，不递归子目录。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["遍历 cards 下的用户目录"] --> B["遍历会话目录"]
+  B --> C{"已有 session.db"}
+  C -->|是| D["统计库内卡片数并跳过读取"]
+  C -->|否| E["新建或打开会话库"]
+  E --> F["按文件名顺序取顶层 Markdown"]
+  F --> G{"卡片 ID 已存在"}
+  G -->|是| H["跳过该卡片"]
+  G -->|否| I{"文件可读且 frontmatter 可解析"}
+  I -->|否| H
+  I -->|是| J["写入卡片"]
+  J --> K{"还有文件"}
+  H --> K
+  K -->|是| F
+  K -->|否| L["累计会话数与卡片数"]</pre></div>
+<h2 id="4-自带的前端解析工具">4. 自带的前端解析工具</h2>
+<p>脚本没有引入 frontmatter 库，自己实现了三个函数（<code>migrate_to_sqlite.py</code> 开头）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>函数</th><th>作用</th></tr></thead><tbody><tr><td><code>parse_frontmatter_raw</code></td><td>以三横线切出元数据原文与正文，逐行按冒号分键值</td></tr><tr><td><code>parse_yaml_value</code></td><td>把字符串值转成列表、字典、数字或布尔</td></tr><tr><td><code>parse_frontmatter_proper</code></td><td>组合前两者，产出可直接写入数据库的类型</td></tr></tbody></table>
+<p>第一层解析是纯文本切分，遇到嵌套结构或跨行值会退化；第二层负责把 <code>[]</code>、空串、数字等常见形态还原成 Python 类型。卡片字段的类型兜底也在这一层：标题取不到用文件名，创建时间取不到用当前时间。</p>
+<h2 id="5-订单迁移">5. 订单迁移</h2>
+<p>订单目录下每个用户一个 JSON 文件，文件内容是一个订单数组（<code>migrate_orders</code>）。脚本按文件名排序遍历，逐个订单查 <code>order_id</code> 是否已存在。插入覆盖订单表的 15 个字段，缺省状态是 <code>pending</code>，金额缺省为字符串 <code>"0"</code>。</p>
+<p>时间字段与用户迁移一样用当前时间兜底，回调原文与错误信息原样搬运，不做解析。</p>
+<h2 id="6-论坛与分享令牌">6. 论坛与分享令牌</h2>
+<p>论坛数据的来源是 <code>Hub/{创建者}/{会话}/</code> 目录下的 <code>manifest.json</code>（<code>migrate_hub</code>）。判重键是 <code>(creator, name)</code> 组合，与表的复合主键一致。清单里的列表与结构字段在写入前用 JSON 序列化成文本，评论序列化时允许把非字符串对象转成字符串。</p>
+<p>分享令牌来自 <code>backend/share/tokens.json</code>（<code>migrate_share_tokens</code>），以令牌字符串为键，写入令牌、用户名、会话 ID 与创建时间四列，判重按令牌。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型</th><th>判重键</th><th>默认值</th></tr></thead><tbody><tr><td>论坛</td><td><code>creator</code> 加 <code>name</code></td><td>描述空、计数 0、列表空</td></tr><tr><td>分享令牌</td><td><code>token</code></td><td>创建时间当前时间</td></tr></tbody></table>
+<h2 id="7-末尾核对">7. 末尾核对</h2>
+<p>脚本最后对四张全局表执行 <code>COUNT(*)</code> 并打印：用户、订单、论坛会话、分享令牌。卡片数量不在其中，因为卡片分布在多个会话库里，数量在第二段迁移过程中按会话累加后打印。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表</th><th>是否在核对中</th></tr></thead><tbody><tr><td><code>users</code></td><td>是</td></tr><tr><td><code>orders</code></td><td>是</td></tr><tr><td><code>hub_sessions</code></td><td>是</td></tr><tr><td><code>share_tokens</code></td><td>是</td></tr><tr><td><code>domain_quality</code></td><td>否</td></tr></tbody></table>
+<p>核对只是打印，不比较迁移前后的数量，因此「来源有多少条、导入多少条」需要人工从输出里对齐。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant O as 执行者
+  participant S as 迁移脚本
+  participant F as 文件系统
+  participant D as 全局库
+  O->>S: 在仓库根目录执行脚本
+  S->>D: 关闭旧单例并新建连接
+  S->>F: 读 users.json
+  S->>D: 逐用户判重插入
+  S->>F: 遍历 cards 目录
+  S->>D: 会话库逐张导入卡片
+  S->>F: 读订单 Hub 令牌
+  S->>D: 逐条判重插入
+  S->>D: 统计四张表行数
+  S-->>O: 打印迁移汇总</pre></div>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>从非仓库根目录执行</td><td>迁移到新建空库</td><td><code>main</code> 的路径拼接</td></tr><tr><td>认为卡片进全局库</td><td>卡片进每会话库</td><td><code>migrate_sessions_and_cards</code></td></tr><tr><td>把序号当成步骤数</td><td>只有五段迁移</td><td><code>main</code> 编号</td></tr><tr><td>期待覆盖旧记录</td><td>判重命中即跳过</td><td>各迁移段</td></tr><tr><td>以为会递归找卡片</td><td>只匹配顶层 <code>*.md</code></td><td>同上</td></tr><tr><td>把核对当成一致性校验</td><td>只打印行数</td><td><code>main</code> 末尾</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>入口</td><td>在仓库根目录运行，直接写数据库</td></tr><tr><td>五段迁移</td><td>用户、卡片、订单、论坛、分享令牌</td></tr><tr><td>卡片目标</td><td>每会话 <code>session.db</code>，不是全局库</td></tr><tr><td>判重</td><td>写入前查一次，命中即跳过</td></tr><tr><td>解析</td><td>自带三个 frontmatter 解析函数</td></tr><tr><td>核对</td><td>末尾打印四张全局表行数</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>依赖</td><td>不引 frontmatter 库</td><td>环境无需新装包</td><td>解析只覆盖常见形态</td></tr><tr><td>路径</td><td>用当前工作目录</td><td>代码简单</td><td>执行目录错就写错库</td></tr><tr><td>结果</td><td>只打印</td><td>实现简单</td><td>无机器可判断的结论</td></tr><tr><td>卡片处理</td><td>已有库时只统计</td><td>避免重复导入</td><td>库里缺的卡片不会被补</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>脚本的五段迁移分别处理哪类数据？</li>
+<li>卡片的导入目标是什么？</li>
+<li>用户与订单迁移各用什么判重？</li>
+<li>末尾核对统计了哪四张表？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把 <code>[x/6]</code> 编号与步骤数对齐，并说明是否应该补回缺失的那一段。</li>
+<li>为卡片迁移增加「缺卡片补齐」模式，说明与现有只统计分支的关系。</li>
+<li>增加迁移前后数量对比报告，说明需要从来源侧统计哪些值。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>五段迁移、frontmatter 解析函数、单例重建与末尾核对</td></tr><tr><td><code>backend/storage/database.py</code></td><td>迁移写入的全局库与单例</td></tr><tr><td><code>backend/storage/session_database.py</code></td><td>卡片迁移使用的会话库管理器</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-中心库到会话库迁移"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-中心库到会话库迁移</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/03-迁移脚本/03-中心库到会话库迁移.md</span></div><div class="dfile__body"><h1 id="中心库到会话库迁移">中心库到会话库迁移</h1>
+<p>卡片曾经和用户表住在一起：全局库有一张 <code>cards</code> 表，每行用 <code>username</code> 与 <code>session_id</code> 两列标明归属。后来会话各自独立成库，卡片搬进 <code>cards/{用户名}/{会话}/session.db</code>。这次搬迁把一张表的行搬到很多张小表里，不重新解析 Markdown，脚本是 <code>migrate_central_db_to_sessions.py</code>。</p>
+<p>它做三件事：搬卡片、把数量写回会话元数据、逐库统计核对。三段都直接操作 SQLite 文件，不经过应用的存储类。</p>
+<h2 id="1-执行入口与三段结构">1. 执行入口与三段结构</h2>
+<p><code>main</code> 打印三段横幅并依次调用三个函数：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>函数</th><th>作用</th></tr></thead><tbody><tr><td>1</td><td><code>migrate</code></td><td>中心表拆到每会话库</td></tr><tr><td>2</td><td><code>sync_session_counts</code></td><td>更新 <code>sessions.json</code> 的卡片数量</td></tr><tr><td>3</td><td><code>verify</code></td><td>逐库统计并打印总数</td></tr></tbody></table>
+<p>三段之间没有失败即停的逻辑：搬卡片阶段跳过某个会话，后面的同步与核对仍会继续。</p>
+<h2 id="2-来源与分组读取">2. 来源与分组读取</h2>
+<p>来源固定在 <code>data/knowledgediver.db</code>，用项目根目录拼绝对路径；文件不存在就打印「跳过」并返回。读取分两步：先按 <code>(username, session_id)</code> 分组拿到所有会话键，再对每个键取出该会话的全部卡片行。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">rows </span><span style="color:#D73A49">=</span><span style="color:#24292E"> central_conn.execute(</span></span>
+<span class="line"><span style="color:#032F62">    "SELECT username, session_id FROM cards GROUP BY username, session_id"</span></span>
+<span class="line"><span style="color:#24292E">).fetchall()</span></span>
+<span class="line"><span style="color:#24292E">cards </span><span style="color:#D73A49">=</span><span style="color:#24292E"> central_conn.execute(</span></span>
+<span class="line"><span style="color:#032F62">    "SELECT * FROM cards WHERE username = ? AND session_id = ?"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    (username, session_id),</span></span>
+<span class="line"><span style="color:#24292E">).fetchall()</span></span></code></pre>
+<p>分组查询依赖中心表里有这两列。若中心库的表结构已经变过（例如列被删除），脚本会在取行时报错，而不是给出可读的提示。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>来源库</td><td><code>data/knowledgediver.db</code></td></tr><tr><td>分组键</td><td><code>username</code> 与 <code>session_id</code></td></tr><tr><td>目标目录</td><td><code>cards/{用户名}/{会话}/</code></td></tr></tbody></table>
+<h2 id="3-每会话建表">3. 每会话建表</h2>
+<p>目标库用标准库的 <code>sqlite3</code> 直接打开，先设 WAL，再执行自己的建表语句（<code>CREATE TABLE IF NOT EXISTS cards</code>）。表结构与应用的会话库基本一致，共 11 列。</p>
+<p>与 <code>SessionDatabaseManager</code> 建库的差别在这里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>本脚本</th><th>应用侧管理器</th></tr></thead><tbody><tr><td>表</td><td>只有 <code>cards</code></td><td><code>cards</code>、<code>raw_pages</code>、<code>card_vec_map</code> 加可选向量表</td></tr><tr><td><code>parent_id</code></td><td>没有该列</td><td>补列机制会加上</td></tr><tr><td>WAL</td><td>有</td><td>有</td></tr><tr><td>权限提示</td><td>无</td><td>构造失败时给出目录归属提示</td></tr></tbody></table>
+<p>迁移出的库缺少的两张表与一列会在应用下次打开该会话时补齐，因此顺序上先跑迁移、再让应用访问是可行的。</p>
+<h2 id="4-逐张判重写入">4. 逐张判重写入</h2>
+<p>每张卡片先查目标库是否已有同 ID 行，有就跳过。写入使用 11 列显式列表，把中心表里对应列一一搬过去，不做字段改名。脚本同时累加本会话与全局的迁移数，并把每会话结果打印成一行。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant S as 迁移脚本
+  participant C as 中心库
+  participant T as 目标会话库
+  S->>C: 按用户与会话分组
+  loop 每个会话
+    S->>T: 打开或创建 session.db 并建表
+    loop 每张卡片
+      S->>T: 查询 ID 是否存在
+      alt 已存在
+        T-->>S: 跳过
+      else 不存在
+        S->>T: INSERT 11 列
+      end
+    end
+    S->>T: 提交
+  end
+  S->>S: 打印每会话与总数</pre></div>
+<h2 id="5-计数同步">5. 计数同步</h2>
+<p>搬完之后会话元数据里的数量可能还是旧值，第二段负责对齐（<code>sync_session_counts</code>）。它遍历 <code>cards</code> 下的用户目录，读该用户的 <code>sessions.json</code>，再遍历每个含 <code>session.db</code> 的会话目录并统计行数：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>处理</th></tr></thead><tbody><tr><td>会话目录不在 <code>sessions.json</code> 里</td><td>补一条记录，写入 ID 与数量</td></tr><tr><td>已存在但数量不同</td><td>更新 <code>card_count</code></td></tr><tr><td>已存在且数量相同</td><td>不动</td></tr></tbody></table>
+<p>只有发生改动才写回文件。统计失败的会话直接跳过，不阻断其余会话。</p>
+<h2 id="6-逐库核对">6. 逐库核对</h2>
+<p>第三段 <code>verify</code> 重新遍历所有会话库，逐个执行 <code>COUNT(*)</code> 并打印相对路径与数量，最后给出合计。它不比对同步阶段写入的值，因此若 <code>sessions.json</code> 更新失败，核对结果仍然正常，问题要靠单独查看元数据才能发现。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>数据来源</th><th>输出</th></tr></thead><tbody><tr><td>迁移</td><td>中心库</td><td>每会话迁移数与总数</td></tr><tr><td>同步</td><td>会话库与元数据</td><td>新增与变化的会话</td></tr><tr><td>核对</td><td>会话库</td><td>每库数量与合计</td></tr></tbody></table>
+<h2 id="7-与文件迁移脚本的分工">7. 与文件迁移脚本的分工</h2>
+<p>两个脚本都能把卡片送进会话库，但来源不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>脚本</th><th>来源</th><th>适用场景</th></tr></thead><tbody><tr><td><code>migrate_central_db_to_sessions.py</code></td><td>全局库 <code>cards</code> 表</td><td>卡片曾被中心表管理过</td></tr><tr><td><code>migrate_to_sqlite.py</code></td><td>会话目录下的 Markdown</td><td>卡片一直在文件里</td></tr></tbody></table>
+<p>先跑哪个取决于历史：如果卡片早已进过中心表，用本脚本；如果只有 Markdown，用文件迁移脚本。两者都判重，先后执行不会造成重复数据，但本脚本不会读取 Markdown，所以文件脚本先跑也不会被本脚本覆盖。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["读中心库 cards 分组"] --> B["逐会话建目标库"]
+  B --> C["逐卡判重插入"]
+  C --> D["累计总数并打印"]
+  D --> E["遍历用户目录"]
+  E --> F["统计每个会话库行数"]
+  F --> G{"元数据记录是否存在"}
+  G -->|否| H["补记录"]
+  G -->|是| I{"数量是否变化"}
+  I -->|是| J["更新 card_count"]
+  I -->|否| K["保持不动"]
+  H --> L["写回 sessions.json"]
+  J --> L
+  L --> M["逐库 COUNT 核对并打印合计"]</pre></div>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为脚本会解析 Markdown</td><td>只读中心表</td><td><code>migrate</code></td></tr><tr><td>期待目标库包含全部表</td><td>只建 <code>cards</code></td><td>建表语句</td></tr><tr><td>中心库结构已变</td><td>取行报错</td><td>分组查询</td></tr><tr><td>同步失败后核对仍正常</td><td>核对不比对元数据</td><td><code>verify</code></td></tr><tr><td>在别处执行脚本</td><td>找不到中心库并跳过</td><td>来源路径</td></tr><tr><td>指望有回滚</td><td>逐会话提交，无整体事务</td><td><code>migrate</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>来源</td><td>全局库 <code>cards</code> 表</td></tr><tr><td>目标</td><td><code>cards/{用户}/{会话}/session.db</code></td></tr><tr><td>建表</td><td>脚本自带 11 列 <code>cards</code> 表语句</td></tr><tr><td>判重</td><td>目标库已有同 ID 即跳过</td></tr><tr><td>同步</td><td>核对会话库行数并写入 <code>sessions.json</code></td></tr><tr><td>核对</td><td>逐库 <code>COUNT(*)</code> 打印合计</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>数据库访问</td><td>直接用 <code>sqlite3</code></td><td>不依赖应用单例</td><td>缺少权限提示与表补齐</td></tr><tr><td>表结构</td><td>只建 <code>cards</code></td><td>迁移路径最短</td><td>目标库暂时不完整</td></tr><tr><td>提交粒度</td><td>每会话提交</td><td>单会话失败不影响其他</td><td>无整体回滚</td></tr><tr><td>核对方式</td><td>只打印</td><td>简单</td><td>不校验元数据一致性</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>脚本的三个阶段分别做什么？</li>
+<li>目标库建了哪张表？缺少什么？</li>
+<li>判重条件是什么？</li>
+<li>计数同步在什么情况下写回文件？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>让目标库改用应用侧管理器建库，说明能补齐哪些表与需要处理的差异。</li>
+<li>增加元数据一致性校验，说明如何比对 <code>sessions.json</code> 与实际行数。</li>
+<li>给出整体事务或失败回滚方案，比较逐会话提交与一次性提交的取舍。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scripts/migrate_central_db_to_sessions.py</code></td><td>分组读取、建表、判重写入、计数同步与核对</td></tr><tr><td><code>backend/storage/session_database.py</code></td><td>应用侧会话库的表结构与补列</td></tr><tr><td><code>backend/storage/session_store.py</code></td><td><code>sessions.json</code> 与卡片数量字段</td></tr><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>另一条从 Markdown 进会话库的路径</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-卡片目录整理与父子回填"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-卡片目录整理与父子回填</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/03-迁移脚本/04-卡片目录整理与父子回填.md</span></div><div class="dfile__body"><h1 id="卡片目录整理与父子回填">卡片目录整理与父子回填</h1>
+<p>卡片相关还有两件与数据库无关的历史欠账。第一件是目录布局：最早卡片直接放在 <code>cards/{用户名}/</code> 下，后来变成每会话一个子目录，旧文件需要挪进 <code>default/</code>。第二件是树结构：旧版本靠链接方向和时间先后猜父子关系，猜法写在运行期代码里，结果不稳定，需要把猜出来的结果固化到 <code>parent_id</code> 列。</p>
+<p>两件事分别由 <code>backend/scripts/migrate_sessions.py</code> 与 <code>backend/storage/parent_migration.py</code> 完成，一个移动文件，一个更新行。</p>
+<h2 id="1-目录布局的前后对比">1. 目录布局的前后对比</h2>
+<p>整理脚本的目标写在模块注释里：把 <code>cards/{用户名}/*.md</code> 移到 <code>cards/{用户名}/default/*.md</code>，同时把 <code>cards/*.md</code> 下的无主卡片移到 <code>cards/unknown/default/*.md</code>。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>整理前                          整理后</span></span>
+<span class="line"><span>cards/                          cards/</span></span>
+<span class="line"><span>├── alice/                      ├── alice/</span></span>
+<span class="line"><span>│   ├── a.md                    │   ├── default/</span></span>
+<span class="line"><span>│   └── b.md                    │   │   ├── a.md</span></span>
+<span class="line"><span>├── bob/                        │   │   └── b.md</span></span>
+<span class="line"><span>│   └── c.md                    │   └── sessions.json</span></span>
+<span class="line"><span>└── stray.md                    ├── bob/default/c.md</span></span>
+<span class="line"><span>                                ├── unknown/default/stray.md</span></span>
+<span class="line"><span>                                └── ...</span></span></code></pre>
+<p>布局统一后，每个用户目录下的子目录都对应一个会话，应用侧按会话 ID 找卡片目录的规则才成立。</p>
+<h2 id="2-整理脚本的三个分支">2. 整理脚本的三个分支</h2>
+<p><code>migrate_user_cards</code> 对一个用户目录做判断（<code>migrate_sessions.py</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>处理</th></tr></thead><tbody><tr><td>用户目录不存在</td><td>打印跳过</td></tr><tr><td>目录下没有 Markdown</td><td>打印提示并返回 0</td></tr><tr><td>目标文件已存在</td><td>打印警告并跳过该文件</td></tr><tr><td>正常文件</td><td>移动到 <code>default/</code> 并计数</td></tr></tbody></table>
+<p>目标冲突不覆盖，因此同名文件会留在原处，需要人工比对。移动使用文件系统的改名操作，同一分区内是原子的；跨分区执行会退化成复制加删除。</p>
+<h2 id="3-无主卡片的兜底">3. 无主卡片的兜底</h2>
+<p><code>cards</code> 根目录下的 Markdown 不属于任何用户，脚本把它们统一收进 <code>cards/unknown/default/</code>，并明确提示这些卡片没有归属，需要人工指派。这样做的好处是整理后根目录不再混有卡片文件，代价是 <code>unknown</code> 这个用户名会出现在用户目录列表里。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>来源</td><td><code>cards/*.md</code></td></tr><tr><td>去向</td><td><code>cards/unknown/default/</code></td></tr><tr><td>后续动作</td><td>人工指派归属</td></tr></tbody></table>
+<p>主入口 <code>main</code> 先检查 <code>cards</code> 是否存在，不存在直接报错退出；存在则列出全部用户目录逐个整理，最后处理无主卡片并打印汇总。</p>
+<h2 id="4-树结构为什么需要固化">4. 树结构为什么需要固化</h2>
+<p>旧版树方向由「链接有向边加创建时间启发式」推断，模块注释指出它无法区分两种情形：后建的父卡挂载先建的子卡（Agent 重新定根），以及旧版关键词合并留下的反向污染边。两者在数据上都是双向链接，单看边分不出来。</p>
+<p>把推断结果写进 <code>parent_id</code> 之后，渲染树时直接读列，不再每次重跑启发式，也不会因为数据顺序变化而改变结果。</p>
+<h2 id="5-四条推断规则">5. 四条推断规则</h2>
+<p><code>infer_parent_ids</code> 对每张还没有父卡的卡片 C，遍历它的反链候选 P，按顺序套用规则：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>规则</th><th>条件</th><th>结果</th></tr></thead><tbody><tr><td>边存在性</td><td><code>C.id</code> 在 <code>P.links</code> 中</td><td>P 是候选</td></tr><tr><td>非互指</td><td>C 的 links 里没有 P</td><td>links 方向权威，<code>C.parent_id = P</code></td></tr><tr><td>互指</td><td>双方都有边</td><td>创建更晚的当子卡，更早的保持根</td></tr><tr><td>无候选</td><td>没有满足条件的 P</td><td>保持根，<code>parent_id</code> 为空</td></tr></tbody></table>
+<p>互指那条是妥协：双向边分不出真实方向，用创建时间兜底，并保留更早的卡为根，兼容历史上的污染数据。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["取一张未设置父卡的卡片 C"] --> B["遍历 C 的反链候选 P"]
+  B --> C{"P 的 links 是否含 C"}
+  C -->|否| B
+  C -->|是| D{"C 的 links 是否含 P"}
+  D -->|否| E["判定 P 为父卡"]
+  D -->|是| F{"C 与 P 谁创建更晚"}
+  F -->|C 更晚| E
+  F -->|P 更晚| G["保持 C 为根"]
+  B --> H{"还有候选"}
+  H -->|是| C
+  H -->|否| I["无候选 保持根"]</pre></div>
+<h2 id="6-幂等与试运行">6. 幂等与试运行</h2>
+<p>回填对「已有 <code>parent_id</code> 的卡片」直接跳过，因此第二次运行没有副作用。<code>migrate_store</code> 提供 <code>dry_run</code> 参数：只统计会被设置的卡片数量，不写库；写入路径会对每张卡调用存储的更新方法并累加计数，最后记一条日志。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th>行为</th><th>输出</th></tr></thead><tbody><tr><td><code>dry_run=True</code></td><td>只计数</td><td>日志里的更新数量</td></tr><tr><td><code>dry_run=False</code></td><td>写 <code>parent_id</code> 并更新</td><td>日志与库内变化</td></tr></tbody></table>
+<p>目录整理脚本没有对应的试运行开关，执行即移动文件。</p>
+<h2 id="7-会话级入口">7. 会话级入口</h2>
+<p><code>migrate_session</code> 是回填的便捷入口：按用户名与会话 ID 构造 <code>SqliteCardStore</code>，调用 <code>migrate_store</code>，最后在 <code>finally</code> 里关闭连接。构造时显式传 <code>auto_index=False</code>，注释说明是为了避免向量自动索引与关闭连接产生竞态——回填只改 <code>parent_id</code>，不需要重建向量。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant U as 使用者
+  participant F as SqliteCardStore
+  participant M as 回填函数
+  U->>F: 构造 用户名 会话ID 关闭自动索引
+  U->>M: migrate_session 或 migrate_store
+  M->>F: list_cards
+  F-->>M: 会话内全部卡片
+  M->>M: infer_parent_ids 推断映射
+  loop 映射中的每张卡
+    alt dry_run
+      M->>M: 只累加计数
+    else 写入
+      M->>F: update_card 设置 parent_id
+    end
+  end
+  M-->>U: 返回更新数量
+  U->>F: finally 关闭连接</pre></div>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为同名文件会被覆盖</td><td>冲突即跳过留在原处</td><td><code>migrate_user_cards</code></td></tr><tr><td>忽略无主卡片</td><td>被收进 <code>unknown</code></td><td><code>migrate_orphaned_cards</code></td></tr><tr><td>期望互指也能判出方向</td><td>用创建时间兜底</td><td>规则部分</td></tr><tr><td>重复回填导致覆盖</td><td>已有 <code>parent_id</code> 会跳过</td><td><code>infer_parent_ids</code></td></tr><tr><td>目录整理前没备份</td><td>移动不可撤销</td><td><code>migrate_sessions.py</code></td></tr><tr><td>回填时开着自动索引</td><td>可能与关闭竞态</td><td>会话级入口注释</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>目录整理</td><td>用户卡片进 <code>default/</code>，无主卡片进 <code>unknown/default/</code></td></tr><tr><td>冲突处理</td><td>目标存在即跳过，不覆盖</td></tr><tr><td>回填目标</td><td>把启发式推断固化到 <code>parent_id</code></td></tr><tr><td>推断规则</td><td>边存在、非互指取 links 方向、互指取创建时间、无候选保持根</td></tr><tr><td>幂等</td><td>已有 <code>parent_id</code> 跳过</td></tr><tr><td>试运行</td><td>只有回填支持 <code>dry_run</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>冲突处理</td><td>跳过不覆盖</td><td>不丢数据</td><td>需要人工清理</td></tr><tr><td>无主卡片</td><td>集中到 <code>unknown</code></td><td>根目录干净</td><td>多出特殊用户名</td></tr><tr><td>方向推断</td><td>互指用时间兜底</td><td>兼容旧数据</td><td>可能判错</td></tr><tr><td>结果存储</td><td>写 <code>parent_id</code></td><td>运行期不再猜</td><td>需要一次迁移</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>整理脚本把卡片从哪移到哪？无主卡片去哪里？</li>
+<li>目标文件已存在时脚本怎么做？</li>
+<li>回填的四条规则分别是什么？</li>
+<li>回填的幂等条件是什么？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>为目录整理脚本增加试运行与冲突报告，说明输出内容。</li>
+<li>设计一份互指边的复核清单，说明如何在人工确认后修正 <code>parent_id</code>。</li>
+<li>评估把 <code>unknown</code> 用户改成显式归属字段的影响面。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scripts/migrate_sessions.py</code></td><td>卡片目录整理、无主卡片处理与主入口</td></tr><tr><td><code>backend/storage/parent_migration.py</code></td><td>推断规则、<code>migrate_store</code> 与 <code>migrate_session</code></td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>回填使用的卡片存储与 <code>auto_index</code> 参数</td></tr><tr><td><code>backend/models/card.py</code></td><td><code>parent_id</code> 字段</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/03-迁移脚本/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="迁移脚本的易错点与排查">迁移脚本的易错点与排查</h1>
+<p>迁移脚本的问题不会在运行时暴露：跑完一段，没有报错，数量也打印了，第二天用户却发现卡片少了几张。原因通常是它按设计「跳过」了某些东西，或者执行时所在目录与来源路径不匹配。</p>
+<p>排查迁移问题要从「来源是否存在、目标是否已有、脚本在哪里执行」三处入手，而不是从应用日志里找。</p>
+<h2 id="1-风险清单">1. 风险清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>执行目录不是仓库根</td><td><code>migrate_to_sqlite.py</code> 的路径拼接</td><td>迁移进新建的空库</td></tr><tr><td>来源路径不存在就跳过</td><td>各迁移函数开头</td><td>输出全是「跳过」，数据没动</td></tr><tr><td>除回填外没有预演</td><td>三个 <code>migrate_*</code> 脚本</td><td>执行即写盘</td></tr><tr><td>无整体事务</td><td>各脚本按段或按会话提交</td><td>中断后留下半份数据</td></tr><tr><td>中央库脚本只建 <code>cards</code> 表</td><td><code>migrate_central_db_to_sessions.py</code> 建表语句</td><td>目标库暂时缺表与列</td></tr><tr><td>计数同步与核对相互独立</td><td>同脚本第二、三段</td><td>同步失败但核对正常</td></tr><tr><td>迁移脚本强制重建全局单例</td><td><code>migrate_to_sqlite.py</code> <code>main</code></td><td>同进程旧连接失效</td></tr><tr><td>目录整理不更新计数</td><td><code>migrate_sessions.py</code></td><td>会话数量显示不对</td></tr><tr><td>无主卡片进入 <code>unknown</code></td><td>同脚本</td><td>出现特殊用户名</td></tr><tr><td>判重跳过不覆盖</td><td>所有脚本</td><td>来源侧修改不会同步</td></tr><tr><td>frontmatter 简易解析</td><td><code>migrate_to_sqlite.py</code> 解析函数</td><td>复杂结构被降级</td></tr><tr><td>输出只有打印</td><td>四个工具</td><td>无法被自动化消费</td></tr></tbody></table>
+<h2 id="2-排查顺序">2. 排查顺序</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["迁移后数据缺失"] --> B{"脚本输出里有没有跳过"}
+  B -->|有| C["确认来源路径与判重条件"]
+  B -->|无| D{"执行时的工作目录"}
+  D -->|不是仓库根| E["重新在正确目录执行"]
+  D -->|正确| F{"目标库与表是否存在"}
+  F -->|否| G["确认目标路径与建表语句"]
+  F -->|是| H{"是否同进程跑过文件迁移"}
+  H -->|是| I["检查单例被重建导致的旧连接"]
+  H -->|否| J["对比来源条数与目标行数"]
+  C --> J</pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层级</th><th>检查点</th><th>判据</th></tr></thead><tbody><tr><td>执行环境</td><td>当前目录</td><td>是否是仓库根</td></tr><tr><td>来源</td><td>文件或表是否存在</td><td>输出中的跳过信息</td></tr><tr><td>判重</td><td>目标是否已有同键</td><td>跳过计数</td></tr><tr><td>目标结构</td><td>库与表是否存在</td><td>表清单</td></tr><tr><td>进程</td><td>是否与应用的连接混用</td><td>单例重建记录</td></tr></tbody></table>
+<h2 id="3-执行目录的影响">3. 执行目录的影响</h2>
+<p><code>migrate_to_sqlite.py</code> 用当前工作目录拼数据库路径，<code>migrate_central_db_to_sessions.py</code> 与 <code>migrate_sessions.py</code> 用项目根目录拼来源。同一个脚本在不同目录执行，结果不一样：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>脚本</th><th>路径基准</th><th>执行目录错时的表现</th></tr></thead><tbody><tr><td><code>migrate_to_sqlite.py</code></td><td>当前工作目录</td><td>写入新建的空库</td></tr><tr><td><code>migrate_central_db_to_sessions.py</code></td><td>项目根目录</td><td>找不到来源并跳过</td></tr><tr><td><code>migrate_sessions.py</code></td><td>项目根目录</td><td>找不到 <code>cards</code> 并报错</td></tr></tbody></table>
+<p>第一种最危险：它不报错，还会打印一份看起来正常的汇总。</p>
+<h2 id="4-幂等带来的增量缺失">4. 幂等带来的增量缺失</h2>
+<p>判重的收益是不覆盖人工修正，代价是「来源更新不会同步到目标」。用户后来在 <code>users.json</code> 里改了密码或积分，再跑一次脚本不会更新数据库里的旧值。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>操作</th><th>结果</th></tr></thead><tbody><tr><td>首次迁移</td><td>全部写入</td></tr><tr><td>重复执行</td><td>全部跳过</td></tr><tr><td>来源后改、目标已存在</td><td>以目标为准</td></tr><tr><td>目标被外部删除、来源还在</td><td>会重新导入</td></tr></tbody></table>
+<p>排查「改了没生效」时先确认改的是来源还是目标：脚本只从来源流向目标，且只填补缺失的记录。</p>
+<h2 id="5-事务粒度与中断">5. 事务粒度与中断</h2>
+<p>脚本按段或按会话提交，没有覆盖整次迁移的事务。中途中断会留下部分数据，但不会留下重复数据：重跑时判重会跳过已写入的部分。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>脚本</th><th>提交粒度</th><th>中断后果</th></tr></thead><tbody><tr><td><code>migrate_to_sqlite.py</code></td><td>每类数据一次提交</td><td>已提交的类型保留</td></tr><tr><td><code>migrate_central_db_to_sessions.py</code></td><td>每会话一次</td><td>已完成的会话保留</td></tr><tr><td><code>migrate_sessions.py</code></td><td>逐文件移动</td><td>已移动的文件保留</td></tr></tbody></table>
+<p>因此中断后的处理方式是重新执行，而不是清理后再来。</p>
+<h2 id="6-计数与核对的分离">6. 计数与核对的分离</h2>
+<p>中心库脚本的第二段更新 <code>sessions.json</code>，第三段只统计会话库行数。两者互不校验，所以「数量显示不对但核对通过」是可能的。排查时把两张数据直接取出来对照，而不要只看脚本末尾的总数。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数据</th><th>来源</th><th>是否被核对覆盖</th></tr></thead><tbody><tr><td>会话库行数</td><td><code>COUNT(*)</code></td><td>是</td></tr><tr><td><code>sessions.json</code> 的 <code>card_count</code></td><td>文件字段</td><td>否</td></tr><tr><td>目录整理结果</td><td>文件系统</td><td>否</td></tr></tbody></table>
+<h2 id="7-单例重建的副作用">7. 单例重建的副作用</h2>
+<p><code>migrate_to_sqlite.py</code> 在开始时关闭已有的全局单例并新建连接。如果这个脚本被某个常驻进程导入而不是单独执行，进程里其他代码持有的旧连接会失效，之后的操作会报连接已关闭类错误。</p>
+<p>排查时看两条线索：脚本是否在服务进程内被调用，以及错误是否集中在全局库相关操作上。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant P as 常驻进程
+  participant S as 迁移脚本
+  participant D as 全局库
+  P->>D: 持有单例连接
+  P->>S: 进程内调用迁移
+  S->>D: 关闭已有单例
+  S->>D: 新建连接并迁移
+  S-->>P: 迁移完成
+  P->>D: 继续使用旧连接
+  D-->>P: 连接已关闭</pre></div>
+<h2 id="8-容易走错的方向">8. 容易走错的方向</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>容易先怀疑</th><th>实际应先查</th></tr></thead><tbody><tr><td>迁移后数据为空</td><td>脚本坏了</td><td>执行目录与来源路径</td></tr><tr><td>卡片少几张</td><td>导入失败</td><td>判重跳过的日志</td></tr><tr><td>迁移后连接报错</td><td>数据库损坏</td><td>单例是否被脚本重建</td></tr><tr><td>数量显示不对</td><td>卡片真丢了</td><td>元数据字段是否被同步</td></tr><tr><td>重复执行后没变化</td><td>脚本没跑</td><td>判重命中属正常</td></tr><tr><td>目标库缺表</td><td>迁移中断</td><td>建表语句只含 <code>cards</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>排查三处</td><td>执行目录、来源是否跳过、目标结构</td></tr><tr><td>幂等代价</td><td>来源更新不会同步到目标</td></tr><tr><td>事务</td><td>分段提交，中断可重跑</td></tr><tr><td>计数与核对</td><td>两段互不校验</td></tr><tr><td>单例</td><td>文件迁移脚本会重建全局单例</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>路径基准</td><td>不统一</td><td>各脚本就近取值</td><td>执行目录成隐形前提</td></tr><tr><td>判重策略</td><td>跳过已存在</td><td>不覆盖人工修正</td><td>缺增量同步</td></tr><tr><td>事务粒度</td><td>分段提交</td><td>中断可续跑</td><td>无整体一致性</td></tr><tr><td>结果输出</td><td>打印</td><td>简单</td><td>无法自动化判定</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>排查迁移数据缺失先看哪三处？</li>
+<li>为什么重复执行脚本不会更新已存在的记录？</li>
+<li>哪个脚本会重建全局单例？副作用是什么？</li>
+<li>计数同步与核对为什么不能互相证明？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>统一四个脚本的路径基准，说明放置位置与部署影响。</li>
+<li>为迁移增加「更新模式」，说明如何在不覆盖人工修正的前提下同步来源变更。</li>
+<li>设计一份迁移结果的结构化报告，列出需要的计数、跳过原因与时间戳。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>路径拼接、单例重建、解析与判重</td></tr><tr><td><code>backend/scripts/migrate_central_db_to_sessions.py</code></td><td>建表语句、计数同步与核对</td></tr><tr><td><code>backend/scripts/migrate_sessions.py</code></td><td>目录整理与来源检查</td></tr><tr><td><code>backend/storage/parent_migration.py</code></td><td>试运行与幂等条件</td></tr><tr><td><code>backend/storage/database.py</code></td><td>被重建的全局单例</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/02-%E4%BC%9A%E8%AF%9D%E6%95%B0%E6%8D%AE%E5%BA%93/"><span class="k">← 上一篇</span><span class="t">会话数据库</span><span class="d">SQLite 数据层 · 5 个文件</span></a><a class="next" href="/tc63/docs/30-React%20%E4%B8%8E%E5%89%8D%E7%AB%AF%E5%B7%A5%E7%A8%8B/01-%E7%BB%84%E4%BB%B6%E4%B8%8E%E7%8A%B6%E6%80%81/"><span class="k">下一篇 →</span><span class="t">组件与状态</span><span class="d">React 与前端工程 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

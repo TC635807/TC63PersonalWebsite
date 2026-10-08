@@ -1,0 +1,1643 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>路由与依赖注入 · FastAPI 后端 · 王宇翔</title><meta name="description" content="KnowledgeDiver 的 FastAPI 实例如何装配：CORS 与安全头中间件、slowapi 限流挂载、三层异常处理器，以及启动与关闭钩子"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/01-%E8%B7%AF%E7%94%B1%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="路由与依赖注入 · FastAPI 后端 · 王宇翔"><meta property="og:description" content="KnowledgeDiver 的 FastAPI 实例如何装配：CORS 与安全头中间件、slowapi 限流挂载、三层异常处理器，以及启动与关闭钩子"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/01-%E8%B7%AF%E7%94%B1%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/">FastAPI 后端</a><span class="sep" aria-hidden="true">/</span><span class="now">路由与依赖注入</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>路由与依赖注入</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>应用装配与中间件</span></a><ul class="toc__heads"><li><a href="#1-实例创建与导入顺序" data-depth="2" data-heading-j="0">1. 实例创建与导入顺序</a></li><li><a href="#2-安全头中间件" data-depth="2" data-heading-j="1">2. 安全头中间件</a></li><li><a href="#3-cors-的来源与拆分" data-depth="2" data-heading-j="2">3. CORS 的来源与拆分</a></li><li><a href="#4-slowapi-限流的挂载" data-depth="2" data-heading-j="3">4. slowapi 限流的挂载</a></li><li><a href="#5-三层异常处理器" data-depth="2" data-heading-j="4">5. 三层异常处理器</a></li><li><a href="#6-启动与关闭钩子" data-depth="2" data-heading-j="5">6. 启动与关闭钩子</a></li><li><a href="#7-根路径与健康检查" data-depth="2" data-heading-j="6">7. 根路径与健康检查</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>路由模块与路径注册</span></a><ul class="toc__heads"><li><a href="#1-十六个路由模块" data-depth="2" data-heading-j="0">1. 十六个路由模块</a></li><li><a href="#2-实例创建的两种写法" data-depth="2" data-heading-j="1">2. 实例创建的两种写法</a></li><li><a href="#3-集中注册的顺序" data-depth="2" data-heading-j="2">3. 集中注册的顺序</a></li><li><a href="#4-可选注册带来的静默缺席" data-depth="2" data-heading-j="3">4. 可选注册带来的静默缺席</a></li><li><a href="#5-端点装饰器的路径写法" data-depth="2" data-heading-j="4">5. 端点装饰器的路径写法</a></li><li><a href="#6-同一模块内依赖的复用" data-depth="2" data-heading-j="5">6. 同一模块内依赖的复用</a></li><li><a href="#7-端点签名的两种参数风格" data-depth="2" data-heading-j="6">7. 端点签名的两种参数风格</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>Depends 的工作方式</span></a><ul class="toc__heads"><li><a href="#1-三种参数在签名里的区分" data-depth="2" data-heading-j="0">1. 三种参数在签名里的区分</a></li><li><a href="#2-依赖提供者的两种形态" data-depth="2" data-heading-j="1">2. 依赖提供者的两种形态</a></li><li><a href="#3-子依赖链的解析顺序" data-depth="2" data-heading-j="2">3. 子依赖链的解析顺序</a></li><li><a href="#4-同一请求内的结果缓存" data-depth="2" data-heading-j="3">4. 同一请求内的结果缓存</a></li><li><a href="#5-直接构造与依赖注入的混用" data-depth="2" data-heading-j="4">5. 直接构造与依赖注入的混用</a></li><li><a href="#6-依赖提供者的重复定义" data-depth="2" data-heading-j="5">6. 依赖提供者的重复定义</a></li><li><a href="#7-依赖的返回值与类型标注" data-depth="2" data-heading-j="6">7. 依赖的返回值与类型标注</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>鉴权依赖与存储依赖</span></a><ul class="toc__heads"><li><a href="#1-httpbearer-实例与凭证对象" data-depth="2" data-heading-j="0">1. HTTPBearer 实例与凭证对象</a></li><li><a href="#2-get_current_user-的四段校验" data-depth="2" data-heading-j="1">2. get_current_user 的四段校验</a></li><li><a href="#3-token-签发与解析的分工" data-depth="2" data-heading-j="2">3. token 签发与解析的分工</a></li><li><a href="#4-用户存储的每次请求构造" data-depth="2" data-heading-j="3">4. 用户存储的每次请求构造</a></li><li><a href="#5-端点侧的三种依赖组合" data-depth="2" data-heading-j="4">5. 端点侧的三种依赖组合</a></li><li><a href="#6-跨模块复用同一依赖" data-depth="2" data-heading-j="5">6. 跨模块复用同一依赖</a></li><li><a href="#7-令牌有效期与模块注释的差异" data-depth="2" data-heading-j="6">7. 令牌有效期与模块注释的差异</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-风险清单" data-depth="2" data-heading-j="0">1. 风险清单</a></li><li><a href="#2-启动期配置校验的位置" data-depth="2" data-heading-j="1">2. 启动期：配置校验的位置</a></li><li><a href="#3-请求期cors-与中间件顺序" data-depth="2" data-heading-j="2">3. 请求期：CORS 与中间件顺序</a></li><li><a href="#4-请求期限流与依赖" data-depth="2" data-heading-j="3">4. 请求期：限流与依赖</a></li><li><a href="#5-请求期存储依赖的构造成本" data-depth="2" data-heading-j="4">5. 请求期：存储依赖的构造成本</a></li><li><a href="#6-配置期一个未被使用的配置项" data-depth="2" data-heading-j="5">6. 配置期：一个未被使用的配置项</a></li><li><a href="#7-排查顺序" data-depth="2" data-heading-j="6">7. 排查顺序</a></li><li><a href="#8-容易走错的方向" data-depth="2" data-heading-j="7">8. 容易走错的方向</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">FastAPI 后端</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>FastAPI / 中间件 / CORS / 异常处理 / 启动钩子 / APIRouter / 路由注册 / 路径前缀</span></div><h1 class="docs__title">路由与依赖注入</h1><p class="docs__lead">KnowledgeDiver 的 FastAPI 实例如何装配：CORS 与安全头中间件、slowapi 限流挂载、三层异常处理器，以及启动与关闭钩子</p></header><section class="dfile" id="file-1" data-file="01-应用装配与中间件"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-应用装配与中间件</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/01-路由与依赖注入/01-应用装配与中间件.md</span></div><div class="dfile__body"><h1 id="应用装配与中间件">应用装配与中间件</h1>
+<p>KnowledgeDiver 的后端入口是 <code>backend/main.py</code>，全文 166 行，承担四件事：创建 <code>FastAPI</code> 实例、挂中间件与限流、注册路由、定义异常处理与启动钩子。所有路由业务都在 <code>backend/routes/</code> 下，入口文件只做装配。</p>
+<p>装配层的代码集中在应用对象的构造与中间件的挂载上。路由模块的组织方式在 <code>02-路由模块与路径注册.md</code>，<code>Depends</code> 的用法在 <code>03-Depends 的工作方式.md</code> 与 <code>04-鉴权依赖与存储依赖.md</code>。</p>
+<h2 id="1-实例创建与导入顺序">1. 实例创建与导入顺序</h2>
+<p><code>app = FastAPI()</code> 只有一行，没有参数（<code>backend/main.py:47</code>）。应用的配置通过后续 <code>add_middleware</code>、<code>app.state</code> 与异常处理器补充，构造函数保持默认。</p>
+<p>导入区在文件开头集中列出十三组路由（<code>:22-34</code>），其中导出路由用 <code>try</code> / <code>except</code> 包住（<code>:35-38</code>）。日志配置紧随其后（<code>:41-45</code>），在创建实例之前执行，因此模块导入阶段的日志也能按统一格式输出。</p>
+<p>这个顺序有一个直接后果：任何路由模块在导入期抛出的异常都会让整个应用启动失败，只有导出路由被单独豁免。<code>backend/config.py:168-172</code> 中的 <code>JWT_SECRET</code> 校验就发生在导入期，见 <code>05-易错点与排查.md</code>。</p>
+<h2 id="2-安全头中间件">2. 安全头中间件</h2>
+<p><code>SecurityHeadersMiddleware</code> 继承 <code>BaseHTTPMiddleware</code>，在 <code>dispatch</code> 里调用下游并把四个响应头写回（<code>backend/main.py:52-67</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>响应头</th><th>取值</th></tr></thead><tbody><tr><td><code>X-Content-Type-Options</code></td><td><code>nosniff</code></td></tr><tr><td><code>X-Frame-Options</code></td><td><code>DENY</code></td></tr><tr><td><code>Strict-Transport-Security</code></td><td><code>max-age=31536000; includeSubDomains</code></td></tr><tr><td><code>Content-Security-Policy</code></td><td><code>default-src 'self'</code> 起头，脚本与样式允许 <code>'unsafe-inline'</code></td></tr></tbody></table>
+<p>中间件不区分路径，所有响应都会带上这四个头。<code>@override</code> 装饰器（<code>:55</code>）来自 <code>typing</code>，用于标注重写父类方法，运行时不改变行为。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["ASGI 请求"] --> B["SecurityHeadersMiddleware 外层"]
+  B --> C["CORSMiddleware"]
+  C --> D["路由匹配与依赖解析"]
+  D --> E["端点函数"]
+  E --> F["异常处理器 若抛出"]
+  F --> C
+  C --> B
+  B --> G["响应 带四个安全头"]</pre></div>
+<h2 id="3-cors-的来源与拆分">3. CORS 的来源与拆分</h2>
+<p>CORS 中间件的来源列表来自配置项 <code>CORS_ORIGINS</code>，在装配时按逗号拆分（<code>backend/main.py:73</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">allow_origins</span><span style="color:#D73A49">=</span><span style="color:#24292E">[origin.strip() </span><span style="color:#D73A49">for</span><span style="color:#24292E"> origin </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> CORS_ORIGINS</span><span style="color:#24292E">.split(</span><span style="color:#032F62">","</span><span style="color:#24292E">)],</span></span>
+<span class="line"><span style="color:#24292E">allow_credentials</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">allow_methods</span><span style="color:#D73A49">=</span><span style="color:#24292E">[</span><span style="color:#032F62">"*"</span><span style="color:#24292E">],</span></span>
+<span class="line"><span style="color:#24292E">allow_headers</span><span style="color:#D73A49">=</span><span style="color:#24292E">[</span><span style="color:#032F62">"*"</span><span style="color:#24292E">],</span></span></code></pre>
+<p><code>CORS_ORIGINS</code> 的默认值是 <code>"*"</code>（<code>backend/config.py:165</code>）。通配来源与 <code>allow_credentials=True</code> 同时出现时，浏览器侧的凭证请求会被拒绝，具体表现与浏览器实现有关，属 <code>05-易错点与排查.md</code> 中的排查项。</p>
+<p>拆分逻辑只做 <code>strip</code>，不处理空串。配置成 <code>"a,b,"</code> 时会产生一个空来源项；配置成空字符串时列表里只剩一个空串。</p>
+<h2 id="4-slowapi-限流的挂载">4. slowapi 限流的挂载</h2>
+<p>限流器定义在独立模块，避免循环导入（<code>backend/rate_limit.py:1-6</code> 的模块注释写明 <code>auth → main → pipeline → auth</code> 的依赖链）。<code>limiter</code> 用 <code>get_remote_address</code> 作为键函数，默认限值取自配置（<code>:8-12</code>）。</p>
+<p>装配层做两件事：把 <code>limiter</code> 挂到 <code>app.state.limiter</code>（<code>backend/main.py:85</code>），注册 <code>RateLimitExceeded</code> 的处理器（<code>:86</code>）。<code>RATE_LIMIT_DEFAULT</code> 默认 <code>30/minute</code>，认证相关默认 <code>5/minute</code>（<code>backend/config.py:161-162</code>）。</p>
+<p><code>slowapi</code> 的装饰器要求被装饰的端点带 <code>request: Request</code> 形参。仓库里只有注册与登录两个端点显式加了 <code>@limiter.limit</code>（<code>backend/routes/auth.py:59-60</code>、<code>:75-76</code>），其余端点的限流是否生效取决于库对 <code>default_limits</code> 的处理方式，按 slowapi 文档的默认行为理解。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant M as main.py
+  participant L as rate_limit.limiter
+  participant A as app.state
+  participant E as RateLimitExceeded
+  M->>L: from backend.rate_limit import limiter
+  M->>A: 设置 limiter 属性
+  M->>E: add_exception_handler 注册处理器
+  Note over M,L: 路由模块自行 import limiter 加装饰器</pre></div>
+<h2 id="5-三层异常处理器">5. 三层异常处理器</h2>
+<p><code>backend/main.py:92-126</code> 注册三个处理器，覆盖面从具体到宽泛：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>处理器</th><th>触发条件</th><th>响应</th></tr></thead><tbody><tr><td><code>http_exception_handler</code></td><td><code>HTTPException</code></td><td>原状态码，<code>{"detail", "status_code"}</code></td></tr><tr><td><code>validation_exception_handler</code></td><td><code>RequestValidationError</code></td><td>422，中文提示加 <code>errors</code> 列表</td></tr><tr><td><code>general_exception_handler</code></td><td>其他 <code>Exception</code></td><td>500，固定文案，同时记录日志</td></tr></tbody></table>
+<p>三条路径都不把堆栈返回给客户端：<code>HTTPException</code> 只回 <code>detail</code> 与状态码，校验错误回 <code>exc.errors()</code>，未预期错误先 <code>logging.exception</code> 再回固定中文（<code>:122-125</code>）。</p>
+<p><code>exception_handler(Exception)</code> 覆盖不到 Starlette 层面的 404 与 405，这两类仍由默认处理器响应。这一条属框架行为，仓库里没有额外处理代码。</p>
+<h2 id="6-启动与关闭钩子">6. 启动与关闭钩子</h2>
+<p><code>startup</code> 在事件循环里创建后台任务预热抓取浏览器（<code>backend/main.py:153-158</code>），<code>shutdown</code> 释放资源（<code>:160-166</code>）。两个钩子都用 <code>@app.on_event</code> 装饰，该写法在较新的 FastAPI 中已被 <code>lifespan</code> 取代，仓库仍在使用。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>钩子</th><th>动作</th><th>代码位置</th></tr></thead><tbody><tr><td><code>startup</code></td><td><code>asyncio.create_task(_get_crawler())</code></td><td><code>:153-158</code></td></tr><tr><td><code>shutdown</code></td><td><code>await close_crawler()</code></td><td><code>:160-166</code></td></tr></tbody></table>
+<p>预热被包成任务而不是直接 <code>await</code>，避免启动被浏览器初始化阻塞；注释说明首次抓取可能因此卡住 10 到 30 秒（<code>:155</code>）。关闭钩子里取了 logger 并打两条日志，标记释放的开始与结束。</p>
+<h2 id="7-根路径与健康检查">7. 根路径与健康检查</h2>
+<p><code>GET /</code> 返回固定 JSON（<code>backend/main.py:147-150</code>），作用是进程存活确认，不检查数据库连通性或浏览器状态。需要判断依赖是否就绪时，这个端点不足以作为依据。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>把 <code>app.state.limiter</code> 当成可选</td><td>未设置时限流装饰器失效</td><td><code>backend/main.py:85</code></td></tr><tr><td>以为安全头只加在 API 路径</td><td>所有响应都带头，包括静态与错误响应</td><td><code>:52-67</code></td></tr><tr><td>用 <code>Exception</code> 处理器兜住 404</td><td>404 仍走默认响应</td><td><code>:117-126</code></td></tr><tr><td>认为每个端点都限流</td><td>只有两个端点带显式装饰器</td><td><code>backend/routes/auth.py:59、:75</code></td></tr><tr><td>依赖 <code>on_event</code> 长期存在</td><td>新版 FastAPI 已推荐 <code>lifespan</code></td><td><code>:153-166</code></td></tr><tr><td>在导入期读敏感配置</td><td>缺 <code>JWT_SECRET</code> 时应用直接启动失败</td><td><code>backend/config.py:169-170</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>装配集中</td><td>实例创建、中间件、路由注册、异常处理都在 <code>backend/main.py</code></td></tr><tr><td>中间件</td><td>安全头与 CORS 两个，安全头在响应阶段无差别添加</td></tr><tr><td>限流</td><td><code>limiter</code> 挂在 <code>app.state</code>，异常处理器单独注册</td></tr><tr><td>异常处理</td><td>三层处理器，都不向客户端返回堆栈</td></tr><tr><td>生命周期</td><td><code>startup</code> 预热浏览器，<code>shutdown</code> 释放资源，用 <code>on_event</code> 写法</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>入口文件职责</td><td>只装配不写业务</td><td>路由改动互不干扰</td><td>入口变长后仍要集中改这里</td></tr><tr><td>中间件实现</td><td>自定义 <code>BaseHTTPMiddleware</code></td><td>安全头一处生效</td><td>每请求多一层包装开销</td></tr><tr><td>限流器位置</td><td>独立模块</td><td>避免 <code>auth</code> 与 <code>main</code> 循环导入</td><td>装饰器要各自 <code>import</code></td></tr><tr><td>异常兜底</td><td>捕获 <code>Exception</code></td><td>客户端拿到统一文案</td><td>未预期错误的表现被抹平，排查要靠日志</td></tr><tr><td>启动预热</td><td>后台任务</td><td>启动不被浏览器初始化阻塞</td><td>预热未完成时的首次抓取仍可能等待</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出 <code>backend/main.py</code> 中依次执行的装配步骤。</li>
+<li>安全头中间件添加了哪四个响应头？它是否按路径区分？</li>
+<li><code>CORS_ORIGINS</code> 的默认值是什么？装配时如何拆分？</li>
+<li>三个异常处理器各自的触发条件与响应体是什么？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>说明把 <code>@app.on_event</code> 迁移到 <code>lifespan</code> 需要改动的代码范围，以及迁移时容易漏掉的关闭逻辑。</li>
+<li>现有 <code>general_exception_handler</code> 会把所有未处理异常压成 500 固定文案。设计一个在保留统一响应格式的前提下提高可观测性的方案。</li>
+<li><code>CORS_ORIGINS</code> 默认 <code>"*"</code> 且 <code>allow_credentials=True</code>。给出两种整改方向，并说明各自对本地开发与部署的影响。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/main.py</code></td><td>实例与导入（:22-47）、安全头（:52-67）、CORS（:71-77）、限流（:85-86）、异常处理（:92-126）、路由注册（:129-145）、健康检查与钩子（:147-166）</td></tr><tr><td><code>backend/config.py</code></td><td><code>CORS_ORIGINS</code>（:165）、限流默认值（:161-162）、<code>JWT_SECRET</code> 校验（:168-172）</td></tr><tr><td><code>backend/rate_limit.py</code></td><td><code>limiter</code> 定义与循环导入说明（:1-12）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>显式限流装饰器（:59-60、:75-76）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-路由模块与路径注册"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-路由模块与路径注册</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/01-路由与依赖注入/02-路由模块与路径注册.md</span></div><div class="dfile__body"><h1 id="路由模块与路径注册">路由模块与路径注册</h1>
+<p>后端的接口按业务拆成十六个模块，每个模块在文件顶部创建一个 <code>APIRouter</code> 实例，用装饰器把端点挂上去；<code>backend/main.py:129-145</code> 再把这些实例逐个注册进应用。模块之间不互相注册路由，注册动作全部集中在入口。</p>
+<p>路由的组织方式与路径前缀在这里有两套写法。应用装配与中间件在 <code>01-应用装配与中间件.md</code>，依赖注入在 <code>03-Depends 的工作方式.md</code>。</p>
+<h2 id="1-十六个路由模块">1. 十六个路由模块</h2>
+<p><code>backend/routes/</code> 下有十五个模块，其中十二个无条件注册、导出模块条件注册；加上 <code>backend/agent/routes/agent.py</code>，共十四个 <code>APIRouter</code> 实例被接入应用，另有 <code>scraper.py</code> 与 <code>search.py</code> 创建了实例但未注册：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模块</th><th>注册注释里的职责</th></tr></thead><tbody><tr><td><code>routes/auth.py</code></td><td>认证：注册、登录、个人信息、头像</td></tr><tr><td><code>routes/pipeline.py</code></td><td>流水线：收集与延申搜索的 SSE 流、任务管理</td></tr><tr><td><code>routes/links.py</code></td><td>卡片双向链接 CRUD</td></tr><tr><td><code>routes/classification.py</code></td><td>AI 自动分类、重分类、分类树</td></tr><tr><td><code>routes/ai.py</code></td><td>流式文本生成</td></tr><tr><td><code>routes/cards.py</code></td><td>卡片 CRUD</td></tr><tr><td><code>routes/sessions.py</code></td><td>会话 CRUD 与卡片移动</td></tr><tr><td><code>routes/session_io.py</code></td><td>会话 ZIP 导入导出</td></tr><tr><td><code>routes/share.py</code></td><td>分享链接 token</td></tr><tr><td><code>routes/hub.py</code></td><td>Hub 论坛浏览、分享、导入、点赞、评论</td></tr><tr><td><code>routes/documents.py</code></td><td>文档上传与分析</td></tr><tr><td><code>routes/payment.py</code></td><td>支付订单创建、回调、查询</td></tr><tr><td><code>agent/routes/agent.py</code></td><td>Agent SSE 对话与工具调用</td></tr><tr><td><code>routes/export.py</code></td><td>Markdown 导出（可选注册）</td></tr></tbody></table>
+<p><code>backend/routes/scraper.py</code> 与 <code>backend/routes/search.py</code> 也各自创建了 <code>APIRouter</code>，但没有出现在 <code>main.py</code> 的注册列表里，属于未接入的模块。这一条按导入与注册代码对照得出。</p>
+<h2 id="2-实例创建的两种写法">2. 实例创建的两种写法</h2>
+<p>绝大多数模块写作 <code>router = APIRouter()</code>，不带参数。例外是分类模块，直接声明前缀与标签（<code>backend/routes/classification.py:17</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">router </span><span style="color:#D73A49">=</span><span style="color:#24292E"> APIRouter(</span><span style="color:#E36209">prefix</span><span style="color:#D73A49">=</span><span style="color:#032F62">"/api/classification"</span><span style="color:#24292E">, </span><span style="color:#E36209">tags</span><span style="color:#D73A49">=</span><span style="color:#24292E">[</span><span style="color:#032F62">"classification"</span><span style="color:#24292E">])</span></span></code></pre>
+<p>两种写法导致路径定义方式分叉：带前缀的模块在装饰器里写相对路径，不带前缀的模块把 <code>/api/...</code> 完整写进装饰器。同一个仓库里因此并存两套风格。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>实例</th><th>装饰器路径</th><th>代表</th></tr></thead><tbody><tr><td>无前缀</td><td><code>APIRouter()</code></td><td>完整路径</td><td><code>routes/cards.py:47</code> 的 <code>@router.get("/api/cards")</code></td></tr><tr><td>带前缀</td><td><code>APIRouter(prefix=...)</code></td><td>相对路径</td><td><code>routes/classification.py:17</code></td></tr></tbody></table>
+<p>选择哪一种不影响运行结果，但影响前缀修改的成本：完整路径写法要逐个改装饰器，前缀写法只改一行。</p>
+<h2 id="3-集中注册的顺序">3. 集中注册的顺序</h2>
+<p><code>backend/main.py:129-145</code> 按固定顺序调用 <code>app.include_router</code>，顺序与注释一一对应。注册顺序决定 OpenAPI 文档里的分组顺序，不改变路由匹配结果，因为路径本身互不重叠。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>注册位置</th><th>模块</th><th>是否条件注册</th></tr></thead><tbody><tr><td><code>:130</code></td><td><code>auth_router</code></td><td>否</td></tr><tr><td><code>:131</code></td><td><code>pipeline_router</code></td><td>否</td></tr><tr><td><code>:132-142</code></td><td>其余十个业务路由</td><td>否</td></tr><tr><td><code>:143-144</code></td><td><code>export_router</code></td><td>是，判空后注册</td></tr></tbody></table>
+<p><code>agent_router</code> 来自 <code>backend/agent/routes/agent.py</code>，与 <code>routes/</code> 下的模块并列注册（<code>:142</code>）。</p>
+<h2 id="4-可选注册带来的静默缺席">4. 可选注册带来的静默缺席</h2>
+<p>导出路由的导入被 <code>try</code> / <code>except Exception</code> 包住（<code>backend/main.py:35-38</code>），失败时把 <code>export_router</code> 置为 <code>None</code>，注册处再判空（<code>:143-144</code>）。设计意图在注释里写明：让缺少导出模块的环境仍能启动应用。</p>
+<p>未接入的两个模块（<code>scraper.py</code>、<code>search.py</code>）与可选的导出模块，三者从外部看都是「端点不存在」，返回 404。要区分它们需要看代码，运行期没有专门的诊断端点。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["backend/main.py 导入阶段"] --> B["十三个无条件导入"]
+  A --> C["try 导入 export_router"]
+  C -->|成功| D["export_router 为实例"]
+  C -->|失败| E["export_router 为 None"]
+  B --> F["include_router 逐个注册"]
+  D --> G["判空后注册"]
+  E --> H["跳过注册 端点不存在"]
+  F --> I["FastAPI app"]
+  G --> I
+  H --> I</pre></div>
+<h2 id="5-端点装饰器的路径写法">5. 端点装饰器的路径写法</h2>
+<p>无前缀模块的路径都带 <code>/api</code> 段。举三例：卡片列表是 <code>@router.get("/api/cards")</code>（<code>backend/routes/cards.py:47</code>），会话列表是 <code>@router.get("/api/sessions")</code>（<code>backend/routes/sessions.py:24</code>），注册是 <code>@router.post("/api/auth/register")</code>（<code>backend/routes/auth.py:58</code>）。</p>
+<p>路径里出现中文与复数混用的情况较少，命名整体一致。同一个模块内部的路径以业务名词开头，例如 <code>cards.py</code> 全是 <code>/api/cards</code> 系列，<code>sessions.py</code> 全是 <code>/api/sessions</code> 系列。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模块</th><th>端点路径示例</th><th>行号</th></tr></thead><tbody><tr><td><code>cards.py</code></td><td><code>/api/cards</code></td><td><code>:47</code></td></tr><tr><td><code>sessions.py</code></td><td><code>/api/sessions</code></td><td><code>:24</code></td></tr><tr><td><code>auth.py</code></td><td><code>/api/auth/register</code></td><td><code>:58</code></td></tr><tr><td><code>sessions.py</code></td><td><code>/api/sessions/{session_id}/download</code></td><td><code>backend/routes/session_io.py:35</code> 起的会话导出系列</td></tr></tbody></table>
+<h2 id="6-同一模块内依赖的复用">6. 同一模块内依赖的复用</h2>
+<p>路由模块之间通过函数导入复用依赖。<code>routes/cards.py</code>、<code>routes/sessions.py</code> 等多处从 <code>routes/auth.py</code> 导入 <code>get_current_user</code>（<code>backend/routes/cards.py:21</code>、<code>backend/routes/sessions.py:13</code>）。会话存储的依赖提供者 <code>get_session_store</code> 在三个模块里各写了一份相同实现（<code>sessions.py:19-21</code>、<code>session_io.py:35</code>、<code>share.py:19</code>）。</p>
+<p>这种复用以函数为粒度，不需要共享基类。代价是同一个 <code>get_session_store</code> 出现三份，改一处不会自动同步到另外两处。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph LR
+  A["routes/auth.py get_current_user"] --> B["routes/cards.py"]
+  A --> C["routes/sessions.py"]
+  A --> D["agent/routes/agent.py"]
+  A --> E["routes/hub.py"]
+  F["routes/auth.py get_user_store"] --> G["routes/auth.py 端点"]
+  H["routes/sessions.py get_session_store"] --> I["sessions 端点"]
+  J["routes/session_io.py get_session_store"] --> K["session_io 端点"]
+  L["routes/share.py get_session_store"] --> M["share 端点"]</pre></div>
+<h2 id="7-端点签名的两种参数风格">7. 端点签名的两种参数风格</h2>
+<p>业务参数与依赖参数混在同一个签名里，靠 <code>= Depends(...)</code> 区分。<code>cards.py</code> 的列表端点把查询参数默认值与依赖写在一起（<code>backend/routes/cards.py:47-50</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6F42C1">@router.get</span><span style="color:#24292E">(</span><span style="color:#032F62">"/api/cards"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> list_cards</span><span style="color:#24292E">(</span></span>
+<span class="line"><span style="color:#24292E">    session_id: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> DEFAULT_SESSION_ID</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    current_user: User </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Depends(get_current_user)</span></span>
+<span class="line"><span style="color:#24292E">) -> List[</span><span style="color:#005CC5">dict</span><span style="color:#24292E">]:</span></span></code></pre>
+<p><code>session_id</code> 是带默认值的查询参数，<code>current_user</code> 是依赖注入结果。两者位置相邻、形式相似，读签名时要靠 <code>Depends</code> 判断来源。返回类型标注 <code>List[dict]</code>，在 OpenAPI 里会生成对应的响应结构。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>在有前缀的模块里写完整路径</td><td>实际路径变成前缀重复</td><td><code>routes/classification.py:17</code> 与装饰器写法的组合</td></tr><tr><td>以为 <code>scraper.py</code> / <code>search.py</code> 的端点可用</td><td>请求 404</td><td>未注册（对照 <code>main.py:129-145</code>）</td></tr><tr><td>认为注册顺序影响匹配</td><td>修改顺序后路由行为不变</td><td>路径互不重叠</td></tr><tr><td>找不到 <code>get_session_store</code> 的唯一来源</td><td>三份同名实现</td><td><code>sessions.py:19</code>、<code>session_io.py:35</code>、<code>share.py:19</code></td></tr><tr><td>把 <code>DEFAULT_SESSION_ID</code> 当成依赖</td><td>它是普通默认值，不参与注入</td><td><code>routes/cards.py:49</code></td></tr><tr><td>认为导出路由一定存在</td><td>导入失败时静默跳过</td><td><code>backend/main.py:35-38</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>模块化方式</td><td>每个业务一个模块，模块内创建 <code>APIRouter</code> 并挂端点</td></tr><tr><td>注册位置</td><td>全部集中在 <code>backend/main.py:129-145</code></td></tr><tr><td>前缀写法</td><td>多数模块把 <code>/api/...</code> 写进装饰器，分类模块用 <code>prefix</code> 参数</td></tr><tr><td>条件注册</td><td>导出路由判空后注册，其余无条件</td></tr><tr><td>依赖复用</td><td>通过导入 <code>get_current_user</code> 等函数跨模块复用，会话存储依赖有三份副本</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>注册集中</td><td>入口统一 <code>include_router</code></td><td>一眼看清全部接口</td><td>入口文件随模块增加而变长</td></tr><tr><td>前缀风格</td><td>混用两套</td><td>各自写法直观</td><td>前缀调整成本不一致</td></tr><tr><td>导出路由</td><td>可选注册</td><td>缺依赖也能启动</td><td>端点缺席无运行期提示</td></tr><tr><td>依赖提供者</td><td>模块内定义、跨模块导入</td><td>无额外抽象层</td><td>重复实现难以统一修改</td></tr><tr><td>参数风格</td><td>默认值与 <code>Depends</code> 并列</td><td>签名紧凑</td><td>需要靠 <code>Depends</code> 分辨参数来源</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出 <code>backend/main.py</code> 中注册的路由模块，并指出哪一个有条件注册。</li>
+<li>说出 <code>APIRouter()</code> 与 <code>APIRouter(prefix=...)</code> 两种写法在路径定义上的差别。</li>
+<li><code>routes/scraper.py</code> 与 <code>routes/search.py</code> 为什么无法访问？给出判断依据。</li>
+<li><code>get_session_store</code> 在几个文件里出现？各自的返回类型是什么？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>若要给所有业务路由统一加上 <code>/api</code> 前缀，比较「改 <code>include_router</code> 参数」与「逐个改装饰器」两种方案的改动面与风险。</li>
+<li>设计一个启动期自检：在应用启动时列出未注册的 <code>APIRouter</code> 模块并打日志，说明实现位置与误报处理。</li>
+<li>把三份 <code>get_session_store</code> 合并成一处，给出放置位置与需要同步修改的导入语句，并评估循环导入风险。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/main.py</code></td><td>导入列表（:22-38）、注册区（:129-145）</td></tr><tr><td><code>backend/routes/classification.py</code></td><td>带 <code>prefix</code> 与 <code>tags</code> 的实例化（:17）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>无参数实例（:27）、列表端点（:47-50）、依赖导入（:21）</td></tr><tr><td><code>backend/routes/sessions.py</code></td><td>实例与依赖提供者（:16-21）、列表端点（:24-26）</td></tr><tr><td><code>backend/routes/session_io.py</code></td><td>同名依赖提供者（:35）</td></tr><tr><td><code>backend/routes/share.py</code></td><td>同名依赖提供者（:19）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>注册端点路径（:58）、依赖提供者（:23-28）</td></tr><tr><td><code>backend/agent/routes/agent.py</code></td><td>Agent 路由实例（:12）与依赖使用（:18）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-Depends的工作方式"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-Depends的工作方式</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/01-路由与依赖注入/03-Depends的工作方式.md</span></div><div class="dfile__body"><h1 id="depends-的工作方式">Depends 的工作方式</h1>
+<p>后端的鉴权、存储与请求上下文都通过 <code>Depends</code> 注入，全仓库出现 84 次依赖声明。注入的写法集中在三类：把 <code>Request</code> 交给限流装饰器、把 <code>User</code> 注入端点、把存储实例注入端点。依赖提供者本身也是普通函数，可以继续声明自己的依赖，形成链式解析。</p>
+<p><code>Depends</code> 在仓库里的具体形态由几处调用点决定。鉴权链与存储依赖的细节在 <code>04-鉴权依赖与存储依赖.md</code>，模块与路由的组织在 <code>02-路由模块与路径注册.md</code>。</p>
+<h2 id="1-三种参数在签名里的区分">1. 三种参数在签名里的区分</h2>
+<p>一个端点签名里可能同时出现业务参数、带默认值的查询参数与依赖参数。<code>backend/routes/cards.py:47-50</code> 是最小示例：<code>session_id</code> 有默认值，<code>current_user</code> 用 <code>Depends</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>解析方式</th><th>例子</th></tr></thead><tbody><tr><td><code>name: str</code> 无默认值</td><td>必填查询参数</td><td><code>routes/cards.py:60</code> 的查询串字段</td></tr><tr><td><code>name: str = "默认"</code></td><td>可选查询参数</td><td><code>routes/cards.py:49</code> 的 <code>session_id</code></td></tr><tr><td><code>obj: T = Depends(f)</code></td><td>调用 <code>f</code> 取返回值</td><td><code>routes/sessions.py:24</code> 的 <code>store</code></td></tr><tr><td><code>request: Request</code></td><td>由框架注入请求对象</td><td><code>routes/auth.py:60</code></td></tr></tbody></table>
+<p><code>Depends</code> 的实参是「可调用对象」，可以是同步函数、异步函数或类。仓库里全部使用函数，没有依赖类。</p>
+<h2 id="2-依赖提供者的两种形态">2. 依赖提供者的两种形态</h2>
+<p>仓库里的提供者分同步与异步两类，返回类型都标注在签名上：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 同步：每次调用构造一个存储实例</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> get_user_store</span><span style="color:#24292E">() -> SqliteUserStore:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> SqliteUserStore()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 异步：先解析登录用户，再按用户名构造存储</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> get_current_user</span><span style="color:#24292E">(</span></span>
+<span class="line"><span style="color:#24292E">    credentials: HTTPAuthorizationCredentials </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Depends(security)</span></span>
+<span class="line"><span style="color:#24292E">) -> User:</span></span>
+<span class="line"><span style="color:#005CC5">    ...</span></span></code></pre>
+<p><code>get_user_store</code> 不接收任何参数（<code>backend/routes/auth.py:23-25</code>），<code>get_current_user</code> 自身带一个 <code>Depends</code> 参数（<code>:28-29</code>），构成两层依赖链。同步提供者会被 FastAPI 放进线程池执行，异步提供者直接在事件循环里执行，这一点对构造存储这类轻量操作没有可感知差别。</p>
+<h2 id="3-子依赖链的解析顺序">3. 子依赖链的解析顺序</h2>
+<p><code>get_session_store</code> 依赖 <code>get_current_user</code>，后者依赖 <code>security</code>，解析顺序是从外到内再逐层返回：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant F as FastAPI 依赖解析
+  participant S as security HTTPBearer
+  participant U as get_current_user
+  participant T as get_session_store
+  participant E as 端点函数
+  F->>S: 解析 security
+  S-->>F: HTTPAuthorizationCredentials
+  F->>U: 传入 credentials
+  U->>U: decode_access_token 校验
+  U->>U: 按用户名查用户
+  U-->>F: User
+  F->>T: 传入 current_user
+  T-->>F: SessionStore
+  F->>E: 调用端点并传入参数字典</pre></div>
+<p>链上任意一层抛出 <code>HTTPException</code>，后续层不会执行，端点函数也不会被调用。<code>get_current_user</code> 在 token 无效时抛 401（<code>backend/routes/auth.py:31-38</code>）。</p>
+<h2 id="4-同一请求内的结果缓存">4. 同一请求内的结果缓存</h2>
+<p>FastAPI 对同一个依赖函数在同一请求内只解析一次，结果复用。仓库里最直接的例子是 <code>backend/routes/auth.py:94</code> 的 <code>get_me</code>：它同时依赖 <code>get_current_user</code> 与 <code>get_user_store</code>，两个依赖互不嵌套，各解析一次。</p>
+<p>缓存按依赖函数对象计，不按参数计。若同一个依赖带不同参数，缓存语义就要靠 <code>use_cache=False</code> 或直接调用函数来规避。仓库当前没有出现参数化依赖，所以缓存行为按默认值理解，属框架通用行为。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>解析次数</th><th>说明</th></tr></thead><tbody><tr><td>端点直接依赖 <code>get_current_user</code></td><td>1</td><td>常见形态</td></tr><tr><td>端点依赖 <code>get_session_store</code>，它又依赖 <code>get_current_user</code></td><td>1</td><td>链上只解析一次</td></tr><tr><td>端点同时依赖 <code>get_current_user</code> 与 <code>get_session_store</code></td><td>1</td><td>缓存命中，用户对象复用</td></tr><tr><td>同一请求里两次 <code>Depends(f)</code> 同名</td><td>1</td><td>默认 <code>use_cache=True</code></td></tr></tbody></table>
+<h2 id="5-直接构造与依赖注入的混用">5. 直接构造与依赖注入的混用</h2>
+<p>并非所有存储都通过依赖获取。<code>backend/routes/cards.py:52</code> 在端点体内直接构造 <code>SqliteCardStore</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">store </span><span style="color:#D73A49">=</span><span style="color:#24292E"> SqliteCardStore(</span><span style="color:#E36209">username</span><span style="color:#D73A49">=</span><span style="color:#24292E">current_user.username, </span><span style="color:#E36209">session_id</span><span style="color:#D73A49">=</span><span style="color:#24292E">session_id)</span></span>
+<span class="line"><span style="color:#24292E">cards </span><span style="color:#D73A49">=</span><span style="color:#24292E"> store.list_cards()</span></span></code></pre>
+<p>同一个模块的另一个端点则把用户对象作为依赖注入（<code>:49</code>）。两种方式并存：用户身份必须走依赖（要解析 token），存储实例可以依赖注入也可以就地构造。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方式</th><th>位置</th><th>特点</th></tr></thead><tbody><tr><td>依赖注入存储</td><td><code>routes/sessions.py:24-26</code></td><td>端点签名声明，便于替换与测试</td></tr><tr><td>端点内构造存储</td><td><code>routes/cards.py:52</code></td><td>需要组合用户名与会话 ID，就地构造更直接</td></tr></tbody></table>
+<h2 id="6-依赖提供者的重复定义">6. 依赖提供者的重复定义</h2>
+<p>会话存储的提供者在三个模块里各有一份（<code>backend/routes/sessions.py:19-21</code>、<code>backend/routes/session_io.py:35</code>、<code>backend/routes/share.py:19</code>），实现相同：拿当前用户再构造 <code>SessionStore</code>。Hub 模块另有一个 <code>get_hub_store</code>（<code>backend/routes/hub.py:31</code>），用户存储提供者只在 <code>auth.py</code> 出现一次（<code>:23-25</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph TD
+  A["HTTPBearer security"] --> B["get_current_user"]
+  B --> C["get_session_store 三份"]
+  B --> D["端点直接用 current_user"]
+  E["get_user_store 一份"] --> F["auth 端点"]
+  G["get_hub_store 一份"] --> H["hub 端点"]
+  B --> I["cards 端点内构造 SqliteCardStore"]</pre></div>
+<p>依赖提供者作为函数存在，所以跨模块复用的方式是导入；重复定义不会引发冲突，但修改时会漏改。</p>
+<h2 id="7-依赖的返回值与类型标注">7. 依赖的返回值与类型标注</h2>
+<p>提供者的返回类型同时是端点的参数类型，<code>store: SqliteUserStore = Depends(get_user_store)</code>（<code>backend/routes/auth.py:60</code>）与 <code>store: SessionStore = Depends(get_session_store)</code>（<code>backend/routes/sessions.py:24</code>）都是这种形态。类型标注让编辑器与 OpenAPI 生成器能推断端点参数结构。</p>
+<p>需要注意返回类型与端点内使用是否一致。<code>routes/export.py</code> 的注释把 <code>CardStore</code> 当类型，实际运行时传入的是 <code>InMemoryCardStore</code>（<code>backend/routes/export.py:28-36</code>），两者同属 <code>BaseCardStore</code> 的子类，类型层面靠鸭子类型成立。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>把 <code>Depends</code> 实参写成调用</td><td>传入函数返回值而非函数对象</td><td>依赖要写 <code>Depends(f)</code> 而非 <code>f()</code></td></tr><tr><td>认为依赖每次调用都重新执行</td><td>同一请求内结果被缓存</td><td><code>routes/auth.py:94</code> 两依赖共存</td></tr><tr><td>在提供者里做重活</td><td>每个请求都会触发</td><td><code>get_user_store</code> 只构造对象（<code>auth.py:23-25</code>）</td></tr><tr><td>以为 <code>session_id</code> 也是注入</td><td>它是查询参数默认值</td><td><code>routes/cards.py:49</code></td></tr><tr><td>找不到 <code>get_session_store</code> 的定义</td><td>三份同名实现分布在不同模块</td><td><code>sessions.py:19</code>、<code>session_io.py:35</code>、<code>share.py:19</code></td></tr><tr><td>依赖抛错后期望端点兜底</td><td>端点不会被执行</td><td><code>auth.py:31-38</code> 的 401</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>注入形态</td><td><code>obj: T = Depends(callable)</code>，实参是可调用对象而非调用结果</td></tr><tr><td>依赖链</td><td>提供者自身可继续声明依赖，如 <code>get_session_store → get_current_user → security</code></td></tr><tr><td>缓存</td><td>同一请求内同一依赖只解析一次，结果复用</td></tr><tr><td>参数区分</td><td>无 <code>Depends</code> 的参数按查询参数解析，带默认值即为可选</td></tr><tr><td>混用</td><td>用户身份走依赖，存储实例可注入也可在端点内构造</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>提供者形态</td><td>普通函数</td><td>可测试、可导入复用</td><td>重复定义不会报错，容易漏改</td></tr><tr><td>鉴权方式</td><td><code>HTTPBearer</code> 加函数依赖</td><td>端点只需声明 <code>Depends</code></td><td>每个受保护端点都要写一遍</td></tr><tr><td>存储获取</td><td>注入与就地构造混用</td><td>复杂组合参数可就地处理</td><td>签名风格不统一</td></tr><tr><td>缓存依赖</td><td>默认开启</td><td>避免重复查库</td><td>依赖有副作用时结果不易预期</td></tr><tr><td>依赖粒度</td><td>每个存储一个提供者</td><td>端点签名自解释</td><td>提供者数量随存储类型增长</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>说出端点签名里三种参数的区分方式，各举一个源码位置。</li>
+<li><code>get_session_store</code> 的依赖链有哪几层？每层返回什么？</li>
+<li>同一请求内 <code>get_current_user</code> 被两个依赖间接用到时会解析几次？</li>
+<li>仓库里有哪几处是端点内直接构造存储而不是依赖注入？给出位置。</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把三份 <code>get_session_store</code> 合并为一份并保持端点签名不变，说明放置位置与循环导入风险的规避方式。</li>
+<li>设计一个带参数的存储依赖（例如按 <code>session_id</code> 返回不同存储），说明 <code>use_cache</code> 设置与参数来源。</li>
+<li><code>Depends</code> 可以作用于类。给出把 <code>get_current_user</code> 改写成依赖类的方案，并比较两种实现的测试成本。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/auth.py</code></td><td>提供者定义（:23-25、:28-29）、401 分支（:31-38）、双依赖端点（:94）</td></tr><tr><td><code>backend/routes/sessions.py</code></td><td><code>get_session_store</code>（:19-21）与端点用法（:24-26）</td></tr><tr><td><code>backend/routes/session_io.py</code></td><td>同名提供者（:35）</td></tr><tr><td><code>backend/routes/share.py</code></td><td>同名提供者（:19）</td></tr><tr><td><code>backend/routes/hub.py</code></td><td><code>get_hub_store</code>（:31）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>端点内构造存储（:52）、查询参数默认值（:49）</td></tr><tr><td><code>backend/routes/export.py</code></td><td>存储类型与运行时实例的差异（:28-36）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-鉴权依赖与存储依赖"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-鉴权依赖与存储依赖</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/01-路由与依赖注入/04-鉴权依赖与存储依赖.md</span></div><div class="dfile__body"><h1 id="鉴权依赖与存储依赖">鉴权依赖与存储依赖</h1>
+<p>受保护的端点在签名里声明 <code>current_user: User = Depends(get_current_user)</code>，请求进入业务逻辑之前，框架会先解析 <code>Authorization</code> 头、校验 token、查出用户对象。这条链的实现在 <code>backend/routes/auth.py</code>，token 的签发与解析在 <code>backend/auth/jwt.py</code>，密码校验在 <code>backend/auth/password.py</code>。</p>
+<p>鉴权与存储在依赖链上配合。<code>Depends</code> 的通用机制在 <code>03-Depends的工作方式.md</code>，装配层在 <code>01-应用装配与中间件.md</code>。</p>
+<h2 id="1-httpbearer-实例与凭证对象">1. HTTPBearer 实例与凭证对象</h2>
+<p>模块顶部创建一个 <code>HTTPBearer</code>（<code>backend/routes/auth.py:20</code>），它是 FastAPI 提供的安全方案类，负责从请求头里取出 <code>Bearer</code> 凭证。<code>get_current_user</code> 通过 <code>Depends(security)</code> 接收解析结果（<code>:29</code>），类型是 <code>HTTPAuthorizationCredentials</code>，两个有用字段是 <code>scheme</code> 与 <code>credentials</code>。</p>
+<p><code>HTTPBearer</code> 默认 <code>auto_error=True</code>：请求缺少 <code>Authorization</code> 头时由它直接抛出异常，端点函数不会执行；token 本身无效时由 <code>get_current_user</code> 抛出 401（<code>:34-39</code>）。两种失败因此对应两个不同状态码，这一点在 <code>05-易错点与排查.md</code> 里展开。</p>
+<h2 id="2-get_current_user-的四段校验">2. get_current_user 的四段校验</h2>
+<p>函数体只有二十多行，处理四种失败与一种成功（<code>backend/routes/auth.py:28-55</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>检查</th><th>失败处理</th><th>行号</th></tr></thead><tbody><tr><td>1</td><td>取 <code>credentials.credentials</code> 作为 token</td><td>无，取字段本身不失败</td><td><code>:32</code></td></tr><tr><td>2</td><td><code>decode_access_token</code> 返回 <code>None</code></td><td>401 <code>认证凭据无效</code></td><td><code>:33-39</code></td></tr><tr><td>3</td><td><code>payload.get("sub")</code> 为 <code>None</code></td><td>401 <code>认证凭据无效</code></td><td><code>:40-46</code></td></tr><tr><td>4</td><td><code>store.get_user(username)</code> 为 <code>None</code></td><td>401 <code>用户不存在</code></td><td><code>:47-54</code></td></tr><tr><td>成功</td><td>返回 <code>User</code> 对象</td><td>无</td><td><code>:55</code></td></tr></tbody></table>
+<p>三次 401 都带 <code>WWW-Authenticate: Bearer</code> 头。第 3 步与第 2 步的 detail 文本相同，因此调用方无法从响应区分「签名校验失败」与「payload 缺少 sub 字段」。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["Depends(security) 解析凭证"] --> B["decode_access_token"]
+  B -->|None| C["401 认证凭据无效"]
+  B -->|payload| D{"payload.get sub"}
+  D -->|None| C
+  D -->|username| E["get_user_store 取存储"]
+  E --> F["store.get_user"]
+  F -->|None| G["401 用户不存在"]
+  F -->|User| H["返回给端点"]</pre></div>
+<h2 id="3-token-签发与解析的分工">3. token 签发与解析的分工</h2>
+<p>签发在 <code>backend/auth/jwt.py:18-35</code>：复制传入的 <code>data</code>、按 <code>expires_delta</code> 或默认过期时间算出 <code>exp</code>、用 <code>JWT_SECRET</code> 与 <code>HS256</code> 编码。解析在 <code>:38-51</code>：用同一密钥与算法解码，捕 <code>JWTError</code> 后返回 <code>None</code>，不向调用方抛异常。</p>
+<p>调用点有两处，注册与登录各一次，都把用户名放进 <code>sub</code>（<code>backend/routes/auth.py:70</code>、<code>:89</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">access_token </span><span style="color:#D73A49">=</span><span style="color:#24292E"> create_access_token(</span><span style="color:#E36209">data</span><span style="color:#D73A49">=</span><span style="color:#24292E">{</span><span style="color:#032F62">"sub"</span><span style="color:#24292E">: user.username})</span></span></code></pre>
+<p>解析侧用 <code>payload.get("sub")</code> 取回用户名（<code>:40</code>），与签发侧形成字面对应。中间没有额外的会话表或吊销机制：token 自带过期时间，服务端不记录已签发集合。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>位置</th><th>行为</th></tr></thead><tbody><tr><td>签发</td><td><code>auth/jwt.py:18-35</code></td><td>写入 <code>sub</code> 与 <code>exp</code>，HS256 签名</td></tr><tr><td>调用</td><td><code>routes/auth.py:70</code>、<code>:89</code></td><td>注册与登录成功后返回给客户端</td></tr><tr><td>解析</td><td><code>auth/jwt.py:38-51</code></td><td>失败返回 <code>None</code>，不抛异常</td></tr><tr><td>使用</td><td><code>routes/auth.py:32-46</code></td><td>取 <code>sub</code> 作为用户名，失败抛 401</td></tr></tbody></table>
+<h2 id="4-用户存储的每次请求构造">4. 用户存储的每次请求构造</h2>
+<p><code>get_user_store</code> 只有两行，直接返回新建的 <code>SqliteUserStore()</code>（<code>backend/routes/auth.py:23-25</code>）。它作为依赖被注册、登录、个人信息、头像与升级等端点使用，也被 <code>get_current_user</code> 在函数体内直接调用（<code>:47</code>）。</p>
+<p><code>get_current_user</code> 里的调用是直接函数调用而不是 <code>Depends</code>，因此不受依赖缓存影响：一次受保护请求里，框架解析 <code>get_current_user</code> 时会构造一个用户存储，端点若又声明 <code>store: SqliteUserStore = Depends(get_user_store)</code>，框架会再解析一次 <code>get_user_store</code>。两个实例指向同一数据库，行为一致，只是多了一次对象构造。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant R as 受保护端点
+  participant U as get_current_user
+  participant S as SqliteUserStore
+  C->>R: 携带 Bearer token
+  R->>U: 依赖解析
+  U->>U: decode_access_token
+  U->>S: get_user_store 新建实例
+  S-->>U: user 或 None
+  U-->>R: User
+  R->>S: Depends(get_user_store) 再建一个实例
+  S-->>R: 端点内使用</pre></div>
+<h2 id="5-端点侧的三种依赖组合">5. 端点侧的三种依赖组合</h2>
+<p><code>backend/routes/auth.py</code> 的五个端点点出了三种组合：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组合</th><th>端点</th><th>行号</th></tr></thead><tbody><tr><td>只用存储依赖</td><td><code>register</code>、<code>login</code></td><td><code>:60</code>、<code>:76</code></td></tr><tr><td>用户加存储</td><td><code>get_me</code>、<code>upgrade</code>、<code>avatar</code></td><td><code>:94</code>、<code>:153-154</code>、<code>:125-126</code></td></tr><tr><td>不用依赖</td><td><code>get_avatar</code></td><td><code>:139</code></td></tr></tbody></table>
+<p>注册与登录是未认证端点，只需要存储；个人信息、升级与头像上传需要当前用户；按用户名取头像是公开读，签名里只有一个路径参数（<code>:139</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6F42C1">@router.get</span><span style="color:#24292E">(</span><span style="color:#032F62">"/api/auth/avatar/</span><span style="color:#005CC5">{username}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> get_avatar</span><span style="color:#24292E">(username: </span><span style="color:#005CC5">str</span><span style="color:#24292E">):</span></span></code></pre>
+<p>这个端点是本模块里唯一不带任何 <code>Depends</code> 的业务端点，它按路径参数直接读文件，见 <code>05-易错点与排查.md</code> 的访问面讨论。</p>
+<h2 id="6-跨模块复用同一依赖">6. 跨模块复用同一依赖</h2>
+<p>其他模块从 <code>routes/auth.py</code> 导入 <code>get_current_user</code>：卡片路由（<code>backend/routes/cards.py:21</code>）、会话路由（<code>backend/routes/sessions.py:13</code>）、Agent 路由（<code>backend/agent/routes/agent.py:18</code> 的使用处）。导入的是函数对象，所以 <code>Depends</code> 缓存仍然按同一对象生效。</p>
+<p>各模块的鉴权写法一致：把 <code>current_user</code> 放在最后一个参数位置，业务参数在前。这个顺序不是框架要求，但仓库里没有反例。</p>
+<h2 id="7-令牌有效期与模块注释的差异">7. 令牌有效期与模块注释的差异</h2>
+<p><code>backend/auth/jwt.py:5</code> 的模块注释写「默认有效期 24 小时」，而有效期实际来自配置：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">ACCESS_TOKEN_EXPIRE_MINUTES</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 60</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> JWT_EXPIRATION_HOURS</span></span></code></pre>
+<p><code>JWT_EXPIRATION_HOURS</code> 的默认值是 <code>4</code>（<code>backend/config.py:172</code>），因此默认过期时间是 240 分钟，即 4 小时。注释里的 24 小时与实际默认值不一致，部署时若通过环境变量调整，注释也不会同步。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为缺 <code>Authorization</code> 头返回 401</td><td><code>HTTPBearer</code> 默认先抛错，状态码与 token 无效不同</td><td><code>routes/auth.py:20</code></td></tr><tr><td>用响应文本区分两类 401</td><td>两类 detail 都是 <code>认证凭据无效</code></td><td><code>:34-46</code></td></tr><tr><td>认为 <code>get_user_store</code> 每请求只调用一次</td><td><code>get_current_user</code> 内是直接调用，端点再声明依赖会再建一个</td><td><code>:47</code> 与 <code>:94</code></td></tr><tr><td>按注释判断 token 有效期</td><td>注释写 24 小时，默认值是 4 小时</td><td><code>auth/jwt.py:5</code>、<code>backend/config.py:172</code></td></tr><tr><td>以为所有 auth 端点都受保护</td><td><code>get_avatar</code> 无依赖</td><td><code>:139</code></td></tr><tr><td>认为 token 可服务端吊销</td><td>无签发记录，只有过期时间</td><td><code>auth/jwt.py:18-51</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>凭证解析</td><td><code>HTTPBearer</code> 取 <code>Authorization</code> 头，函数依赖里拿到 <code>credentials.credentials</code></td></tr><tr><td>四段校验</td><td>解码、取 <code>sub</code>、查用户，任一失败抛 401，成功返回 <code>User</code></td></tr><tr><td>签发与解析</td><td>都在 <code>auth/jwt.py</code>，用 <code>sub</code> 字段对应，失败解析返回 <code>None</code></td></tr><tr><td>存储依赖</td><td><code>get_user_store</code> 每次调用新建 <code>SqliteUserStore</code>，被端点与 <code>get_current_user</code> 共用</td></tr><tr><td>端点组合</td><td>未认证端点只用存储；受保护端点加 <code>get_current_user</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>鉴权方式</td><td>无状态 JWT</td><td>无需服务端会话表</td><td>无法主动吊销，只能等过期</td></tr><tr><td>用户存储</td><td>依赖内直接构造</td><td>提供者极简</td><td>一次请求可能建两个实例</td></tr><tr><td>失败提示</td><td>两类失败共用同一文案</td><td>不泄露校验细节</td><td>排查时要看日志或加日志</td></tr><tr><td>公开头像</td><td>不挂鉴权依赖</td><td>头像可直接展示</td><td>用户名枚举面扩大</td></tr><tr><td>密码哈希</td><td>bcrypt 加 72 字节截断</td><td>兼容长密码输入</td><td>截断边界要读实现才知道</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>写出 <code>get_current_user</code> 的四段校验与各自的失败响应。</li>
+<li><code>HTTPBearer</code> 在请求缺少凭证时会怎样？与 token 无效的响应有何差别？</li>
+<li>token 里的用户名放在哪个字段？签发与解析各在什么位置？</li>
+<li><code>get_avatar</code> 为什么不需要 <code>Depends</code>？这样做有什么访问面影响？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>让 <code>get_current_user</code> 复用端点已声明的 <code>get_user_store</code> 实例，说明改动方式与依赖缓存能否生效。</li>
+<li>设计一个 token 吊销方案，要求保留无状态校验路径，说明需要新增的存储与请求开销。</li>
+<li>模块注释与实际有效期不一致。给出一份防止配置说明与默认值漂移的检查方案，并说明接入 CI 的成本。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/auth.py</code></td><td><code>HTTPBearer</code> 实例（:20）、<code>get_user_store</code>（:23-25）、<code>get_current_user</code>（:28-55）、签发调用（:70、:89）、端点依赖组合（:60、:76、:94、:125-126、:139、:153-154）</td></tr><tr><td><code>backend/auth/jwt.py</code></td><td>模块注释（:5）、有效期计算（:15）、签发（:18-35）、解析（:38-51）</td></tr><tr><td><code>backend/auth/password.py</code></td><td>哈希与校验（:46-48、:51）</td></tr><tr><td><code>backend/config.py</code></td><td><code>JWT_*</code> 配置与校验（:168-172）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>跨模块导入 <code>get_current_user</code>（:21）</td></tr><tr><td><code>backend/routes/sessions.py</code></td><td>跨模块导入（:13）与组合依赖（:19-21）</td></tr><tr><td><code>backend/agent/routes/agent.py</code></td><td>Agent 端点的鉴权依赖（:18）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/01-路由与依赖注入/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="装配与依赖的易错点与排查">装配与依赖的易错点与排查</h1>
+<p>装配层的代码少，出错时却常常表现为「应用根本起不来」或「端点静默变空」，两类现象都远离出错的那一行。风险按「启动期、请求期、配置期」分组，每条给出位置、现象与确认方式。</p>
+<p>模块组织见 <code>02-路由模块与路径注册.md</code>，依赖机制见 <code>03-Depends的工作方式.md</code>，鉴权链见 <code>04-鉴权依赖与存储依赖.md</code>。</p>
+<h2 id="1-风险清单">1. 风险清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>敏感配置在导入期校验并抛异常</td><td><code>backend/config.py:168-172</code></td><td>缺 <code>JWT_SECRET</code> 时应用无法启动</td></tr><tr><td>R2</td><td>CORS 通配来源与凭证同时开启</td><td><code>backend/config.py:165</code>、<code>backend/main.py:73-74</code></td><td>浏览器拒绝带凭证的跨域请求</td></tr><tr><td>R3</td><td>安全头中间件在 CORS 之后添加</td><td><code>backend/main.py:71-80</code></td><td>执行顺序为后添加者在外层</td></tr><tr><td>R4</td><td>限流装饰器要求端点带 <code>request</code> 形参</td><td><code>backend/routes/auth.py:59-60</code></td><td>缺参数时装饰器不生效或报错</td></tr><tr><td>R5</td><td>存储依赖缺失时回退空实例</td><td><code>backend/routes/export.py:28-36</code></td><td>端点返回 200 与空数据</td></tr><tr><td>R6</td><td>受保护端点每次请求新建存储</td><td><code>backend/routes/auth.py:23-25</code></td><td>重复构造，首次还会触发向量索引</td></tr><tr><td>R7</td><td>头像配置项未被任何代码使用</td><td><code>backend/config.py:175-176</code></td><td>改配置不生效，真实限制在服务模块</td></tr><tr><td>R8</td><td>两个路由模块创建了实例但未注册</td><td><code>backend/routes/scraper.py:13</code>、<code>backend/routes/search.py:13</code></td><td>端点 404</td></tr><tr><td>R9</td><td>缺凭证与凭证无效返回不同状态码</td><td><code>backend/routes/auth.py:20</code>、<code>:34-39</code></td><td>客户端需要处理两种失败</td></tr></tbody></table>
+<h2 id="2-启动期配置校验的位置">2. 启动期：配置校验的位置</h2>
+<p><code>backend/config.py:168-172</code> 在模块顶层读取 <code>JWT_SECRET</code>，为空时直接 <code>raise RuntimeError</code>。这个文件被 <code>main.py</code>、<code>jwt.py</code>、<code>rate_limit.py</code> 等多处导入，任何一处导入都会触发校验，所以缺配置的表现是应用启动失败，而不是某个接口报错。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>配置项</th><th>读取方式</th><th>缺省表现</th></tr></thead><tbody><tr><td><code>JWT_SECRET</code></td><td><code>os.getenv</code> 后判空并抛异常</td><td>启动失败</td></tr><tr><td><code>CORS_ORIGINS</code></td><td><code>os.getenv("CORS_ORIGINS", "*")</code></td><td>使用通配来源</td></tr><tr><td><code>RATE_LIMIT_DEFAULT</code></td><td><code>os.getenv(..., "30/minute")</code></td><td>使用默认限值</td></tr><tr><td><code>AI_API_KEY</code></td><td><code>os.getenv(..., "")</code></td><td>空字符串，调用 AI 时才失败</td></tr></tbody></table>
+<p>同一文件里两类风格并存：安全相关的 <code>JWT_SECRET</code> 缺失即失败，其余配置给空串或默认值。<code>load_dotenv()</code> 在文件第 19 行执行，所以 .env 里的值在导入期就已生效。</p>
+<h2 id="3-请求期cors-与中间件顺序">3. 请求期：CORS 与中间件顺序</h2>
+<p>CORS 中间件把 <code>CORS_ORIGINS</code> 按逗号拆分，同时设置 <code>allow_credentials=True</code>（<code>backend/main.py:73-74</code>）。<code>CORS_ORIGINS</code> 默认 <code>"*"</code>（<code>backend/config.py:165</code>）。通配来源加凭证的组合在浏览器侧有额外限制，配置里没有针对这种组合的检查或告警。</p>
+<p>安全头中间件在 CORS 之后添加（<code>backend/main.py:71</code> 与 <code>:80</code>）。Starlette 的中间件栈按添加顺序反向包裹，后添加的在外层，所以安全头最先执行、最后写回；这一条属框架行为，仓库未做额外说明。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["读取 CORS_ORIGINS 默认星号"] --> B["allow_origins 拆分"]
+  B --> C{"allow_credentials 为真"}
+  C -->|是| D["通配加凭证组合"]
+  D --> E["浏览器对带凭证请求另有限制"]
+  A --> F["add_middleware CORS"]
+  F --> G["add_middleware 安全头 后添加"]
+  G --> H["安全头位于外层"]</pre></div>
+<h2 id="4-请求期限流与依赖">4. 请求期：限流与依赖</h2>
+<p>限流器带默认限值（<code>backend/rate_limit.py:12</code>），装配层把它挂到 <code>app.state.limiter</code> 并注册异常处理器（<code>backend/main.py:85-86</code>）。显式装饰器只出现在注册与登录上（<code>backend/routes/auth.py:59</code>、<code>:75</code>），两个端点的签名里都有 <code>request: Request</code>（<code>:60</code>、<code>:76</code>）。</p>
+<p><code>slowapi</code> 的装饰器需要从请求对象取客户端地址，端点上没有 <code>request</code> 形参时装饰器无法工作，这一点按该库文档理解。仓库里带装饰器的两个端点都满足这个前提；其余端点是否受默认限值约束取决于库对 <code>default_limits</code> 的处理，未在本地实测。</p>
+<p>依赖侧的风险集中在「拿不到实例时怎么办」。导出路由的取值逻辑先读 <code>app.state.card_store</code>，读不到就新建空存储并写回（<code>backend/routes/export.py:31-36</code>），端点因此永远不因为缺少存储而失败。排查空文档时，先确认 <code>app.state.card_store</code> 是否被设置过。</p>
+<h2 id="5-请求期存储依赖的构造成本">5. 请求期：存储依赖的构造成本</h2>
+<p><code>get_user_store</code> 每次调用新建 <code>SqliteUserStore</code>（<code>backend/routes/auth.py:23-25</code>），<code>cards.py</code> 的端点在函数体内新建 <code>SqliteCardStore</code>（<code>backend/routes/cards.py:52</code>）。卡片存储在构造时可以自动建向量索引（<code>backend/storage/sqlite_card_store.py:37-49</code>），索引按用户名与会话的键缓存在模块级集合里，所以只有首次构造会实际建索引。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>依赖</th><th>构造点</th><th>是否带索引</th></tr></thead><tbody><tr><td><code>SqliteUserStore</code></td><td>三个提供者与 <code>get_current_user</code> 内</td><td>否</td></tr><tr><td><code>SqliteCardStore</code></td><td>卡片端点内</td><td>是，首次触发，之后命中缓存</td></tr><tr><td><code>SessionStore</code></td><td>三份 <code>get_session_store</code></td><td>否</td></tr></tbody></table>
+<p>排查请求变慢时，先确认是否命中了索引缓存；会话或用户新建后的首个请求会比其他请求慢。</p>
+<h2 id="6-配置期一个未被使用的配置项">6. 配置期：一个未被使用的配置项</h2>
+<p><code>backend/config.py:175-176</code> 定义了两个头像相关常量：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">AVATAR_MAX_SIZE</span><span style="color:#24292E">: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 5</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 1024</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 1024</span><span style="color:#6A737D">  # 5MB</span></span>
+<span class="line"><span style="color:#005CC5">AVATAR_ALLOWED_EXTENSIONS</span><span style="color:#24292E">: List[</span><span style="color:#005CC5">str</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> field(</span><span style="color:#E36209">default_factory</span><span style="color:#D73A49">=lambda</span><span style="color:#24292E">: [</span><span style="color:#032F62">".png"</span><span style="color:#24292E">, </span><span style="color:#032F62">".jpg"</span><span style="color:#24292E">, </span><span style="color:#032F62">".jpeg"</span><span style="color:#24292E">, </span><span style="color:#032F62">".gif"</span><span style="color:#24292E">, </span><span style="color:#032F62">".webp"</span><span style="color:#24292E">])</span></span></code></pre>
+<p>第二行在数据类之外使用了 <code>dataclasses.field</code>。它不是数据类字段声明，模块导入后得到的是一个 <code>Field</code> 对象而不是列表。真实的头像限制写在服务模块里（<code>backend/services/avatar.py:15-16</code> 的 <code>MAX_AVATAR_SIZE</code> 与 <code>ALLOWED_EXTENSIONS</code>），两个配置项在后端代码里没有任何引用点。修改 <code>config.py</code> 里的这两个值不会改变头像校验行为。</p>
+<h2 id="7-排查顺序">7. 排查顺序</h2>
+<p>按「能不能启动、端点在不在、依赖有没有拿到、配置有没有生效」四层推进：</p>
+<ol>
+<li>应用启动失败。先看日志里的 <code>RuntimeError</code>，确认 <code>JWT_SECRET</code> 等导入期校验项。</li>
+<li>端点 404。对照 <code>backend/main.py:129-145</code> 的注册列表，确认模块是否注册；未注册的模块包括 <code>scraper.py</code> 与 <code>search.py</code>。</li>
+<li>端点返回空数据。检查 <code>app.state</code> 上的存储是否被注入，特别是导出路由的回退分支。</li>
+<li>跨域失败。确认 <code>CORS_ORIGINS</code> 的取值，以及是否同时开了凭证。</li>
+<li>限流不生效。确认端点是否有 <code>request</code> 形参、是否加了 <code>@limiter.limit</code>。</li>
+<li>请求偏慢。确认新建存储后的首个请求是否触发了索引构建。</li>
+</ol>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant D as 排查者
+  participant M as main.py 注册列表
+  participant S as app.state
+  participant C as config.py
+  D->>C: 应用起不来 先看导入期校验
+  D->>M: 端点 404 对照注册列表
+  D->>S: 返回空数据 检查存储注入
+  D->>C: 跨域失败 检查 CORS_ORIGINS
+  Note over D,C: 以上四步都不需要改代码即可定位</pre></div>
+<h2 id="8-容易走错的方向">8. 容易走错的方向</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>容易先怀疑</th><th>实际应先查</th></tr></thead><tbody><tr><td>应用启动即退出</td><td>路由代码语法</td><td><code>backend/config.py:169-170</code> 的导入期校验</td></tr><tr><td>浏览器跨域失败</td><td>前端请求写法</td><td><code>CORS_ORIGINS</code> 与凭证开关的组合</td></tr><tr><td>导出为空</td><td>导出器渲染</td><td><code>app.state.card_store</code> 是否注入</td></tr><tr><td>修改头像限制无效</td><td>服务模块代码</td><td>配置项根本没有被引用</td></tr><tr><td>全部端点限流不生效</td><td>库版本</td><td>装饰器与 <code>request</code> 形参是否齐备</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>启动期校验</td><td><code>JWT_SECRET</code> 缺失即抛异常，影响所有导入 <code>config</code> 的模块</td></tr><tr><td>CORS 组合</td><td>通配来源与 <code>allow_credentials=True</code> 并存，浏览器侧另有限制</td></tr><tr><td>中间件顺序</td><td>后添加者在外层，安全头最后写回</td></tr><tr><td>限流前提</td><td>装饰器需要端点带 <code>request</code> 形参</td></tr><tr><td>静默回退</td><td>存储缺失时端点返回空数据而不是错误</td></tr><tr><td>配置漂移</td><td>头像两个常量未被引用，真实限制在 <code>services/avatar.py</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>配置校验时机</td><td>导入期抛异常</td><td>缺配置立刻暴露</td><td>应用无法以降级方式启动</td></tr><tr><td>CORS 默认值</td><td><code>"*"</code></td><td>本地开发方便</td><td>生产需显式配置</td></tr><tr><td>依赖回退</td><td>建空实例</td><td>端点始终可用</td><td>配置问题被掩盖</td></tr><tr><td>存储构造</td><td>每请求新建</td><td>无长生命周期状态</td><td>首次请求有索引构建成本</td></tr><tr><td>限流</td><td>全局默认加两处显式</td><td>认证端点保护更严</td><td>其余端点的限流依赖库默认行为</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出启动期会抛异常的配置项，并说明它为什么影响整个应用。</li>
+<li><code>CORS_ORIGINS</code> 默认值是什么？与 <code>allow_credentials=True</code> 组合会有什么问题？</li>
+<li>限流装饰器对端点签名有什么要求？仓库里哪两个端点满足？</li>
+<li>头像相关的两个配置项为什么修改无效？真实限制在哪里？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>为 <code>JWT_SECRET</code> 设计一个既能早期暴露又允许测试环境降级的校验方案，说明实现位置与安全边界。</li>
+<li>给出一次完整的排查记录模板，覆盖启动失败、端点 404、空数据、跨域与限流五类现象，每类写清观测点与判定依据。</li>
+<li><code>config.py:176</code> 的 <code>field</code> 用法在数据类之外。列出仓库中所有受影响的引用点，并给出两种修复方式及其兼容性影响。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/config.py</code></td><td>导入期校验（:168-172）、CORS 默认值（:165）、限流默认值（:161-162）、头像常量（:175-176）、dotenv 载入（:19）</td></tr><tr><td><code>backend/main.py</code></td><td>CORS 与安全头（:71-80）、限流挂载（:85-86）、注册列表（:129-145）</td></tr><tr><td><code>backend/rate_limit.py</code></td><td><code>limiter</code> 与默认限值（:8-12）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td><code>HTTPBearer</code>（:20）、提供者（:23-25）、401 分支（:34-39）、限流装饰器（:59-60、:75-76）</td></tr><tr><td><code>backend/routes/export.py</code></td><td><code>app.state</code> 回退（:28-36）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>端点内构造存储（:52）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>构造与索引缓存（:37-70）</td></tr><tr><td><code>backend/services/avatar.py</code></td><td>真实头像限制（:15-16）</td></tr><tr><td><code>backend/routes/scraper.py</code>、<code>backend/routes/search.py</code></td><td>未注册的路由实例（各 :13）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/27-%E6%96%87%E6%A1%A3%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AF%BC%E5%87%BA/02-Markdown%E5%AF%BC%E5%87%BA/"><span class="k">← 上一篇</span><span class="t">Markdown导出</span><span class="d">文档解析与导出 · 5 个文件</span></a><a class="next" href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/02-Pydantic%E6%A8%A1%E5%9E%8B/"><span class="k">下一篇 →</span><span class="t">Pydantic模型</span><span class="d">FastAPI 后端 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

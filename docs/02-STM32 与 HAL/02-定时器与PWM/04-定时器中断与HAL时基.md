@@ -17,7 +17,7 @@ HAL 库的软件时基只有一个 32 位变量 `uwTick`，它由定时器的更
 | `Core/Src/main.c` | `HAL_TIM_PeriodElapsedCallback()` 里调用 `HAL_IncTick()` |
 | `Core/Src/stm32f4xx_it.c` | `TIM2_IRQHandler()` |
 | `Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY = 15` |
-| `Core/Inc/FreeRTOSConfig.h` | `configTICK_RATE_HZ`、中断优先级门槛、句柄映射 |
+| `Core/Inc/FreeRTOSConfig.h` | `configTICK_RATE_HZ`、中断优先级阈值、句柄映射 |
 | `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | `uwTick` 与 `HAL_IncTick()`、`HAL_GetTick()`、`HAL_Delay()` |
 | `Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c` | SysTick 重装值与内核中断优先级 |
 
@@ -239,7 +239,7 @@ if ((HAL_GetTick() - start_time) > ANGLE_REACH_TIMEOUT)
 - `HAL_InitTick()` 被调用两次，最终生效的是 `HAL_RCC_ClockConfig()` 末尾按 168 MHz 主频算出的 PSC=83。
 - 用 TIM2 而非 SysTick 的原因只有一条：`SysTick_Handler` 已经被 FreeRTOS 的移植层占用，两者不能共用一个向量。
 - `uwTick` 与 `xTickCount` 都是 1 ms 一格，但彼此独立，不能互相替代。
-- 优先级 5 是外设中断与 FreeRTOS API 的门槛，优先级 15 是时基与内核中断的档位；`BASEPRI = 0x50` 会把 5 到 15 全部屏蔽，屏蔽期间丢失的节拍无法补回。
+- 优先级 5 是外设中断与 FreeRTOS API 的阈值，优先级 15 是时基与内核中断的档位；`BASEPRI = 0x50` 会把 5 到 15 全部屏蔽，屏蔽期间丢失的节拍无法补回。
 - `uwTick` 是 32 位毫秒计数，约 49.71 天回绕，判断超时用减法。
 
 ### 设计权衡

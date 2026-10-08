@@ -1,0 +1,1213 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Message_Bus · 嵌入式软件架构 · 王宇翔</title><meta name="description" content="两板固件用一组全局结构体做任务间数据交换，三个结构体与全局实例的字段口径、两板的实例差异，以及不引入队列与锁的取舍依据。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/02-Message_Bus/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="Message_Bus · 嵌入式软件架构 · 王宇翔"><meta property="og:description" content="两板固件用一组全局结构体做任务间数据交换，三个结构体与全局实例的字段口径、两板的实例差异，以及不引入队列与锁的取舍依据。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/02-Message_Bus/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/">嵌入式软件架构</a><span class="sep" aria-hidden="true">/</span><span class="now">Message_Bus</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>Message_Bus</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>Message_Bus 全局数据交换的取舍与结构</span></a><ul class="toc__heads"><li><a href="#1-用到的源码位置" data-depth="2" data-heading-j="0">1. 用到的源码位置</a></li><li><a href="#2-用全局结构体做交换的取舍依据" data-depth="2" data-heading-j="1">2. 用全局结构体做交换的取舍依据</a></li><li><a href="#3-三个结构体分别装什么" data-depth="2" data-heading-j="2">3. 三个结构体分别装什么</a></li><li><a href="#4-最新值语义与周期比" data-depth="2" data-heading-j="3">4. 最新值语义与周期比</a></li><li><a href="#5-单字段原子与组合字段非原子的边界" data-depth="2" data-heading-j="4">5. 单字段原子与组合字段非原子的边界</a></li><li><a href="#6-两板的实例定义位置对照" data-depth="2" data-heading-j="5">6. 两板的实例定义位置对照</a></li><li><a href="#7-两板的写者与读者关系" data-depth="2" data-heading-j="6">7. 两板的写者与读者关系</a></li><li><a href="#8-全局交换方案的已知代价" data-depth="2" data-heading-j="7">8. 全局交换方案的已知代价</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>生产者与消费者矩阵</span></a><ul class="toc__heads"><li><a href="#1-矩阵要覆盖的范围" data-depth="2" data-heading-j="0">1. 矩阵要覆盖的范围</a></li><li><a href="#2-调度参数与周期比口径" data-depth="2" data-heading-j="1">2. 调度参数与周期比口径</a></li><li><a href="#3-两板任务与周期清单" data-depth="2" data-heading-j="2">3. 两板任务与周期清单</a></li><li><a href="#4-底盘板矩阵" data-depth="2" data-heading-j="3">4. 底盘板矩阵</a></li><li><a href="#5-云台板矩阵" data-depth="2" data-heading-j="4">5. 云台板矩阵</a></li><li><a href="#6-采样相位与半更新窗口" data-depth="2" data-heading-j="5">6. 采样相位与半更新窗口</a></li><li><a href="#7-矩阵容易漏掉的口径" data-depth="2" data-heading-j="6">7. 矩阵容易漏掉的口径</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>Message_Bus 易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-四类隐式约定" data-depth="2" data-heading-j="0">1. 四类隐式约定</a></li><li><a href="#2-布尔字段写成-float-与-int-的代价" data-depth="2" data-heading-j="1">2. 布尔字段写成 float 与 int 的代价</a></li><li><a href="#3-单一定义规则与两板的定义差异" data-depth="2" data-heading-j="2">3. 单一定义规则与两板的定义差异</a></li><li><a href="#4-中断直写缓冲区与队列两种做法" data-depth="2" data-heading-j="3">4. 中断直写缓冲区与队列两种做法</a></li><li><a href="#5-已核对问题清单" data-depth="2" data-heading-j="4">5. 已核对问题清单</a></li><li><a href="#6-观测手段与现成观测点" data-depth="2" data-heading-j="5">6. 观测手段与现成观测点</a></li><li><a href="#7-观测数据的判读口径" data-depth="2" data-heading-j="6">7. 观测数据的判读口径</a></li><li><a href="#8-从数据不更新出发的排查顺序" data-depth="2" data-heading-j="7">8. 从数据不更新出发的排查顺序</a></li><li><a href="#9-排查时容易漏掉的位置" data-depth="2" data-heading-j="8">9. 排查时容易漏掉的位置</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">嵌入式软件架构</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>嵌入式软件架构 / Message_Bus / 全局变量 / FreeRTOS / 哨兵固件 / 生产者消费者 / 任务调度 / 调试</span></div><h1 class="docs__title">Message_Bus</h1><p class="docs__lead">两板固件用一组全局结构体做任务间数据交换，三个结构体与全局实例的字段口径、两板的实例差异，以及不引入队列与锁的取舍依据。</p></header><section class="dfile" id="file-1" data-file="01-全局数据交换的取舍与结构"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-全局数据交换的取舍与结构</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/02-Message_Bus/01-全局数据交换的取舍与结构.md</span></div><div class="dfile__body"><h1 id="message_bus-全局数据交换的取舍与结构">Message_Bus 全局数据交换的取舍与结构</h1>
+<p>两块固件的任务之间没有通过队列传控制量。姿态解算的结果、控制中心算出的目标、电机输出电流都写在 <code>Message_Bus</code> 下的全局结构体里，谁需要就包含 <code>message_bus.h</code> 后直接读。这套做法把写点与读点分开，双方不需要互相包含任务头文件，代价是没有任何显式的同步机制。</p>
+<p>对象是两板固件的 <code>Message_Bus/message_bus.h</code> 与 <code>message_bus.cpp</code>。行号取自本轮核对的两板源码，路径前缀 <code>2026OmniSentryChassis/</code> 与 <code>2026OmniSentryGimbal/</code> 分别指底盘板与云台板仓库根。不选队列和锁的理由、结构体字段与全局实例的定义位置、最新值语义对应的周期比，以及组合字段更新的时间窗口估计，都从这两份文件出发。</p>
+<h2 id="1-用到的源码位置">1. 用到的源码位置</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>Message_Bus/message_bus.h</code></td><td>三个结构体与全局实例的 extern 声明</td></tr><tr><td><code>Message_Bus/message_bus.cpp</code></td><td>全局实例定义</td></tr><tr><td><code>Task/Src/ImuTask.cpp</code></td><td><code>imu_data</code> 写点，云台板 1 ms 周期</td></tr><tr><td><code>Task/Src/ControlCenterTask.cpp</code></td><td><code>control_target</code> 写点与部分读点</td></tr><tr><td><code>Communication/Src/referee_decode.cpp</code></td><td>裁判数据写点，云台板同时是定义位置</td></tr><tr><td><code>BSP/Src/bsp_can.cpp</code></td><td>CAN 中断写弹量与弹速</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>tick 频率与调度开关</td></tr></tbody></table>
+<h2 id="2-用全局结构体做交换的取舍依据">2. 用全局结构体做交换的取舍依据</h2>
+<p>Message_Bus 是一组定义在头文件里的结构体加全局实例。任何任务包含 <code>message_bus.h</code> 后直接读写这些实例，就完成了数据交换。选它之前，几种可选机制在两板上的适用性对比如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>机制</th><th>提供的能力</th><th>运行期成本</th><th>本工程</th></tr></thead><tbody><tr><td>全局结构体</td><td>最新值可见，无排队</td><td>无内核对象、无阻塞</td><td>使用</td></tr><tr><td>FreeRTOS 队列</td><td>逐条传递，带背压</td><td>一次拷贝加调度</td><td>仅 USB 字节流使用（云台板）</td></tr><tr><td>互斥锁</td><td>组合字段整体一致</td><td>加解锁、优先级继承</td><td>未使用</td></tr><tr><td>事件与信号量</td><td>通知而非数据</td><td>还须另建数据通路</td><td>未使用</td></tr></tbody></table>
+<p>选全局结构体的直接理由有三点。控制回路只关心最新值：底盘速度环在 1 ms 周期里取一次目标速度，错过上一拍的值没有意义，排队反而引入固定相位滞后。写者通常是单一任务，写点集中在一个函数里，读点分散但都只读。结构体定义在头文件中，两块板可以直接共用同一份数据布局，不需要序列化。</p>
+<p>代价是显式同步为零。一致性依赖写者更新序列不被打断这一隐含前提，第 5 节把这个前提对应的时间窗口算出来。只要读者能在写序列中间取值，它拿到的就是新旧字段混合的一组数据，而这组数据不满足任何一致性约定。</p>
+<h2 id="3-三个结构体分别装什么">3. 三个结构体分别装什么</h2>
+<p>三个结构体按生产侧划分职责：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体</th><th>生产角色</th><th>主要内容</th></tr></thead><tbody><tr><td><code>LocalImuData</code></td><td>姿态解算</td><td>三轴欧拉角、陀螺、加计、温度</td></tr><tr><td><code>ControlTarget</code></td><td>控制中心</td><td>底盘速度、云台角度、发射就绪、模式</td></tr><tr><td><code>MotorOutputData</code></td><td>电机输出</td><td>拨弹电流、左右摩擦轮电流</td></tr></tbody></table>
+<p><code>2026OmniSentryChassis/Message_Bus/message_bus.h:16-20</code> 是底盘板的 <code>LocalImuData</code>，共 9 个 <code>float</code>；云台板同名结构体在 <code>2026OmniSentryGimbal/Message_Bus/message_bus.h:15-20</code>，多一个 <code>gimbal_yaw_total_angle</code>（<code>:19</code>）。该字段由云台板 <code>Task/Src/ImuTask.cpp:100</code> 写入，是 Yaw 轴闭环的反馈量。</p>
+<p><code>message_bus.h:23-47</code> 是两板共有的 <code>ControlTarget</code>，字段与语义如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>类型</th><th>语义</th><th>实际状态</th></tr></thead><tbody><tr><td><code>chassis_vx</code> <code>chassis_vy</code> <code>chassis_wz</code></td><td><code>float</code></td><td>底盘三轴速度指令</td><td>底盘板使用，云台板只初始化</td></tr><tr><td><code>gimbal_yaw_angle</code></td><td><code>float</code></td><td>Yaw 目标总角度</td><td>两板使用</td></tr><tr><td><code>gimbal_yaw_angle_single</code></td><td><code>float</code></td><td>Yaw 单圈角度</td><td>两板均无引用</td></tr><tr><td><code>gimbal_pitch_angle</code></td><td><code>float</code></td><td>Pitch 目标角度</td><td>两板使用</td></tr><tr><td><code>friction_ready</code></td><td><code>float</code></td><td>摩擦轮就绪</td><td>当布尔使用</td></tr><tr><td><code>feeder_ready</code></td><td><code>int</code></td><td>拨弹盘就绪</td><td>当布尔使用</td></tr><tr><td><code>control_mode</code></td><td>内嵌枚举</td><td><code>MODE_RC=0</code>、<code>MODE_RC_follow=1</code>、<code>MODE_AI=2</code></td><td>两板使用</td></tr><tr><td><code>emergency_stop</code></td><td><code>bool</code></td><td>急停标志</td><td>只被初始化，无读取点</td></tr></tbody></table>
+<p>表里有两个字段的类型与语义不一致：<code>friction_ready</code> 用 <code>float</code> 表布尔，<code>feeder_ready</code> 用 <code>int</code> 表布尔。两种写法都能工作，因为写点只赋 0 与 1，读点的判据也是与 0 或 1 比较；类型上没有阻止把速度值写进就绪字段。</p>
+<p><code>MotorOutputData</code> 在 <code>message_bus.h:50-54</code>，含 <code>feeder_current</code>、<code>friction_left</code>、<code>friction_right</code> 三个 <code>int16_t</code>。两板全仓没有对该实例的读写，属预留字段。</p>
+<h2 id="4-最新值语义与周期比">4. 最新值语义与周期比</h2>
+<p>把结构体看成一个状态量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>。写者在时刻 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">t_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span> 更新为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">x_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，读者在任意时刻取到的是某个 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">x_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>，其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi><mo>≤</mo><mi>k</mi></mrow><annotation encoding="application/x-tex">j \le k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span>。没有队列时读者拿到哪一拍取决于调度相位。设写周期为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>w</mi></msub></mrow><annotation encoding="application/x-tex">T_w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、读周期为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>r</mi></msub></mrow><annotation encoding="application/x-tex">T_r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，读者相邻两次采样跨过的写次数为</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mfrac><msub><mi>T</mi><mi>r</mi></msub><msub><mi>T</mi><mi>w</mi></msub></mfrac></mrow><annotation encoding="application/x-tex">n = \frac{T_r}{T_w}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3335em;vertical-align:-0.4451em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8884em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4101em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4451em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>当 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>≥</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n \ge 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 时读者不会漏掉状态变化，但可能一次跨过多拍，看到跳变而非连续变化。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> 越大，读者对瞬态的分辨力越低。底盘速度环 1 ms 取一次、控制中心 1 ms 写一次，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>，读者不会漏拍；云台板 <code>UsbConnectTask</code> 10 ms 读 <code>imu_data</code>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">n=10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span>，它看到的是这 10 拍中的最后一拍。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mtext>USB-IMU</mtext></msub><mo>=</mo><mfrac><mrow><mn>10</mn><mtext> ms</mtext></mrow><mrow><mn>1</mn><mtext> ms</mtext></mrow></mfrac><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">n_{\text{USB-IMU}} = \frac{10\ \text{ms}}{1\ \text{ms}} = 10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">USB-IMU</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">ms</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">10</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">ms</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span></p>
+<p>这个数说明上行帧里的姿态值是抽样结果，不能用来重建 1 ms 级别的角速度波形。选择最新值语义换来的收益是读点不需要阻塞等待，代价是读者对过程量的分辨力由周期比决定。</p>
+<h2 id="5-单字段原子与组合字段非原子的边界">5. 单字段原子与组合字段非原子的边界</h2>
+<p>Cortex-M4 上对齐的 32 位 <code>float</code> 与 <code>int</code> 读写是一条 <code>LDR</code> 或 <code>STR</code> 指令，中断不会把它切成两半，单个标量字段不会撕裂。结构体的赋值序列不满足这一点：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">imu_data.roll  </span><span style="color:#D73A49">=</span><span style="color:#24292E"> roll_out;</span></span>
+<span class="line"><span style="color:#24292E">imu_data.pitch </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pitch_out;</span></span>
+<span class="line"><span style="color:#24292E">imu_data.yaw   </span><span style="color:#D73A49">=</span><span style="color:#24292E"> yaw_out;</span></span></code></pre>
+<p>三条语句之间可能插入中断或同优先级任务的调度。读者在这段窗口内取值，会拿到新的 <code>roll</code> 配旧的 <code>yaw</code>。写序列长度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span></span></span></span> 条存储指令对应的时间窗口按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>w</mi></msub><mo>≈</mo><mo stretchy="false">(</mo><mi>L</mi><mo>+</mo><mn>2</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mi>f</mi></mrow><annotation encoding="application/x-tex">T_w \approx (L+2)/f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mclose">)</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span></span></span></span> 估计，取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">L=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo>=</mo><mn>168</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f=168\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">168</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>，窗口约 30 ns。这个组合状态不满足任何一致性约定，属按代码推导的风险，待实测确认其在实际调度下的出现概率。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>c</mi></msub><mo>≈</mo><mfrac><mrow><mi>L</mi><mo>+</mo><mn>2</mn></mrow><mi>f</mi></mfrac><mo>=</mo><mfrac><mn>5</mn><mrow><mn>168</mn><mtext> MHz</mtext></mrow></mfrac><mo>≈</mo><mn>29.8</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">T_{c} \approx \frac{L+2}{f} = \frac{5}{168\ \text{MHz}} \approx 29.8\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3534em;vertical-align:-0.4811em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">L</span><span class="mbin mtight">+</span><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">5</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">29.8</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span></p>
+<p>分子取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>+</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">L+2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span> 是为了把循环开销与地址计算也算进去，30 ns 是量级估计，不是实测值。需要判断的是这个窗口与调度节拍的关系：1 tick 等于 1 ms，tick 中断落进 30 ns 窗口的概率按窗口与周期之比估计，量级约 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup></mrow><annotation encoding="application/x-tex">3\times10^{-5}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">5</span></span></span></span></span></span></span></span></span></span></span></span>。</p>
+<h2 id="6-两板的实例定义位置对照">6. 两板的实例定义位置对照</h2>
+<p><code>2026OmniSentryChassis/Message_Bus/message_bus.cpp:10-15</code> 定义六个实例，云台板对应文件只有 15 行。两板对照：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实例</th><th>底盘板定义点</th><th>云台板定义点</th><th>云台板差异</th></tr></thead><tbody><tr><td><code>imu_data</code></td><td><code>message_bus.cpp:10</code></td><td><code>message_bus.cpp:10</code></td><td>多 <code>gimbal_yaw_total_angle</code></td></tr><tr><td><code>control_target</code></td><td><code>message_bus.cpp:11</code></td><td><code>message_bus.cpp:11</code></td><td>一致</td></tr><tr><td><code>motor_output</code></td><td><code>message_bus.cpp:12</code></td><td><code>message_bus.cpp:12</code></td><td>一致</td></tr><tr><td><code>g_referee_info</code></td><td><code>message_bus.cpp:13</code></td><td><code>Communication/Src/referee_decode.cpp:9</code></td><td>定义落在通信层</td></tr><tr><td><code>cmd</code></td><td><code>message_bus.cpp:14</code></td><td>无</td><td>云台板改用 <code>vision_data</code></td></tr><tr><td><code>TotalAmmoShooted</code></td><td><code>message_bus.cpp:15</code></td><td><code>message_bus.cpp:13</code></td><td>定义行不同</td></tr><tr><td><code>AmmoSpeed</code></td><td>无</td><td><code>message_bus.cpp:14</code></td><td>仅云台板</td></tr></tbody></table>
+<p>同一份头文件在两块板上的 extern 列表并不相同，第 3 篇再展开这一点。定义位置跨板不同带来的直接后果是源码不能整段搬移：底盘板 <code>Communication/Src/referee_decode.cpp:9</code> 写的是 <code>extern</code>，云台板同一行是定义。</p>
+<p>分层上的依赖方向同样有差异。<code>2026OmniSentryChassis/Message_Bus/message_bus.h:11-14</code> 包含 <code>bsp_can.h</code>、<code>dbus.h</code>、<code>referee_decode.h</code>、<code>UsbConnectTask.h</code>；云台板 <code>2026OmniSentryGimbal/Message_Bus/message_bus.h:11-12</code> 只包含前两个。底盘板把 <code>UsbConnectTask.h</code> 拉进数据层，使 <code>Message_Bus</code> 反向依赖 <code>Task</code>；数据层原则上只应依赖底层类型。</p>
+<h2 id="7-两板的写者与读者关系">7. 两板的写者与读者关系</h2>
+<p>下图按板分组标出共享量的生产与消费路径。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  subgraph CH["底盘板 2026OmniSentryChassis"]
+    C1["UsbConnectTask 10ms 解析并写 cmd"] --> B1["message_bus.cpp 全局实例"]
+    C2["referee_decode 中断 写 g_referee_info"] --> B1
+    B1 --> C3["ControlCenterTask 1ms 读 cmd 与 g_referee_info"]
+    C3 --> C4["写出 Target_chassis_speed_motor_1..4"]
+    C4 --> C5["ChassisTask 1ms 读目标速度"]
+  end
+  subgraph GB["云台板 2026OmniSentryGimbal"]
+    G1["ImuTask 1ms 写 imu_data"] --> B2["message_bus.cpp 全局实例"]
+    G3["bsp_can 中断 写 TotalAmmoShooted 与 AmmoSpeed"] --> B2
+    G4["ControlCenterTask 1ms 写 control_target"] --> B2
+    B2 --> G2["GimbalTask 2ms 读 imu_data"]
+    B2 --> G5["FireTask 1ms 读 control_target"]
+    B2 --> G6["UsbConnectTask 10ms 读 imu_data 与 control_target"]
+  end</pre></div>
+<p>图里每条边都对应下一节的源码写点或读点。底盘板的 <code>g_referee_info</code> 与云台板的 <code>TotalAmmoShooted</code> 由中断服务函数写入，读者任务的优先级对它们没有隔离作用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant W as 写者 ImuTask 1ms
+  participant R as 读者 GimbalTask 2ms
+  W->>W: 写 roll pitch yaw
+  Note over W: 被同优先级任务抢占
+  R->>R: 读 roll pitch yaw
+  Note over R: 可能读到新 roll 配旧 yaw
+  W->>W: 写 gyro accel temperature
+  R->>R: 下一拍重新读取整组</pre></div>
+<p>读者要拿到一致的整组值，只能在写序列之外采样；而采样时机由调度决定，代码里没有任何地方约束它。</p>
+<h2 id="8-全局交换方案的已知代价">8. 全局交换方案的已知代价</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>代价</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把全局实例当队列用</td><td>期望读到每一拍，实际只拿到最新值</td><td><code>2026OmniSentryChassis/Message_Bus/message_bus.h:57-62</code>、<code>2026OmniSentryGimbal/Message_Bus/message_bus.h:57-61</code></td></tr><tr><td>组合字段非原子</td><td>读者拿到新旧字段混合的一组值</td><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp:97-107</code></td></tr><tr><td>中断写共享量</td><td>CAN 回调直接写全局，任务侧无屏蔽</td><td><code>2026OmniSentryGimbal/BSP/Src/bsp_can.cpp:675-679</code></td></tr><tr><td>预留字段被当已实现</td><td><code>motor_output</code> 与 <code>emergency_stop</code> 无读写仍被引用</td><td>两板 <code>Message_Bus/message_bus.h:50-54</code>、<code>:46</code></td></tr><tr><td>假定两板 extern 列表一致</td><td>在一块板上引用另一块才有的实例</td><td><code>2026OmniSentryChassis/Message_Bus/message_bus.h:57-62</code>、<code>2026OmniSentryGimbal/Message_Bus/message_bus.h:57-61</code></td></tr><tr><td>数据层反向依赖 Task</td><td>改任务头文件会连带重编数据层</td><td><code>2026OmniSentryChassis/Message_Bus/message_bus.h:11-14</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>Message_Bus 提供最新值可见语义，不提供逐条传递与背压。</li>
+<li>写点集中在单任务、读点分散，是选择全局结构体的前提。</li>
+<li>对齐的 32 位标量读写不可分割，结构体多字段更新序列可分割。</li>
+<li>中断服务函数也是生产者，其写点对任务读者的隔离性最差。</li>
+<li>两板的 <code>message_bus.h</code> 不共用同一份实例布局。</li>
+<li><code>MotorOutputData</code> 当前无读写点，属预留。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>交换机制</td><td>全局结构体</td><td>零运行期开销、无阻塞</td><td>无一致性保证</td></tr><tr><td>数据粒度</td><td>结构体多字段</td><td>读写直观</td><td>组合状态可半更新</td></tr><tr><td>可见性</td><td>最新值</td><td>无相位滞后</td><td>无法回溯历史</td></tr><tr><td>分层</td><td>头文件集中声明</td><td>两板可共用布局</td><td>包含关系跨层</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>数出 <code>message_bus.h</code> 中三个结构体的字段总数，并指出哪些字段在两板之间不一致。</li>
+<li>找到 <code>g_referee_info</code> 在两块板上的定义位置，说明同一份头文件为何都能编译通过。</li>
+<li>写出 <code>ControlTarget</code> 从写者赋值到读者取值的完整语句序列，标出可被打断的位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>把 <code>imu_data</code> 的十次赋值改成一个整体结构体赋值，分析 M4 上需要多少条指令，以及是否仍可能被中断打断。</li>
+<li>为 <code>control_target</code> 设计一个不引入锁的版本号方案，说明读者如何检测半更新。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.h</code></td><td>底盘板结构体与实例声明</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.cpp</code></td><td>底盘板实例定义</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Message_Bus/message_bus.h</code></td><td>云台板结构体与实例声明</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Message_Bus/message_bus.cpp</code></td><td>云台板实例定义</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>云台板 IMU 写点</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>云台板 CAN 中断写弹速与弹量</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-生产者与消费者矩阵"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-生产者与消费者矩阵</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/02-Message_Bus/02-生产者与消费者矩阵.md</span></div><div class="dfile__body"><h1 id="生产者与消费者矩阵">生产者与消费者矩阵</h1>
+<p>全局结构体的取舍与字段口径在上一页，这里把这些字段对应到具体的写点与读点。生产者是写入共享量的执行体，消费者是读取它的执行体；把两者按共享量排成矩阵之后，谁在什么时候写、谁在什么时候读、读者实际能看到哪一拍就都能算出来。</p>
+<p>矩阵还要覆盖总线之外的数据通路。底盘板的 <code>Target_chassis_speed_motor_1..4</code>、<code>wz_output</code> 与云台板的 <code>vision_data</code> 都是任务之间的直接全局量，不写在 <code>message_bus.h</code> 里，只查总线会漏掉实际的耦合边。行号沿用上一页的口径，两板分别标前缀。</p>
+<h2 id="1-矩阵要覆盖的范围">1. 矩阵要覆盖的范围</h2>
+<p>参与交换的量分三类：<code>Message_Bus</code> 头文件里声明的全局实例、总线之外的任务间全局量、中断服务函数写入的共享标量。第三类容易被漏掉，因为它的写点不在任务函数里，而在 CAN 或 USB 回调里。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>生产形态</th><th>含义</th><th>风险</th></tr></thead><tbody><tr><td>单写者</td><td>只有一个任务写</td><td>字段之间仍可半更新</td></tr><tr><td>多写者</td><td>任务与中断都写</td><td>更新顺序无法约定</td></tr><tr><td>无写者</td><td>只有初始化</td><td>读者永远拿到初值</td></tr><tr><td>无读者</td><td>没有人消费</td><td>写点与字段属冗余</td></tr></tbody></table>
+<p>判定某个量的生产形态时，按写点的执行上下文分类：任务函数里写属单写者，中断回调里写属额外生产者，任务启动函数里只赋一次初值属无写者。读者一侧只需统计读取点数与读取周期，不区分它在哪个分支里读。</p>
+<p>统计写点时按行号逐个确认，不要按字段名全局搜索后就下结论。同一个字段可能在初始化、运行期更新、异常处理三处被写，三处的执行上下文不同，生产形态也不同。统计读点时要区分读取与写入同一字段的语句，<code>delta_angel</code> 这类双向交换的量两边都出现，按方向拆开记才不会把写点当读点。</p>
+<h2 id="2-调度参数与周期比口径">2. 调度参数与周期比口径</h2>
+<p>调度参数在两块板上一致。<code>configTICK_RATE_HZ</code> 为 1000，<code>configUSE_PREEMPTION</code> 为 1，<code>configMAX_PRIORITIES</code> 为 7（两板 <code>Core/Inc/FreeRTOSConfig.h:58</code>、<code>:64</code>、<code>:65</code>）。<code>configUSE_TIME_SLICING</code> 未在配置文件中定义，按 FreeRTOS 默认值为 1（<code>Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:793-794</code>），同优先级任务按 tick 轮转。所有任务都用 <code>osPriorityNormal</code>，映射到 FreeRTOS 优先级 3。</p>
+<p>设写者周期 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>w</mi></msub></mrow><annotation encoding="application/x-tex">T_w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、读者周期 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>r</mi></msub></mrow><annotation encoding="application/x-tex">T_r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、写序列占用的时间窗口 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>c</mi></msub></mrow><annotation encoding="application/x-tex">T_c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>。读者每次采样跨过的写次数为</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mfrac><msub><mi>T</mi><mi>r</mi></msub><msub><mi>T</mi><mi>w</mi></msub></mfrac></mrow><annotation encoding="application/x-tex">n = \frac{T_r}{T_w}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3335em;vertical-align:-0.4451em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8884em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4101em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4451em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>当读者与写者同周期时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>，采样点与更新点的相对相位由就绪表顺序决定，不随时间漂移；当 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>></mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n>1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 时读者只看得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> 拍中的最后一拍。同优先级任务按 tick 轮转，就绪表顺序本身也可能随阻塞点变化，所以 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 的情形只能按最坏情况处理，不能假设固定相位。</p>
+<p>读者落入写窗口的概率只有在相位会遍历时才可用相位近似均匀估计：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>≈</mo><mfrac><msub><mi>T</mi><mi>c</mi></msub><msub><mi>T</mi><mi>r</mi></msub></mfrac></mrow><annotation encoding="application/x-tex">p \approx \frac{T_c}{T_r}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6776em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3335em;vertical-align:-0.4451em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8884em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4101em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4451em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>该式的适用范围是读周期与写周期互质，或调度抖动足以让相位在一段时间内遍历整个读周期。本工程的两组读者是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">n=2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span>（2 ms 读者）与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">n=10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span>（10 ms 读者），都是整数倍比：写点由 tick 对齐，读点相对写序列的位置每个周期都落在同一处，不随时间漂移，因此这个式子不适用。整数倍比下的最坏情况取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">p=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>（读点长期落在写窗口内），最好情况取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">p=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span>（读点长期避开写窗口），取值由就绪顺序决定，无法用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>c</mi></msub><mi mathvariant="normal">/</mi><msub><mi>T</mi><mi>r</mi></msub></mrow><annotation encoding="application/x-tex">T_c/T_r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 缩小。若相位遍历条件成立，取写窗口 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>c</mi></msub><mo>≈</mo><mn>30</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">T_c \approx 30\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">30</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span>（上一页的三字段估计）可得 2 ms 读者 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>≈</mo><mn>1.5</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup></mrow><annotation encoding="application/x-tex">p \approx 1.5 \times 10^{-5}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6776em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">5</span></span></span></span></span></span></span></span></span></span></span></span>、10 ms 读者更小，但这两个值在本工程的整数倍比下只能当参考上界。以上属按代码与调度推导，待实测。</p>
+<h2 id="3-两板任务与周期清单">3. 两板任务与周期清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>板</th><th>任务</th><th>优先级</th><th>周期</th><th>创建位置</th></tr></thead><tbody><tr><td>底盘</td><td><code>ControlCenterTask</code></td><td><code>osPriorityNormal</code></td><td>1 ms</td><td><code>Task/Src/ControlCenterTask.cpp:128</code>、<code>:139</code></td></tr><tr><td>底盘</td><td><code>ChassisTask</code></td><td><code>osPriorityNormal</code></td><td>1 ms</td><td><code>Task/Src/ChassisTask.cpp:94</code>、<code>:104</code></td></tr><tr><td>底盘</td><td><code>UsbConnectTask</code></td><td><code>osPriorityNormal</code></td><td>10 ms</td><td><code>Task/Src/UsbConnectTask.cpp:174</code>、<code>:374</code></td></tr><tr><td>底盘</td><td><code>ImuTask</code></td><td>未启动</td><td>声明 1 ms</td><td><code>2026OmniSentryChassis/Task/Src/ImuTask.cpp:112</code>；<code>Core/Src/freertos.c:100</code> 已注释</td></tr><tr><td>云台</td><td><code>ImuTask</code></td><td><code>osPriorityNormal</code></td><td>1 ms</td><td><code>Task/Src/ImuTask.cpp:111</code>、<code>:123</code></td></tr><tr><td>云台</td><td><code>ControlCenterTask</code></td><td><code>osPriorityNormal</code></td><td>1 ms</td><td><code>Task/Src/ControlCenterTask.cpp:111</code>、<code>:122</code></td></tr><tr><td>云台</td><td><code>FireTask</code></td><td><code>osPriorityNormal</code></td><td>1 ms</td><td><code>Task/Src/FireTask.cpp:70</code>、<code>:80</code></td></tr><tr><td>云台</td><td><code>GimbalTask</code></td><td><code>osPriorityNormal</code></td><td>2 ms</td><td><code>Task/Src/GimbalTask.cpp:100</code>、<code>:110</code></td></tr><tr><td>云台</td><td><code>UsbConnectTask</code></td><td><code>osPriorityNormal</code></td><td>10 ms</td><td><code>Task/Src/UsbConnectTask.cpp:154</code>、<code>:177</code></td></tr></tbody></table>
+<p>底盘与云台的 <code>ImuTask</code> 用 <code>DWT_Delay_ms(1)</code> 忙等而非 <code>osDelay</code>，只在被 tick 抢占时让出 CPU（<code>2026OmniSentryChassis/Task/Src/ImuTask.cpp:112</code>、<code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp:111</code>）。忙等意味着它在自己的周期里一直占着 CPU，被抢占的时机只由 tick 决定，写序列被打断的概率比主动阻塞的任务更高。底盘板 <code>ImuTask</code> 的启动调用被注释，它的写点不参与运行期交换。</p>
+<p>优先级全部相同这一点对矩阵有直接影响。若读者优先级高于写者，读者一就绪就能抢占并拿到完整的新值；优先级相同时读者只能等 tick 轮转或写者阻塞，采样点落在写序列中间的概率上升。两板都没有用优先级制造顺序，分析可见性只能按最坏情况，不能假设读者总在写完之后执行。</p>
+<h2 id="4-底盘板矩阵">4. 底盘板矩阵</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>共享量</th><th>生产者</th><th>消费者</th><th>生产节奏</th></tr></thead><tbody><tr><td><code>imu_data</code></td><td><code>Task/Src/ImuTask.cpp:101-110</code></td><td>无</td><td>任务未启动</td></tr><tr><td><code>control_target</code></td><td><code>Task/Src/ControlCenterTask.cpp:40-48</code>、<code>:81-90</code>、<code>:106</code>、<code>:112-121</code></td><td>同任务自身</td><td>1 ms</td></tr><tr><td><code>cmd</code></td><td><code>Task/Src/UsbConnectTask.cpp:90</code></td><td><code>Task/Src/ControlCenterTask.cpp:81-83</code></td><td>事件驱动</td></tr><tr><td><code>g_referee_info</code></td><td><code>Communication/Src/referee_decode.cpp:40-148</code></td><td><code>Task/Src/ControlCenterTask.cpp:123</code>、<code>:127</code></td><td>事件驱动</td></tr><tr><td><code>TotalAmmoShooted</code></td><td><code>Task/Src/ControlCenterTask.cpp:123</code></td><td><code>Task/Src/ControlCenterTask.cpp:127</code></td><td>1 ms</td></tr><tr><td><code>motor_output</code></td><td>无</td><td>无</td><td>无</td></tr><tr><td><code>Target_chassis_speed_motor_1..4</code></td><td><code>Task/Src/ControlCenterTask.cpp:112-121</code></td><td><code>Task/Src/ChassisTask.cpp:57-60</code>、<code>:83-86</code></td><td>1 ms</td></tr><tr><td><code>wz_output</code></td><td><code>Task/Src/ChassisTask.cpp:93</code></td><td><code>Task/Src/ControlCenterTask.cpp:106</code></td><td>1 ms</td></tr><tr><td><code>delta_angel</code></td><td><code>Task/Src/ControlCenterTask.cpp:93-94</code></td><td><code>Task/Src/ChassisTask.cpp:93</code></td><td>1 ms</td></tr></tbody></table>
+<p>底盘板的 <code>control_target</code> 由 <code>ControlCenterTask</code> 写完后又在本任务内用于运动学解算，写读在同一执行流内，不构成跨任务风险。跨任务的边是 <code>Target_chassis_speed_motor_1..4</code>、<code>wz_output</code> 与 <code>delta_angel</code> 这三组。<code>delta_angel</code> 的名字与 <code>wz_output</code> 相近，但它们是两个独立的全局量，写读点分别在两个任务里，属于双向交换：控制中心写 <code>delta_angel</code> 给底盘任务，底盘任务写 <code>wz_output</code> 给控制中心。</p>
+<p>底盘板的 <code>TotalAmmoShooted</code> 写点 <code>:123</code> 与读点 <code>:127</code> 都在 <code>ControlCenterTask</code> 内，写读之间没有其他任务参与，属于同一任务内的自读，不构成跨任务边。矩阵保留这一行是为了和云台板对照：云台板同一个量由 <code>bsp_can</code> 中断写、由 <code>UsbConnectTask</code> 读，那才是跨执行体的交换。</p>
+<h2 id="5-云台板矩阵">5. 云台板矩阵</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>共享量</th><th>生产者</th><th>消费者</th><th>生产节奏</th></tr></thead><tbody><tr><td><code>imu_data</code></td><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp:97-107</code></td><td><code>Task/Src/GimbalTask.cpp:45</code>、<code>:63</code>、<code>:74</code>、<code>:87</code>、<code>:94</code>、<code>:98</code>；<code>Task/Src/UsbConnectTask.cpp:129-137</code>；<code>Task/Src/ControlCenterTask.cpp:110</code></td><td>1 ms</td></tr><tr><td><code>control_target</code></td><td><code>Task/Src/ControlCenterTask.cpp:31-39</code>、<code>:69-74</code>、<code>:81-100</code></td><td><code>Task/Src/GimbalTask.cpp:48-57</code>、<code>:62</code>、<code>:86</code>；<code>Task/Src/FireTask.cpp:42</code>、<code>:51</code>；<code>Task/Src/UsbConnectTask.cpp:120</code></td><td>1 ms</td></tr><tr><td><code>vision_data</code></td><td><code>Task/Src/UsbConnectTask.cpp:92-98</code></td><td><code>Task/Src/ControlCenterTask.cpp:68-70</code>、<code>:79</code>、<code>:97</code></td><td>10 ms</td></tr><tr><td><code>TotalAmmoShooted</code></td><td><code>BSP/Src/bsp_can.cpp:675</code></td><td><code>Task/Src/UsbConnectTask.cpp:139</code></td><td>事件驱动</td></tr><tr><td><code>AmmoSpeed</code></td><td><code>BSP/Src/bsp_can.cpp:679</code></td><td><code>Task/Src/UsbConnectTask.cpp:138</code></td><td>事件驱动</td></tr><tr><td><code>motor_output</code></td><td>无</td><td>无</td><td>无</td></tr><tr><td><code>g_referee_info</code></td><td><code>Communication/Src/referee_decode.cpp:40-148</code></td><td>无</td><td>事件驱动</td></tr></tbody></table>
+<p>云台板的 <code>control_target.chassis_vx</code>、<code>chassis_vy</code>、<code>chassis_wz</code> 只在 <code>Task/Src/ControlCenterTask.cpp:31-33</code> 被初始化，无更新点也无读取点；底盘速度改由 CAN 帧下发（<code>:109</code>）。<code>g_referee_info</code> 在云台板上只写不读。</p>
+<p><code>imu_data</code> 在云台板上有三个消费者，周期分别是 1 ms、2 ms、10 ms，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> 分别为 1、2、10。三个读者在同一时刻看到的内容不一定相同：1 ms 的读者与写者同周期，采样相位由就绪顺序决定；10 ms 的读者跨越 10 拍，只取每批的最后一拍。</p>
+<h2 id="6-采样相位与半更新窗口">6. 采样相位与半更新窗口</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["TotalAmmoShooted 与 AmmoSpeed"] --> B["UsbConnectTask 10ms 打包上行帧"]
+  C["imu_data"] --> B
+  D["control_target"] --> B
+  E["control_target"] --> F["FireTask 1ms 判就绪"]
+  G["imu_data"] --> H["GimbalTask 2ms 角度环与速度环"]
+  I["control_target"] --> H
+  J["vision_data"] --> K["ControlCenterTask 1ms 转角度目标"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant W as ControlCenterTask 1ms
+  participant G as GimbalTask 2ms
+  participant U as UsbConnectTask 10ms
+  W->>W: 写 gimbal_yaw_angle
+  W->>W: 写 gimbal_pitch_angle
+  G->>G: 采样 control_target
+  W->>W: 写 friction_ready
+  W->>W: 写 feeder_ready
+  U->>U: 采样 control_target 与 imu_data
+  Note over G,U: 两个读者的采样点相位不同，看到的字段组可能不同</pre></div>
+<p>时序图只画出两个读者的采样点相对写序列的位置，不指定谁命中写窗口。2 ms 读者与 1 ms 写者是整数倍比，采样位置相对写序列固定，落在写窗口内还是避开由就绪顺序决定，需按第 2 节的最坏情况单独判断；10 ms 读者跨过 10 次写序列，情况同理，不能套用 2 ms 读者的结论。两个读者的结论不能互相套用：同一个共享量、同一个写者，采样相位由各自的周期与就绪顺序决定。</p>
+<p>底盘板：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  subgraph CH["底盘板"]
+    CT["ControlCenterTask 1ms 写"] --> CTGT["control_target"]
+    CTGT --> CT_R["ControlCenterTask 同任务读"]
+    CT --> SM["Target_chassis_speed_motor_1..4 与 delta_angel"]
+    SM --> CTASK_R["ChassisTask 1ms 读"]
+    CTASK_R --> WZ["wz_output"]
+    WZ --> CT
+    UB["UsbConnectTask 10ms 写"] --> CM["cmd"]
+    CM --> CT
+    RD["referee_decode 中断 写"] --> RF["g_referee_info"]
+    RF --> CT
+    TA["TotalAmmoShooted 同任务写读"] --> CT
+  end</pre></div>
+<p>云台板：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  subgraph GH["云台板"]
+    IM["ImuTask 1ms 写"] --> ID["imu_data"]
+    ID --> GT_R["GimbalTask 2ms 读"]
+    ID --> UB_R["UsbConnectTask 10ms 读"]
+    ID --> CC_R["ControlCenterTask 1ms 读"]
+    CT2["ControlCenterTask 1ms 写"] --> GT2["control_target"]
+    GT2 --> GT_R
+    GT2 --> FT["FireTask 1ms 读"]
+    GT2 --> UB_R
+    VB["UsbConnectTask 10ms 写"] --> VD["vision_data"]
+    VD --> CC_R
+    BC["bsp_can 中断 写"] --> TA2["TotalAmmoShooted 与 AmmoSpeed"]
+    TA2 --> UB_R
+    RD2["referee_decode 中断 写"] --> RF2["g_referee_info 只写不读"]
+  end</pre></div>
+<p>两张图按板分开，节点名带板名，两板之间没有同名共享量：<code>cmd</code> 与 <code>g_referee_info</code> 的读点在底盘板，<code>TotalAmmoShooted</code> 与 <code>AmmoSpeed</code> 的写点在云台板。核对具体某条边时要回到第 4、5 节的表里按板确认。</p>
+<h2 id="7-矩阵容易漏掉的口径">7. 矩阵容易漏掉的口径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>口径问题</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>只查总线，漏掉总线外的共享量</td><td>修改后仍出现耦合，查不到写点</td><td><code>Task/Src/ChassisTask.cpp:93</code>、<code>Task/Src/UsbConnectTask.cpp:92-98</code></td></tr><tr><td>认为未启动任务仍在写</td><td>读到 <code>imu_data</code> 的初值</td><td><code>Core/Src/freertos.c:100</code></td></tr><tr><td>忽略中断生产者</td><td>按任务优先级分析可见性，结论失效</td><td><code>BSP/Src/bsp_can.cpp:675-679</code></td></tr><tr><td>同周期读者被当成独立采样</td><td>半更新概率估成零</td><td>全部任务 <code>osPriorityNormal</code></td></tr><tr><td>把忙等当主动让出</td><td>估算 CPU 占用偏低</td><td><code>2026OmniSentryChassis/Task/Src/ImuTask.cpp:112</code></td></tr><tr><td>认为云台板也消费裁判数据</td><td>找不到读取点</td><td><code>Communication/Src/referee_decode.cpp:40-148</code></td></tr></tbody></table>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>单写者对多读者是两板的基本形态，多写者出现在中断路径。</li>
+<li>周期比 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><msub><mi>T</mi><mi>r</mi></msub><mi mathvariant="normal">/</mi><msub><mi>T</mi><mi>w</mi></msub></mrow><annotation encoding="application/x-tex">n=T_r/T_w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 决定读者能看到几拍，同周期时相位由 tick 对齐。</li>
+<li>半更新概率按写窗口与读周期之比估计，同周期情形退化为最坏情况。</li>
+<li>总线之外仍有任务间全局量，矩阵必须覆盖。</li>
+<li>云台板任务全部同优先级，调度顺序由就绪表与 tick 轮转决定。</li>
+<li>未启动任务的写点等价于无写点。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>写者数量</td><td>单任务集中写</td><td>更新顺序可控</td><td>该任务周期成为数据新鲜度上限</td></tr><tr><td>读者数量</td><td>多读者无阻塞</td><td>各任务独立取用</td><td>无法通知变化，只能轮询</td></tr><tr><td>优先级</td><td>全部相同</td><td>配置简单</td><td>相位不可预测，实时性无保证</td></tr><tr><td>数据通路</td><td>总线加直接全局量</td><td>迁移成本低</td><td>耦合边分散，矩阵易漏</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>按第 4 节找出底盘板上所有跨任务写读对，标出哪些不在 <code>message_bus</code> 中。</li>
+<li>给定写者 1 ms、读者 10 ms，计算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> 并说明读者会看到什么。</li>
+<li>说明为什么云台板上 <code>imu_data</code> 的三个读者可能在不同拍上采样。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>把 <code>control_target</code> 的两个就绪标志合成一个位域，重新评估半更新窗口。</li>
+<li>给云台板设计一个周期与优先级分配，使 <code>imu_data</code> 的相位对读者可预测，说明需要改动的源码位置。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.h</code></td><td>共享结构体声明</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>底盘板写点与运动学解算</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ChassisTask.cpp</code></td><td>底盘板目标速度消费者</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/freertos.c</code></td><td>底盘板任务创建与注释状态</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>云台板视觉数据生产者与上行消费者</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>云台板中断生产者</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td>调度参数</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/02-Message_Bus/03-易错点与调试.md</span></div><div class="dfile__body"><h1 id="message_bus-易错点与调试">Message_Bus 易错点与调试</h1>
+<p>已核对的问题集中在下面，并说明怎么把它们查出来。全局数据交换的问题不集中在读写逻辑本身，而集中在几条隐式约定被违反：字段类型与使用语义不一致、同一个实例在两块板上定义位置不同、写者没有运行或读者没有消费、中断与任务共用一块缓冲区。</p>
+<p>这些问题的共同点是编译器不报错。声明齐全、类型能隐式转换、未使用的实例不触发警告，都要靠人工核对才能发现。下面逐类说明机制，再给出已核对清单、现成观测点与排查顺序。</p>
+<blockquote>
+<p>路径前缀沿用第 1、2 篇的结构与矩阵口径，两板仓库根。</p>
+</blockquote>
+<h2 id="1-四类隐式约定">1. 四类隐式约定</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类别</th><th>约定</th><th>违反后的表现</th></tr></thead><tbody><tr><td>类型语义</td><td>字段类型与使用语义一致</td><td>比较失败、赋值截断</td></tr><tr><td>定义位置</td><td>每个实例全仓只有一个非 extern 定义</td><td>重复定义或多份互不相干的副本</td></tr><tr><td>可见性</td><td>写者有运行、读者有消费</td><td>读到初值或字段无人使用</td></tr><tr><td>并发</td><td>写序列不被打断</td><td>组合状态半更新、缓冲字节丢失</td></tr></tbody></table>
+<p>四类约定的检查方式不同。类型语义要逐个字段看写点赋什么、读点拿什么比较；定义位置要用链接结果或全仓搜索确认；可见性要把任务的启动状态与读写点数出来；并发要盯中断与任务之间的共享对象。四类都过一遍之后，剩下的问题才需要按逻辑错误继续查。</p>
+<p>排查顺序上先做可见性，再做类型语义，最后做并发。可见性问题会让现象一直存在且稳定，容易先被排除；并发问题只在特定相位出现，需要先确认其他三类没有问题，否则现象容易归因错误。</p>
+<p>四类划分覆盖的是约定被违反的方式，不覆盖违反的严重程度。类型语义不一致可以一直不影响功能，也可以在字段被赋进新语义之后变成错误；两者在清单里都只记一条。核对时只记录约定与位置，严重程度留给整改阶段评估。</p>
+<h2 id="2-布尔字段写成-float-与-int-的代价">2. 布尔字段写成 float 与 int 的代价</h2>
+<p><code>friction_ready</code> 声明为 <code>float</code>（<code>Message_Bus/message_bus.h:33</code>），写点赋 <code>true</code> 或 <code>false</code>，读点写作 <code>if (control_target.friction_ready)</code> 或 <code>== true</code>。<code>bool</code> 转 <code>float</code> 后取值只有 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.0</mn><mi>f</mi></mrow><annotation encoding="application/x-tex">1.0f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">1.0</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.0</mn><mi>f</mi></mrow><annotation encoding="application/x-tex">0.0f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">0.0</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span></span></span></span>，<code>!= 0.0f</code> 的判据成立，因此功能上可用。脆弱之处在于该字段语义上是布尔，类型上是浮点：任何把速度写进去的改动都不会被编译器拦住。</p>
+<p><code>feeder_ready</code> 声明为 <code>int</code>（<code>:36</code>），同样赋 <code>true</code> 与 <code>false</code>（即 <code>1</code> 与 <code>0</code>），读点写作 <code>== true</code>。整数与布尔的隐式转换同样不报错。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>b</mi><mtext>friction</mtext></msub><mo>∈</mo><mo stretchy="false">{</mo><mn>0.0</mn><mi>f</mi><mo separator="true">,</mo><mtext> </mtext><mn>1.0</mn><mi>f</mi><mo stretchy="false">}</mo><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>b</mi><mtext>feeder</mtext></msub><mo>∈</mo><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mtext> </mtext><mn>1</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">b_{\text{friction}} \in \{0.0f,\ 1.0f\}, \qquad b_{\text{feeder}} \in \{0,\ 1\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">friction</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">0.0</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1.0</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mclose">}</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">feeder</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">}</span></span></span></span></p>
+<p>判据若写成 <code>== 1.0f</code> 或 <code>== 1</code> 也能工作，但与写点的符号不一致，改动时更容易失配。类型语义不一致本身不产生错误，它降低的是后续改动的安全边界：同一个字段在不同文件里被当作两种类型使用，谁改谁都要先确认另一侧的写法。</p>
+<h2 id="3-单一定义规则与两板的定义差异">3. 单一定义规则与两板的定义差异</h2>
+<p>C++ 的单一定义规则要求每个全局变量只有一个翻译单元给出定义，其余用 <code>extern</code>。两块板的处理不同：底盘板把 <code>g_referee_info</code> 定义在 <code>Message_Bus/message_bus.cpp:13</code>，<code>Communication/Src/referee_decode.cpp:9</code> 只写 <code>extern</code>；云台板把定义放在 <code>Communication/Src/referee_decode.cpp:9</code>，<code>message_bus.h</code> 里没有它的 extern 声明。<code>Communication/Inc/referee_decode.h:501</code> 在两板上都提供 <code>extern</code> 声明。</p>
+<p>只要全仓只有一处非 extern 定义，链接期就没有问题。风险在两块板的源码被当成同一份来改：在一个仓库里把定义挪走或删掉 <code>extern</code> 关键字，会直接产生重复定义或未定义符号。核对办法是把两板的定义点与 extern 点各列一份，确认每块板上恰好一次非 extern 定义。</p>
+<p>两板各自的链接结果只能证明各自没有问题，不能证明两份源码可以互换。合并或迁移前要按实例逐个对照定义点，<code>g_referee_info</code> 与 <code>TotalAmmoShooted</code> 在两板的定义文件与行号都不同，正是这类差异的位置。</p>
+<h2 id="4-中断直写缓冲区与队列两种做法">4. 中断直写缓冲区与队列两种做法</h2>
+<p>底盘板的 USB 接收路径是中断直写缓冲：<code>USB_DEVICE/App/usbd_cdc_if.c:271</code> 在 CDC 接收中断里调用 <code>USB_Data_Received</code>，后者在 <code>Task/Src/UsbConnectTask.cpp:222-226</code> 转调 <code>addDataToBuffer</code>，由 <code>:191-198</code> 修改 <code>rx_buffer</code> 与 <code>rx_index</code>。任务侧在 <code>:164-168</code> 读缓冲区、解析成功后把 <code>rx_index</code> 清零。中断可在任务的判断与清零之间追加数据，这部分字节会被随后清零丢弃。</p>
+<p>云台板在同一位置改用了队列：<code>Core/Src/freertos.c:114</code> 创建 <code>usbRxQueue</code>，中断里 <code>xQueueSendFromISR</code>（<code>usbd_cdc_if.c:271</code>），任务里 <code>xQueueReceive</code>（<code>Task/Src/UsbConnectTask.cpp:83</code>）。队列把中断与任务的接触面缩到一次入队，入队与出队由内核保证原子，字节不会因为清零动作被杀掉。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant ISR as CDC 中断 USB_Data_Received
+  participant T as UsbConnectTask 10ms
+  ISR->>ISR: 写 rx_buffer 并累加 rx_index
+  T->>T: 判 rx_index 大于 0 后解析缓冲区
+  ISR->>ISR: 追加新字节并修改 rx_index
+  T->>T: 解析成功后 rx_index 清零
+  Note over ISR,T: 中断在读取与清零之间追加的部分被丢弃</pre></div>
+<p>两种做法的差别不在中断里执行了多少代码，而在共享对象有没有被原子化。直写缓冲共享的是普通数组与下标，队列共享的是内核对象，后者的并发由内核负责。</p>
+<p>判断一段中断代码是否需要改队列，先看它在中断里改了几个共享变量。只改一个对齐标量时撕裂不会发生；同时改数组内容与下标两个量时，任务侧没有临界区就会丢数据。底盘板这一处改的是两个量，云台板已经用队列替代。</p>
+<h2 id="5-已核对问题清单">5. 已核对问题清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>问题</th><th>位置</th><th>判据</th><th>性质</th></tr></thead><tbody><tr><td><code>friction_ready</code> 用 <code>float</code> 表布尔</td><td>两板 <code>message_bus.h:33</code></td><td>写 <code>true</code>，读 <code>if(...)</code> 与 <code>== true</code></td><td>类型语义不一致</td></tr><tr><td><code>feeder_ready</code> 用 <code>int</code> 表布尔</td><td>两板 <code>message_bus.h:36</code></td><td>写 <code>true</code> 与 <code>false</code>（即 <code>1</code> 与 <code>0</code>），读 <code>== true</code></td><td>类型语义不一致</td></tr><tr><td><code>g_referee_info</code> 定义位置跨板不同</td><td>底盘 <code>message_bus.cpp:13</code>；云台 <code>Communication/Src/referee_decode.cpp:9</code></td><td>底盘该文件 <code>:9</code> 为 <code>extern</code></td><td>跨板差异</td></tr><tr><td>两板 extern 实例集合不同</td><td>底盘 <code>message_bus.h:57-62</code>；云台 <code>:57-61</code></td><td>云台无 <code>cmd</code> 与 <code>g_referee_info</code>，多 <code>AmmoSpeed</code></td><td>跨板差异</td></tr><tr><td>底盘 <code>ImuTask</code> 未启动</td><td><code>Core/Src/freertos.c:100</code></td><td><code>StartImuTask_Init()</code> 被注释</td><td>无写者</td></tr><tr><td><code>motor_output</code> 无读写</td><td>两板 <code>message_bus.h:59</code>、<code>message_bus.cpp:12</code></td><td>全仓只有声明与定义</td><td>预留</td></tr><tr><td><code>emergency_stop</code> 无读取点</td><td>两板 <code>message_bus.h:46</code></td><td>只有初始化赋值</td><td>预留</td></tr><tr><td><code>gimbal_yaw_angle_single</code> 无引用</td><td>两板 <code>message_bus.h:29</code></td><td>只有声明</td><td>预留</td></tr><tr><td><code>updated</code> 只写不读</td><td><code>Communication/Src/referee_decode.cpp:44</code>、<code>:71</code>、<code>:91</code>、<code>:110</code>、<code>:128</code>、<code>:148</code></td><td>六个写点，无读取点</td><td>死标志</td></tr><tr><td>底盘接收缓冲无保护</td><td><code>Task/Src/UsbConnectTask.cpp:191-198</code> 与 <code>:164-168</code></td><td>中断写、任务读并清零</td><td>并发</td></tr><tr><td>云台 <code>control_mode</code> 恒为 <code>MODE_AI</code></td><td><code>Task/Src/ControlCenterTask.cpp:46</code>、<code>:108</code></td><td>每轮把 <code>dbus.s1</code> 置 3，分支只命中 <code>:52</code></td><td>分支不可达</td></tr><tr><td>断连无超时处理</td><td>底盘 <code>Task/Src/UsbConnectTask.cpp:134</code>、<code>:156</code></td><td><code>last_receive_time</code> 只赋值，无比较点</td><td>缺保护</td></tr></tbody></table>
+<p>按清单核对时建议分三步走：</p>
+<ol>
+<li>先对每个实例数一遍定义点，确认非 extern 定义恰好一处。</li>
+<li>再对每个字段列出写点与读点，写点为零或读点为零的都标出来。</li>
+<li>最后只看写点落在中断里、读点在任务里的那些字段，逐对判断共享对象是否需要原子化。</li>
+</ol>
+<p>清单里前三类问题可以通过代码搜索确认，<code>updated</code> 与断连超时需要把写点与读点都数完才能下结论：六个写点对应零个读点，<code>last_receive_time</code> 只有赋值没有比较。</p>
+<h2 id="6-观测手段与现成观测点">6. 观测手段与现成观测点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>手段</th><th>能回答的问题</th><th>限制</th></tr></thead><tbody><tr><td>CAN 抓包</td><td>已发出字段的值与刷新节奏</td><td>只有被发出的量可见</td></tr><tr><td>调试器挂起读实例</td><td>某一时刻的完整结构体</td><td>会暂停全部任务</td></tr><tr><td>局部快照</td><td>一段读写区间内的字段组合</td><td>快照本身仍可能跨越写序列</td></tr><tr><td>串口打印</td><td>数值变化的时间顺序</td><td>底盘板的打印语句当前被注释</td></tr></tbody></table>
+<p>观测前先写下要回答的问题，再选手段。</p>
+<p>观测点的选择决定能回答什么问题。抓包看到的是生产者已经写好的值，无法区分字段是旧值还是更新中；挂起读实例能拿到一致的整组值，但会改变调度，只能用于静态核对。</p>
+<p>两板的 <code>Debug_vars/debug_vars.h</code> 导出声明全部处于注释状态（<code>:14-23</code>），没有现成的可观察变量。可用观测点有两处：云台板 <code>Task/Src/ControlCenterTask.cpp:110</code> 把 <code>imu_data.yaw</code> 经 CAN 发出，底盘板 <code>Task/Src/ControlCenterTask.cpp:127</code> 把 <code>TotalAmmoShooted</code> 与 <code>g_referee_info.bullet_speed</code> 发出，都能在总线上抓取。底盘 <code>Task/Src/UsbConnectTask.cpp:201</code> 留有一处被注释的 <code>printf</code>。更直接的做法是调试器挂起后直接读实例地址，或把结构体整体拷到局部副本再打印，避免逐字段取值时被写者改动。后两种做法属建议，未在本工程实测。</p>
+<p>观测点要选在生产者与消费者之间，不要选在写序列中间。云台板 <code>Task/Src/ControlCenterTask.cpp:110</code> 的发送点在控制中心任务末尾，它在读完 <code>imu_data</code> 之后才发出，抓到的值已经是消费者视角的抽样结果。</p>
+<h2 id="7-观测数据的判读口径">7. 观测数据的判读口径</h2>
+<p>拿到一段观测数据之后，判读的口径要提前定好，否则同一组数字可以支持互相矛盾的结论。下面四条是本工程核对时会用到的口径：</p>
+<ol>
+<li>抓包得到的值是生产者最后一次写入的结果，无法判断它是新值还是旧值，只能用刷新节奏推断写者是否在运行。</li>
+<li>挂起调试器读到的是某一时刻的整组字段，一致但不代表运行期一致，运行期仍可能半更新。</li>
+<li>局部快照跨越写序列时同样可能半更新，要把快照长度与写窗口比较后才下结论。</li>
+<li>逐字段打印会把一次不一致的读数固化下来，判读时不能用它反推写序列的顺序。</li>
+</ol>
+<p>四条的差别在于观测动作本身有没有改变被观测对象。挂起会改变调度，打印会改变时序，抓包不改时序但看不到未发出的量。</p>
+<h2 id="8-从数据不更新出发的排查顺序">8. 从数据不更新出发的排查顺序</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["数据不更新或行为异常"] --> B{"写者任务是否在运行"}
+  B -- "否" --> C["查 freertos.c 的 Init 调用是否被注释"]
+  B -- "是" --> D{"实例定义是否唯一"}
+  D -- "否" --> E["查 extern 与非 extern 混用及两板差异"]
+  D -- "是" --> F{"类型与语义是否一致"}
+  F -- "否" --> G["查 float 或 int 当布尔使用的字段"]
+  F -- "是" --> H{"写点是否在中断中"}
+  H -- "是" --> I["查 ISR 与任务共享的缓冲区"]
+  H -- "否" --> J["核对读者与写者的周期比"]
+  J --> K["记录相位差与半更新窗口"]
+  I --> K</pre></div>
+<p>分诊的前四步按代码静态核对就能完成，后两步需要接观测手段。数据完全不更新几乎都落在前四步；数值偶发异常才会走到中断与相位分支。把分支顺序固定下来，可以避免在数据恒为初值时就去接调试器测相位。</p>
+<p>分支里每一问都尽量用静态核对回答。写者是否在运行看启动函数的调用状态，定义是否唯一看链接结果，类型是否一致看字段声明与读写点，写点是否在中断看它所在的函数。只有最后一问必须接观测手段，前四问都能在代码里得出结论。</p>
+<h2 id="9-排查时容易漏掉的位置">9. 排查时容易漏掉的位置</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>按字段逐个读共享结构体</td><td>打印出的组合状态自相矛盾</td><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp:129-137</code></td></tr><tr><td>把 <code>extern</code> 声明当定义</td><td>改动后出现重复定义或未定义符号</td><td>两板 <code>Communication/Inc/referee_decode.h:501</code></td></tr><tr><td>用一块板的头文件推断另一块</td><td>引用不存在的 <code>cmd</code> 或 <code>g_referee_info</code></td><td>两板 <code>message_bus.h:57-62</code> 与 <code>:57-61</code></td></tr><tr><td>忽略被注释的 Init 调用</td><td>期望周期性数据，实际恒为初值</td><td><code>Core/Src/freertos.c:100</code></td></tr><tr><td>把死字段当有效信号</td><td>逻辑永远走到同一分支</td><td><code>message_bus.h:29</code>、<code>:46</code></td></tr><tr><td>依赖 <code>updated</code> 判断新帧</td><td>判据永远为上一次写入值</td><td><code>Communication/Src/referee_decode.cpp:44-148</code></td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>编译器不拦截类型语义不一致、未使用实例与跨板差异，需人工核对。</li>
+<li>单一定义规则下，定义位置可以跨文件，但两板并不对称。</li>
+<li>中断生产者与任务读者的共享缓冲需要队列或临界区。</li>
+<li>只写不读的字段是重构信号，不是可用的状态位。</li>
+<li>未启动任务的写点等于没有写点。</li>
+<li>调试优先取快照，再分析；逐字段读会引入观察者自身的不一致。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>布尔字段类型</td><td>沿用 <code>float</code> 与 <code>int</code></td><td>不改动已有读写点</td><td>类型不表达语义</td></tr><tr><td>裁判数据定义</td><td>跨板放在不同文件</td><td>各板包含关系最小</td><td>迁移与合并时易错</td></tr><tr><td>USB 接收</td><td>底盘直写缓冲，云台用队列</td><td>云台实现更安全</td><td>两板行为不一致</td></tr><tr><td>调试导出</td><td>注释掉 <code>Debug_vars</code></td><td>避免未使用符号被回收</td><td>缺少现成观测量</td></tr></tbody></table>
+<p>四类问题的整改顺序建议是先补可见性，再统一类型，最后处理并发。可见性整改会改变哪些字段真的有读写点，先做这一步可以缩小后面两步的范围。</p>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出 <code>message_bus.h</code> 中类型与语义不一致的字段，写出各自的读写点行号。</li>
+<li>说明底盘板与云台板 <code>g_referee_info</code> 的定义差异，并给出统一后的改法。</li>
+<li>找出底盘板接收缓冲竞争的两个参与方，指出丢失字节发生的位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>把 <code>friction_ready</code> 与 <code>feeder_ready</code> 改为 <code>bool</code>，列出所有需要同步修改的读写点并评估影响。</li>
+<li>为 <code>g_referee_info</code> 增加超时判据，设计时间戳字段与更新点，说明如何避免中断侧写入与任务侧读取的时间戳撕裂。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.h</code></td><td>字段类型与实例声明</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.cpp</code></td><td>底盘板实例定义</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp</code></td><td>底盘板接收缓冲与 <code>cmd</code> 写点</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>CDC 中断入口</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/freertos.c</code></td><td>任务创建与注释状态</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>云台板裁判数据定义与写点</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>云台板模式分支与观测点</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/01-%E5%88%86%E5%B1%82%E6%9E%B6%E6%9E%84/"><span class="k">← 上一篇</span><span class="t">分层架构</span><span class="d">嵌入式软件架构 · 3 个文件</span></a><a class="next" href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/03-%E4%B8%8A%E4%B8%8B%E6%9D%BF%E5%88%86%E5%B7%A5%E4%B8%8ECAN%E6%8B%93%E6%89%91/"><span class="k">下一篇 →</span><span class="t">上下板分工与CAN拓扑</span><span class="d">嵌入式软件架构 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

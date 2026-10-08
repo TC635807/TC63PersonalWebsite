@@ -1,0 +1,1122 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>底盘指令映射 · 机器人运动学 · 王宇翔</title><meta name="description" content="DBUS 的 18 字节解码、通道到 vx/vy/wz 的实际取值、s1 三模式与 0x301 跨板转发，以及遥控分支 5 倍增益的生效条件。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/08-%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%BF%90%E5%8A%A8%E5%AD%A6/03-%E5%BA%95%E7%9B%98%E6%8C%87%E4%BB%A4%E6%98%A0%E5%B0%84/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="底盘指令映射 · 机器人运动学 · 王宇翔"><meta property="og:description" content="DBUS 的 18 字节解码、通道到 vx/vy/wz 的实际取值、s1 三模式与 0x301 跨板转发，以及遥控分支 5 倍增益的生效条件。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/08-%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%BF%90%E5%8A%A8%E5%AD%A6/03-%E5%BA%95%E7%9B%98%E6%8C%87%E4%BB%A4%E6%98%A0%E5%B0%84/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/08-%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%BF%90%E5%8A%A8%E5%AD%A6/">机器人运动学</a><span class="sep" aria-hidden="true">/</span><span class="now">底盘指令映射</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>底盘指令映射</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>遥控器通道到速度指令</span></a><ul class="toc__heads"><li><a href="#1-两个速度指令入口与两板分工" data-depth="2" data-heading-j="0">1. 两个速度指令入口与两板分工</a></li><li><a href="#2-dbus-18-字节帧的解码" data-depth="2" data-heading-j="1">2. DBUS 18 字节帧的解码</a></li><li><a href="#3-通道到-vxvywz-的三套口径" data-depth="2" data-heading-j="2">3. 通道到 vx/vy/wz 的三套口径</a></li><li><a href="#4-s1-的位域与三种控制模式" data-depth="2" data-heading-j="3">4. s1 的位域与三种控制模式</a></li><li><a href="#5-跨板-0x301-转发链路" data-depth="2" data-heading-j="4">5. 跨板 0x301 转发链路</a></li><li><a href="#6-增益-5-的生效条件" data-depth="2" data-heading-j="5">6. 增益 5 的生效条件</a></li><li><a href="#7-0x301-分支落穿的影响" data-depth="2" data-heading-j="6">7. 0x301 分支落穿的影响</a></li><li><a href="#8-常见错误" data-depth="2" data-heading-j="7">8. 常见错误</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>上位机速度指令到轮速</span></a><ul class="toc__heads"><li><a href="#1-上位机入口与协议常量" data-depth="2" data-heading-j="0">1. 上位机入口与协议常量</a></li><li><a href="#2-帧结构与整帧长度口径" data-depth="2" data-heading-j="1">2. 帧结构与整帧长度口径</a></li><li><a href="#3-解析流程与只做两项校验" data-depth="2" data-heading-j="2">3. 解析流程与只做两项校验</a></li><li><a href="#4-2000-与-5-的-400-倍增益差" data-depth="2" data-heading-j="3">4. 2000 与 5 的 400 倍增益差</a></li><li><a href="#5-ai-分支四条式子的系数矩阵" data-depth="2" data-heading-j="4">5. AI 分支四条式子的系数矩阵</a></li><li><a href="#6-收包缓冲与数据落点" data-depth="2" data-heading-j="5">6. 收包缓冲与数据落点</a></li><li><a href="#7-生效分支与-s1-固定的关系" data-depth="2" data-heading-j="6">7. 生效分支与 s1 固定的关系</a></li><li><a href="#8-常见错误" data-depth="2" data-heading-j="7">8. 常见错误</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>斜坡与停车处理</span></a><ul class="toc__heads"><li><a href="#1-指令映射之后的速度环" data-depth="2" data-heading-j="0">1. 指令映射之后的速度环</a></li><li><a href="#2-单轮速度环的误差与输出限幅" data-depth="2" data-heading-j="1">2. 单轮速度环的误差与输出限幅</a></li><li><a href="#3-只限减速的斜坡" data-depth="2" data-heading-j="2">3. 只限减速的斜坡</a></li><li><a href="#4-停车时清零积分" data-depth="2" data-heading-j="3">4. 停车时清零积分</a></li><li><a href="#5-dt-与-osdelay-的周期错配" data-depth="2" data-heading-j="4">5. dt 与 osDelay 的周期错配</a></li><li><a href="#6-速度环对象与参数" data-depth="2" data-heading-j="5">6. 速度环对象与参数</a></li><li><a href="#7-斜坡与输出的衔接" data-depth="2" data-heading-j="6">7. 斜坡与输出的衔接</a></li><li><a href="#8-输出类型不一致的后果" data-depth="2" data-heading-j="7">8. 输出类型不一致的后果</a></li><li><a href="#9-常见错误" data-depth="2" data-heading-j="8">9. 常见错误</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">机器人运动学</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>机器人运动学 / DBUS遥控 / 通道映射 / 控制模式 / 上位机 / USB协议 / 底盘控制 / 速度环</span></div><h1 class="docs__title">底盘指令映射</h1><p class="docs__lead">DBUS 的 18 字节解码、通道到 vx/vy/wz 的实际取值、s1 三模式与 0x301 跨板转发，以及遥控分支 5 倍增益的生效条件。</p></header><section class="dfile" id="file-1" data-file="01-遥控器通道到速度指令"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-遥控器通道到速度指令</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/08-机器人运动学/03-底盘指令映射/01-遥控器通道到速度指令.md</span></div><div class="dfile__body"><h1 id="遥控器通道到速度指令">遥控器通道到速度指令</h1>
+<p>底盘速度指令有两个入口：遥控器通道和上位机 USB 命令（<code>02-上位机速度指令到轮速.md</code>）。两块板分工不同，遥控器插在云台板上，底盘板靠一条 0x301 报文拿到摇杆量。</p>
+<p>遥控器数据从 DBUS 帧到 <code>control_target.chassis_vx/vy/wz</code> 的路径上，最容易出错的是通道下标：源码里同一份文件存在三套互不相同的通道注释与代码，生效的只有一处。另一处容易误判的是增益生效条件：两块板联调时遥控分支可能根本走不到。</p>
+<blockquote>
+<p>遥控器数据从 DBUS 帧到 <code>control_target.chassis_vx/vy/wz</code> 的路径，涉及底盘板 <code>ControlCenterTask.cpp</code>、<code>dbus.cpp</code>、<code>bsp_can.cpp</code> 与云台板同级文件。</p>
+</blockquote>
+<h2 id="1-两个速度指令入口与两板分工">1. 两个速度指令入口与两板分工</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>取值</th><th>出处</th></tr></thead><tbody><tr><td>DBUS 帧长</td><td>18 字节</td><td><code>dbus.cpp:13</code></td></tr><tr><td>通道原始位宽</td><td>11 位</td><td>屏蔽码 <code>0x07FF</code></td></tr><tr><td>解码偏置</td><td>减 1024</td><td><code>dbus.cpp:16-20</code></td></tr><tr><td>通道行程</td><td>约 ±660</td><td><code>ControlCenterTask.cpp:14-18</code></td></tr><tr><td>遥控增益</td><td>5.0</td><td><code>ControlCenterTask.cpp:86</code></td></tr><tr><td>0x301 帧长</td><td>8 字节</td><td><code>bsp_can.cpp:469-481</code></td></tr></tbody></table>
+<p>摇杆量是计数，速度目标是浮点轮速单位，两者靠一个常数增益换算。这个增益与上位机分支的 2000 相差 400 倍，是切换输入源时最先要核对的地方。</p>
+<h2 id="2-dbus-18-字节帧的解码">2. DBUS 18 字节帧的解码</h2>
+<p>DBUS 一帧固定 18 字节，五个通道各占 11 位，按低位在前拼装后再减偏置：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><msub><mi>h</mi><mi>i</mi></msub><mo>=</mo><mrow><mo fence="true">(</mo><mi>r</mi><mi>a</mi><msub><mi>w</mi><mi>i</mi></msub><mo mathvariant="normal" lspace="0.22em" rspace="0.22em">&#x26;</mo><mn>0</mn><mi>x</mi><mn>07</mn><mi>F</mi><mi>F</mi><mo fence="true">)</mo></mrow><mo>−</mo><mn>1024</mn><mo separator="true">,</mo><mspace width="2em"></mspace><mi>i</mi><mo>=</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo separator="true">,</mo><mn>2</mn><mo separator="true">,</mo><mn>3</mn><mo separator="true">,</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">ch_i=\left(raw_i \mathbin{\&#x26;} 0x07FF\right)-1024,\qquad i=0,1,2,3,4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord mathnormal">c</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin"><span class="mord">&#x26;</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">07</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord">1024</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">3</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">4</span></span></span></span></p>
+<p><code>ch[4]</code> 不在字节 0 到 5 的连续位流里，而是取第 16、17 字节（<code>dbus.cpp:20</code>）。开关 s1、s2 共用第 5 字节的高 4 位：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>表达式</th><th>值域</th></tr></thead><tbody><tr><td>s1</td><td><code>((buf[5] >> 4) &#x26; 0x0C) >> 2</code></td><td>0 到 3</td></tr><tr><td>s2</td><td><code>((buf[5] >> 4) &#x26; 0x03)</code></td><td>0 到 3</td></tr></tbody></table>
+<p>11 位原始值域是 0 到 2047，减去 1024 后是 -1024 到 1023。硬件机械行程只有约 ±660，代码没有额外限幅，超出部分只可能来自异常帧。自写解析器时把 <code>ch[4]</code> 也按前 6 字节的位流拼接，会得到与固件不同的 wz 通道。</p>
+<h2 id="3-通道到-vxvywz-的三套口径">3. 通道到 vx/vy/wz 的三套口径</h2>
+<p>生效取值写在遥控分支里：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">control_target.chassis_vx </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dbus.ch[</span><span style="color:#005CC5">3</span><span style="color:#24292E">]</span><span style="color:#D73A49">*</span><span style="color:#24292E">GAIN2;</span><span style="color:#6A737D">  // 缩放系数</span></span>
+<span class="line"><span style="color:#24292E">control_target.chassis_vy </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dbus.ch[</span><span style="color:#005CC5">2</span><span style="color:#24292E">]</span><span style="color:#D73A49">*</span><span style="color:#24292E">GAIN2;</span></span>
+<span class="line"><span style="color:#24292E">control_target.chassis_wz </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dbus.ch[</span><span style="color:#005CC5">4</span><span style="color:#24292E">]</span><span style="color:#D73A49">*</span><span style="color:#24292E">GAIN2;</span></span></code></pre>
+<p>同一文件里另有两处通道注释，三套口径互不相同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>量</th><th>通道注释 <code>:14-18</code></th><th>通道注释 <code>:69-71</code></th><th>生效代码 <code>:88-90</code></th></tr></thead><tbody><tr><td>vx</td><td><code>ch[3]</code> 右摇杆前后</td><td><code>ch[1]</code> 左摇杆前后</td><td><code>ch[3]</code></td></tr><tr><td>vy</td><td><code>ch[2]</code> 右摇杆左右</td><td><code>ch[0]</code> 左摇杆左右</td><td><code>ch[2]</code></td></tr><tr><td>wz</td><td>未列</td><td><code>ch[2]</code> 旋转</td><td><code>ch[4]</code></td></tr></tbody></table>
+<p><code>:69-71</code> 还把 vz 指到 <code>ch[2]</code>，与代码的 <code>ch[4]</code> 冲突。摇杆物理归属（左杆还是右杆）无法从源码判定，属待现场确认；通道下标以代码为准。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["DBUS 18 字节帧"] --> B["dbus_decode 取 ch0..ch4 与 s1 s2"]
+    B --> C["云台板全局 dbus"]
+    C --> D["ch2 ch3 ch4 与 s1 送 0x301"]
+    D --> E["底盘 bsp_can 中断填 dbus"]
+    E --> F{"dbus.s1 取值"}
+    F -->|1| G["MODE_RC"]
+    F -->|2| H["MODE_RC_follow"]
+    F -->|3| I["MODE_AI"]
+    G --> J["vx 等于 ch3 乘 5, vy 等于 ch2 乘 5, wz 等于 ch4 乘 5"]
+    H --> J
+    H --> K["wz 被 wz_output 覆盖"]
+    I --> L["改用上位机增益 2000"]</pre></div>
+<p>三套口径同时存在时的排查方法是看最终写入 <code>control_target</code> 的那一行，而不是看注释。注释与代码不一致的后果是：按注释改代码方向，会得到”推杆无响应”或”方向错”的表象。</p>
+<h2 id="4-s1-的位域与三种控制模式">4. s1 的位域与三种控制模式</h2>
+<p>模式由 s1 的取值直接决定（<code>ControlCenterTask.cpp:57-63</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>s1</th><th>模式枚举</th><th>平移来源</th><th>旋转来源</th></tr></thead><tbody><tr><td>1</td><td><code>MODE_RC</code></td><td>遥控通道</td><td>遥控通道 <code>ch[4]</code></td></tr><tr><td>2</td><td><code>MODE_RC_follow</code></td><td>遥控通道</td><td><code>wz_output</code></td></tr><tr><td>3</td><td><code>MODE_AI</code></td><td>上位机 <code>cmd.speed</code></td><td>上位机</td></tr></tbody></table>
+<p>s1 不是 1、2、3 时没有 else 分支，模式保持上一轮的取值。跟随模式的误差与覆盖逻辑见 <code>docs/08-机器人运动学/02-正逆运动学/03-跟随模式与场地系解算.md</code>。</p>
+<p>“非法值沿用旧模式”是一条真实的行为：遥控器开关的中间档或帧丢失时，底盘不会退回安全状态，而是继续按上一次的模式走。排查”模式莫名保持”的现象时，先确认 s1 是否处于 0。</p>
+<h2 id="5-跨板-0x301-转发链路">5. 跨板 0x301 转发链路</h2>
+<p>遥控器由云台板接收，云台板在每轮循环把 s1 写死为 3（<code>2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp:46</code>、<code>ControlCenterTask.cpp:104</code> 附近），再随速度指令转发：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">dbus.s1 </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 3</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#6F42C1">bsp_can1_sendremotecontrolcmd</span><span style="color:#24292E">(dbus.ch[</span><span style="color:#005CC5">2</span><span style="color:#24292E">],dbus.ch[</span><span style="color:#005CC5">3</span><span style="color:#24292E">],dbus.ch[</span><span style="color:#005CC5">4</span><span style="color:#24292E">],dbus.s1);</span></span></code></pre>
+<p>底盘在 CAN1 的 0x301 分支收下这四个量（<code>BSP/Src/bsp_can.cpp:608-613</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>报文位置</th><th>目标变量</th></tr></thead><tbody><tr><td><code>RxData[0..1]</code></td><td><code>dbus.ch[2]</code></td></tr><tr><td><code>RxData[2..3]</code></td><td><code>dbus.ch[3]</code></td></tr><tr><td><code>RxData[4..5]</code></td><td><code>dbus.ch[4]</code></td></tr><tr><td><code>RxData[6]</code></td><td><code>dbus.s1</code></td></tr></tbody></table>
+<p>发送函数第四个形参命名为 <code>s2</code>（<code>2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code>），实际传入的是 <code>s1</code>，接收端也写入 <code>dbus.s1</code>。名字不影响字节序，但读函数签名时容易误判。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant RC as 遥控器
+    participant GB as 云台板 dbus
+    participant GC as 云台板 ControlCenterTask
+    participant CB as 底盘 bsp_can 中断
+    participant CC as 底盘 ControlCenterTask
+    RC->>GB: DBUS 帧, DMA 中断解码
+    GB->>GC: 全局 dbus
+    GC->>GC: dbus.s1 写死为 3
+    GC->>CB: CAN1 0x301 携带 ch2 ch3 ch4 s1
+    CB->>CC: 填 dbus 的 ch2 到 ch4 与 s1
+    CC->>CC: 读 s1 选模式, 取通道乘 5
+    CC->>CC: 写 control_target 的三个速度分量</pre></div>
+<h2 id="6-增益-5-的生效条件">6. 增益 5 的生效条件</h2>
+<p>模式选择与增益在同一个循环里（<code>ControlCenterTask.cpp:57-63</code>、<code>ControlCenterTask.cpp:78-84</code>）。遥控分支的 <code>GAIN2</code> 是 5.0，乘在原始计数上。</p>
+<p>由于云台板把 s1 固定成 3，两板联调时底盘读到的 s1 恒为 3，实际走 <code>MODE_AI</code> 分支；只有在底盘板单独运行、没有 0x301 输入时，遥控分支才可能生效。这是按当前固件代码得出的结论，换板或改固件后需重新确认。</p>
+<p>这条结论解释了”接了遥控器却推不动底盘”的现象：遥控量确实进了 0x301，但模式是 AI，平移来源被切到上位机。验证办法是在底盘侧打印 s1 与当前模式枚举。</p>
+<h2 id="7-0x301-分支落穿的影响">7. 0x301 分支落穿的影响</h2>
+<p>底盘 0x301 分支末尾没有 <code>break</code>，会落穿到 0x302，把 <code>RxData[0..3]</code> 当成大端 float 写进 <code>gimbal_yaw_angle</code>（<code>bsp_can.cpp:608-632</code>）。<code>gimbal_yaw_angle</code> 随后只在 <code>ControlCenterTask.cpp:104</code> 被读去算 <code>gimbal_yaw_radians</code>，该中间量没有再被使用，影响限于可读性；同一帧被两个分支消费属结构问题。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>分支</th><th>帧</th><th>读到的字节</th><th>写入</th></tr></thead><tbody><tr><td>0x301</td><td>遥控转发</td><td><code>RxData[0..6]</code></td><td><code>dbus.ch[2..4]</code> 与 <code>s1</code></td></tr><tr><td>0x302（落穿）</td><td>同一帧</td><td><code>RxData[0..3]</code></td><td><code>gimbal_yaw_angle</code></td></tr></tbody></table>
+<p>落穿本身不影响速度指令，因为 0x302 分支写的是另一个变量。但把帧长或字段顺序改成不同长度后，两个分支的解读会同时变化，所以修它要先确认下游是否有人读那个中间量。</p>
+<h2 id="8-常见错误">8. 常见错误</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>1</td><td>推前后杆无响应或方向错</td><td>按 <code>:69-71</code> 把 vx 取 <code>ch[1]</code></td><td><code>ControlCenterTask.cpp:88</code></td></tr><tr><td>2</td><td>映射对不上，排查跑偏</td><td>认为三处通道注释一致</td><td><code>ControlCenterTask.cpp:14-18</code>、<code>:69-71</code>、<code>:88-90</code></td></tr><tr><td>3</td><td>模式在 1/2/3 之外不变</td><td>把 s1 当连续量</td><td><code>ControlCenterTask.cpp:57-63</code></td></tr><tr><td>4</td><td>自写解析器取错 wz</td><td>忽略 <code>ch[4]</code> 在第 16、17 字节</td><td><code>dbus.cpp:20</code></td></tr><tr><td>5</td><td>认为遥控分支一定生效</td><td>两板联调时 s1 恒为 3</td><td><code>ControlCenterTask.cpp:46</code>、<code>108</code></td></tr><tr><td>6</td><td>同帧被 0x302 再解析一次</td><td>忽略 0x301 后缺 <code>break</code></td><td><code>bsp_can.cpp:608-632</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>DBUS 一帧 18 字节，通道是 11 位减 1024 的带符号计数，行程约 ±660。</li>
+<li>生效代码取 <code>vx=ch[3]*5</code>、<code>vy=ch[2]*5</code>、<code>wz=ch[4]*5</code>，与两处注释都不一致。</li>
+<li>s1 取 1/2/3 对应 RC、跟随、AI；取 0 时模式保持不变。</li>
+<li>遥控器挂在云台板，底盘经 0x301 收到 <code>ch[2]</code>、<code>ch[3]</code>、<code>ch[4]</code> 与 s1。</li>
+<li>云台板把 s1 写死为 3 并转发，两板联调时底盘恒走 AI 分支。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>遥控器归属</td><td>接在云台板</td><td>云台板直读摇杆</td><td>底盘依赖跨板报文</td></tr><tr><td>模式选择</td><td>s1 直接映射枚举</td><td>逻辑短</td><td>无 else，非法值沿用旧模式</td></tr><tr><td>增益</td><td>计数乘常数 5</td><td>无需标定</td><td>与上位机分支量纲不一致</td></tr><tr><td>转发字段</td><td>固定 7 个字节</td><td>帧短</td><td>缺 break 时被邻分支复用</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 s1 的位表达式，列出 2 位所有取值及对应模式。</li>
+<li>按第 3 节的表分别写出代码口径与 <code>:69-71</code> 口径下的 vx 取值通道。</li>
+<li>计算 vx 通道打满（+660）时 <code>control_target.chassis_vx</code> 的值。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>若 s1 被云台板固定为 3，说明如何在不改云台板的前提下让底盘恢复遥控控制。</li>
+<li>给 0x301 接收分支补上 <code>break</code> 后，逐步列出 <code>gimbal_yaw_angle</code> 的写入路径变化。</li>
+<li>设计一次联调实验，用示波器或日志判断底盘实际处于哪个模式。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Communication/Src/dbus.cpp</code></td><td>18 字节解码与 s1/s2 位域（<code>:11-34</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>通道注释、模式选择、增益与赋值（<code>:14-19</code>、<code>:57-63</code>、<code>:69-91</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>0x301 接收与落穿（<code>:597-632</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>s1 写死与 0x301 转发（<code>:46</code>、<code>:108-109</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>0x301 发送函数签名与字段（<code>:496-520</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.h</code></td><td>模式枚举定义（<code>:39-43</code>）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-上位机速度指令到轮速"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-上位机速度指令到轮速</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/08-机器人运动学/03-底盘指令映射/02-上位机速度指令到轮速.md</span></div><div class="dfile__body"><h1 id="上位机速度指令到轮速">上位机速度指令到轮速</h1>
+<p>上位机（小电脑）通过 USB CDC 发帧，底盘板用一个独立任务收包并解析，AI 模式下把速度向量写进四个目标轮速。协议帧的起始字节是 0x5A，速度包 ID 是 0x01。</p>
+<p>这条路径上最容易出错的地方是三个不一致：收发两端的帧长口径不一致，两个入口的增益量纲不一致，AI 分支的四条式子与标准麦克纳姆逆解不一致。三者都属于”代码能跑但语义可疑”的类型，需要拿证据判断而不是靠读注释。</p>
+<blockquote>
+<p>上位机速度指令从 USB 收包到 AI 分支写 <code>Target_chassis_speed_motor_1..4</code> 的路径；遥控入口与 s1 模式判据见 <code>01-遥控器通道到速度指令.md</code>。</p>
+</blockquote>
+<h2 id="1-上位机入口与协议常量">1. 上位机入口与协议常量</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>取值</th><th>出处</th></tr></thead><tbody><tr><td>帧起始字节</td><td>0x5A</td><td><code>UsbConnectTask.h:16</code></td></tr><tr><td>帧头长度</td><td>4 字节</td><td><code>UsbConnectTask.h:17</code></td></tr><tr><td>速度包 ID</td><td>0x01</td><td><code>UsbConnectTask.h:21</code></td></tr><tr><td>上位机增益</td><td>2000.0</td><td><code>ControlCenterTask.cpp:80</code></td></tr><tr><td>遥控增益</td><td>5.0</td><td><code>ControlCenterTask.cpp:86</code></td></tr><tr><td>增益比</td><td>400</td><td>2000 / 5</td></tr></tbody></table>
+<p>两个入口写的是同一组 <code>control_target.chassis_vx/vy/wz</code>，但增益相差 400 倍。模式切到 AI 时，同样的操作量会得到与遥控分支完全不同的目标轮速。</p>
+<h2 id="2-帧结构与整帧长度口径">2. 帧结构与整帧长度口径</h2>
+<p>帧由四段组成：帧头、可选时间戳、数据段、尾校验。解析端按下面的式子算整帧长度：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mrow><mi>f</mi><mi>r</mi><mi>a</mi><mi>m</mi><mi>e</mi></mrow></msub><mo>=</mo><mn>4</mn><mo>+</mo><mn>4</mn><mo>+</mo><msub><mi>L</mi><mrow><mi>d</mi><mi>a</mi><mi>t</mi><mi>a</mi></mrow></msub><mo>+</mo><mn>2</mn><mo>=</mo><msub><mi>L</mi><mrow><mi>d</mi><mi>a</mi><mi>t</mi><mi>a</mi></mrow></msub><mo>+</mo><mn>10</mn><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>L</mi><mrow><mi>f</mi><mi>r</mi><mi>a</mi><mi>m</mi><mi>e</mi></mrow></msub><mo>≥</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">L_{frame}=4+4+L_{data}+2=L_{data}+10,\qquad L_{frame}\ge 10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">am</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">a</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">a</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord">10</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">am</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span></p>
+<p>四字节时间戳被算进长度，且数据段指针按帧头加时间戳的偏移取。发送端构造帧时把时间戳整段注释掉（<code>UsbConnectTask.cpp:247-250</code>），只发帧头、数据、两字节 CRC16，收发的长度口径由此不同。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>端</th><th>实际字段</th><th>长度</th></tr></thead><tbody><tr><td>发送端</td><td>帧头 4 + 数据 + CRC16 2</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mrow><mi>d</mi><mi>a</mi><mi>t</mi><mi>a</mi></mrow></msub><mo>+</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">L_{data}+6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">a</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span></td></tr><tr><td>接收端</td><td>帧头 4 + 时间戳 4 + 数据 + CRC16 2</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mrow><mi>d</mi><mi>a</mi><mi>t</mi><mi>a</mi></mrow></msub><mo>+</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">L_{data}+10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">a</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span></td></tr></tbody></table>
+<p>差 4 字节的后果是接收端按更长的步长前进，若同一缓冲里有连续多帧，第二帧的起点会错位。单帧测试通常发现不了，因为错位的读取落在缓冲尾部未初始化区。</p>
+<h2 id="3-解析流程与只做两项校验">3. 解析流程与只做两项校验</h2>
+<p>解析在任务循环里对缓冲区做一次线性扫描：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>判据</th><th>位置</th></tr></thead><tbody><tr><td>长度检查</td><td>小于 10 直接返回</td><td><code>UsbConnectTask.cpp:104-106</code></td></tr><tr><td>帧头校验</td><td>只查 SOF 与 <code>len &#x3C;= 256</code></td><td><code>:59-74</code></td></tr><tr><td>长度计算</td><td><code>4+4+len+2</code></td><td><code>:118</code></td></tr><tr><td>包分发</td><td><code>header->id == 0x01</code></td><td><code>:130-136</code></td></tr><tr><td>数据拷贝</td><td><code>memcpy(&#x26;cmd, data, sizeof(robot_cmd_t))</code></td><td><code>:82-93</code></td></tr></tbody></table>
+<p>帧头里的 CRC8 字段存在，但校验被临时禁用（<code>:71-72</code> 的 TODO），所以只有 SOF 和长度参与过滤。过滤条件只剩两项时，任何以 0x5A 开头且长度字段合理的字节序列都会被当成帧，噪声与粘包都可能进入控制链。</p>
+<p>数据段长度必须不小于 <code>sizeof(robot_cmd_t)</code>，该结构是三个速度浮点加五组未使用字段，按 1 字节对齐共 38 字节。</p>
+<p>长度字段本身也只做了上界检查，下界由结构体大小隐式保证：长度小于 38 的帧即使通过 SOF 检查，也会在读结构体时越界取到缓冲里的旧字节。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["上位机 0x5A 帧"] --> B["USB CDC 中断"]
+    B --> C["CDC_Receive_FS 转交 USB_Data_Received"]
+    C --> D["addDataToBuffer 追加到 rx_buffer"]
+    D --> E["UsbConnectTask 每 10 ms 解析"]
+    E --> F{"帧头有效且 id 等于 0x01"}
+    F -->|否| G["跳过或等待更多字节"]
+    F -->|是| H["memcpy 写入全局 cmd"]
+    H --> I["ControlCenterTask 读 cmd.speed"]
+    I --> J["乘 GAIN 2000"]
+    J --> K["AI 分支四条式子"]
+    K --> L["写四个目标轮速"]</pre></div>
+<h2 id="4-2000-与-5-的-400-倍增益差">4. 2000 与 5 的 400 倍增益差</h2>
+<p>增益差的排查要先确认当前模式，再看该模式的增益常量。若模式是 AI 而上位机按遥控口径给数，整车速度会放大 400 倍；反过来，模式是 RC 而按上位机口径给数，底盘几乎不动。</p>
+<p>两个分支的赋值形式相同，增益不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>分支</th><th>输入量</th><th>增益</th><th>满行程目标值</th></tr></thead><tbody><tr><td>遥控</td><td>DBUS 计数</td><td>5.0</td><td>±3300（按 ±660 计数）</td></tr><tr><td>上位机</td><td><code>cmd.speed.vx</code> 等</td><td>2000.0</td><td>取决于上位机量纲</td></tr></tbody></table>
+<p><code>cmd.speed</code> 是 <code>float</code>，源码没有单位注释。若上位机按米每秒发送，3 m/s 对应 6000，与遥控满行程同量级；若按归一化量发送，则高出 400 倍。单位属推断，需与上位机代码或联调日志核对后才能定论。</p>
+<p>判断量纲的办法是从下游反推：目标轮速最终进的是速度环，速度环的输出是电流或力矩，中间还可能有减速比换算。把速度环的输入口径与目标轮速的数值范围对上，就能确定 <code>cmd.speed</code> 是米每秒还是归一化量。</p>
+<h2 id="5-ai-分支四条式子的系数矩阵">5. AI 分支四条式子的系数矩阵</h2>
+<p>AI 分支不使用旋转层，也不使用标准逆解，而是四条直接赋值：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">Target_chassis_speed_motor_1 </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#24292E">control_target.chassis_vx </span><span style="color:#D73A49">+</span><span style="color:#24292E"> factor </span><span style="color:#D73A49">*</span><span style="color:#24292E"> control_target.chassis_wz;</span><span style="color:#6A737D">  // 右前轮</span></span>
+<span class="line"><span style="color:#24292E">Target_chassis_speed_motor_2 </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#24292E">control_target.chassis_vy </span><span style="color:#D73A49">+</span><span style="color:#24292E"> factor </span><span style="color:#D73A49">*</span><span style="color:#24292E"> control_target.chassis_wz;</span><span style="color:#6A737D">  // 左前轮</span></span>
+<span class="line"><span style="color:#24292E">Target_chassis_speed_motor_3 </span><span style="color:#D73A49">=</span><span style="color:#24292E">  control_target.chassis_vx </span><span style="color:#D73A49">+</span><span style="color:#24292E"> factor </span><span style="color:#D73A49">*</span><span style="color:#24292E"> control_target.chassis_wz;</span><span style="color:#6A737D">  // 左后轮</span></span>
+<span class="line"><span style="color:#24292E">Target_chassis_speed_motor_4 </span><span style="color:#D73A49">=</span><span style="color:#24292E">  control_target.chassis_vy </span><span style="color:#D73A49">+</span><span style="color:#24292E"> factor </span><span style="color:#D73A49">*</span><span style="color:#24292E"> control_target.chassis_wz;</span><span style="color:#6A737D">  // 右后轮</span></span></code></pre>
+<p>把每条式子按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>v</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>v</mi><mi>y</mi></msub><mo separator="true">,</mo><msub><mi>w</mi><mi>z</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(v_x,v_y,w_z)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 的系数写成矩阵：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mo fence="true">[</mo><mtable rowspacing="0.16em" columnalign="center" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>m</mi><mn>1</mn></msub></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>m</mi><mn>2</mn></msub></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>m</mi><mn>3</mn></msub></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>m</mi><mn>4</mn></msub></mstyle></mtd></mtr></mtable><mo fence="true">]</mo></mrow><mo>=</mo><mrow><mo fence="true">[</mo><mtable rowspacing="0.16em" columnalign="center center center" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mo>−</mo><mn>1</mn></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>0</mn></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>1</mn></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>0</mn></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mo>−</mo><mn>1</mn></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>1</mn></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>1</mn></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>0</mn></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>1</mn></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>0</mn></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>1</mn></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mn>1</mn></mstyle></mtd></mtr></mtable><mo fence="true">]</mo></mrow><mrow><mo fence="true">[</mo><mtable rowspacing="0.16em" columnalign="center" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>v</mi><mi>x</mi></msub></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>v</mi><mi>y</mi></msub></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>w</mi><mi>z</mi></msub></mstyle></mtd></mtr></mtable><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\begin{bmatrix} m_1 \\ m_2 \\ m_3 \\ m_4 \end{bmatrix}=\begin{bmatrix} -1 &#x26; 0 &#x26; 1 \\ 0 &#x26; -1 &#x26; 1 \\ 1 &#x26; 0 &#x26; 1 \\ 0 &#x26; 1 &#x26; 1 \end{bmatrix}\begin{bmatrix} v_x \\ v_y \\ w_z \end{bmatrix}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:4.8em;vertical-align:-2.15em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.65em;"><span class="pstrut" style="height:6.8em;"></span><span style="width:0.667em;height:4.8em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="4.8em" viewBox="0 0 667 4800"><path d="M403 1759 V84 H666 V0 H319 V1759 v1200 v1759 v84 h347 v-84
+H403z M403 1759 V0 H319 V1759 v1200 v1759 v84 h84z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mtable"><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.81em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.61em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.41em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-1.21em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">4</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.65em;"><span class="pstrut" style="height:6.8em;"></span><span style="width:0.667em;height:4.8em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="4.8em" viewBox="0 0 667 4800"><path d="M347 1759 V0 H0 V84 H263 V1759 v1200 v1759 H0 v84 H347z
+M347 1759 V0 H263 V1759 v1200 v1759 h84z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:4.8em;vertical-align:-2.15em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.65em;"><span class="pstrut" style="height:6.8em;"></span><span style="width:0.667em;height:4.8em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="4.8em" viewBox="0 0 667 4800"><path d="M403 1759 V84 H666 V0 H319 V1759 v1200 v1759 v84 h347 v-84
+H403z M403 1759 V0 H319 V1759 v1200 v1759 v84 h84z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mtable"><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.81em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">−</span><span class="mord">1</span></span></span><span style="top:-3.61em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0</span></span></span><span style="top:-2.41em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span><span style="top:-1.21em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.81em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0</span></span></span><span style="top:-3.61em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">−</span><span class="mord">1</span></span></span><span style="top:-2.41em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0</span></span></span><span style="top:-1.21em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:0.5em;"></span><span class="arraycolsep" style="width:0.5em;"></span><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.81em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span><span style="top:-3.61em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span><span style="top:-2.41em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span><span style="top:-1.21em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.65em;"><span style="top:-4.65em;"><span class="pstrut" style="height:6.8em;"></span><span style="width:0.667em;height:4.8em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="4.8em" viewBox="0 0 667 4800"><path d="M347 1759 V0 H0 V84 H263 V1759 v1200 v1759 H0 v84 H347z
+M347 1759 V0 H263 V1759 v1200 v1759 h84z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.15em;"><span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.667em;height:3.6em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="3.6em" viewBox="0 0 667 3600"><path d="M403 1759 V84 H666 V0 H319 V1759 v0 v1759 v84 h347 v-84
+H403z M403 1759 V0 H319 V1759 v0 v1759 v84 h84z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span><span class="mord"><span class="mtable"><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.21em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.01em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-1.81em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.667em;height:3.6em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.667em" height="3.6em" viewBox="0 0 667 3600"><path d="M347 1759 V0 H0 V84 H263 V1759 v0 v1759 H0 v84 H347z
+M347 1759 V0 H263 V1759 v0 v1759 h84z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>轮</th><th>平移系数行</th><th>与哪一轮重复</th></tr></thead><tbody><tr><td>1 右前</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-1, 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></td><td>无</td></tr><tr><td>2 左前</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mo>−</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(0, -1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">1</span><span class="mclose">)</span></span></span></span></td><td>无</td></tr><tr><td>3 左后</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1, 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></td><td>与 1 反号，同一轴</td></tr><tr><td>4 右后</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></td><td>与 2 反号，同一轴</td></tr></tbody></table>
+<p>标准麦克纳姆逆解的每一行都同时含 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mi>x</mi></msub></mrow><annotation encoding="application/x-tex">v_x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mi>y</mi></msub></mrow><annotation encoding="application/x-tex">v_y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>，横向与纵向在四个轮上按对角组合。这里的系数矩阵每一行只有一个平移分量非零，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mi>x</mi></msub></mrow><annotation encoding="application/x-tex">v_x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 只进 1、3 轮，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mi>y</mi></msub></mrow><annotation encoding="application/x-tex">v_y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 只进 2、4 轮，且四轮的平移项两两重复。按结构判断，它不构成逆解，属占位实现，待现场确认。</p>
+<h2 id="6-收包缓冲与数据落点">6. 收包缓冲与数据落点</h2>
+<p>中断回调把每次收到的字节块追加进 2048 字节缓冲（<code>USB_DEVICE/App/usbd_cdc_if.h:52</code>、<code>Task/Src/UsbConnectTask.cpp:183-202</code>），收包函数在 <code>usbd_cdc_if.c:261-271</code>。任务循环每 10 ms 处理一次缓冲（<code>UsbConnectTask.cpp:160-175</code>），解析成功就清空缓冲。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant PC as 上位机
+    participant CDC as USB CDC 中断
+    participant UT as UsbConnectTask
+    participant CT as ControlCenterTask
+    PC->>CDC: 0x5A 帧 含 len 与 id 与数据与 CRC16
+    CDC->>UT: USB_Data_Received 追加缓冲区
+    UT->>UT: 线性扫描 校验 SOF 与长度
+    UT->>UT: memcpy 到 cmd
+    CT->>CT: AI 模式读 cmd.speed 并乘 2000
+    CT->>CT: 四条式子写目标轮速</pre></div>
+<p>全局对象 <code>cmd</code> 定义在 <code>Message_Bus/message_bus.cpp:14</code>，由 <code>message_bus.h:61</code> 对外声明。缓冲在解析成功后被整体清空，所以一帧里多余的字节不会留到下一轮；若帧被截断，剩余字节会与新到的数据拼在一起，需要等下一次扫描。</p>
+<p>解析函数直接写入它，没有加锁；<code>robot_cmd_t</code> 是 38 字节，ControlCenterTask 与其并发读写时可能读到半新半旧的值，这一点按代码结构属推断，未实测。</p>
+<h2 id="7-生效分支与-s1-固定的关系">7. 生效分支与 s1 固定的关系</h2>
+<p>AI 分支位于 <code>ControlCenterTask.cpp:78-84</code>，增益定义为局部常量 <code>GAIN</code>；逆解条件写成 <code>if (control_target.control_mode != ControlTarget::MODE_AI)</code>（<code>:108</code>），AI 走 <code>:117-122</code> 的 else。由于云台板把 s1 固定成 3（见 <code>01-遥控器通道到速度指令.md</code>），两板联调时这条 else 是实际生效的分支。</p>
+<p>这也解释了上位机链路的地位：即使遥控器接好了，两板联调时实际写轮速的是 AI 分支，所以 <code>cmd.speed</code> 的量纲错了会直接表现为整车速度不对，而遥控杆怎么推都不影响底盘。</p>
+<h2 id="8-常见错误">8. 常见错误</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>1</td><td>坏帧进入解析</td><td>以为 CRC8 在过滤坏帧</td><td><code>UsbConnectTask.cpp:71-72</code></td></tr><tr><td>2</td><td>每帧多算 4 字节，后续错位</td><td>按发送端长度算收包帧长</td><td><code>UsbConnectTask.cpp:247-250</code> 与 <code>:118</code></td></tr><tr><td>3</td><td>与固定结构体解析冲突</td><td>按 <code>Usb协议要求.md</code> 把 0x01 当变长数组</td><td><code>Usb协议要求.md:1-7</code></td></tr><tr><td>4</td><td>一旦被引用就链接失败</td><td>用 <code>g_robot_cmd</code> 这个名字</td><td><code>UsbConnectTask.cpp:16</code></td></tr><tr><td>5</td><td>切模式后速度跳变</td><td>忽略 400 倍增益差</td><td><code>ControlCenterTask.cpp:80</code>、<code>ControlCenterTask.cpp:86</code></td></tr><tr><td>6</td><td>平移只在两组轮上，转向叠加异常</td><td>把 AI 四条式子当逆解</td><td><code>:117-122</code></td></tr><tr><td>7</td><td>换算无从下手</td><td>认为 <code>cmd</code> 有单位约定</td><td><code>UsbConnectTask.h:40-44</code></td></tr></tbody></table>
+<p>第 4 行的 <code>extern robot_cmd_t g_robot_cmd;</code> 与定义 <code>cmd</code> 名字不同，且没有任何引用点。保留现状不会链接失败，一旦有人开始用它就会暴露。</p>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>上位机走 USB CDC，帧以 0x5A 起始，速度包 ID 为 0x01，帧头 4 字节。</li>
+<li>解析只校验 SOF 与长度，CRC8 被 TODO 禁用，整帧长度按含 4 字节时间戳计算。</li>
+<li>数据段拷入 38 字节的 <code>robot_cmd_t</code>，底盘只用其中的 <code>cmd.speed</code>。</li>
+<li>上位机分支增益 2000，遥控分支增益 5，比值 400，量纲是否对齐取决于上位机。</li>
+<li>AI 分支的四条式子把 vx 只给 1、3 轮，vy 只给 2、4 轮，不构成麦克纳姆逆解。</li>
+<li>两板联调时 s1 恒为 3，AI 的 else 分支才是实际生效的路径。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>校验强度</td><td>暂时禁用 CRC8</td><td>便于早期联调</td><td>坏帧可进入控制链</td></tr><tr><td>帧长口径</td><td>含时间戳 4 字节</td><td>与参考协议一致</td><td>与自身发送端不一致</td></tr><tr><td>数据落点</td><td>全局结构体直拷</td><td>无队列开销</td><td>无同步保护</td></tr><tr><td>增益</td><td>上位机乘 2000</td><td>与导航量纲匹配</td><td>与遥控分支相差 400 倍</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出整帧长度公式，并计算 <code>len=40</code> 时的 <code>frame_size</code>。</li>
+<li>按第 4 节的表说明两个分支的增益与满行程目标值。</li>
+<li>写出 AI 分支系数矩阵，指出哪几行相同。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>若上位机按米每秒发送且要求与遥控满行程一致，给出 <code>GAIN</code> 应取的量级并说明推导。</li>
+<li>把接收端的 <code>frame_size</code> 与 <code>data</code> 偏移改成与发送端一致，列出需要改动的行。</li>
+<li>为 <code>cmd</code> 设计一种无锁读写方案，说明在单核 Cortex-M4 上是否必要。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Inc/UsbConnectTask.h</code></td><td>帧常量、包 ID 与数据结构（<code>:16-33</code>、<code>:39-85</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp</code></td><td>收包缓冲、帧解析与打包（<code>:59-147</code>、<code>:183-202</code>、<code>:232-260</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>AI 增益与四条式子（<code>:78-84</code>、<code>:108-122</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Message_Bus/message_bus.cpp</code></td><td><code>cmd</code> 全局定义（<code>:14</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>CDC 接收回调转交（<code>:261-271</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Usb协议要求.md</code></td><td>0x01 包的文档口径（<code>:1-7</code>）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-斜坡与停车处理"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-斜坡与停车处理</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/08-机器人运动学/03-底盘指令映射/03-斜坡与停车处理.md</span></div><div class="dfile__body"><h1 id="斜坡与停车处理">斜坡与停车处理</h1>
+<p>指令映射只负责把操作量变成四个目标轮速，实际电流由 <code>ChassisTask</code> 产生。它每轮做三件事：读目标轮速、过一个只限减速的斜坡、再用速度环 PID 对比电机反馈。</p>
+<p>这条链路里三个数值口径必须一起看：PID 的 <code>dt</code>、循环的真实周期、斜坡的每周期步长。三者任一被单独改动，整定出来的手感就会变。此外输出量在两处声明类型不同，负电流的传递路径需要单独核对。</p>
+<blockquote>
+<p>目标轮速从 <code>ControlCenterTask</code> 写到 <code>ChassisTask</code> 的斜坡、PID 与电流输出；指令来源见 <code>01-遥控器通道到速度指令.md</code> 与 <code>02-上位机速度指令到轮速.md</code>。</p>
+</blockquote>
+<h2 id="1-指令映射之后的速度环">1. 指令映射之后的速度环</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>取值</th><th>出处</th></tr></thead><tbody><tr><td>速度环 Kp / Ki / Kd</td><td>4.0 / 0.001 / 0.001</td><td><code>ChassisTask.cpp:38-40</code></td></tr><tr><td>输出限幅</td><td>±10000</td><td><code>:41</code></td></tr><tr><td>误差限幅</td><td>±25000</td><td><code>:42</code></td></tr><tr><td>斜坡速率</td><td>350 每周期</td><td><code>:32</code></td></tr><tr><td>PID 周期参数</td><td>0.01 s</td><td><code>:20</code></td></tr><tr><td>实际延时</td><td><code>osDelay(1)</code></td><td><code>:94</code></td></tr></tbody></table>
+<p>四个轮各有一个 <code>SpeedPID</code>，参数相同；另有一个只做比例控制的 <code>follow</code> 环，用于跟随模式产生 <code>wz_output</code>（<code>:54</code>）。</p>
+<h2 id="2-单轮速度环的误差与输出限幅">2. 单轮速度环的误差与输出限幅</h2>
+<p>速度环比较斜坡后的目标与电机反馈：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mo>=</mo><msub><mi>k</mi><mrow><mi>e</mi><mi>r</mi><mi>r</mi></mrow></msub><mrow><mo fence="true">(</mo><msub><mi>t</mi><mrow><mi>r</mi><mi>a</mi><mi>m</mi><mi>p</mi></mrow></msub><mo>−</mo><msub><mi>ω</mi><mrow><mi>r</mi><mi>o</mi><mi>t</mi><mi>o</mi><mi>r</mi></mrow></msub><mo fence="true">)</mo></mrow><mo separator="true">,</mo><mspace width="2em"></mspace><mi>u</mi><mo>=</mo><msub><mi>k</mi><mi>p</mi></msub><mi>e</mi><mo>+</mo><msub><mi>k</mi><mi>i</mi></msub><mo>∫</mo><mi>e</mi><mtext> </mtext><mi>d</mi><mi>t</mi><mo>+</mo><msub><mi>k</mi><mi>d</mi></msub><mfrac><mrow><mi>d</mi><mi>e</mi></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">e=k_{err}\left(t_{ramp}-\omega_{rotor}\right),\qquad u=k_p e+k_i\int e\,dt+k_d\frac{de}{dt}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">am</span><span class="mord mathnormal mtight">p</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">or</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1111em;vertical-align:-0.3061em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-symbol small-op" style="margin-right:0.1945em;position:relative;top:-0.0006em;">∫</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2251em;vertical-align:-0.345em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8801em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">e</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>误差先被限到 ±25000，输出再被限到 ±10000（<code>PID/Src/speed_pid.cpp:59-108</code>）。整数电流的表示范围在 <code>int16_t</code> 之内，限幅值 10000 没有越过该范围。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>级</th><th>限幅</th><th>作用</th></tr></thead><tbody><tr><td>误差级</td><td>±25000</td><td>防止积分项被大误差一次性推满</td></tr><tr><td>输出级</td><td>±10000</td><td>限制下发到电机的电流指令</td></tr></tbody></table>
+<p>两级限幅的顺序是先误差后输出，所以积分器累积的是限幅后的误差。把误差限幅去掉会让积分在大误差下增长过快，恢复时间变长。</p>
+<h2 id="3-只限减速的斜坡">3. 只限减速的斜坡</h2>
+<p>斜坡函数是一条折线，只在减速方向生效：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><mrow><mo fence="true">{</mo><mtable rowspacing="0.36em" columnalign="left left" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msubsup><mi>t</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msubsup></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><msubsup><mi>t</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msubsup><mo>≥</mo><msub><mi>t</mi><mi>k</mi></msub></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>max</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><msubsup><mi>t</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msubsup><mo separator="true">,</mo><mtext> </mtext><msub><mi>t</mi><mi>k</mi></msub><mo>−</mo><mn>350</mn><mo fence="true">)</mo></mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><msubsup><mi>t</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msubsup><mo>&#x3C;</mo><msub><mi>t</mi><mi>k</mi></msub></mrow></mstyle></mtd></mtr></mtable></mrow></mrow><annotation encoding="application/x-tex">t_{k+1}=\begin{cases} t_{k+1}^{cmd} &#x26; t_{k+1}^{cmd}\ge t_k \\ \max\left(t_{k+1}^{cmd},\ t_k-350\right) &#x26; t_{k+1}^{cmd}&#x3C;t_k \end{cases}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8234em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3em;vertical-align:-1.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">{</span></span><span class="mord"><span class="mtable"><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.4169em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3414em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mop">max</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.4169em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3414em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">350</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:1em;"></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.4169em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3414em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.4169em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3414em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>加速方向直接返回目标值，没有速率限制；减速方向每个周期最多变化 350 个单位。这样起步可以立刻给出大电流，刹车则被拉成若干周期。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方向</th><th>行为</th><th>效果</th></tr></thead><tbody><tr><td>加速</td><td>直接取目标</td><td>响应快，电流可能一步到顶</td></tr><tr><td>减速</td><td>每周期最多降 350</td><td>刹车变缓，但步长与真实周期耦合</td></tr></tbody></table>
+<p>斜坡步长 350 是按 10 ms 周期标定的，实际周期越短，单位时间内的减速量越大。改循环延时时斜坡手感会跟着变，这一点在第 5 节展开。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["四个目标轮速, 来自指令映射"] --> B{"四个目标是否全为 0"}
+    B -->|是| C["四个 PID 调用 Clear"]
+    B -->|否| D["跳过清零"]
+    C --> E["斜坡函数"]
+    D --> E
+    E --> F{"目标是否大于等于当前"}
+    F -->|是| G["直接返回目标, 加速无限"]
+    F -->|否| H["每周期最多降 350"]
+    G --> I["速度环 PID"]
+    H --> I
+    I --> J["int16 电流输出"]
+    J --> K["CAN2 0x200 下发四轮"]</pre></div>
+<h2 id="4-停车时清零积分">4. 停车时清零积分</h2>
+<p>四个目标速度同时为零时，对四个 PID 调用 <code>Clear()</code>（<code>ChassisTask.cpp:56-68</code>）。<code>Clear()</code> 只复位积分项和上一次误差（<code>PID/PidBase.h:23-26</code>），不改变目标。作用是在停车瞬间清掉历史积分，避免下一次起步被旧积分推着走。</p>
+<p>判断用的是目标轮速的浮点相等，不是电机实际转速。只要四个目标不是精确的 0，清零就不触发；遥控计数乘 5 后只有通道恰好为 0 才会得到精确 0。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情形</th><th>目标值</th><th>是否清零</th></tr></thead><tbody><tr><td>摇杆回中，计数为 0</td><td>精确 0.0</td><td>是</td></tr><tr><td>摇杆微动，计数为 1</td><td>5.0</td><td>否</td></tr><tr><td>上位机发送接近 0 的小数</td><td>非精确 0</td><td>否</td></tr></tbody></table>
+<h2 id="5-dt-与-osdelay-的周期错配">5. dt 与 osDelay 的周期错配</h2>
+<p><code>dt</code> 与循环延时分处两行：<code>float dt = 0.01</code>（<code>:20</code>）按 10 ms 周期标定，循环末却是 <code>osDelay(1)</code>（<code>:94</code>）。<code>configTICK_RATE_HZ</code> 为 1000，一个 tick 约 1 ms，实际周期接近 1 ms。把这两个口径带进积分与微分：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>每真实秒的效果</th><th>与标定值相比</th></tr></thead><tbody><tr><td>积分增量</td><td>累加约 1000 次 <code>Ki*e*0.01</code></td><td>放大约 10 倍</td></tr><tr><td>微分</td><td>除以 0.01 而非 0.001</td><td>缩小约 10 倍</td></tr><tr><td>斜坡</td><td>每毫秒变化 350</td><td>比 10 ms 标定快约 10 倍</td></tr></tbody></table>
+<p>跟随环是纯比例控制，<code>dt</code> 不进入 P 项，所以周期错配不改变它的比例增益，只影响带 I、D 的四个速度环与斜坡的手感。实际周期还要叠加任务执行时间，精确值待实测。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant CC as ControlCenterTask
+    participant TS as 四个目标轮速
+    participant CT as ChassisTask
+    participant PID as 四个 SpeedPID
+    participant CAN as bsp_can2
+    participant M as 3508 电机
+    CC->>TS: 写目标轮速
+    CT->>TS: 读目标轮速
+    CT->>CT: 全零则 Clear
+    CT->>CT: 斜坡限减速
+    CT->>PID: Calculate 斜坡目标与 rotor_speed
+    PID->>CT: int16 电流
+    CC->>CAN: 读输出并组帧
+    CAN->>M: CAN2 0x200</pre></div>
+<h2 id="6-速度环对象与参数">6. 速度环对象与参数</h2>
+<p>四个 PID 在任务进入循环前构造，参数完全一致（<code>ChassisTask.cpp:46-52</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6F42C1">SpeedPID</span><span style="color:#6F42C1"> motor_1_PID</span><span style="color:#24292E">(</span><span style="color:#6F42C1">KP</span><span style="color:#24292E">, </span><span style="color:#6F42C1">KI</span><span style="color:#24292E">, </span><span style="color:#6F42C1">KD</span><span style="color:#24292E">, </span><span style="color:#6F42C1">OUT_BOUNDARY</span><span style="color:#24292E">, </span><span style="color:#D73A49">-</span><span style="color:#E36209">OUT_BOUNDARY</span><span style="color:#24292E">, </span><span style="color:#6F42C1">ERR_BOUNDARY</span><span style="color:#24292E">, </span><span style="color:#D73A49">-</span><span style="color:#E36209">ERR_BOUNDARY</span><span style="color:#24292E">);</span></span></code></pre>
+<p><code>OUT_BOUNDARY</code> 为 10000，<code>ERR_BOUNDARY</code> 为 25000。反馈量是 <code>chassis_motor_N.rotor_speed</code>，由 CAN2 的 0x201 到 0x204 中断填入（<code>BSP/Src/bsp_can.cpp:560-588</code>）。</p>
+<p>四个环共用同一组参数，意味着四个轮的速度响应一致（在电机与负载一致的前提下）。若某个轮明显偏慢，先看反馈是否正常进入，再看机械负载，而不是单独改那一个环的参数。</p>
+<h2 id="7-斜坡与输出的衔接">7. 斜坡与输出的衔接</h2>
+<p>斜坡的局部变量 <code>motor_N_target</code> 在任务栈上跨轮持久，每轮先更新再进 PID（<code>ChassisTask.cpp:83-92</code>）。PID 输出直接写四个全局输出量：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">chassis_output_motor_1 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> motor_1_PID.</span><span style="color:#6F42C1">Calculate</span><span style="color:#24292E">(motor_1_target, chassis_motor_1.rotor_speed, dt);</span></span></code></pre>
+<p><code>ControlCenterTask</code> 在同一个 1 ms 节拍里读取这四个量并下发（<code>ControlCenterTask.cpp:126</code>），<code>bsp_can2_djimotorcmd</code> 把它们按大端拆成 8 字节，发到 CAN2 的 0x200（<code>BSP/Src/bsp_can.cpp:83-108</code>）。两个任务都是 <code>osPriorityNormal</code>，在 <code>Core/Src/freertos.c:101-104</code> 注册，输出变量的读写没有互斥。</p>
+<h2 id="8-输出类型不一致的后果">8. 输出类型不一致的后果</h2>
+<p>同四个符号在两处声明类型不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>声明</th><th>类型</th></tr></thead><tbody><tr><td><code>ChassisTask.cpp:15-18</code></td><td>定义</td><td><code>int16_t</code></td></tr><tr><td><code>ControlCenterTask.cpp:25-28</code></td><td><code>extern</code></td><td><code>uint16_t</code></td></tr></tbody></table>
+<p>定义侧用带符号类型承接 PID 输出，引用侧按无符号读。按代码推导，负电流经 <code>uint16_t</code> 会变成接近 65535 的正数，再传给 <code>bsp_can2_djimotorcmd</code> 时按大端拆字节，电机收到的是一个异常大的正值。这是类型不一致的典型后果，真实现象待实测确认。</p>
+<p>排查办法是在组帧前打印原始值与转换后的值。若定义侧为负而组帧侧为正，就确认了这条路径。</p>
+<h2 id="9-常见错误">9. 常见错误</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>1</td><td>起步电流一步到顶</td><td>以为斜坡两个方向都限速</td><td><code>ChassisTask.cpp:70-79</code></td></tr><tr><td>2</td><td>I 偏大、D 偏小约 10 倍</td><td>用 <code>dt=0.01</code> 算真实增益</td><td><code>:20</code> 与 <code>:94</code></td></tr><tr><td>3</td><td>目标非零时不清积分</td><td>以为停车按实际转速判断</td><td><code>ChassisTask.cpp:56-68</code></td></tr><tr><td>4</td><td>负电流变正大数</td><td>忽略输出类型不一致</td><td><code>ChassisTask.cpp:15-18</code> 与 <code>ControlCenterTask.cpp:25-28</code></td></tr><tr><td>5</td><td>两个 1 ms 任务并发访问</td><td>以为输出读写是原子的整体</td><td><code>ControlCenterTask.cpp:126</code></td></tr><tr><td>6</td><td>判据只看原始目标</td><td>把斜坡目标当停车判据</td><td><code>:57-60</code></td></tr></tbody></table>
+<p><code>int16_t</code> 的单次读写本身是原子的，第 5 行的问题不在单个变量的撕裂，而在一次控制周期内四个输出可能来自两个不同轮次，四轮不再严格同步。这一点按代码结构属推断。</p>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>目标轮速先过斜坡，再进四个 <code>SpeedPID</code>，输出限幅 ±10000、误差限幅 ±25000。</li>
+<li>斜坡只在减速方向限速，加速方向直接跳到目标值。</li>
+<li>四个目标同时为零时清零四个 PID 的积分与上一次误差。</li>
+<li><code>dt=0.01</code> 与实际约 1 ms 周期错配，I 项放大、D 项与斜坡时间尺度各差约 10 倍。</li>
+<li>输出量两处声明类型不同，负电流经无符号引用会失效。</li>
+<li><code>ControlCenterTask</code> 读输出并组 CAN2 0x200 帧，两个任务同级运行。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>斜坡方向</td><td>只限减速</td><td>起步响应快</td><td>目标跳变时电流冲击无缓冲</td></tr><tr><td>停车判据</td><td>目标全零</td><td>判断简单</td><td>与实际转速无关</td></tr><tr><td>周期参数</td><td>写死 0.01</td><td>与 PID 标定解耦</td><td>与延时不一致</td></tr><tr><td>输出类型</td><td>定义 <code>int16_t</code></td><td>能表示负电流</td><td>引用写成 <code>uint16_t</code> 后失效</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出斜坡函数的两种分支，并计算当前值 1000、目标 0 时下一周期的斜坡值。</li>
+<li>列出四个 PID 的 Kp、Ki、Kd 与两级限幅值，指出各自出处。</li>
+<li>说明 <code>Clear()</code> 复位了哪些量、没有复位哪些量。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把 <code>dt</code> 改为与实际延时一致，推导 I 项在 1 秒内的积分增量变化。</li>
+<li>为斜坡补上加速方向的速率限制，写出新的分段表达式并说明对起步电流的影响。</li>
+<li>设计一次实测，用 CAN 日志区分第 9 节第 4 行中的类型不一致是否真实发生。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ChassisTask.cpp</code></td><td>速度环参数、斜坡、停车清零与输出（<code>:15-24</code>、<code>:32-94</code>、<code>:103-105</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>输出引用与 CAN 下发（<code>:25-28</code>、<code>:126-128</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>0x200 组帧与 0x201 到 0x204 反馈（<code>:83-108</code>、<code>:560-588</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/PID/Src/speed_pid.cpp</code></td><td>误差限幅与 PID 计算（<code>:59-108</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/PID/PidBase.h</code></td><td><code>Clear()</code> 与积分限幅（<code>:23-26</code>、<code>:44-47</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/freertos.c</code></td><td>任务注册（<code>:101-104</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Inc/FreeRTOSConfig.h</code></td><td>系统节拍 1000 Hz（<code>:64</code>）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/08-%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%BF%90%E5%8A%A8%E5%AD%A6/02-%E6%AD%A3%E9%80%86%E8%BF%90%E5%8A%A8%E5%AD%A6/"><span class="k">← 上一篇</span><span class="t">正逆运动学</span><span class="d">机器人运动学 · 5 个文件</span></a><a class="next" href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/01-%E5%88%86%E5%B1%82%E6%9E%B6%E6%9E%84/"><span class="k">下一篇 →</span><span class="t">分层架构</span><span class="d">嵌入式软件架构 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

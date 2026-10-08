@@ -1,0 +1,1558 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>jit·vmap·grad · JAX 与 Brax · 王宇翔</title><meta name="description" content="jax.jit 在本仓库的用法与约束，包括追踪一次、编译缓存复用、trace 期常量、重编触发条件，以及训练侧与观察侧的取法差异。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/01-jit%C2%B7vmap%C2%B7grad/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="jit·vmap·grad · JAX 与 Brax · 王宇翔"><meta property="og:description" content="jax.jit 在本仓库的用法与约束，包括追踪一次、编译缓存复用、trace 期常量、重编触发条件，以及训练侧与观察侧的取法差异。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/01-jit%C2%B7vmap%C2%B7grad/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/">JAX 与 Brax</a><span class="sep" aria-hidden="true">/</span><span class="now">jit·vmap·grad</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>jit·vmap·grad</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>jit 追踪与缓存</span></a><ul class="toc__heads"><li><a href="#1-逐算子派发与一次编译的差距" data-depth="2" data-heading-j="0">1. 逐算子派发与一次编译的差距</a></li><li><a href="#2-追踪一次编译一次缓存键由三样东西组成" data-depth="2" data-heading-j="1">2. 追踪一次、编译一次，缓存键由三样东西组成</a></li><li><a href="#3-哪些改动会触发重新编译" data-depth="2" data-heading-j="2">3. 哪些改动会触发重新编译</a></li><li><a href="#4-观察器三处按帧调用各自-jit" data-depth="2" data-heading-j="3">4. 观察器：三处按帧调用各自 jit</a></li><li><a href="#5-其余落点探针评估与姿态池" data-depth="2" data-heading-j="4">5. 其余落点：探针、评估与姿态池</a></li><li><a href="#6-训练侧trace-期常量决定课程推进方式" data-depth="2" data-heading-j="5">6. 训练侧：trace 期常量决定课程推进方式</a></li><li><a href="#7-首帧慢与反复重编的区分" data-depth="2" data-heading-j="6">7. 首帧慢与反复重编的区分</a></li><li><a href="#8-与缓存相关的故障现象" data-depth="2" data-heading-j="7">8. 与缓存相关的故障现象</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>vmap 批量环境与策略</span></a><ul class="toc__heads"><li><a href="#1-四种批量写法的代价" data-depth="2" data-heading-j="0">1. 四种批量写法的代价</a></li><li><a href="#2-in_axespytree-与随机键分发" data-depth="2" data-heading-j="1">2. in_axes、pytree 与随机键分发</a></li><li><a href="#3-组合顺序与编译缓存" data-depth="2" data-heading-j="2">3. 组合顺序与编译缓存</a></li><li><a href="#4-评估脚本的统一骨架" data-depth="2" data-heading-j="3">4. 评估脚本的统一骨架</a></li><li><a href="#5-探针脚本与姿态池" data-depth="2" data-heading-j="4">5. 探针脚本与姿态池</a></li><li><a href="#6-批量规模怎么取" data-depth="2" data-heading-j="5">6. 批量规模怎么取</a></li><li><a href="#7-两处未包-jit-的例外" data-depth="2" data-heading-j="6">7. 两处未包 jit 的例外</a></li><li><a href="#8-批量相关的故障现象" data-depth="2" data-heading-j="7">8. 批量相关的故障现象</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>grad 梯度与 PPO 更新</span></a><ul class="toc__heads"><li><a href="#1-梯度在哪一层" data-depth="2" data-heading-j="0">1. 梯度在哪一层</a></li><li><a href="#2-裁剪代理目标与-gae" data-depth="2" data-heading-j="1">2. 裁剪代理目标与 GAE</a></li><li><a href="#3-全局范数裁剪与-adam" data-depth="2" data-heading-j="2">3. 全局范数裁剪与 Adam</a></li><li><a href="#4-批量账目batch_size-是序列数" data-depth="2" data-heading-j="3">4. 批量账目：batch_size 是序列数</a></li><li><a href="#5-超参从训练脚本到-brax-的映射" data-depth="2" data-heading-j="4">5. 超参从训练脚本到 brax 的映射</a></li><li><a href="#6-检查点里没有优化器状态" data-depth="2" data-heading-j="5">6. 检查点里没有优化器状态</a></li><li><a href="#7-梯度为零的失败模式" data-depth="2" data-heading-j="6">7. 梯度为零的失败模式</a></li><li><a href="#8-权重加载与网络重建" data-depth="2" data-heading-j="7">8. 权重加载与网络重建</a></li><li><a href="#9-梯度相关的故障现象" data-depth="2" data-heading-j="8">9. 梯度相关的故障现象</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>编译产物与显存图缓存</span></a><ul class="toc__heads"><li><a href="#1-编译后在设备侧留下三类产物" data-depth="2" data-heading-j="0">1. 编译后在设备侧留下三类产物</a></li><li><a href="#2-显存预占比例必须在-import-jax-之前" data-depth="2" data-heading-j="1">2. 显存预占：比例必须在 import jax 之前</a></li><li><a href="#3-cuda-graph-按地址缓存" data-depth="2" data-heading-j="2">3. CUDA graph 按地址缓存</a></li><li><a href="#4-donate_argnums-与每帧重建" data-depth="2" data-heading-j="3">4. donate_argnums 与每帧重建</a></li><li><a href="#5-接触与约束容量改的是物理" data-depth="2" data-heading-j="4">5. 接触与约束容量改的是物理</a></li><li><a href="#6-预热把首帧开销提前结清" data-depth="2" data-heading-j="5">6. 预热把首帧开销提前结清</a></li><li><a href="#7-各类脚本的实际取值" data-depth="2" data-heading-j="6">7. 各类脚本的实际取值</a></li><li><a href="#71-显存比例" data-depth="3" data-heading-j="7">7.1 显存比例</a></li><li><a href="#72-graph_mode" data-depth="3" data-heading-j="8">7.2 graph_mode</a></li><li><a href="#73-接触与约束预算" data-depth="3" data-heading-j="9">7.3 接触与约束预算</a></li><li><a href="#8-一进程一环境" data-depth="2" data-heading-j="10">8. 一进程一环境</a></li><li><a href="#9-显存与图缓存相关的故障现象" data-depth="2" data-heading-j="11">9. 显存与图缓存相关的故障现象</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="12">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="13">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="14">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="15">11. 练习</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-四步排查顺序" data-depth="2" data-heading-j="0">1. 四步排查顺序</a></li><li><a href="#2-计时必须落在同步点之后" data-depth="2" data-heading-j="1">2. 计时必须落在同步点之后</a></li><li><a href="#3-累计-fps-会被编译摊薄" data-depth="2" data-heading-j="2">3. 累计 fps 会被编译摊薄</a></li><li><a href="#4-对照实验的最小单元" data-depth="2" data-heading-j="3">4. 对照实验的最小单元</a></li><li><a href="#5-能出数的探针" data-depth="2" data-heading-j="4">5. 能出数的探针</a></li><li><a href="#6-观察器的正确性闸门" data-depth="2" data-heading-j="5">6. 观察器的正确性闸门</a></li><li><a href="#7-交付前-grep-四个配置" data-depth="2" data-heading-j="6">7. 交付前 grep 四个配置</a></li><li><a href="#8-三类问题的表象对照" data-depth="2" data-heading-j="7">8. 三类问题的表象对照</a></li><li><a href="#9-排查清单" data-depth="2" data-heading-j="8">9. 排查清单</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">JAX 与 Brax</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>JAX / jit / MJX / Brax / vmap / 批量仿真 / grad / PPO</span></div><h1 class="docs__title">jit·vmap·grad</h1><p class="docs__lead">jax.jit 在本仓库的用法与约束，包括追踪一次、编译缓存复用、trace 期常量、重编触发条件，以及训练侧与观察侧的取法差异。</p></header><section class="dfile" id="file-1" data-file="01-jit追踪与缓存"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-jit追踪与缓存</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/01-jit·vmap·grad/01-jit追踪与缓存.md</span></div><div class="dfile__body"><h1 id="jit-追踪与缓存">jit 追踪与缓存</h1>
+<p>JAX 默认按算子逐个派发，一个 12 维动作的小网络前向在 Python 侧要分派几十次，每帧的固定开销远大于计算本身。mjx-go1-getup 的训练侧从来看不到这个开销，因为策略前向被 brax 包在 <code>jax.lax.scan</code> 与 <code>vmap</code> 里整体编译；只有交互式观察器那种每帧直接调用一次的写法才需要显式 <code>jax.jit</code>（<code>docs/viewer-guide.md:51-80</code> 记录了这两侧的差异）。</p>
+<p>这里按三层来写：先说明 jit 到底省掉了什么，再拆开追踪与编译缓存的机制、列出会触发重新编译的几类改动，然后逐个核对本仓库的落点，最后说明为什么观察器里的随机键必须固定成常量、以及一个在 trace 期被读成常量的课程旋钮为什么改不动。</p>
+<blockquote>
+<p>本页对象是 <code>jax.jit</code> 在 mjx-go1-getup 里的实际用法与约束，涉及 <code>train/</code>、<code>sim/</code>、<code>envs/</code> 三个目录；行号按当前检出，全部与源码核对过。</p>
+</blockquote>
+<h2 id="1-逐算子派发与一次编译的差距">1. 逐算子派发与一次编译的差距</h2>
+<p>eager 模式下每个算子单独派发，Python 侧串行等待；<code>jax.jit</code> 把函数先在抽象值上跑一遍，记录算子图，交给 XLA 编译成一个可执行体，之后形状与 dtype 相同的调用直接执行编译产物，不再经过 Python 派发。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>每次调用做的事</th><th>本项目实测</th></tr></thead><tbody><tr><td>eager</td><td>每个算子单独派发，Python 侧串行</td><td>策略前向 10.97 ms（128×128，obs 91 维）</td></tr><tr><td><code>jax.jit</code></td><td>命中缓存后一次 kernel launch</td><td>策略前向 0.08 ms</td></tr><tr><td>eager 逐条画扫描点</td><td>每帧上百次 tiny kernel launch</td><td>51.6 ms / 315.8 ms（两次独立测量）</td></tr><tr><td>jit 成一个 kernel</td><td>一次 launch</td><td>0.32 ms / 6.28 ms</td></tr></tbody></table>
+<p>两组数字的差距都在两个数量级以上。扫描点那一组两次测量差了六倍，原因是扫描点数不同，但无论哪一次，编译之后都落在毫秒以下。</p>
+<p>两组数字的测量条件也不同：策略前向那一组在 128 个环境、obs 91 维下测，扫描点那一组与批量无关。比较编译收益时要把批量与观测维度一起写清楚，否则同一个函数的两个数字无法判断是编译带来的还是输入规模带来的。</p>
+<p>jit 只负责把单次调用编译快，不负责批量。把 N 个环境塞进一次调用是 vmap 的事，本仓库的批量脚本统一写成 <code>jax.jit(jax.vmap(f))</code>，见第 2 篇。</p>
+<h2 id="2-追踪一次编译一次缓存键由三样东西组成">2. 追踪一次、编译一次，缓存键由三样东西组成</h2>
+<p>追踪（trace）用抽象值替换真实数组，只关心形状与 dtype。Python 里的 <code>if</code>、循环、<code>config</code> 字段读取都在追踪时求值一次，结果写进算图，于是这些值成为编译期常量。</p>
+<p>编译缓存的键由三部分组成：</p>
+<ol>
+<li>被追踪函数的身份，即同一个 <code>jit</code> 包装对象；</li>
+<li>每个数组参数的形状与 dtype；</li>
+<li><code>static_argnums</code> 指定位置上的值。</li>
+</ol>
+<p>三者之一改变就会重新追踪并编译。闭包里的 Python 对象不参与缓存键，<code>cfg</code> 在 trace 时读到的字段就是那一刻的值，之后再改对象字段不会反映到已编译的图里。本仓库没有使用 <code>static_argnums</code>：所有会变的量要么是数组参数，要么在 trace 时被读成常量。</p>
+<p>抽象值的具体含义是：数组被替换成一个只有形状与 dtype 的占位对象，数值未知。追踪器只保证形状合法，所以任何依赖具体数值的 Python 分支在 trace 时都无法按真实数据取值。这是配置字段必须在 trace 前定好的原因，也是环境里所有按步推进的状态都要写成 jax 数组而不是 Python 变量的原因。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["调用 jit 包裹的函数"] --> B{"缓存里有匹配的形状与 dtype 吗"}
+  B -- "有" --> C["取出编译产物直接执行"]
+  B -- "没有" --> D["用抽象值追踪函数"]
+  D --> E["生成算图 jaxpr"]
+  E --> F["XLA 编译成可执行体"]
+  F --> G["写入缓存并执行"]</pre></div>
+<p>调试重编问题时，JAX 提供 <code>jax.log_compiles(True)</code> 与 <code>jax.debug_info()</code> 这类开关，本仓库没有使用；需要在本地排查时可用它们打印每次编译，判断是哪个调用点在反复触发。这类开关只影响日志，不改变计算。</p>
+<h2 id="3-哪些改动会触发重新编译">3. 哪些改动会触发重新编译</h2>
+<p>常见的重编触发条件：</p>
+<ul>
+<li>环境开关改了 obs 维度，例如 <code>height_scan</code> 或相位特征被打开；</li>
+<li>批量大小变了，评估用 128 环境、训练用 768 环境，前向各有一份编译产物（属推断，按 JAX 缓存键规则）；</li>
+<li>每次调用传入不同的 rng key；</li>
+<li>数组 dtype 改变，例如混入 float64。</li>
+</ul>
+<p>四类触发条件里，前三类在训练脚本里都会出现，第四类通常来自配置错误。排查时先把配置固定，再观察同一个形状的调用是否稳定命中。</p>
+<p>第一类是配置层面的改动，编译次数有限，代价只是第一次慢。第三类最隐蔽：<code>jit</code> 函数本身不会因为 key 的数值不同而重编，引起重编的是把 key 当作 Python 常量参与形状推导、或者在不同分支里构造不同结构的数组；本仓库观察器把 key 固定成常量正是为了避开这条边界。</p>
+<p>编译与执行都是异步的：调用返回时设备上的工作可能尚未结束。要测真实耗时，必须在计时点前加一次同步，例如 <code>jax.block_until_ready</code> 或 <code>np.asarray</code>。第 4 篇会说明首帧还叠加了显存分配与图捕获，不能把首帧当作稳态。</p>
+<p><code>donate_argnums=0</code> 让输出复用输入缓冲区，省一次分配，代价是输入数组之后不可再用。它同时固定了每次调用的缓冲区地址，这一点在第 4 篇里对 warp 的 CUDA graph 缓存是关键。</p>
+<h2 id="4-观察器三处按帧调用各自-jit">4. 观察器：三处按帧调用各自 jit</h2>
+<p><code>sim/watch_v20_fast.py:342-347</code> 把三处按帧调用的函数分别编译：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">_dummy_rng </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.zeros((</span><span style="color:#005CC5">2</span><span style="color:#24292E">,), </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#24292E">jp.uint32)</span></span>
+<span class="line"><span style="color:#24292E">act_jit </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(</span><span style="color:#D73A49">lambda</span><span style="color:#24292E"> obs: policy(obs, _dummy_rng)[</span><span style="color:#005CC5">0</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#24292E">reset_jit </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(env.reset)</span></span>
+<span class="line"><span style="color:#24292E">step_jit </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(env.step, </span><span style="color:#E36209">donate_argnums</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0</span><span style="color:#24292E">)</span></span></code></pre>
+<p>策略的随机键被固定成 <code>_dummy_rng</code> 常量（<code>sim/watch_v20_fast.py:344-345</code>）。策略是 <code>deterministic=True</code> 的推理，不需要真随机；若每帧传入不同 key，形状与 dtype 虽不变，但把 key 当常量的写法会失效，缓存不命中并反复编译。这里体现的规则是：推理用的 key 一律固定，只有训练采样才需要真的推进随机流。</p>
+<p><code>sim/view_go1.py:546-549</code> 是同一写法，注释写明 <code>donate_argnums=0</code> 把单步从 25.9 ms 压到 14.8 ms。起身状态机的 <code>gk.fsm_step</code> 单独 jit（<code>sim/view_go1.py:556</code>），getup_v2 的 42 维单帧组装也单独 jit（<code>sim/view_go1.py:594-606</code>），理由是逐条 eager 调用每帧要发起多次 kernel launch。</p>
+<p>三处编译的调用频率不同：<code>act_jit</code> 与 <code>step_jit</code> 每帧一次，<code>reset_jit</code> 只在重置时调用。调用频率低的函数即使不 jit 也未必致命，但本仓库统一处理，避免以后把某处挪进热路径时忘记编译。</p>
+<p>扫描点可视化是一条更强的判据。<code>sim/watch_v20_fast.py:384-395</code> 与 <code>sim/view_go1.py:710-723</code> 把「采样点坐标 + 地面高 + 高度特征」合成一个 <code>@jax.jit</code> 函数，实测 51.6 ms 降到 0.32 ms（<code>docs/viewer-guide.md:120-136</code>）。这一处最能说明问题：函数体没变，只是从逐条调用改成编译成一个 kernel。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant Py as Python 调用方
+  participant J as jax.jit 包装
+  participant X as XLA 与设备
+  Py->>J: 第一次调用，shape=(768,91)
+  J->>J: 追踪并编译，耗时秒级
+  J->>X: 执行编译产物
+  X-->>Py: 异步返回
+  Py->>J: 第二次同形状调用
+  J->>X: 命中缓存，直接执行
+  X-->>Py: 结果
+  Py->>Py: np.asarray 或 block_until_ready 同步</pre></div>
+<h2 id="5-其余落点探针评估与姿态池">5. 其余落点：探针、评估与姿态池</h2>
+<p><code>sim/eval_stairs.py:77-93</code> 除了 reset 与 step，还把 <code>place</code>（把批量环境摆到台阶的指定位置）单独编译成 <code>jax.jit(jax.vmap(place))</code>。<code>sim/make_getup_posepool.py:57-63</code> 只 jit reset，用来批量采样摔倒姿态池。<code>sim/probe_handover.py:250-266</code> 对 <code>first_act</code> 与 <code>step_set</code> 各自 jit；<code>sim/probe_handover.py:748</code> 在函数内部用 <code>@jax.jit</code> 装饰局部函数 <code>one</code>。这些落点对应同一条规则：按帧或按批调用的纯函数都要编译，包括只跑一次的探针主循环。</p>
+<p>批量脚本统一写成 <code>jax.jit(jax.vmap(env.reset))</code> 的形式，见 <code>sim/probe_getup_v2.py:77-79</code>、<code>sim/eval_getup.py:135-144</code>、<code>sim/probe_nefc.py:49-51</code>。vmap 本身在第 2 篇展开，这里只记 jit 包在外层。</p>
+<p>评估与训练的批量不同，前向各有一份编译产物，这属于正常行为：<code>train/train_getup.py:115</code> 的评估环境数默认 128，<code>train/train_getup.py:118</code> 的训练环境数默认 768，两个形状的缓存互不覆盖。</p>
+<h2 id="6-训练侧trace-期常量决定课程推进方式">6. 训练侧：trace 期常量决定课程推进方式</h2>
+<p><code>envs/go1_getup.py:94-100</code> 的 <code>difficulty</code> 是 trace 期常量。注释与 <code>train/train_getup.py:164-169</code> 的 <code>--difficulty</code> 帮助都说明：编译缓存命中时改它不会重编，运行中推进难度无效，课程只能靠多次运行加 <code>--restore</code>。这个判断来自 <code>sim/probe_reset_cost.py</code> 的实测，但该脚本已不在当前检出（待确认）。</p>
+<p>一旦某个字段在 trace 时被读成常量，训练循环里改它就只在 Python 侧改了一个没人再读的对象。要推进课程，只能改参数后重新启动进程，让新的常量进入新的编译产物。</p>
+<p><code>train/train_getup.py:399-401</code> 的 dry_run 用 <code>jax.random.PRNGKey(0)</code> 初始化网络，只做形状自检，不调用 <code>ppo.train</code>。这是在不触发训练编译的前提下验证网络输入层的方式。</p>
+<p><code>--dry_run</code> 只建环境与网络，不进入 <code>ppo.train</code>，所以它不会产生 rollout 与更新循环的编译产物。用它验证维度是安全的；反过来，把它当作性能基准时，测到的只是初始化时间。</p>
+<p><code>train/train_go1.py:677</code> 的注释记录了一个相关事实：网络输入层形状由环境自动推断，brax 在 <code>mjx_env.py</code> 里用 <code>jax.eval_shape(reset)</code> 走一遍追踪而不执行计算。改了 <code>height_scan</code> 这类会改 obs 维度的开关，网络形状随之改变，不需要手改。这条与本节的主题相通：<code>eval_shape</code> 只追踪、不执行，所以它得到的形状就是追踪器眼里的形状。</p>
+<h2 id="7-首帧慢与反复重编的区分">7. 首帧慢与反复重编的区分</h2>
+<p>两种现象都表现为耗时尖峰，判别方式看尖峰的形状。首帧慢是单调的：主循环前面的若干帧耗时偏高，之后回落到稳态，不会再次升高；反复重编是周期性的，每次调用点走到不同的形状或分支就再出现一次尖峰。<code>sim/view_go1.py:764-774</code> 的预热把前者提前结清；<code>sim/watch_v20_fast.py:449-452</code> 每帧重建 command 数组则属于后者的诱因，地址变化会让图缓存失效。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>形态</th><th>表现</th><th>处理</th></tr></thead><tbody><tr><td>首次编译</td><td>第一次调用耗时数十秒到秒级</td><td>预热一次，之后复用</td></tr><tr><td>首帧分配与图捕获</td><td>主循环前几百帧偏高</td><td>主循环前用相同调用序列预热</td></tr><tr><td>反复重编</td><td>耗时尖峰周期性出现</td><td>检查形状、dtype 与传入的常量</td></tr></tbody></table>
+<p>若尖峰只在某一次配置改动之后出现，并且之后再也不回落，说明那次改动进了缓存键（形状、dtype 或静态参数）。此时应当固定配置后重启进程，而不是在运行中反复切换：每次切换都要付一次编译代价，训练循环里还会把这段代价摊进吞吐统计。</p>
+<h2 id="8-与缓存相关的故障现象">8. 与缓存相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>单帧多花约 11 ms，帧率腰斩</td><td>每帧 eager 调策略</td><td><code>sim/watch_v20_fast.py:343</code></td></tr><tr><td>缓存不命中，反复编译</td><td>每次传不同 rng</td><td><code>sim/watch_v20_fast.py:344-345</code></td></tr><tr><td>日志显示难度变了，环境其实没变</td><td>运行中改 trace 期常量</td><td><code>envs/go1_getup.py:97-99</code></td></tr><tr><td>头几百帧 step 数百毫秒，之后自行恢复</td><td>未预热就进主循环</td><td><code>sim/view_go1.py:764-774</code></td></tr><tr><td>报 <code>Array has been deleted</code></td><td>复用被捐赠的数组</td><td><code>sim/watch_v20_fast.py:449-452</code></td></tr><tr><td>测到的是派发时间，不是帧耗时</td><td>在设备同步前计时</td><td><code>sim/watch_v20_fast.py:455-458</code></td></tr><tr><td>jit 前就失败，报 <code>ScopeParamShapeError</code></td><td>obs 维度与策略不符</td><td><code>docs/viewer-guide.md:295-297</code></td></tr><tr><td>注释写留 60%，代码写 0.45</td><td>注释与代码不一致</td><td><code>train/train_getup.py:38-42</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>jax.jit</code> 追踪一次、编译一次，之后按形状、dtype 与静态参数命中原物。</li>
+<li>trace 期读到的 Python 常量会冻进算图，运行中修改不生效，<code>difficulty</code> 就属于这一类。</li>
+<li>观察器里凡按帧调用的 JAX 函数都要 jit，并把 rng 固定成常量。</li>
+<li><code>donate_argnums=0</code> 省分配并固定缓冲区地址，代价是输入不可复用。</li>
+<li>计时必须在设备同步之后，否则测到的是派发速度。</li>
+<li>批量大小属于缓存键，评估与训练各编译一份属正常现象。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取法</th><th>适用侧</th><th>代价</th></tr></thead><tbody><tr><td>整段 jit（brax 内部扫描）</td><td>训练</td><td>首次编译数十秒，换来稳定地址与高吞吐</td></tr><tr><td>逐帧 jit 加常量 rng</td><td>观察器</td><td>首帧编译，预热后稳定</td></tr><tr><td>逐条 eager 调用</td><td>只用一次的小脚本</td><td>调用次数一多就退化，观察器不可用</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出 <code>jax.jit</code> 编译缓存键的三个组成部分，并说明把策略的 rng 从常量改成每帧新 key 会不会改变缓存键。</li>
+<li>扫描点可视化从 51.6 ms 降到 0.32 ms，说明这一段省掉的主要开销是什么。</li>
+<li>说明 <code>donate_argnums=0</code> 的两个后果，并指出观察器里哪一行代码因此必须每帧重建数组。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>
+<p><code>difficulty</code> 在 trace 期被读成常量。设计一种不需要改框架、就能在单次训练里推进课程的方案，写出需要改动的文件和验证方法。</p>
+</li>
+<li>
+<p>用 <code>jax.eval_shape(reset)</code> 推断网络输入层形状。说明它与完整执行一次 <code>reset</code> 的差别，以及为什么它不会触发物理计算。</p>
+</li>
+<li>
+<p>给出一种只用计时数据区分“首次编译”与“每帧重编”的方法，写出采样点、判据与需要的对照。</p>
+</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>mjx-go1-getup/</td><td>仓库根目录，文中相对路径均相对它</td></tr><tr><td><code>sim/watch_v20_fast.py</code></td><td>观察器的 jit 组合、常量 rng 与预热</td></tr><tr><td><code>sim/view_go1.py</code></td><td>调度器与 getup 相关的 jit</td></tr><tr><td><code>envs/go1_getup.py</code></td><td>trace 期常量 difficulty 的定义</td></tr><tr><td><code>train/train_getup.py</code></td><td>dry_run 与课程旋钮</td></tr><tr><td><code>train/train_go1.py</code></td><td>eval_shape 推断 obs 维度的记录</td></tr><tr><td><code>docs/viewer-guide.md</code></td><td>jit 收益与等价性判据的实测</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-vmap批量环境与策略"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-vmap批量环境与策略</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/01-jit·vmap·grad/02-vmap批量环境与策略.md</span></div><div class="dfile__body"><h1 id="vmap-批量环境与策略">vmap 批量环境与策略</h1>
+<p>环境与策略都按单环境、单样本写，批量靠 <code>jax.vmap</code> 自动展开。它把一个函数沿参数的前导轴复制 N 份，N 份共享同一张算图，在设备上并行执行。Python 侧的 <code>for</code> 循环做不到这一点：每次迭代都要重新派发一遍算子，N 个环境就是 N 次派发。</p>
+<blockquote>
+<p>本页对象是 <code>jax.vmap</code> 在 mjx-go1-getup 的评估与探针脚本里的用法；行号按当前检出核对，策略与环境的批量规模取自各脚本的命令行默认值。</p>
+</blockquote>
+<h2 id="1-四种批量写法的代价">1. 四种批量写法的代价</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>代码形态</th><th>每次调用代价</th><th>本仓库</th></tr></thead><tbody><tr><td>Python 循环</td><td><code>for i in range(N): reset(key_i)</code></td><td>N 次派发，逐环境串行</td><td>未使用</td></tr><tr><td>手工堆叠</td><td>自己把状态拼成 (N, …)</td><td>易错，需手写每处 broadcast</td><td>未使用</td></tr><tr><td><code>jax.vmap</code></td><td>单环境函数原样，只加一层包装</td><td>一次派发覆盖 N 份</td><td>全部批量脚本</td></tr><tr><td>未包 jit 的 <code>jax.vmap</code></td><td>同上，但没有外层编译</td><td>每次调用重新追踪</td><td>只用于调用次数极少的几处</td></tr></tbody></table>
+<p>vmap 只改变形状，不改变数学。单环境函数里没有写 batch 维度，vmap 负责把它补上。这条性质带来一个直接好处：环境代码可以按”一个机器人”来写，物理参数、奖励、终止判据都不用关心 N。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>数学语义</th><th>编译时机</th></tr></thead><tbody><tr><td><code>for</code> 循环</td><td>逐环境独立</td><td>不编译</td></tr><tr><td>手工堆叠</td><td>逐元素独立</td><td>依赖手写实现</td></tr><tr><td><code>jit(vmap(f))</code></td><td>一次性展开 N 份</td><td>整个批量函数编译成一份</td></tr><tr><td><code>vmap(jit(f))</code></td><td>单样本编译后沿轴复制</td><td>单样本一份，外层再展开</td></tr></tbody></table>
+<p>后两种在数学上等价，本仓库统一用前者，因为批量大小固定时只编译一份。</p>
+<h2 id="2-in_axespytree-与随机键分发">2. in_axes、pytree 与随机键分发</h2>
+<p><code>vmap</code> 的默认 <code>in_axes=0</code>：参数的第一个轴是批量轴。环境的两个接口正好适配：</p>
+<ul>
+<li><code>reset(rng)</code> 的 <code>rng</code> 是形状 <code>(2,)</code> 的 key，批量后传入 <code>(N,2)</code>；</li>
+<li><code>step(state, action)</code> 的 <code>state</code> 是 pytree，<code>action</code> 形状 <code>(12,)</code>，批量后分别是带批量轴的 pytree 与 <code>(N,12)</code>。</li>
+</ul>
+<p><code>vmap</code> 对 pytree 的每个叶子沿 <code>in_axes</code> 展开，所以环境状态里所有与该环境相关的字段（<code>data</code>、<code>obs</code>、<code>info</code>、<code>reward</code>、<code>done</code>）都自然带上批量维。这也是环境状态必须写成 pytree 而不是 Python 对象的原因之一：vmap 需要能遍历它。</p>
+<p>随机键必须自己分发：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">keys </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.random.split(jax.random.PRNGKey(seed), N)</span></span>
+<span class="line"><span style="color:#24292E">st </span><span style="color:#D73A49">=</span><span style="color:#24292E"> reset(keys)</span></span></code></pre>
+<p>若把同一个 key 传给 N 个环境，所有环境的出生姿态完全相同，批量探针就失去意义（<code>sim/eval_getup.py:143</code> 就是这一行的落点）。key 的形状 <code>(N,2)</code> 与单环境 <code>(2,)</code> 的关系正好对应 <code>in_axes=0</code> 的约定。</p>
+<p>策略推理的标准写法是 <code>jax.vmap(lambda o: policy(o, dummy)[0])</code>：<code>dummy</code> 是常量 key，作为闭包而不是批量参数（<code>sim/eval_getup.py:141</code>）。若直接写 <code>jax.vmap(policy)</code>，vmap 会试图对参数与 key 一起展开，形状对不上。</p>
+<p><code>out_axes</code> 默认也是 0，批量函数的返回值第一维就是环境编号；本仓库没有改过 <code>out_axes</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["PRNGKey(seed)"] --> B["jax.random.split(keys, N)"]
+  B --> C["vmap(env.reset) 得到 N 个初态"]
+  C --> D["vmap(env.step) 循环推进"]
+  D --> E["vmap(policy) 给出 N 个动作"]
+  E --> D
+  D --> F["np.asarray 收回 CPU 统计"]</pre></div>
+<h2 id="3-组合顺序与编译缓存">3. 组合顺序与编译缓存</h2>
+<p>组合顺序上，本仓库统一用 <code>jax.jit(jax.vmap(f))</code>：先 vmap 出批量函数，再整体编译一次。反过来 <code>jax.vmap(jax.jit(f))</code> 是先编译单样本再沿批量轴复制，对同构计算也能跑，但本仓库没有这样写。</p>
+<p>批量大小 N 是编译期形状的一部分。改成另一个 N 会触发重新编译，这一点与第 1 篇的缓存键规则一致：形状参与缓存键。评估用 128 环境、训练用 768 环境，两者的策略前向各有一份编译产物（<code>train/train_getup.py:115</code> 的评估默认与训练默认不是同一个数）。</p>
+<p>缓存命中的前提是同一份批量函数对象。若在循环里每次重新构造 <code>jax.jit(jax.vmap(f))</code>，每次都是新的 jit 对象，缓存不会命中。批量脚本因此把编译好的函数提前放在循环外。</p>
+<h2 id="4-评估脚本的统一骨架">4. 评估脚本的统一骨架</h2>
+<p><code>sim/eval_getup.py:134-144</code> 是最完整的一处：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">reset </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(jax.vmap(env.reset))</span></span>
+<span class="line"><span style="color:#24292E">step </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(jax.vmap(env.step))</span></span>
+<span class="line"><span style="color:#24292E">act_fn </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(jax.vmap(</span><span style="color:#D73A49">lambda</span><span style="color:#24292E"> o: policy(o, dummy)[</span><span style="color:#005CC5">0</span><span style="color:#24292E">]))</span></span>
+<span class="line"><span style="color:#24292E">st </span><span style="color:#D73A49">=</span><span style="color:#24292E"> reset(jax.random.split(jax.random.PRNGKey(args.seed), N))</span></span>
+<span class="line"><span style="color:#24292E">st </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.block_until_ready(st)</span></span></code></pre>
+<p><code>sim/eval_getup.py:135-141</code> 的三行分别对应 reset、step 与策略前向；<code>sim/eval_getup.py:134</code> 是编译点。<code>sim/eval_walk.py:157-166</code>、<code>sim/eval_stairs.py:77-79</code> 是同一形状。</p>
+<p><code>sim/eval_stairs.py:93</code> 还额外把 <code>place</code> 编译成 <code>jax.jit(jax.vmap(place))</code>，用来把每个环境摆到台阶的指定朝向与位置；<code>place</code> 内部直接构造 <code>qpos</code> 并调用 <code>env._get_obs</code>，所以必须作为纯函数交给 vmap，环境对象本身不能当参数（<code>sim/eval_stairs.py:93</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant E as 评估主循环
+  participant V as jit(vmap(env.step))
+  participant P as jit(vmap(policy))
+  E->>P: obs (N,91)
+  P-->>E: action (N,12)
+  E->>V: state (批量 pytree), action
+  V-->>E: 新 state，reward/done 均为 (N,)
+  E->>E: np.asarray 后统计成功率</pre></div>
+<h2 id="5-探针脚本与姿态池">5. 探针脚本与姿态池</h2>
+<p><code>sim/probe_nefc.py:45-57</code> 先用 vmap 建 <code>N</code> 个环境，再用 <code>jax.jit(jax.vmap(lambda o: pol(o, dummy)[0]))</code> 给出策略动作；没给策略时用 <code>jax.random.normal(kk, (N, env.action_size))</code> 直接采样动作（<code>sim/probe_nefc.py:76-77</code>）。</p>
+<p><code>sim/probe_getup_v2.py:77-79</code>、<code>sim/probe_handover.py:126-130</code> 与 <code>sim/probe_handover.py:250-266</code>、<code>sim/probe_standability.py:92-94</code> 都是同类骨架。循环形状一致：批量 reset 拿初态，批量策略给动作，批量 step 推进，统计全部在 CPU 侧用 <code>np.asarray</code> 完成。</p>
+<p><code>sim/probe_handover.py:505-514</code> 把多个辅助函数一起 vmap：<code>terrain_height</code>、<code>get_gyro</code>、<code>get_gravity</code> 各包一层，再与 reset/step 组合。辅助函数返回的数组形状不同，vmap 会按每个函数的返回结构分别展开，所以它们各自包一层而不是拼成一个函数。</p>
+<p><code>sim/make_getup_posepool.py:56-63</code> 只用 <code>jax.jit(jax.vmap(env.reset))</code>，按批次采样摔倒姿态并写进姿态池。姿态池采样不需要 step，是”只批量 reset”的典型用例。</p>
+<p>批量规模的来源：<code>train/train_getup.py:115</code> 的评估环境数默认 128，<code>train/train_go1.py:753</code> 固定 128；探针用 <code>--envs</code> 覆盖，常见 256。训练 rollout 的 768 与 8192 由 brax 内部再包一层 vmap，骨架与探针一致。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["--envs N"] --> B["jax.random.split 出 N 个 key"]
+  B --> C["jit(vmap(reset)) 建 N 个环境"]
+  C --> D["jit(vmap(policy)) 出动作"]
+  D --> E["jit(vmap(step)) 推进"]
+  E --> F["np.asarray 统计分布"]
+  F --> G["探针输出计数与直方图"]</pre></div>
+<h2 id="6-批量规模怎么取">6. 批量规模怎么取</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>批量规模</th><th>用在哪</th><th>代价</th></tr></thead><tbody><tr><td>32</td><td><code>sim/eval_stairs.py:61</code> 台阶评估</td><td>显存小，统计噪声大</td></tr><tr><td>256</td><td><code>sim/eval_getup.py:50</code> 起身评估与探针</td><td>统计较稳，单轮秒级</td></tr><tr><td>512</td><td><code>sim/eval_walk.py:36</code> 走路评估</td><td>吞吐与显存折中</td></tr><tr><td>768</td><td><code>sim/probe_nefc.py:31</code> NaN 探针</td><td>接触统计充分，显存占用大</td></tr><tr><td>2048</td><td><code>sim/make_getup_posepool.py:36</code> 姿态池采样</td><td>一轮样本多，采样时间更长</td></tr></tbody></table>
+<p>规模取值的依据是统计量需要多少样本，而不是显存剩多少。评估成功率时 128 到 256 够用，接触与约束统计（<code>nefc</code>、NaN 计数）需要更大的批量才能覆盖极端姿态，姿态池采样则偏向一次多采、少轮次。</p>
+<h2 id="7-两处未包-jit-的例外">7. 两处未包 jit 的例外</h2>
+<p><code>sim/probe_handover.py:703-712</code> 的 reset 与 step 用了未包 jit 的 <code>jax.vmap</code>，没有外层 jit。这在此处可用是因为该段只跑固定的少数几步。反例是主循环里按帧调用：<code>docs/status.md:202-203</code> 记录，eager 的 <code>jax.vmap(env.step)</code> 每帧都会重新追踪与编译，一个探针跑 500 s 都跑不完。</p>
+<p><code>sim/eval_walk.py:165</code> 与 <code>sim/eval_walk.py:202</code> 对 <code>env.terrain_height</code> 也用了未包 jit 的 <code>jax.vmap</code>，因为它在评估里只调用几次、返回小数组，不构成每步开销。</p>
+<p><code>sim/getup_keyframe.py:124-125</code> 的注释写明 <code>init_fsm</code> 返回的状态机初态可被 <code>jax.vmap</code> 批量展开：状态机的每个字段都是 jax 数组，符合 vmap 对 pytree 的要求。这是”能不能批量”的判据：字段里只要有一个 Python 容器或不可遍历对象，vmap 就会在追踪时报错。</p>
+<h2 id="8-批量相关的故障现象">8. 批量相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>每帧重新追踪编译，探针跑不完</td><td>主循环里用未包 jit 的 vmap</td><td><code>docs/status.md:202-203</code></td></tr><tr><td>N 个环境出生姿态完全相同</td><td>key 没有 split</td><td><code>sim/eval_getup.py:143</code></td></tr><tr><td>追踪报错，环境不是数组</td><td>把环境对象当 vmap 参数</td><td><code>sim/eval_stairs.py:93</code> 用闭包</td></tr><tr><td>形状不匹配或结果只对一个环境生效</td><td>某个叶子缺批量轴</td><td><code>sim/probe_handover.py:505-514</code></td></tr><tr><td>传入 (N,…) 却按单样本解释</td><td>单环境函数与批量混用</td><td><code>sim/eval_getup.py:135-141</code></td></tr><tr><td>首次调用重新编译</td><td>改 N 后不复用缓存</td><td><code>sim/eval_getup.py:134</code></td></tr><tr><td>形状对不上，追踪失败</td><td>把常量 key 当 vmap 参数</td><td><code>sim/eval_getup.py:141</code> 用 lambda 包裹</td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>vmap</code> 把单环境函数沿前导轴复制 N 份，共享一张算图。</li>
+<li>step 返回的 state 仍是批量 pytree，下一轮直接喂回 step。</li>
+<li>环境状态是 pytree，vmap 对每个叶子展开，批量维自动补齐。</li>
+<li>随机键用 <code>jax.random.split</code> 分发，一个环境一个 key。</li>
+<li>组合顺序统一为 <code>jax.jit(jax.vmap(f))</code>，批量大小是编译期形状。</li>
+<li>未包 jit 的 vmap 只在调用次数极少时可以接受，主循环里必须包 jit。</li>
+<li>批量规模按统计量需要取，不是按显存剩多少取。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍</th><th>选法</th><th>代价</th></tr></thead><tbody><tr><td>批量规模</td><td>评估 128 到 256，探针 768</td><td>大批量统计稳，显存与单轮时间上升</td></tr><tr><td>组合顺序</td><td><code>jit(vmap(f))</code></td><td>改 N 要重编，换来一份批量算图</td></tr><tr><td>辅助函数是否合并</td><td>各自 vmap</td><td>代码清晰，编译产物多几份</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出把单环境 <code>env.reset</code> 与 <code>env.step</code> 批量到 256 个环境的 jit 与 vmap 骨架，说明随机键从哪来、批量大小改变后会发生什么。</li>
+<li>说明 <code>in_axes=0</code> 对 <code>state</code> 这个 pytree 的含义，以及为什么 <code>action</code> 的批量形状是 <code>(N,12)</code>。</li>
+<li>解释为什么策略前向要写成 <code>jax.vmap(lambda o: policy(o, dummy)[0])</code>，而把 <code>dummy</code> 直接当参数会失败。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li><code>sim/probe_handover.py:703-712</code> 的 vmap 没有包 jit。写出这段代码可用的条件，以及把它挪进每帧主循环后会发生什么，并给出验证方式。</li>
+<li>同一份环境的批量函数先后用 128 与 768 调用。说明编译缓存的行为、两次调用各自的产物，以及怎样复现”评估与训练各编译一份”这一现象。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>mjx-go1-getup/</td><td>仓库根目录，文中相对路径均相对它</td></tr><tr><td><code>sim/eval_getup.py</code></td><td>评估骨架与 key 分发</td></tr><tr><td><code>sim/eval_stairs.py</code></td><td>vmap 与 place 的组合</td></tr><tr><td><code>sim/probe_nefc.py</code></td><td>批量 step 与随机动作</td></tr><tr><td><code>sim/probe_handover.py</code></td><td>多辅助函数 vmap，及未包 jit 的 vmap 例外</td></tr><tr><td><code>sim/make_getup_posepool.py</code></td><td>批量 reset 采样姿态池</td></tr><tr><td><code>docs/status.md</code></td><td>eager vmap 重编的实测记录</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-grad梯度与PPO更新"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-grad梯度与PPO更新</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/01-jit·vmap·grad/03-grad梯度与PPO更新.md</span></div><div class="dfile__body"><h1 id="grad-梯度与-ppo-更新">grad 梯度与 PPO 更新</h1>
+<p>反向模式自动微分把标量损失的梯度一次算出来，代价约等于一次前向。强化学习里损失是策略与价值网络的函数，mjx-go1-getup 不自己写这段，而是把环境与超参交给 brax。仓库内没有任何一处直接调用 <code>jax.grad</code>，这一点由全仓库 grep 核对，梯度路径全部落在 brax 的 PPO 训练函数内部。</p>
+<blockquote>
+<p>本页对象是梯度计算在 mjx-go1-getup 里的归属与映射；仓库内没有任何一处直接调用 <code>jax.grad</code>，梯度路径全部落在 brax 的 PPO 训练函数内部。</p>
+</blockquote>
+<h2 id="1-梯度在哪一层">1. 梯度在哪一层</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>谁负责</th><th>本仓库对应</th></tr></thead><tbody><tr><td>损失与梯度</td><td>brax PPO 训练函数</td><td><code>ppo.train</code> 调用点</td></tr><tr><td>优化器与更新步</td><td>brax 内部（optax Adam）</td><td>只通过 <code>learning_rate</code> 等超参进入</td></tr><tr><td>策略前向</td><td>编译后的网络</td><td><code>sim/common.py</code> 加载权重重建</td></tr></tbody></table>
+<p>标注：brax 0.14.2 的内部实现没有在本机逐行打开，下文的损失与优化器形态按该版本的公开接口与依赖清单描述（未实测）。</p>
+<p><code>train/train_go1.py:22-27</code> 引入 <code>jax</code>、brax 的 PPO 网络与 <code>train</code>；<code>train/train_getup.py:44-48</code> 相同，并且多引了 <code>ml_collections</code> 与 playground 的 <code>locomotion</code>。两个入口都不构造损失函数，只把环境与配置交给 <code>ppo.train</code>。</p>
+<p>想在本地核对这一点，直接在仓库根跑 <code>grep -rn "jax.grad" .</code> 与 <code>grep -rn "value_and_grad" .</code>，两处都不会命中训练代码。这意味着任何涉及”损失怎么来的”的问题，改本仓库没有用，必须去看 brax 的实现或调 brax 的日志。</p>
+<h2 id="2-裁剪代理目标与-gae">2. 裁剪代理目标与 GAE</h2>
+<p>PPO 用裁剪后的代理目标做梯度上升。记概率比 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>r</mi><mi>t</mi></msub><mo stretchy="false">(</mo><mi>θ</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>π</mi><mi>θ</mi></msub><mo stretchy="false">(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>∣</mo><msub><mi>s</mi><mi>t</mi></msub><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><msub><mi>π</mi><msub><mi>θ</mi><mrow><mi>o</mi><mi>l</mi><mi>d</mi></mrow></msub></msub><mo stretchy="false">(</mo><msub><mi>a</mi><mi>t</mi></msub><mo>∣</mo><msub><mi>s</mi><mi>t</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">r_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{old}}(a_t\mid s_t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0059em;vertical-align:-0.2559em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.0278em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2559em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>、优势 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">A_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、裁剪系数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">\epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span>：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>L</mi><mrow><mi>c</mi><mi>l</mi><mi>i</mi><mi>p</mi></mrow></msup><mo stretchy="false">(</mo><mi>θ</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi mathvariant="double-struck">E</mi><mi>t</mi></msub><mrow><mo fence="true">[</mo><mi>min</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><msub><mi>r</mi><mi>t</mi></msub><mo stretchy="false">(</mo><mi>θ</mi><mo stretchy="false">)</mo><msub><mi>A</mi><mi>t</mi></msub><mo separator="true">,</mo><mtext> </mtext><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">p</mi></mrow><mo stretchy="false">(</mo><msub><mi>r</mi><mi>t</mi></msub><mo stretchy="false">(</mo><mi>θ</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mn>1</mn><mo>−</mo><mi>ϵ</mi><mo separator="true">,</mo><mn>1</mn><mo>+</mo><mi>ϵ</mi><mo stretchy="false">)</mo><msub><mi>A</mi><mi>t</mi></msub><mo fence="true">)</mo></mrow><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">L^{clip}(\theta)=\mathbb{E}_t\left[\min\left(r_t(\theta)A_t,\ \mathrm{clip}(r_t(\theta),1-\epsilon,1+\epsilon)A_t\right)\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0991em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight">p</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">E</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mclose">)</span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathrm">clip</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">ϵ</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">ϵ</span><span class="mclose">)</span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mclose delimcenter" style="top:0em;">]</span></span></span></span></span></p>
+<p>两个入口都取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϵ</mi><mo>=</mo><mn>0.2</mn></mrow><annotation encoding="application/x-tex">\epsilon=0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span>，对应概率比的允许区间 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>0.8</mn><mo separator="true">,</mo><mn>1.2</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[0.8, 1.2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">0.8</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1.2</span><span class="mclose">]</span></span></span></span>，也就是一次更新最多让某个动作的概率变化 20%。</p>
+<p>取 min 的作用是：当优势为正时，策略更新收益超过 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>+</mo><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">1+\epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span> 就不再给梯度；优势为负时对称地卡在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>−</mo><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">1-\epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span>。这条限制让一次 rollout 里的数据可以被重复用几个 epoch，而不会把策略推离旧分布太远。</p>
+<p>优势用 GAE 估计，先算每一步的时序差分残差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>δ</mi><mi>t</mi></msub><mo>=</mo><msub><mi>r</mi><mi>t</mi></msub><mo>+</mo><mi>γ</mi><mi>V</mi><mo stretchy="false">(</mo><msub><mi>s</mi><mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow></msub><mo stretchy="false">)</mo><mo>−</mo><mi>V</mi><mo stretchy="false">(</mo><msub><mi>s</mi><mi>t</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\delta_t=r_t+\gamma V(s_{t+1})-V(s_t)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0379em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>t</mi></msub><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>l</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>T</mi><mo>−</mo><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msubsup><mo stretchy="false">(</mo><mi>γ</mi><mi>λ</mi><msup><mo stretchy="false">)</mo><mi>l</mi></msup><mtext> </mtext><msub><mi>δ</mi><mrow><mi>t</mi><mo>+</mo><mi>l</mi></mrow></msub></mrow><annotation encoding="application/x-tex">A_t=\sum_{l=0}^{T-t-1}(\gamma\lambda)^l\,\delta_{t+l}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2809em;vertical-align:-0.2997em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9812em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mrel mtight">=</span><span class="mord mtight">0</span></span></span></span><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="mbin mtight">−</span><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mord mathnormal">λ</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0379em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi></mrow><annotation encoding="application/x-tex">\lambda</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span></span></span></span> 控制偏差与方差的折中：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\lambda=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> 时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>t</mi></msub><mo>=</mo><msub><mi>δ</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">A_t=\delta_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0379em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，方差小但偏差大；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\lambda=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 时是完整回报减去基线。GAE 的求和沿时间反向进行，写成编译后的扫描，这也是训练侧看不到显式循环的原因。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["批量 rollout: N 环境 × unroll 步"] --> B["GAE 估计优势 A_t"]
+  B --> C["按 minibatch 切序列"]
+  C --> D["value_and_grad 求损失梯度"]
+  D --> E["全局范数裁剪 max_grad_norm"]
+  E --> F["Adam 更新参数"]
+  F --> G{"还有 epoch 吗"}
+  G -- "有" --> C
+  G -- "没有" --> H["进入下一次 rollout"]</pre></div>
+<h2 id="3-全局范数裁剪与-adam">3. 全局范数裁剪与 Adam</h2>
+<p>一次更新是：算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi><mo>=</mo><msub><mi mathvariant="normal">∇</mi><mi>θ</mi></msub><mi>L</mi></mrow><annotation encoding="application/x-tex">g=\nabla_\theta L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">∇</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal">L</span></span></span></span>，按全局范数裁剪，再交给 Adam。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi><mo>←</mo><mi>g</mi><mo>⋅</mo><mi>min</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mn>1</mn><mo separator="true">,</mo><mfrac><mi>c</mi><mrow><mo stretchy="false">∥</mo><mi>g</mi><msub><mo stretchy="false">∥</mo><mn>2</mn></msub></mrow></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">g\leftarrow g\cdot\min\left(1,\frac{c}{\lVert g\rVert_2}\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6954em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">∥</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="mclose mtight"><span class="mclose mtight">∥</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">c</span></span></span></span> 就是 <code>max_grad_norm</code>，两个入口都取 0.5。裁剪的作用是限制单次更新的幅度：梯度范数小于 0.5 时不改动，大于 0.5 时按比例缩小到 0.5。它与学习率是两个独立的量，一个限制方向上的步长上限，一个限制沿方向的缩放。</p>
+<p><code>clipping_epsilon=0.2</code> 与 <code>max_grad_norm=0.5</code> 作用于两个不同的环节：前者限制概率比能离开旧策略多远（信任域），后者限制参数更新的绝对幅度。<code>entropy_cost=0.0</code> 表示不加熵正则，探索完全由动作分布自身与课程设置决定。</p>
+<p>Adam 维护一阶与二阶动量，用每个参数自身的梯度尺度归一化。这也是为什么续训时优化器状态不能丢：动量从零重建后，前几步的更新幅度与训练末期不在同一量级。</p>
+<h2 id="4-批量账目batch_size-是序列数">4. 批量账目：batch_size 是序列数</h2>
+<p>brax 的批量账目按序列记。设 <code>batch_size</code> 为每个 minibatch 的序列数、<code>unroll_length</code> 为每条序列的步数，则一个 minibatch 的转移数是：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>N</mi><mtext>trans</mtext></msub><mo>=</mo><mi>b</mi><mi>a</mi><mi>t</mi><mi>c</mi><mi>h</mi><mi mathvariant="normal">_</mi><mi>s</mi><mi>i</mi><mi>z</mi><mi>e</mi><mo>×</mo><mi>u</mi><mi>n</mi><mi>r</mi><mi>o</mi><mi>l</mi><mi>l</mi><mi mathvariant="normal">_</mi><mi>l</mi><mi>e</mi><mi>n</mi><mi>g</mi><mi>t</mi><mi>h</mi></mrow><annotation encoding="application/x-tex">N_{\text{trans}} = batch\_size \times unroll\_length</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">trans</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord mathnormal">ba</span><span class="mord mathnormal">t</span><span class="mord mathnormal">c</span><span class="mord mathnormal">h</span><span class="mord" style="margin-right:0.0278em;">_</span><span class="mord mathnormal">s</span><span class="mord mathnormal">i</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord mathnormal">u</span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord" style="margin-right:0.0278em;">_</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal">e</span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mord mathnormal">t</span><span class="mord mathnormal">h</span></span></span></span></p>
+<p>一个 rollout 的梯度更新次数是 <code>num_minibatches × num_updates_per_batch</code>。</p>
+<p><code>train/train_go1.py:318-357</code> 的 <code>sb3_full</code> 分支把 brax 参数映射到 SB3 默认：768 环境 × unroll 32 = 24576 条 rollout，<code>batch_size=2</code>（2 序列 × 32 步 = 64 条转移），<code>num_minibatches=384</code>，<code>num_updates_per_batch=10</code>。注释 <code>train/train_go1.py:329-336</code> 明确记录了 <code>batch_size</code> 的语义是序列数而不是转移数，早期按转移数理解导致每样本更新密度低了 32 倍。</p>
+<p>把这条差值算出来：若把 <code>batch_size=2</code> 当成”每批 2 条转移”，实际每批是 64 条转移，两者相差 <code>unroll_length</code> 倍。同样的 <code>num_minibatches</code> 下，真实更新次数是误读时的 1/32，样本效率差出一个数量级。</p>
+<p><code>train/train_go1.py:383-392</code> 与 <code>train/train_getup.py:332-333</code> 都有整除断言：<code>num_envs</code> 必须能被 <code>num_minibatches</code> 整除，否则 brax 直接失败。走路入口默认 <code>num_envs=8192</code> 与 <code>num_minibatches=32</code> 满足（<code>train/train_go1.py:390-391</code>），若手改成 64 就会触发断言。</p>
+<p>时间维的展开同样由 brax 内部完成：rollout 与 epoch 循环都写成可编译的扫描，梯度在反向扫描里累计。训练的内存峰值因此由激活值与接触数组一起决定，unroll 长度直接相关（按架构推断，未逐行核对 brax 实现）。</p>
+<h2 id="5-超参从训练脚本到-brax-的映射">5. 超参从训练脚本到 brax 的映射</h2>
+<p>超参在 <code>train/train_go1.py:710-736</code> 组装成 <code>config_dict</code>，其中与梯度直接相关的字段：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>走路默认（v9 档）</th><th>起身默认</th><th>作用</th></tr></thead><tbody><tr><td><code>learning_rate</code></td><td>3e-4</td><td>3e-4</td><td>Adam 步长</td></tr><tr><td><code>entropy_cost</code></td><td>0.0</td><td>0.0</td><td>熵正则系数</td></tr><tr><td><code>max_grad_norm</code></td><td>0.5</td><td>0.5</td><td>全局范数裁剪阈值</td></tr><tr><td><code>clipping_epsilon</code></td><td>0.2</td><td>0.2</td><td>代理目标裁剪</td></tr><tr><td><code>discounting</code></td><td>0.99</td><td>0.99</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi></mrow><annotation encoding="application/x-tex">\gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span></span></span></span></td></tr><tr><td><code>num_updates_per_batch</code></td><td>10</td><td>10</td><td>每个 rollout 的 epoch 数</td></tr></tbody></table>
+<p><code>train/train_getup.py:342-367</code> 的 config 与 <code>train/train_go1.py:710-736</code> 同构。起身入口把 <code>reward_scaling</code> 固定为 1.0，并显式关闭观测归一化，这两项不直接进梯度，但会改变损失量级与梯度尺度。观测归一化打开时，观测被在线标准化，同一份奖励对应的梯度尺度会随之改变；关闭它是为了与走路任务的奖励口径可比。</p>
+<p><code>discounting=0.99</code> 配合 <code>ctrl_dt=0.02</code>，有效视野的半衰期约为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ln</mi><mo>⁡</mo><mn>0.5</mn><mi mathvariant="normal">/</mi><mi>ln</mi><mo>⁡</mo><mn>0.99</mn><mo>≈</mo><mn>69</mn></mrow><annotation encoding="application/x-tex">\ln 0.5 / \ln 0.99 \approx 69</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">ln</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.5/</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">ln</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.99</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">69</span></span></span></span> 步，也就是 1.4 s。这个量与 <code>unroll_length=32</code> 相比短一些，说明单条序列内的回报折扣覆盖完整，跨序列的引导由价值网络承担。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant T as train 脚本
+  participant B as brax PPO.train
+  participant O as optax Adam
+  T->>B: 环境 + 超参 + 网络工厂
+  loop 每个 rollout
+    B->>B: 采样并算 GAE
+    loop 每个 epoch
+      B->>B: value_and_grad 求梯度
+      B->>B: 全局范数裁剪
+      B->>O: 梯度
+      O-->>B: 新参数
+    end
+  end
+  B-->>T: params, make_inference_fn
+  T->>T: pickle.dump(params)</pre></div>
+<h2 id="6-检查点里没有优化器状态">6. 检查点里没有优化器状态</h2>
+<p><code>train/train_getup.py:178-180</code> 与 <code>train/train_go1.py:96-97</code> 都写明：brax 检查点不含优化器状态与步数，续训时 Adam 动量从零重建、步数从 0 计数。这是续训必须降 <code>lr</code> 的直接原因（<code>train/train_go1.py:160-162</code>）。</p>
+<p><code>train/train_getup.py:174-180</code> 还把两种起步方式分开：<code>--restore</code> 读检查点，<code>--init_pkl</code> 喂初始参数。前者恢复网络权重，后者提供监督学习得到的初始权重，两者的语义不同，混用会让”续训”变成”从旧参数冷启动”，而优化器状态在两种情况下都从零开始。</p>
+<h2 id="7-梯度为零的失败模式">7. 梯度为零的失败模式</h2>
+<p>奖励里负项过大时总奖励会被裁剪到 0，梯度随之归零。<code>train/train_go1.py:673-674</code> 记录 <code>body_contact</code> 的上限就是为避免这一点；<code>train/train_go1.py:527-529</code> 记录 <code>base_height</code> 权重取 -2000 会把每步奖励打到 0，正是 v1 到 v7 的失败模式。</p>
+<p><code>envs/go1_walk.py:1376</code> 记录了另一次核查：沿楼梯上升时的“额外惩罚对高度”相关性只有 +0.13，没有系统方向，排除了某项惩罚定向压爬升的猜想。这条的意义在于：梯度不动的第一嫌疑是奖励被裁剪，但在改代码之前应当先用探针把相关性量出来。</p>
+<h2 id="8-权重加载与网络重建">8. 权重加载与网络重建</h2>
+<p><code>sim/common.py:65-92</code> 从 pkl 或 orbax 目录读取参数，用第一层 <code>kernel</code> 的形状反推 obs 维度与网络层数，再重建网络并生成确定性推理函数。这解释了训练保存的 <code>params</code> 里有什么、没有什么：只有网络参数，没有优化器状态。</p>
+<p>从 pkl 与从 orbax 目录读取是两条不同的代码路径，前者是 pickle 的参数字典，后者是 orbax 检查点目录；两条路都会走到同一个形状反推逻辑，得到的网络结构也应当一致。</p>
+<p>反推输入层形状依赖网络第一层的结构：<code>kernel</code> 的第一维等于 obs 维度，其余维度决定隐藏层。若换了一个第一层形状不同的网络，重建会得到另一套维度，加载时与环境的观测维度对不上就会报错。</p>
+<h2 id="9-梯度相关的故障现象">9. 梯度相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>续训立刻发散，需降 lr</td><td>以为续训保留 Adam 动量</td><td><code>train/train_go1.py:96-97</code></td></tr><tr><td>每样本更新密度低约 32 倍</td><td>把 batch_size 当转移数</td><td><code>train/train_go1.py:329-336</code></td></tr><tr><td>brax 整除断言失败</td><td>num_envs 不能被 num_minibatches 整除</td><td><code>train/train_go1.py:390-391</code></td></tr><tr><td>总奖励裁剪到 0，梯度归零</td><td>奖励负项过大</td><td><code>train/train_go1.py:673-674</code></td></tr><tr><td>收敛好的策略被 Adam 步长推走</td><td>微调时沿用大 lr</td><td><code>train/train_go1.py:160-162</code></td></tr><tr><td>一个恢复检查点，一个喂初始参数</td><td>把 restore 与 init_pkl 混用</td><td><code>train/train_getup.py:174-180</code></td></tr><tr><td>找不到 jax.grad 调用点，需进 brax</td><td>本仓库不写损失</td><td>全仓库 grep 结果</td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>本仓库不直接调用 <code>jax.grad</code>，梯度路径封在 brax PPO 内部。</li>
+<li>损失是裁剪后的代理目标，优势用 GAE，更新前做全局范数裁剪。</li>
+<li>brax 的 <code>batch_size</code> 是序列数，minibatch 转移数要乘 <code>unroll_length</code>。</li>
+<li>检查点只存网络参数，不含优化器状态与步数，续训时 Adam 动量重建。</li>
+<li>奖励被裁剪到 0 会让梯度整体归零。</li>
+<li>全局范数裁剪的阈值是 <code>max_grad_norm</code>，与学习率是两个独立的量。</li>
+<li>epoch 数与 minibatch 数共同决定一次 rollout 的更新次数。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍</th><th>选法</th><th>代价</th></tr></thead><tbody><tr><td>起步方式</td><td>冷启动随机初始化</td><td>需要更长探索，课程要求高</td></tr><tr><td>warm-start</td><td><code>--init_pkl</code> 喂 BC 权重</td><td>可能被 PPO 推离监督分布</td></tr><tr><td>续训</td><td><code>--restore</code> 读检查点</td><td>Adam 动量重建，必须降 lr</td></tr><tr><td>更新密度</td><td>batch_size 按序列数配</td><td>配置项语义反直觉，误读代价大</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出裁剪代理目标的公式，说明 min 的两路分支分别在优势为正和为负时起作用。</li>
+<li>写出 GAE 的递推形式，并说明 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\lambda=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\lambda=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> 时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">A_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 分别退化成什么。</li>
+<li><code>batch_size=2</code>、<code>unroll_length=32</code>，算出一个 minibatch 的转移数，并说明把它误读成 2 条转移会让每样本更新密度差多少倍。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>
+<p>续训时 Adam 动量从零重建。设计一组对照实验，判断续训初期发散是学习率过高还是动量重建导致；写出自变量、观察指标与需要的检查点。</p>
+</li>
+<li>
+<p><code>discounting=0.99</code>、<code>ctrl_dt=0.02</code>、<code>unroll_length=32</code>。算出折扣的有效视野步数与秒数，并说明它与 unroll 长度的关系对价值网络提出的要求。</p>
+</li>
+<li>
+<p><code>clipping_epsilon</code> 与 <code>max_grad_norm</code> 分别限制什么。说明把两者同时调大可能出现什么行为，并给出应当观察的指标。</p>
+</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>mjx-go1-getup/</td><td>仓库根目录，文中相对路径均相对它</td></tr><tr><td><code>train/train_go1.py</code></td><td>PPO 超参、批量账目、恢复自检</td></tr><tr><td><code>train/train_getup.py</code></td><td>起身入口的超参与 warm-start</td></tr><tr><td><code>sim/common.py</code></td><td>从参数重建网络与推理函数</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>奖励面与梯度方向的记录</td></tr><tr><td><code>requirements.txt</code></td><td>brax、optax、flax 版本锁定</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-编译产物与显存图缓存"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-编译产物与显存图缓存</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/01-jit·vmap·grad/04-编译产物与显存图缓存.md</span></div><div class="dfile__body"><h1 id="编译产物与显存图缓存">编译产物与显存图缓存</h1>
+<p>jit 与 vmap 编译之后，设备侧至少留下三样东西：XLA 可执行体、XLA 显存池、以及 warp 后端的 CUDA graph。三者的约束互不相同，也都随进程生命周期存在。观察器与训练脚本对它们的取舍不同，原因是同一份代码在两侧的调用模式不同：训练批量大、缓冲区地址稳定；观察器每帧新建数组、还按 R 重置。</p>
+<blockquote>
+<p>本页对象是 jit 与 vmap 在设备侧留下的产物及约束，行号取自 mjx-go1-getup 的训练入口、观察器与环境配置，性能数字取自仓库内 docs 与源码注释的实测记录。</p>
+</blockquote>
+<h2 id="1-编译后在设备侧留下三类产物">1. 编译后在设备侧留下三类产物</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>产物</th><th>由什么决定</th><th>约束</th><th>本仓库对策</th></tr></thead><tbody><tr><td>XLA 可执行体</td><td>形状、dtype、trace 期常量</td><td>形状改了要重编</td><td>见第 1 篇</td></tr><tr><td>XLA 显存池</td><td>进程启动时的预占比例</td><td>预占过多会让并发的第二个进程饿死</td><td>按用途设 <code>XLA_PYTHON_CLIENT_MEM_FRACTION</code></td></tr><tr><td>warp CUDA graph</td><td>缓冲区地址</td><td>地址每帧变就反复重新捕获，最终崩溃</td><td>训练保持 WARP，观察器用 WARP_STAGED</td></tr></tbody></table>
+<p>三者的命名分别对应编译、分配与缓存三个阶段，按这个顺序看耗时剖面就能判断首帧的开销落在哪一段。</p>
+<p>三类产物彼此不独立：可执行体在第一次运行时才触发显存分配与图捕获，首帧耗时里同时包含编译、分配与捕获三块。观察器的预热就是在主循环之前把这些一次性开销结清。</p>
+<p>三者的生命周期也不同：可执行体与 CUDA graph 属于进程内的缓存，退出即消失；显存池是进程级的预留，只要进程活着就一直占着。这解释了一个常见困惑：同一个脚本重启后显存占用模式会变，而改动配置并不会释放已经预占的显存。</p>
+<p>区分这三者有一个实际用处：同样表现为”第一次调用慢”，可执行体重编要改配置或形状，显存池要改进程级环境变量，图捕获要改缓冲区地址的稳定性。三者的修法完全不同。</p>
+<h2 id="2-显存预占比例必须在-import-jax-之前">2. 显存预占：比例必须在 import jax 之前</h2>
+<p>XLA 默认在第一次用到设备时预占约 75% 显存。8 GiB 卡上单进程约 6 GiB，一旦出现第二个 GPU 进程（旧窗口没关、并发的训练或评估），显存打满，SM 时钟掉到约 180 MHz，单步从十几毫秒涨到数百毫秒。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>显存</th><th>clocks.sm</th><th>帧耗时</th><th>fps</th></tr></thead><tbody><tr><td>单进程</td><td>未打满</td><td>1500+ MHz</td><td>15.7 ms</td><td>63.7</td></tr><tr><td>双进程，默认预占</td><td>7674 / 8192 MiB</td><td>180 MHz</td><td>306.9 ms</td><td>3.3</td></tr><tr><td>双进程，比例 0.25</td><td>未打满</td><td>正常</td><td>27.1 ms</td><td>36.9</td></tr></tbody></table>
+<p>两个并发进程通常只有一个被挤慢，另一个仍有约 30 fps，所以症状表现为某一个查看器异常低帧率。判别顺序是先看 <code>nvidia-smi</code> 的进程与显存，再怀疑代码（<code>docs/viewer-guide.md:231-267</code> 有完整的排查记录）。</p>
+<p>比例必须在 <code>import jax</code> 之前设。设置方式是 <code>os.environ.setdefault</code>，允许命令行覆盖；用 setdefault 而不是直接赋值，是为了让外部传进来的值优先。这条顺序要求来自 XLA 的初始化时机：设备在第一次被引用时就完成显存池分配，之后再改环境变量没有作用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["第二个 GPU 进程启动"] --> B["XLA 各自预占显存"]
+  B --> C{"总占用接近上限"}
+  C -- "是" --> D["SM 时钟降到约 180 MHz"]
+  D --> E["单步从 15 ms 涨到 300-550 ms"]
+  C -- "否" --> F["各自正常"]
+  G["设置 MEM_FRACTION=0.25"] --> B</pre></div>
+<h2 id="3-cuda-graph-按地址缓存">3. CUDA graph 按地址缓存</h2>
+<p>warp 后端把仿真 kernel 包成 CUDA graph。默认 <code>graph_mode=WARP</code> 的语义是按缓冲区地址缓存图：地址不变就重放，地址变了就重新捕获。观察器每帧新建 <code>command</code> 数组并周期性 <code>reset</code>，地址持续变化，反复捕获到几千帧后崩在 <code>unknown stream</code>。</p>
+<p><code>donate_argnums=0</code> 让输出复用输入缓冲区，地址稳定，图缓存能命中。这解释了训练侧与观察器侧的同源需求：训练本来就稳定，观察器要靠捐赠或 WARP_STAGED 达到稳定。</p>
+<p><code>WARP_STAGED</code> 用一个 staging buffer 承载输入，再在图内做一次 memcpy，因此不依赖输入地址固定，代价是一次额外拷贝。<code>WARP_STAGED_EX</code> 是更保守的变体，实测 57.3 ms。<code>NONE</code> 不捕获图，每步直接派发，139.0 ms。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 未捕获
+  未捕获 --> 已捕获: 首次调用，capture
+  已捕获 --> 已捕获: 地址匹配，replay
+  已捕获 --> 重新捕获: 地址变化（每帧新建 command 或 reset）
+  重新捕获 --> 已捕获: 新图
+  重新捕获 --> 崩溃: 反复捕获后 stream 失效
+  已捕获 --> [*]: 进程退出</pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>graph_mode</th><th>步时</th><th>稳定性</th><th>适用</th></tr></thead><tbody><tr><td>NONE</td><td>139.0 ms</td><td>不崩</td><td>只做对照</td></tr><tr><td>WARP（默认）</td><td>185.5 ms</td><td>地址稳定时命中</td><td>训练</td></tr><tr><td>WARP_STAGED</td><td>16.3 ms</td><td>不崩</td><td>交互式观察器</td></tr><tr><td>WARP_STAGED_EX</td><td>57.3 ms</td><td>不崩</td><td>备用</td></tr></tbody></table>
+<h2 id="4-donate_argnums-与每帧重建">4. donate_argnums 与每帧重建</h2>
+<p><code>sim/view_go1.py:547-549</code> 与 <code>sim/watch_v20_fast.py:347</code> 对 <code>step</code> 用 <code>donate_argnums=0</code>，<code>sim/eval_stairs.py:79</code> 在 vmap 外同样捐赠。代价是输入数组不可复用：<code>sim/watch_v20_fast.py:449-452</code> 每帧重建 3 维 <code>command</code> 数组，注释说明复用会被判为已删除。</p>
+<p><code>donate</code> 在 vmap 之外与之内都可以用，作用范围都是被包装函数的那一个位置参数。<code>sim/eval_stairs.py:79</code> 是在 vmap 外层捐赠，<code>sim/view_go1.py:547-549</code> 是同一层。两种写法都要保证调用方不再引用被捐赠的数组。</p>
+<p>捐赠与地址稳定是一对权衡：不捐赠则每次调用可能分到不同地址，图缓存命中率下降；捐赠则缓冲区地址固定，但原数组被交出去。观察器的选择是捐赠并对每帧新建的输入数组重建，把地址固定的收益留在被反复调用的 <code>step</code> 上。</p>
+<h2 id="5-接触与约束容量改的是物理">5. 接触与约束容量改的是物理</h2>
+<p><code>naconmax</code> 是全体 world 共享的接触槽总数，不是每环境配额。把它调小能省内存并让单步略快，但会改变求解器里的求和与排序顺序，从第一步起结果就分叉：65536 降到 2048 的第一步偏差 1.67e-3，降到 512 是 7.81e-3，后期混沌放大到 0.5 至 0.88 m（<code>docs/viewer-guide.md:416-430</code>）。观察器必须复现训练物理，因此不能为了速度改它。</p>
+<p>另一组容量是约束预算。<code>docs/status.md:170-174</code> 记录 <code>njmax=256</code> 在 hfield 摔倒时单 world 的 <code>nefc</code> 要约 1300，会触发溢出告警，建议改成 2048。约束容量偏小的表现是接触精度下降与告警，不是变慢。</p>
+<p>峰值 3700 这个数字是 768 环境下的实测值，与默认容量 65536 相差一个数量级以上，所以默认值有大余量。余量的意义是避免 overflow 告警，而不是性能指标：把容量调到刚好覆盖峰值不会更快，只会更容易触发边界。</p>
+<p>这两组容量与显存池的区别在于：显存池只影响资源分配，容量参数会改变数值结果。把容量参数当性能旋钮是这类问题里最容易误判的一类。</p>
+<h2 id="6-预热把首帧开销提前结清">6. 预热把首帧开销提前结清</h2>
+<p>graph 捕获与显存分配都发生在首次调用。<code>sim/view_go1.py:764-774</code> 在开窗口之前用与主循环相同的调用序列跑若干帧，并对扫描可视化调用 <code>jax.block_until_ready</code>；<code>sim/watch_v20_fast.py:470-475</code> 同样先对扫描函数做一次阻塞调用。没有预热时，窗口刚出现的头几百帧 <code>step</code> 可达 373 ms，之后自行恢复到 52 ms。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>step 耗时</th><th>说明</th></tr></thead><tbody><tr><td>无预热时头几百帧</td><td>373 ms</td><td>捕获与分配尚未结清</td></tr><tr><td>自行恢复后</td><td>52 ms</td><td>图已捕获，地址稳定</td></tr></tbody></table>
+<p>预热必须走与主循环相同的调用序列与相同的形状。若预热只调用了一个简化版函数，主循环里另一条路径上的 kernel 仍会在第一次遇到时触发捕获，表现为”预热过了还是首帧慢”。</p>
+<h2 id="7-各类脚本的实际取值">7. 各类脚本的实际取值</h2>
+<h3 id="71-显存比例">7.1 显存比例</h3>
+<p><code>train/train_getup.py:38-42</code> 把比例设成 0.45，注释解释为给 warp 的 CUDA graph 池留空间；注释里又写“给 XLA 留 60%”，与代码的 0.45 不一致，按代码为准（含义待确认）。</p>
+<p><code>sim/view_go1.py:56</code> 与 <code>sim/watch_v20_fast.py:67</code> 都设 0.25，后者在 <code>sim/watch_v20_fast.py:60-66</code> 记下了单进程与双进程的对比。评估与探针用更宽的档：<code>sim/eval_getup.py:19</code> 为 0.30，<code>sim/eval_stairs.py:21</code> 为 0.25，<code>sim/eval_walk.py:27</code> 为 0.3，<code>sim/probe_nefc.py:17</code> 为 0.45，<code>sim/probe_getup_v2.py:7</code> 与 <code>sim/make_getup_posepool.py:24</code> 为 0.40。</p>
+<p><code>train/train_go1.py</code> 全文件没有设置这个变量（grep 核对），因此走路训练沿用 XLA 默认的约 75%。这与起身入口的 0.45 不一致，属当前检出的实际状态。</p>
+<h3 id="72-graph_mode">7.2 graph_mode</h3>
+<p><code>envs/go1_walk.py:320-339</code> 定义 <code>graph_mode</code> 字段并列出五种模式的实测；<code>envs/go1_walk.py:330</code> 是 NONE 的 139.0 ms 那一行，<code>envs/go1_walk.py:440-446</code> 在 <code>impl="warp"</code> 时把字符串映射成 <code>GraphMode</code> 再交给 <code>mjx.put_model</code>。观察器 <code>sim/watch_v20_fast.py:317-324</code> 与 <code>sim/view_go1.py:492-496</code> 显式设成 <code>WARP_STAGED</code>；<code>sim/eval_stairs.py:53</code> 也设成 <code>WARP_STAGED</code>。训练入口 <code>train/train_getup.py:137-139</code> 的默认是 <code>WARP</code>，帮助文字写明训练侧要地址稳定。</p>
+<h3 id="73-接触与约束预算">7.3 接触与约束预算</h3>
+<p><code>train/train_getup.py:181-185</code> 记录 <code>naconmax</code> 的语义与实测峰值：768 环境峰值约 3700，默认 8×8192=65536 有余量；调小不掉时间，只省内存。<code>sim/make_getup_posepool.py:50</code> 按 <code>max(8*8192, 64*envs)</code> 设容量。<code>docs/status.md:195-196</code> 明确一个进程只建一个环境，两个环境同进程会撞 warp 的地址缓存。</p>
+<h2 id="8-一进程一环境">8. 一进程一环境</h2>
+<p>warp 的 CUDA graph 按地址缓存，同一进程里先后建两个同规模环境时，后一个会命中前一个的图，两个环境互相串味（<code>docs/status.md:195-196</code>）。这条约束影响对照实验的设计：想比较两套配置，必须开两个进程各建一个环境，而不是在同一进程里先后建两个。</p>
+<p>两个进程同时又要控制显存，这正是预占比例必须按用途下调的原因。观察器 0.25、评估 0.3 到 0.45 这些档位，共同目标是让两个进程都能拿到足够显存而不触发降频。</p>
+<h2 id="9-显存与图缓存相关的故障现象">9. 显存与图缓存相关的故障现象</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>比例设了不生效，仍按默认预占</td><td>在 import jax 之后才设</td><td><code>train/train_getup.py:38-42</code></td></tr><tr><td>单进程 63.7 fps 变成 3.3 fps</td><td>旧查看器进程没退</td><td><code>docs/viewer-guide.md:231-267</code></td></tr><tr><td>跑几千帧后报 unknown stream</td><td>观察器沿用 WARP</td><td><code>envs/go1_walk.py:320-339</code></td></tr><tr><td>不崩但单步约 139 ms</td><td>观察器用 NONE</td><td><code>envs/go1_walk.py:330</code></td></tr><tr><td>第一步就分叉，物理不等价</td><td>调小 naconmax 求快</td><td><code>docs/viewer-guide.md:416-430</code></td></tr><tr><td>两个环境互相串味</td><td>一个进程建两个环境</td><td><code>docs/status.md:195-196</code></td></tr><tr><td>nefc 溢出告警，接触精度下降</td><td>njmax 偏小</td><td><code>docs/status.md:170-174</code></td></tr><tr><td>Array has been deleted</td><td>复用被捐赠的 command 数组</td><td><code>sim/watch_v20_fast.py:449-452</code></td></tr><tr><td>漏掉的 kernel 不预热，首帧仍慢</td><td>预热走了简化版函数</td><td><code>sim/view_go1.py:764-774</code></td></tr><tr><td>把捕获与分配算成稳态耗时</td><td>首帧就下结论</td><td><code>sim/watch_v20_fast.py:470-475</code></td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>编译在设备侧留下可执行体、显存池与 CUDA graph 三类产物，修法各不相同。</li>
+<li>显存比例必须在 <code>import jax</code> 之前设置，观察器与评估用 0.25 到 0.45。</li>
+<li>WARP 按缓冲区地址缓存图，地址稳定才命中；观察器用 WARP_STAGED。</li>
+<li><code>donate_argnums=0</code> 固定地址，代价是输入数组不可复用。</li>
+<li>显存预占比例是进程级设置，同一进程内无法切换。</li>
+<li>首帧包含编译、分配与图捕获，主循环前要用相同调用序列预热。</li>
+<li>两个并发进程通常只有一个被显存挤慢。</li>
+<li>接触容量 <code>naconmax</code> 与约束容量 <code>njmax</code> 会改变物理或触发溢出，不能当纯性能旋钮。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍</th><th>选法</th><th>代价</th></tr></thead><tbody><tr><td>graph_mode 训练侧</td><td>WARP</td><td>依赖地址稳定，换观察器模式即失效</td></tr><tr><td>graph_mode 观察器</td><td>WARP_STAGED</td><td>一次额外拷贝，换来不崩与 16.3 ms</td></tr><tr><td>显存比例</td><td>训练 0.45，观察器 0.25</td><td>比例小则单进程吞吐略降，但能并发</td></tr><tr><td>接触容量</td><td>保持默认 65536</td><td>多占内存，换物理与训练一致</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<p>基础题</p>
+<ol>
+<li>写出设备侧三类产物的名称、各自的约束，以及修改它们分别要动什么。</li>
+<li>说明 <code>XLA_PYTHON_CLIENT_MEM_FRACTION</code> 为什么必须在 <code>import jax</code> 之前设置。</li>
+<li>双进程默认预占时单步从 15.7 ms 涨到 306.9 ms。说明 <code>clocks.sm</code> 这一列的诊断价值，以及比例设成 0.25 后的帧耗时。</li>
+</ol>
+<p>挑战题</p>
+<ol start="4">
+<li>
+<p>一台 8 GiB 显卡要在同一台机器上同时跑训练和一个交互式查看器。写出两份进程各自的配置清单（显存比例、<code>graph_mode</code>、环境数或批量），预测并发后两者的单步耗时量级。</p>
+</li>
+<li>
+<p>解释为什么不能把 <code>naconmax</code> 从 65536 降到 512 来换速度，并给出一个既能省内存又不改变物理的替代做法。</p>
+</li>
+<li>
+<p>说明“一进程一环境”这条约束的成因，以及违反它时对照实验会得出什么错误结论。</p>
+</li>
+<li>
+<p>说明 <code>os.environ.setdefault</code> 与直接赋值的差别，以及为什么脚本用前者设置显存比例。</p>
+</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>mjx-go1-getup/</td><td>仓库根目录，文中相对路径均相对它</td></tr><tr><td><code>train/train_getup.py</code></td><td>显存比例、graph_mode、naconmax</td></tr><tr><td><code>train/train_go1.py</code></td><td>未设显存比例的对照</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>graph_mode 定义与五种模式实测</td></tr><tr><td><code>sim/view_go1.py</code></td><td>观察器的 donate 与 WARP_STAGED</td></tr><tr><td><code>sim/watch_v20_fast.py</code></td><td>显存预占与每帧重建 command</td></tr><tr><td><code>docs/status.md</code></td><td>njmax 与一进程一环境</td></tr><tr><td><code>docs/viewer-guide.md</code></td><td>显存与 CUDA graph 的完整实测</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/01-jit·vmap·grad/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<p>jit、vmap、grad 三类问题的表象不同：jit 问题表现为首帧慢或反复重编，vmap 问题表现为重编或批量结果相同，grad 问题表现为损失不降或数值异常。三者的共同点是都可以先用一个能出数的基准把范围缩小，而不是直接读代码。</p>
+<p>这里把排查顺序固定成四步，每步都要求有能出数的证据；再把三条最容易误判的机制写清楚：计时为什么必须在设备同步之后、累计 fps 为什么会被编译摊薄、同进程里为什么不能先后建两个环境。然后列出仓库里可用的探针、观察器的四道正确性闸门，最后给出交付前要 grep 的四个配置。</p>
+<blockquote>
+<p>本页汇总 jit、vmap、grad 在本仓库暴露过的错误与排查方法，行号取自源码与仓库内 docs，练习答案都能在 mjx-go1-getup 的脚本与文档里找到依据。</p>
+</blockquote>
+<h2 id="1-四步排查顺序">1. 四步排查顺序</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>查什么</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>进程外：残留 GPU 进程、显存占用、时钟</td><td><code>nvidia-smi</code> 的进程与 <code>clocks.sm</code></td></tr><tr><td>2</td><td>指标本身是否代表目标场景</td><td>headless 基准对比窗口内耗时</td></tr><tr><td>3</td><td>配置与档位是否与训练一致</td><td>obs 维度、命令坐标系、动作范围</td></tr><tr><td>4</td><td>代码：jit、vmap、计时点、捐赠</td><td>源码行号</td></tr></tbody></table>
+<p>顺序的依据是排查成本与影响面：进程外因素一次 <code>nvidia-smi</code> 就能排除，且它的症状会伪装成代码慢；指标口径问题会影响后面所有结论；配置不一致会让同一份代码在两处表现不同；代码问题放最后，因为定位它需要前三步都确认过。</p>
+<p>这四步里只有第 4 步需要读源码，前三步都可以用现成命令完成。把便宜的检查放在前面，是为了避免在读代码上花掉大量时间之后才发现问题在进程外。</p>
+<p>四步之间还有一个回退关系：任何一步发现异常并修好以后，都要回到第 2 步重新确认指标，而不是直接判定问题解决。修改显存比例这类环境变量的例子最典型：进程外因素变了以后，之前测到的帧耗时全部作废。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["症状: 帧率或损失异常"] --> B{"nvidia-smi 有残留进程或显存接近上限"}
+  B -- "有" --> C["先清进程，按用途设 MEM_FRACTION"]
+  B -- "没有" --> D{"headless 基准能复现吗"}
+  D -- "不能" --> E["指标或窗口暂态问题"]
+  D -- "能" --> F{"配置与训练一致吗"}
+  F -- "不一致" --> G["对齐 obs 维度与坐标系与动作范围"]
+  F -- "一致" --> H["查 jit 计时点与 vmap 重编与捐赠复用"]</pre></div>
+<h2 id="2-计时必须落在同步点之后">2. 计时必须落在同步点之后</h2>
+<p>JAX 调用异步返回，计时点要放在 <code>np.asarray</code> 或 <code>jax.block_until_ready</code> 之后，否则测到的是派发速度。<code>sim/watch_v20_fast.py:455-458</code> 把 <code>t_step</code> 结算在 <code>np.asarray(state.data.qpos)</code> 之后，就是这条。</p>
+<p><code>sim/watch_v20_fast.py:455-458</code> 处把 <code>t_step</code> 与拷贝、同步分开记，分项之和才对得上单帧耗时。只记总分时无法判断瓶颈在计算、拷贝还是设备同步。</p>
+<p>异步执行的代价在单步上可能不明显，在批量子步上会累积：一次 <code>step</code> 内部有多个 kernel，若只计时派发，测到的数值与 GPU 上真实耗时相差几倍。判断自己有没有踩到这条的办法是看数据是否稳定得反常：派发时间几乎不随计算量变化。</p>
+<h2 id="3-累计-fps-会被编译摊薄">3. 累计 fps 会被编译摊薄</h2>
+<p>若记 <code>fps = num_steps / (now - t0)</code>，而 <code>t0</code> 取在 <code>ppo.train</code> 之前，那么编译的数十秒会整块摊进 fps。分段 fps 才是稳态值：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mtext>fps</mtext><mrow><mi>s</mi><mi>e</mi><mi>g</mi></mrow></msub><mo>=</mo><mfrac><mrow><mi>n</mi><mi>u</mi><mi>m</mi><mi mathvariant="normal">_</mi><mi>e</mi><mi>n</mi><mi>v</mi><mi>s</mi><mo>×</mo><mi>u</mi><mi>n</mi><mi>r</mi><mi>o</mi><mi>l</mi><mi>l</mi><mi mathvariant="normal">_</mi><mi>l</mi><mi>e</mi><mi>n</mi><mi>g</mi><mi>t</mi><mi>h</mi><mo>×</mo><mi mathvariant="normal">Δ</mi><mi>i</mi><mi>t</mi></mrow><mrow><mi mathvariant="normal">Δ</mi><mi>t</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{fps}_{seg}=\frac{num\_envs\times unroll\_length\times \Delta it}{\Delta t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0747em;vertical-align:-0.3802em;"></span><span class="mord"><span class="mord text"><span class="mord">fps</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.0573em;"><span style="top:-2.4559em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">se</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3802em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3581em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0131em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">Δ</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.527em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">m</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span><span class="mord mathnormal mtight">s</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mtight" style="margin-right:0.0278em;">_</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">h</span><span class="mbin mtight">×</span><span class="mord mtight">Δ</span><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p><code>train/train_getup.py:410-424</code> 增加 <code>seg=...</code> 与 <code>ms/it</code>，就是为了隔离编译项。<code>docs/experiment-log.md:5234-5249</code> 记录了这个失真曾把 3470 fps 读成 900 到 1650 fps。</p>
+<p>这个公式把环境数、unroll 长度与迭代数都乘上再除以时间，所以它给出的量与环境规模无关，适合跨配置比较。累计 fps 则把进程启动、编译、采样、更新全部混在一起，只适合做”整个脚本跑了多久”的粗略估计。</p>
+<h2 id="4-对照实验的最小单元">4. 对照实验的最小单元</h2>
+<p>warp 的 CUDA graph 按地址缓存，同一进程里先后建两个同规模环境会让后一个命中前一个的图，现象是”换个进程跑就正常”。<code>docs/status.md:195-196</code> 与 <code>docs/viewer-guide.md:474-482</code> 给的规则是一个进程只建一个环境，对照实验用两个进程。</p>
+<p>两个进程还要避免互相挤显存，所以每个进程的预占比例都要下调（<code>train/train_getup.py:38-42</code>、<code>sim/view_go1.py:56</code> 这类设置）。单变量原则在这里有两个含义：一次只改一个配置，以及一次只在一个进程里改。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant D as 调试者
+  participant G as nvidia-smi
+  participant H as headless 基准
+  participant C as 代码与配置
+  D->>G: 查进程与显存
+  G-->>D: 有残留进程则先清理
+  D->>H: 单进程复刻 frame 全流程
+  H-->>D: 15.7 ms，证明软件栈正常
+  D->>C: 对齐 obs 维度与动作范围
+  C-->>D: 仍异常则查 jit 与 vmap 与捐赠</pre></div>
+<h2 id="5-能出数的探针">5. 能出数的探针</h2>
+<p><code>sim/probe_nefc.py</code> 扫 <code>njmax</code> 与 <code>naconmax</code>，统计每个环境出现 NaN 的步数；<code>sim/probe_standability.py</code> 用常量关节目标扫站立能力；<code>sim/probe_handover.py</code> 按 stage 复现交还与真摔倒。这些脚本都用 <code>jax.jit(jax.vmap(...))</code> 包住主循环，本身也是第 2 篇的样例。</p>
+<p>探针的另一个用处是做回归：改动提交之前把同一组探针跑一遍，输出与改动前逐项对比。三个探针的输出都是计数与分布，不依赖随机种子的极端取值，适合作回归基线。</p>
+<p>这些探针的共同点是先把问题量化再改代码：探针输出计数与分布，训练日志只给聚合奖励。改动前后各跑一次同一探针，才能判断是不是代码生效。只用训练曲线做判据时，一次改动的效果会被随机性与课程进度掩盖。</p>
+<h2 id="6-观察器的正确性闸门">6. 观察器的正确性闸门</h2>
+<p><code>docs/viewer-guide.md:372-391</code> 给出四道检查：策略 obs 与环境 obs 同维、自绘几何与 <code>env.height_scan_features</code> 逐位一致、策略真的在走、jit 与 eager 的动作偏差小于 1e-5。</p>
+<p>最后一条特别指出不能用 <code>qpos</code> 比等价性（<code>docs/viewer-guide.md:389</code>）：一步物理会把 1e-7 的动作差混沌放大成米级，用位置比会把正确的实现判成错误。等价性应当比动作，物理等价性只看第一步是否分叉，这一条与第 4 篇的接触容量结论是同一个道理。</p>
+<p>四道检查里前两道是静态的（维度、几何），后两道是动态的（行为、等价性）。静态检查可以在加载策略时一次做完并写成断言，动态检查需要跑少量步数后比较动作。</p>
+<p>维度一致性还有一处独立的记录：<code>docs/viewer-guide.md:295-297</code> 记录观测维度与训练不一致时报 <code>ScopeParamShapeError</code>，<code>docs/viewer-guide.md:303-305</code> 记录靠记忆配开关而不写维度断言的后果。两处合起来说明维度检查应当在加载策略时就失败，而不是等跑到某一步才发现。</p>
+<h2 id="7-交付前-grep-四个配置">7. 交付前 grep 四个配置</h2>
+<p><code>docs/viewer-guide.md:448-449</code> 要求交付前确认 <code>graph_mode</code>、<code>XLA_PYTHON_CLIENT_MEM_FRACTION</code>、<code>GALLIUM_DRIVER</code>、<code>LP_NUM_THREADS</code> 四处都写对。仓库里两次回归都是文档写了、脚本漏了。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># 交付前在仓库根逐项确认</span></span>
+<span class="line"><span style="color:#6F42C1">grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "graph_mode"</span><span style="color:#032F62"> sim/</span><span style="color:#032F62"> train/</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> "WARP_STAGED"</span></span>
+<span class="line"><span style="color:#6F42C1">grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "XLA_PYTHON_CLIENT_MEM_FRACTION"</span><span style="color:#032F62"> sim/</span><span style="color:#032F62"> train/</span></span>
+<span class="line"><span style="color:#6F42C1">grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "GALLIUM_DRIVER\|LP_NUM_THREADS"</span><span style="color:#032F62"> sim/</span><span style="color:#032F62"> train/</span></span></code></pre>
+<p>grep 输出为空才是正常结果；若有命中，先判断它是文档里的说明还是实际生效的赋值，再决定是否修改。</p>
+<p>这类检查的成本极低，但因为改动分散在多个脚本里，靠记忆很容易漏。把它写成一条可以重复执行的命令，比在提交说明里提醒更可靠。</p>
+<h2 id="8-三类问题的表象对照">8. 三类问题的表象对照</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类别</th><th>典型表象</th><th>首先检查</th><th>常见修法</th></tr></thead><tbody><tr><td>jit</td><td>首帧慢，或耗时尖峰周期性出现</td><td>调用频率与传入的 rng</td><td>补 jit，把推理 rng 固定成常量</td></tr><tr><td>vmap</td><td>反复重编，或批量结果完全相同</td><td>key 是否 split、外层是否有 jit</td><td>split 出 N 个 key，外层补 jit</td></tr><tr><td>grad</td><td>损失不降、总奖励恒 0、续训发散</td><td>奖励是否被裁剪，lr 与检查点来源</td><td>放开奖励下限，续训降 lr</td></tr></tbody></table>
+<p>这张表只是缩小范围用的，三类的根因可能重叠：vmap 的重编最终也表现为 jit 的耗时尖峰，grad 的梯度归零可能来自奖励面而不是优化器。确认根因仍然要靠第 1 节的四步顺序。</p>
+<h2 id="9-排查清单">9. 排查清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>对应位置</th></tr></thead><tbody><tr><td>每帧重编，探针跑不完</td><td>主循环里用未包 jit 的 vmap</td><td><code>docs/status.md:202-203</code></td></tr><tr><td>策略前向反复重编</td><td>每帧传不同 rng</td><td><code>sim/watch_v20_fast.py:344-345</code></td></tr><tr><td>日志变了，环境没变</td><td>运行中改 trace 期常量</td><td><code>envs/go1_getup.py:97-99</code></td></tr><tr><td>测到派发时间</td><td>在同步前计时</td><td><code>sim/watch_v20_fast.py:455-458</code></td></tr><tr><td>编译被摊进结果</td><td>用累计 fps 判断快慢</td><td><code>train/train_getup.py:410-424</code></td></tr><tr><td>Array has been deleted</td><td>复用被捐赠的数组</td><td><code>sim/watch_v20_fast.py:449-452</code></td></tr><tr><td>几千帧后 unknown stream</td><td>观察器沿用 WARP</td><td><code>envs/go1_walk.py:320-339</code></td></tr><tr><td>仍按默认预占</td><td>显存比例设晚了</td><td><code>train/train_getup.py:38-42</code></td></tr><tr><td>两环境互相串味</td><td>一个进程建两个环境</td><td><code>docs/status.md:195-196</code></td></tr><tr><td>第一步就分叉</td><td>调小 naconmax</td><td><code>docs/viewer-guide.md:416-430</code></td></tr><tr><td>续训立刻发散</td><td>以为保留 Adam 动量</td><td><code>train/train_go1.py:96-97</code></td></tr><tr><td>梯度归零，损失不动</td><td>总奖励被裁剪到 0</td><td><code>train/train_go1.py:673-674</code></td></tr><tr><td>用 qpos 判 jit 等价会误判</td><td>混沌放大</td><td><code>docs/viewer-guide.md:389</code></td></tr><tr><td>报 ScopeParamShapeError</td><td>obs 维度与训练不一致</td><td><code>docs/viewer-guide.md:295-297</code></td></tr><tr><td>漏掉的 kernel 未预热</td><td>预热走了简化版函数</td><td><code>sim/view_go1.py:764-774</code></td></tr><tr><td>靠记忆配开关</td><td>维度断言缺失</td><td><code>docs/viewer-guide.md:303-305</code></td></tr><tr><td>无法判断瓶颈在哪一项</td><td>只看 fps 不看分项</td><td><code>docs/viewer-guide.md:367-368</code></td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>先排进程外干扰，再查指标，最后读代码。</li>
+<li>计时点在设备同步之后，训练看分段 fps，不看累计 fps。</li>
+<li>对照实验一个进程只建一个环境，变量一次只改一个。</li>
+<li>jit 等价性用动作判，不用 qpos 判；物理等价性看第一步是否分叉。</li>
+<li>obs 维度、坐标系数值、动作范围三项要与训练逐项对齐。</li>
+<li>探针输出计数与分布，改动前后各跑一次再下结论。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍</th><th>选法</th><th>代价</th></tr></thead><tbody><tr><td>对照方式</td><td>两个进程各建一个环境</td><td>显存需限比例，启动慢</td></tr><tr><td>判据</td><td>探针计数与动作偏差</td><td>需要额外脚本，但结论可复现</td></tr><tr><td>交付检查</td><td>一条可重复的 grep 命令</td><td>每次交付都要跑，换来不漏配置</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>
+<p>写出把单环境 <code>env.reset</code> 与 <code>env.step</code> 批量到 256 个环境的 jit 与 vmap 骨架，说明随机键从哪来、批量大小改变后会发生什么。</p>
+</li>
+<li>
+<p>运行 <code>train/train_getup.py</code> 时在 <code>progress_fn</code> 里修改 <code>difficulty</code> 为什么无效，给出两种能实际推进课程的做法，并写出各自需要的关键参数。</p>
+</li>
+<li>
+<p>查看器单帧从 15 ms 涨到 300 ms，而 <code>copy</code>、<code>sync</code>、<code>scan</code> 分项都正常。按调试顺序写出前两步要执行的命令与要看的字段。</p>
+</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>一台 8 GiB 显卡要在同一台机器上同时跑训练和一个交互式查看器。写出两份进程各自的配置清单（显存比例、<code>graph_mode</code>、环境数或批量），预测并发后两者的单步耗时量级，并解释为什么不能把 <code>naconmax</code> 从 65536 降到 512 来换速度。</p>
+</li>
+<li>
+<p>用累计 fps 与分段 fps 分别评估同一次训练的吞吐，说明两者的差别来自哪几段开销，并设计一个实验把编译项从分段 fps 里进一步剥离。</p>
+</li>
+<li>
+<p>说明为什么 <code>docs/viewer-guide.md:389</code> 要求用动作而不是 <code>qpos</code> 判 jit 等价性，并给出一个会因此被误判的具体场景。</p>
+</li>
+<li>
+<p>写出三类问题（jit、vmap、grad）各一个”看起来像另一类”的实例，并说明用哪一步排查可以区分。</p>
+</li>
+<li>
+<p>说明为什么分项计时（step、copy、sync）比只记单帧总耗时更容易定位瓶颈，并给出两个会导致分项之和对不上总耗时的原因。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>mjx-go1-getup/</td><td>仓库根目录，文中相对路径均相对它</td></tr><tr><td><code>sim/probe_nefc.py</code></td><td>NaN 与接触容量探针</td></tr><tr><td><code>sim/probe_handover.py</code></td><td>交还与真摔倒探针</td></tr><tr><td><code>sim/watch_v20_fast.py</code></td><td>计时点、捐赠与显存设置</td></tr><tr><td><code>train/train_getup.py</code></td><td>分段计时与显存比例</td></tr><tr><td><code>train/train_go1.py</code></td><td>续训与奖励截断的记录</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>graph_mode 定义</td></tr><tr><td><code>docs/status.md</code></td><td>一进程一环境与 njmax</td></tr><tr><td><code>docs/viewer-guide.md</code></td><td>排查顺序与正确性闸门</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/11-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/04-%E8%AE%AD%E7%BB%83%E7%A8%B3%E5%AE%9A%E6%80%A7%E4%B8%8E%E8%B6%85%E5%8F%82/"><span class="k">← 上一篇</span><span class="t">训练稳定性与超参</span><span class="d">强化学习 · 4 个文件</span></a><a class="next" href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/02-%E8%AE%BE%E5%A4%87%E6%95%B0%E7%BB%84%E4%B8%8E%E6%98%BE%E5%AD%98/"><span class="k">下一篇 →</span><span class="t">设备数组与显存</span><span class="d">JAX 与 Brax · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

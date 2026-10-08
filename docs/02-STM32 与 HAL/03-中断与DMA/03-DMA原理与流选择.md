@@ -7,10 +7,12 @@ updated: 2026-10-07
 
 # DMA 原理与流选择
 
-> 本页对着 `Core/Src/dma.c`、各外设的 MspInit（`usart.c`、`spi.c`）与 HAL 的 DMA 驱动。
-> 五条流的配置全部来自仓库，逐行可查。
+`Core/Src/dma.c`、各外设的 MspInit（`usart.c`、`spi.c`）与 HAL 的 DMA 驱动是核对对象，五条流的配置全部来自仓库，逐行可查。
 
-## 1. 概念：DMA 解决的问题与它的资源结构
+DMA 把 CPU 从逐字节搬运里解放出来，代价是引入一套资源约束：流与通道的绑定、请求映射、优先级与带宽。资源结构先讲清，然后逐项过一条流的配置，最后收在本工程五条流的清单与一次 SPI 实例上。
+
+
+## 1. DMA 解决的问题与它的资源结构
 
 SPI 读一次 IMU 要搬 8 个字节，串口每来一帧遥控数据要搬 18 个字节。如果这些搬运都由 CPU 执行，每一次都要经历"读状态寄存器、判标志、读数据寄存器、写内存"四步，并且全程占用 CPU。DMA（Direct Memory Access，直接存储器访问）把这四步交给独立的控制器，CPU 只需要配置一次，然后在传输结束时收到一个中断。
 
@@ -59,7 +61,7 @@ flowchart TD
   C --> U["应用层回调 例如 HAL_SPI_TxRxCpltCallback"]
 ```
 
-## 2. 机制
+## 2. 一条流的配置与工作模式
 
 ### 2.1 一条流的配置项
 
@@ -180,7 +182,7 @@ sequenceDiagram
 
 流之间的仲裁由 `CR.PL` 决定，共四档：最高、高、中、低。同一档内按流编号排序。这个优先级只影响两个流同时请求时的先后，不影响 CPU 与 DMA 对总线的竞争：DMA 与 CPU 分时使用总线矩阵，DMA 搬运期间 CPU 访问同一块 SRAM 会被插入等待周期。搬运密度很低时这部分开销可以忽略，本工程的量级在下面算。
 
-## 3. 落到本项目
+## 3. 五条流的配置与实例
 
 ### 3.1 五条流的配置清单
 
@@ -311,7 +313,7 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 ### 4.5 DMA 缓冲区是局部变量
 
-`HAL_SPI_TransmitReceive_DMA(&hspi1, tx, rx, len)` 之后函数返回，DMA 仍然在写 `rx`。如果 `rx` 是栈上的局部数组，函数返回后这块栈空间随时会被别的调用覆盖。本工程的 DMA 目标 `gyro`、`accel` 是全局数组（`Task/Src/ImuTask.cpp:14`），发送缓冲 `bmi088_dma_tx_buf` 是静态数组，没有这个问题。
+`HAL_SPI_TransmitReceive_DMA(&hspi1, tx, rx, len)` 之后函数返回，DMA 仍然在写 `rx`。如果 `rx` 是栈上的局部数组，函数返回后这块栈空间随时会被别的调用覆盖。本工程的 DMA 目标 `gyro`、`accel` 是全局数组（`Task/Src/ImuTask.cpp:15`），发送缓冲 `bmi088_dma_tx_buf` 是静态数组，没有这个问题。
 
 ### 4.6 把双缓冲当单缓冲用
 
@@ -319,7 +321,7 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 ### 4.7 混用阻塞与 DMA 的 SPI 时序
 
-`BMI088/Src/BMI088.cpp:217-219` 在调用 `BMI088_read_multiple_reg_dma()` 之前先用阻塞方式发送了一次寄存器地址，而该函数内部（`:288`）又会发一次同样的地址。这样的序列里前一次发送不经过 DMA，第二次才进入 DMA，两种时序混在同一次读操作里。它是否造成读回数据整体偏移一个寄存器，需要用逻辑分析仪核对实际 MOSI 与 MISO 波形，本页标注为待实测。
+`BMI088/Src/BMI088.cpp:217-219` 在调用 `BMI088_read_multiple_reg_dma()` 之前先用阻塞方式发送了一次寄存器地址，而该函数内部（`:288`）又会发一次同样的地址。这样的序列里前一次发送不经过 DMA，第二次才进入 DMA，两种时序混在同一次读操作里。它是否造成读回数据整体偏移一个寄存器，需要用逻辑分析仪核对实际 MOSI 与 MISO 波形，这一条标注为待实测。
 
 ### 4.8 在中断里调用阻塞式中止
 
@@ -370,13 +372,13 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/dma.c` | DMA 控制器时钟与五个向量（:39-62） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | USART3_RX 流与通道（:180-189）、USART6_RX（:226-235）、USART6_TX（:244-253） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 波特率预分频（:49）、SPI1_RX 流（:99-108）、SPI1_TX 流（:117-126） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 五个 DMA 向量的处理函数（:177-354） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 完成标志与发送缓冲（:15-17）、DMA 启动与等待（:279-315）、完成回调（:355-369） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 全局数组与 1 ms 循环（:14、:34-104） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 双缓冲启动与 `NDTR` 重置（:33-99、:118-178） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `CR` 与 `FCR` 装载（:231-269）、中断分发（:746-921）、双缓冲回调选择（:878-898）、地址长度装载（:1151） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c` | DMA 回调登记（:1707、:1817）、完成分发（:3717-3738） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/dma.c` | 底盘板同配置（:39-62） |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | DMA 控制器时钟与五个向量（:39-62） |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3_RX 流与通道（:180-189）、USART6_RX（:226-235）、USART6_TX（:244-253） |
+| `2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 波特率预分频（:49）、SPI1_RX 流（:99-108）、SPI1_TX 流（:117-126） |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 五个 DMA 向量的处理函数（:177-354） |
+| `2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 完成标志与发送缓冲（:15-17）、DMA 启动与等待（:279-315）、完成回调（:355-369） |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 全局数组与 1 ms 循环（:14、:34-104） |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 双缓冲启动与 `NDTR` 重置（:33-99、:118-178） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `CR` 与 `FCR` 装载（:231-269）、中断分发（:746-921）、双缓冲回调选择（:878-898）、地址长度装载（:1151） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c` | DMA 回调登记（:1707、:1817）、完成分发（:3717-3738） |
+| `2026OmniSentryChassis/Core/Src/dma.c` | 底盘板同配置（:39-62） |

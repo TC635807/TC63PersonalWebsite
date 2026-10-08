@@ -11,7 +11,7 @@ updated: 2026-10-07
 > 素材是云台板 `2026OmniSentryGimbal` 的真实文件（139 行），底盘板 `2026OmniSentryChassis` 的差异会单独标出。
 > 背配置没有意义，需要的是能回答"改这一行，系统会变成什么样"。
 
-## 1. 开篇：一份编译期契约
+## 1. 一份编译期契约
 
 FreeRTOS 的配置方式和大多数库都不一样：没有运行期的配置结构体，没有 `vTaskConfigure()`。所有配置都是 `#define`，在编译时就被嵌进内核代码。这带来三个后果：
 
@@ -38,7 +38,7 @@ flowchart TD
   G --> M["任务如何被选中与切换"]
   I --> M
   J --> N["中断能否安全调用内核 API"]
-  K --> O["出问题时你看到的现象"]
+  K --> O["出问题时观察到的现象"]
   L --> P["链接期是否报 undefined reference"]
   H --> Q["任务创建是否成功"]
 ```
@@ -160,9 +160,9 @@ flowchart TD
 
 | 现象 | 来自哪一行代码 |
 | --- | --- |
-| `osDelay(1)` 就是 1 ms | `GimbalTask.cpp:104`、`FireTask.cpp:207`、`ControlCenterTask.cpp:137` 的控制周期 |
-| `osDelay(5)` = 5 ms | `UsbConnectTask.cpp:95` 轮询 `USBD_BUSY` 的间隔 |
-| `osDelay(10)` = 10 ms | `UsbConnectTask.cpp:99` USB 任务主循环周期 |
+| `osDelay(1)` 就是 1 ms | `FireTask.cpp:70`、`ControlCenterTask.cpp:111` 的控制周期；`gimbalTask` 用的是 `osDelay(2)`（`GimbalTask.cpp:100`） |
+| `osDelay(5)` = 5 ms | `UsbConnectTask.cpp:148` 轮询 `USBD_BUSY` 的间隔 |
+| `osDelay(10)` = 10 ms | `UsbConnectTask.cpp:154` USB 任务主循环周期 |
 | `1.0f / 1000.0f` 当 dt | `ImuTask.cpp` 里 `1kHz` 的融合频率 |
 | `configTICK_RATE_HZ = 1000` 与 `HAL_Delay(1)` 数值相同 | 两个时基恰好都是 1 ms，见 `03` 易错点 3 |
 
@@ -238,7 +238,7 @@ osThreadDef_t taskDef = {};        /* 全零初始化 */
 
 ```mermaid
 flowchart TD
-  A["你打开了某个诊断开关"] --> B{"它是否要求一个应用回调"}
+  A["某个诊断开关被打开"] --> B{"它是否要求一个应用回调"}
   B -->|"configCHECK_FOR_STACK_OVERFLOW 大于 0"| C["必须实现 vApplicationStackOverflowHook"]
   B -->|"configUSE_MALLOC_FAILED_HOOK 等于 1"| D["必须实现 vApplicationMallocFailedHook"]
   B -->|"configUSE_IDLE_HOOK 等于 1"| E["必须实现 vApplicationIdleHook"]
@@ -266,16 +266,16 @@ flowchart TD
 | `INCLUDE_vTaskCleanUpResources = 0` | 本来就已废弃，无所谓 |
 | `INCLUDE_uxTaskGetStackHighWaterMark` 未定义 | 栈水位不可用（见 `04`） |
 
-`INCLUDE_vTaskDelayUntil = 0` 需要单独说明。本工程 `GimbalTask` 用 `osDelay(1)` 做 1 kHz 控制：
+`INCLUDE_vTaskDelayUntil = 0` 需要单独说明。本工程 `GimbalTask` 在循环末尾调用 `osDelay(2)`（`GimbalTask.cpp:100`，源码注释写的是 1 ms 控制周期）：
 
 ```cpp
-/* Task/Src/GimbalTask.cpp:104 */
-osDelay(1); // 控制周期与输出周期同步
+/* Task/Src/GimbalTask.cpp:100 */
+osDelay(2); // 1ms控制周期
 ```
 
-`osDelay` 是相对延时：它在"本次调用时刻"基础上加 1 tick。每轮的 PID 计算、CAN 收发耗时都会叠加到周期里，于是实际周期是 $1\ \text{ms} + \epsilon$。而 `vTaskDelayUntil` 是绝对延时：它保存上次唤醒的绝对时刻，下一轮按 `上次 + 1 tick` 唤醒，误差不累积。
+`osDelay` 是相对延时：它在"本次调用时刻"基础上加 2 tick。每轮的 PID 计算、CAN 收发耗时都会叠加到周期里，于是实际周期是 $2\ \text{ms} + \epsilon$。而 `vTaskDelayUntil` 是绝对延时：它保存上次唤醒的绝对时刻，下一轮按 `上次 + 2 tick` 唤醒，误差不累积。
 
-对云台这种角度环加 1 kHz 速度环的场合，累积漂移会直接变成相位滞后。要改成 `vTaskDelayUntil` 需要三步：把 `INCLUDE_vTaskDelayUntil` 置 1、在循环外记录 `TickType_t xLastWakeTime = xTaskGetTickCount()`、循环内换成 `vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1))`。这是本工程一个明确的可优化点。
+对云台这种角度环加 1 kHz 速度环的场合，累积漂移会直接变成相位滞后。要改成 `vTaskDelayUntil` 需要三步：把 `INCLUDE_vTaskDelayUntil` 置 1、在循环外记录 `TickType_t xLastWakeTime = xTaskGetTickCount()`、循环内换成 `vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(2))`。这是本工程一个明确的可优化点。
 
 ### 3.7 两个装饰性配置：configENABLE_FPU / configENABLE_MPU
 
@@ -376,11 +376,11 @@ CMSIS 优先级等于 0 的 `osPriorityNormal`，在 FreeRTOS 里是优先级 3�
 | 任务 | 创建位置 | 传入优先级 | 实际 FreeRTOS 优先级 |
 | --- | --- | --- | --- |
 | `defaultTask` | `freertos.c:123` | `osPriorityNormal` | 3 |
-| `StartFireTask` | `FireTask.cpp:217` | `osPriorityNormal` | 3 |
-| `imuTask` | `ImuTask.cpp:112` | `osPriorityNormal` | 3 |
-| `gimbalTask` | `GimbalTask.cpp:120` | `osPriorityNormal` | 3 |
-| `StartControlCenterTask` | `ControlCenterTask.cpp:149` | `osPriorityNormal` | 3 |
-| `StartUsbConnectTask` | `UsbConnectTask.cpp:118` | `osPriorityNormal` | 3 |
+| `StartFireTask` | `FireTask.cpp:80` | `osPriorityNormal` | 3 |
+| `imuTask` | `ImuTask.cpp:123` | `osPriorityNormal` | 3 |
+| `gimbalTask` | `GimbalTask.cpp:110` | `osPriorityNormal` | 3 |
+| `StartControlCenterTask` | `ControlCenterTask.cpp:122` | `osPriorityNormal` | 3 |
+| `StartUsbConnectTask` | `UsbConnectTask.cpp:177` | `osPriorityNormal` | 3 |
 | 空闲任务 | 内核自动创建 | `tskIDLE_PRIORITY` | 0 |
 
 ```mermaid
@@ -503,7 +503,7 @@ flowchart TD
 
 读 `FreeRTOSConfig.h` 的关键不在背下每个值，而在于掌握三件事：哪些配置有连锁条件（打开就要补回调）、哪些配置会静默失败（钳位与分配失败都不报错）、以及哪些配置在本工程实际上不生效（`configENABLE_FPU` 与"所有任务同优先级"）。
 
-## 8. 练习题
+## 8. 练习
 
 ### 基础题
 

@@ -1,0 +1,1370 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>四元数与零偏 · 姿态解算与 IMU · 王宇翔</title><meta name="description" content="单位四元数约束、本项目 q[0] 为实部的证据、四元数与旋转矩阵的对应，以及 ImuTask 三条欧拉角公式的逐项推导与 asinf 的奇异性。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/07-%E5%A7%BF%E6%80%81%E8%A7%A3%E7%AE%97%E4%B8%8E%20IMU/04-%E5%9B%9B%E5%85%83%E6%95%B0%E4%B8%8E%E9%9B%B6%E5%81%8F/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="四元数与零偏 · 姿态解算与 IMU · 王宇翔"><meta property="og:description" content="单位四元数约束、本项目 q[0] 为实部的证据、四元数与旋转矩阵的对应，以及 ImuTask 三条欧拉角公式的逐项推导与 asinf 的奇异性。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/07-%E5%A7%BF%E6%80%81%E8%A7%A3%E7%AE%97%E4%B8%8E%20IMU/04-%E5%9B%9B%E5%85%83%E6%95%B0%E4%B8%8E%E9%9B%B6%E5%81%8F/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/07-%E5%A7%BF%E6%80%81%E8%A7%A3%E7%AE%97%E4%B8%8E%20IMU/">姿态解算与 IMU</a><span class="sep" aria-hidden="true">/</span><span class="now">四元数与零偏</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>四元数与零偏</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>四元数表示与欧拉角换算</span></a><ul class="toc__heads"><li><a href="#1-三种姿态表示" data-depth="2" data-heading-j="0">1. 三种姿态表示</a></li><li><a href="#2-从四元数到欧拉角" data-depth="2" data-heading-j="1">2. 从四元数到欧拉角</a></li><li><a href="#21-实部在前的证据" data-depth="3" data-heading-j="2">2.1 实部在前的证据</a></li><li><a href="#22-四元数到旋转矩阵" data-depth="3" data-heading-j="3">2.2 四元数到旋转矩阵</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>偏航零点与总角度累加</span></a><ul class="toc__heads"><li><a href="#1-三种偏航量" data-depth="2" data-heading-j="0">1. 三种偏航量</a></li><li><a href="#2-首帧零点与逐帧累加" data-depth="2" data-heading-j="1">2. 首帧零点与逐帧累加</a></li><li><a href="#21-首帧零点" data-depth="3" data-heading-j="2">2.1 首帧零点</a></li><li><a href="#22-逐帧累加" data-depth="3" data-heading-j="3">2.2 逐帧累加</a></li><li><a href="#23-两条路径的分工" data-depth="3" data-heading-j="4">2.3 两条路径的分工</a></li><li><a href="#3-零点总角度与调用点" data-depth="2" data-heading-j="5">3. 零点、总角度与调用点</a></li><li><a href="#31-完整链路" data-depth="3" data-heading-j="6">3.1 完整链路</a></li><li><a href="#32-关键位置" data-depth="3" data-heading-j="7">3.2 关键位置</a></li><li><a href="#33-单位不一致" data-depth="3" data-heading-j="8">3.3 单位不一致</a></li><li><a href="#34-累加值与零点" data-depth="3" data-heading-j="9">3.4 累加值与零点</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="10">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="11">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="12">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="13">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="14">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="15">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="16">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="17">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>角度绕圈与跨零</span></a><ul class="toc__heads"><li><a href="#1-周期量的等价表示" data-depth="2" data-heading-j="0">1. 周期量的等价表示</a></li><li><a href="#2-单次分支展开" data-depth="2" data-heading-j="1">2. 单次分支展开</a></li><li><a href="#21-为什么单次分支足够" data-depth="3" data-heading-j="2">2.1 为什么单次分支足够</a></li><li><a href="#22-边界恰为-180-度" data-depth="3" data-heading-j="3">2.2 边界恰为 180 度</a></li><li><a href="#23-误差累积与符号" data-depth="3" data-heading-j="4">2.3 误差累积与符号</a></li><li><a href="#3-与编码器域方案的对照" data-depth="2" data-heading-j="5">3. 与编码器域方案的对照</a></li><li><a href="#4-本工程的展开实现" data-depth="2" data-heading-j="6">4. 本工程的展开实现</a></li><li><a href="#41-数据来源" data-depth="3" data-heading-j="7">4.1 数据来源</a></li><li><a href="#42-阈值常量" data-depth="3" data-heading-j="8">4.2 阈值常量</a></li><li><a href="#5-易错点" data-depth="2" data-heading-j="9">5. 易错点</a></li><li><a href="#6-小结" data-depth="2" data-heading-j="10">6. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#7-练习" data-depth="2" data-heading-j="13">7. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="16">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>零偏漂移与抑制</span></a><ul class="toc__heads"><li><a href="#1-零偏与噪声" data-depth="2" data-heading-j="0">1. 零偏与噪声</a></li><li><a href="#2-标量-ekf-估计-z-轴零偏" data-depth="2" data-heading-j="1">2. 标量 EKF 估计 Z 轴零偏</a></li><li><a href="#21-稳态增益" data-depth="3" data-heading-j="2">2.1 稳态增益</a></li><li><a href="#22-静止检测" data-depth="3" data-heading-j="3">2.2 静止检测</a></li><li><a href="#23-只有-z-轴" data-depth="3" data-heading-j="4">2.3 只有 Z 轴</a></li><li><a href="#3-本工程的零偏估计链路" data-depth="2" data-heading-j="5">3. 本工程的零偏估计链路</a></li><li><a href="#31-fusionahrs-的调用链" data-depth="3" data-heading-j="6">3.1 FusionAHRS 的调用链</a></li><li><a href="#32-imutask-中未使用的动态零偏" data-depth="3" data-heading-j="7">3.2 ImuTask 中未使用的动态零偏</a></li><li><a href="#33-可落地修法" data-depth="3" data-heading-j="8">3.3 可落地修法</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="9">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="10">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="13">6. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="16">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-错误分类" data-depth="2" data-heading-j="0">1. 错误分类</a></li><li><a href="#2-单位弧度与角度制" data-depth="2" data-heading-j="1">2. 单位：弧度与角度制</a></li><li><a href="#3-零点与参考系" data-depth="2" data-heading-j="2">3. 零点与参考系</a></li><li><a href="#31-零点只落在首帧" data-depth="3" data-heading-j="3">3.1 零点只落在首帧</a></li><li><a href="#32-总角度的锚点" data-depth="3" data-heading-j="4">3.2 总角度的锚点</a></li><li><a href="#33-无磁力计" data-depth="3" data-heading-j="5">3.3 无磁力计</a></li><li><a href="#4-尺度" data-depth="2" data-heading-j="6">4. 尺度</a></li><li><a href="#5-视觉端的四元数对照" data-depth="2" data-heading-j="7">5. 视觉端的四元数对照</a></li><li><a href="#6-调试流程" data-depth="2" data-heading-j="8">6. 调试流程</a></li><li><a href="#7-常用观测点" data-depth="2" data-heading-j="9">7. 常用观测点</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="10">8. 易错点</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="11">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="12">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="13">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="14">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="15">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="16">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="17">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">姿态解算与 IMU</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>IMU / 四元数 / 欧拉角 / 姿态解算 / FusionAHRS / 偏航 / 零点 / 总角度</span></div><h1 class="docs__title">四元数与零偏</h1><p class="docs__lead">单位四元数约束、本项目 q[0] 为实部的证据、四元数与旋转矩阵的对应，以及 ImuTask 三条欧拉角公式的逐项推导与 asinf 的奇异性。</p></header><section class="dfile" id="file-1" data-file="01-四元数表示与欧拉角换算"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-四元数表示与欧拉角换算</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/07-姿态解算与 IMU/04-四元数与零偏/01-四元数表示与欧拉角换算.md</span></div><div class="dfile__body"><h1 id="四元数表示与欧拉角换算">四元数表示与欧拉角换算</h1>
+<p>欧拉角用三个数描述姿态，直观，但俯仰接近 ±90 度时出现奇异；旋转矩阵没有奇异，却要维持九个元素的正交约束；四元数用四个数加一条模长约束，表示上没有奇异点。云台控制逐帧需要连续的横滚、俯仰与偏航，固件从融合算法取到四元数后，再换算成欧拉角交给 PID。</p>
+<p>三种表示并不互斥：固件内部用四元数做积分，输出到控制环时换算成欧拉角，视觉端又把姿态封回四元数传给云台。三种表示的代价与 <code>ImuTask</code> 里的换算公式、取值范围需要逐项核对。</p>
+<h2 id="1-三种姿态表示">1. 三种姿态表示</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表示</th><th>参数</th><th>约束</th><th>主要问题</th></tr></thead><tbody><tr><td>欧拉角</td><td>3</td><td>无</td><td>俯仰 ±90 度附近奇异</td></tr><tr><td>旋转矩阵</td><td>9</td><td>正交且行列式为 1</td><td>冗余，逐帧更新代价高</td></tr><tr><td>四元数</td><td>4</td><td>模长为 1</td><td>双重覆盖，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mi>q</mi></mrow><annotation encoding="application/x-tex">-q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 表示同一旋转</td></tr></tbody></table>
+<p>四元数的一般形式</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi><mo>=</mo><msub><mi>q</mi><mn>0</mn></msub><mo>+</mo><msub><mi>q</mi><mn>1</mn></msub><mi>i</mi><mo>+</mo><msub><mi>q</mi><mn>2</mn></msub><mi>j</mi><mo>+</mo><msub><mi>q</mi><mn>3</mn></msub><mi>k</mi></mrow><annotation encoding="application/x-tex">q = q_0 + q_1 i + q_2 j + q_3 k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span></p>
+<p>对应本项目的数组 <code>q[0]</code> 到 <code>q[3]</code>。单位约束是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>q</mi><mn>0</mn><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>q</mi><mn>1</mn><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>q</mi><mn>2</mn><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>q</mi><mn>3</mn><mn>2</mn></msubsup><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">q_0^2 + q_1^2 + q_2^2 + q_3^2 = 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0622em;vertical-align:-0.2481em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.4519em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0622em;vertical-align:-0.2481em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.4519em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0622em;vertical-align:-0.2481em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.4519em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0622em;vertical-align:-0.2481em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.4519em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></p>
+<p>模长偏离 1 会同时破坏旋转矩阵的正交性与欧拉角公式的精度，融合算法在每帧末尾重新归一化（<code>Algorithm/Src/FusionAHRS.cpp:129-135</code>）。</p>
+<h2 id="2-从四元数到欧拉角">2. 从四元数到欧拉角</h2>
+<h3 id="21-实部在前的证据">2.1 实部在前的证据</h3>
+<p>两种主流写法（实部在前、实部在后）都能自洽，判定依据要来自代码本身。</p>
+<ol>
+<li><code>FusionAHRS</code> 构造函数把 <code>q_[0]</code> 置 1、其余置 0（<code>Algorithm/Src/FusionAHRS.cpp:57-60</code>），单位旋转对应实部为 1。</li>
+<li><code>Task/Src/UsbConnectTask.cpp:35-38</code> 的 <code>eulerToQuaternion</code> 逐行标注 <code>q[0]</code> 为 <code>w</code>、<code>q[3]</code> 为 <code>z</code>。</li>
+<li><code>Algorithm/Inc/MahonyAHRS.h:21</code> 用 <code>q0</code> 到 <code>q3</code> 命名全局四元数，沿用原版 Mahony 实现。</li>
+<li>三条换算公式与该约定一致，推导见 2.3 节。</li>
+</ol>
+<h3 id="22-四元数到旋转矩阵">2.2 四元数到旋转矩阵</h3>
+<p>单位四元数对应的旋转矩阵（本体到世界）为</p>
+<span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&#x26;&#x27; at position 18: …2(q_2^2+q_3^2) &#x26;̲ 2(q_1q_2-q_0q_…" style="color:#cc0000">1-2(q_2^2+q_3^2) &#x26; 2(q_1q_2-q_0q_3) &#x26; 2(q_1q_3+q_0q_2) \\
+2(q_1q_2+q_0q_3) &#x26; 1-2(q_1^2+q_3^2) &#x26; 2(q_2q_3-q_0q_1) \\
+2(q_1q_3-q_0q_2) &#x26; 2(q_2q_3+q_0q_1) &#x26; 1-2(q_1^2+q_2^2)
+\end{bmatrix} $$
+
+矩阵的更新来自陀螺仪积分。`mahonyUpdate` 在 `Algorithm/Src/FusionAHRS.cpp:116-127` 先把角速度乘以 $0.5/f_s$，再按
+
+$$ \dot{q} = \frac{1}{2} \begin{bmatrix}
+0 &#x26; -\omega_x &#x26; -\omega_y &#x26; -\omega_z \\
+\omega_x &#x26; 0 &#x26; \omega_z &#x26; -\omega_y \\
+\omega_y &#x26; -\omega_z &#x26; 0 &#x26; \omega_x \\
+\omega_z &#x26; \omega_y &#x26; -\omega_x &#x26; 0
+\end{bmatrix} q $$
+
+用一阶欧拉法累加到 `q_[0..3]`。积分后立即归一化，避免浮点误差累积成模长漂移。
+
+### 2.3 三条欧拉角公式
+
+按 ZYX 顺序（先偏航、再俯仰、后横滚）从旋转矩阵取角：
+
+$$ \text{roll} = \operatorname{atan2}(R_{32}, R_{33}), \quad
+\text{pitch} = \arcsin(-R_{31}), \quad
+\text{yaw} = \operatorname{atan2}(R_{21}, R_{11}) $$
+
+把矩阵元素代入：
+
+$$ R_{32} = 2(q_0q_1+q_2q_3), \quad R_{33} = 1-2(q_1^2+q_2^2) $$
+
+$$ -R_{31} = 2(q_0q_2-q_1q_3) $$
+
+$$ R_{21} = 2(q_0q_3+q_1q_2), \quad R_{11} = 1-2(q_2^2+q_3^2) $$
+
+得到
+
+$$ \text{roll} = \operatorname{atan2}\!\left(2(q_0q_1+q_2q_3),\ 1-2(q_1^2+q_2^2)\right) $$
+
+$$ \text{pitch} = \arcsin\!\left(2(q_0q_2-q_1q_3)\right) $$
+
+$$ \text{yaw} = \operatorname{atan2}\!\left(2(q_0q_3+q_1q_2),\ 1-2(q_2^2+q_3^2)\right) $$
+
+三条式子与 `Task/Src/ImuTask.cpp:62-64` 的代码逐项对应。
+
+### 2.4 asinf 的奇异区间
+
+$\arcsin$ 的定义域是 $[-1,1]$。俯仰角达到 ±90 度时，$2(q_0q_2-q_1q_3)$ 取 ±1，导数趋于无穷，横滚与偏航不再独立。参数因浮点舍入略超出 ±1 时，`asinf` 返回 NaN，并沿 `roll`、`pitch`、`yaw` 传播到 `imu_data`。`Task/Src/ImuTask.cpp:63` 没有对参数做限幅。
+
+云台机械上俯仰被限制在 -20 到 30 度（`Task/Src/GimbalTask.cpp:40-41`），正常工况远离奇异点。该限幅是软件常量，实际机械行程按结构件设计，属待现场确认项。
+
+## 3. 本工程的换算与调用点
+
+### 3.1 数据流
+
+```mermaid
+flowchart TD
+  A["BMI088 六轴数据"] --> B["FusionAHRS::update"]
+  B --> C["mahonyUpdate 四元数积分"]
+  C --> D["模长归一化"]
+  D --> E["getQuaternion 返回 q0 到 q3"]
+  E --> F["ImuTask 三条公式求欧拉角"]
+  F --> G["乘 180 除以 pi 转角度制"]
+  G --> H["写入 imu_data 与 gimbal_yaw_total"]
+```
+
+### 3.2 关键变量
+
+| 名称 | 位置 | 含义 |
+| --- | --- | --- |
+| `q` | `Task/Src/ImuTask.cpp:16` | `std::array&#x3C;float,4>`，标量在前 |
+| `q_` | `Algorithm/Inc/FusionAHRS.h:47` | 融合类内部四元数 |
+| `roll`、`pitch`、`yaw` | `Task/Src/ImuTask.cpp:17` | 换算结果，先弧度后角度制 |
+| `roll_out` 等 | `Task/Src/ImuTask.cpp:20` | `volatile` 调试量，弧度制 |
+| `imu_data.roll` 等 | `Message_Bus/message_bus.h:15-20` | 角度制输出 |
+
+### 3.3 时序
+
+```mermaid
+sequenceDiagram
+  participant IT as ImuTask
+  participant FA as FusionAHRS
+  participant MB as Message_Bus
+  participant GT as GimbalTask
+  IT->>FA: update gyro 与 accel
+  FA->>FA: 归一化四元数
+  IT->>FA: getQuaternion
+  FA-->>IT: q0 q1 q2 q3
+  IT->>IT: atan2f 与 asinf 求欧拉角
+  IT->>MB: imu_data 角度制
+  MB-->>GT: 角度制姿态
+```
+
+## 4. 易错点
+
+| # | 易错点 | 表现 | 位置 |
+| --- | --- | --- | --- |
+| 1 | 按分量在前的约定读 q | 欧拉角换算错位 | `Task/Src/ImuTask.cpp:62-64` |
+| 2 | 不给 `asinf` 参数限幅 | 姿态异常时输出 NaN | 同上 |
+| 3 | 跳过归一化直接换算 | 矩阵非正交，角度缓慢漂移 | `Algorithm/Src/FusionAHRS.cpp:129-135` |
+| 4 | 弧度与角度制混用 | 误差量级差约 57 倍 | `Task/Src/ImuTask.cpp:70-76` |
+| 5 | 把 q 与 -q 当作不同姿态 | 直接比较或插值时符号跳变 | 全文约定 |
+| 6 | 认为板子的 roll 就是云台俯仰 | 视觉侧 pitch 实际取 `imu_data.roll` | `Task/Src/UsbConnectTask.cpp:114-116`、`:129` |
+
+## 5. 小结
+
+### 核心概念
+
+- 四元数用四个数与一条模长约束描述旋转，没有表示奇异。
+- 本项目采用实部在前的约定，`q[0]` 为 w，四条证据一致。
+- 欧拉角按 ZYX 顺序从旋转矩阵抽取，代码三条公式与之逐项对应。
+- 俯仰 ±90 度是 `asinf` 的奇异点，参数越界会产生 NaN。
+- 角度制与弧度制的分界落在 `Task/Src/ImuTask.cpp:74-76`。
+
+### 设计权衡
+
+| 权衡点 | 本工程选择 | 收益与代价 |
+| --- | --- | --- |
+| 姿态内部表示 | 单位四元数 | 无奇异、积分稳定；代价是换算成欧拉角多两次三角函数 |
+| 输出表示 | 欧拉角角度制 | PID 直接相减；代价是俯仰奇异与绕圈问题外移给控制层 |
+| 实部位置 | 标量在前 | 与 Mahony 原版一致；代价是与部分库的分量在前约定不同 |
+| 参数保护 | 未做限幅 | 代码短；代价是异常姿态下 NaN 会传播 |
+
+## 6. 练习
+
+### 基础题
+
+1. 写出单位四元数约束，并说明模长偏大 1% 时旋转矩阵的误差来源。
+2. 给定 $q=(1,0,0,0)$，用三条公式求欧拉角。
+3. 已知俯仰 10 度、横滚 5 度、偏航 30 度，写出 $q_0$ 的表达式（用半角公式）。
+
+### 挑战题
+
+4. 在 `Task/Src/ImuTask.cpp:63` 前后加入参数限幅，给出不会引入跳变的限幅方式，并说明理由。
+5. 从旋转矩阵的九个元素出发，重新推导三条欧拉角公式，验证 ZYX 顺序的对应关系。
+6. 用同一组四元数分别计算 $q$ 与 $-q$ 的欧拉角，解释结果差异的几何含义。
+
+### 附：本页引用的固件路径
+
+| 路径 | 用途 |
+| --- | --- |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 四元数声明与欧拉角换算（`:15-76`） |
+| `2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 四元数积分与归一化（`:116-141`） |
+| `2026OmniSentryGimbal/Algorithm/Inc/FusionAHRS.h` | 四元数成员与接口（`:26-57`） |
+| `2026OmniSentryGimbal/Algorithm/Inc/MahonyAHRS.h` | `q0` 命名与全局量（`:19-21`） |
+| `2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp` | 欧拉角转四元数与实部标注（`:19-41`、`:129`） |
+| `2026OmniSentryGimbal/Task/Src/GimbalTask.cpp` | 俯仰软件限幅（`:40-41`） |
+| `2026OmniSentryGimbal/Message_Bus/message_bus.h` | `LocalImuData` 字段（`:15-20`） |</span></div></section><section class="dfile" id="file-2" data-file="02-偏航零点与总角度累加"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-偏航零点与总角度累加</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/07-姿态解算与 IMU/04-四元数与零偏/02-偏航零点与总角度累加.md</span></div><div class="dfile__body"><h1 id="偏航零点与总角度累加">偏航零点与总角度累加</h1>
+<p>陀螺仪积分给出的偏航角只有相对精度，上电时刻的绝对值由融合算法初始状态决定。云台控制需要相对上电时刻的转角，自瞄还需要一个能跨过 ±180 度、逐圈累加的总角度。本项目把这两件事放在两条独立路径上：调试变量记录相对零点，<code>gimbal_yaw_total</code> 记录累加转角。</p>
+<p>零点与累加是两条独立路径：前者只做一次减法，后者每帧都要处理绕圈。把两者混在同一条链路上，就会出现总角度在过零处跳变、或者相对零点被重复扣减这两类故障。</p>
+<h2 id="1-三种偏航量">1. 三种偏航量</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>量</th><th>定义</th><th>单位</th><th>用途</th></tr></thead><tbody><tr><td>相对零点偏航 <code>yaw_out</code></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><mi>w</mi><mo>−</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mrow><mi>z</mi><mi>e</mi><mi>r</mi><mi>o</mi></mrow></msub></mrow><annotation encoding="application/x-tex">yaw - yaw_{zero}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mord mathnormal mtight">o</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td>弧度</td><td>调试观测</td></tr><tr><td>原始偏航 <code>imu_data.yaw</code></td><td>融合算法输出的偏航</td><td>角度制</td><td>姿态记录、累加输入</td></tr><tr><td>总角度 <code>gimbal_yaw_total</code></td><td>逐帧增量求和</td><td>角度制</td><td>云台外环反馈、视觉反馈</td></tr></tbody></table>
+<p>累加式写成</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Θ</mi><mi>N</mi></msub><mo>=</mo><msubsup><mo>∑</mo><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></msubsup><msub><mi mathvariant="normal">Δ</mi><mi>n</mi></msub><mo separator="true">,</mo><mspace width="1em"></mspace><msub><mi mathvariant="normal">Δ</mi><mi>n</mi></msub><mo>=</mo><mi mathvariant="normal">wrap</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mi>n</mi></msub><mo>−</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\Theta_N = \sum_{n=1}^{N} \Delta_n, \quad \Delta_n = \operatorname{wrap}(yaw_n - yaw_{n-1})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">Θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2809em;vertical-align:-0.2997em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9812em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop"><span class="mord mathrm">wrap</span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></p>
+<p><code>wrap</code> 把增量折算到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>180</mn><mo separator="true">,</mo><mn>180</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">(-180, 180]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">180</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">180</span><span class="mclose">]</span></span></span></span> 区间，阈值处理见本单元 03。</p>
+<p>零点相减与增量累加对常量偏置的处理不同。设 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><msub><mi>w</mi><mi>n</mi></msub><mo>=</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mi>n</mi></msub><mo>+</mo><mi>b</mi></mrow><annotation encoding="application/x-tex">yaw_n = \hat{y}_n + b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">b</span></span></span></span>，则</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><msub><mi>w</mi><mi>n</mi></msub><mo>−</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mrow><mi>z</mi><mi>e</mi><mi>r</mi><mi>o</mi></mrow></msub><mo>=</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mi>n</mi></msub><mo>−</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mrow><mi>z</mi><mi>e</mi><mi>r</mi><mi>o</mi></mrow></msub></mrow><annotation encoding="application/x-tex">yaw_n - yaw_{zero} = \hat{y}_n - \hat{y}_{zero}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mord mathnormal mtight">o</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mord mathnormal mtight">o</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Δ</mi><mi>n</mi></msub><mo>=</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mi>n</mi></msub><mo>−</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">\Delta_n = \hat{y}_n - \hat{y}_{n-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9028em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>两式都不含 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">b</span></span></span></span>，差别在于累加的初值：零点相减以上电零点为基准，增量累加以首帧的绝对偏航为基准。这一点在 3.4 节展开。</p>
+<h2 id="2-首帧零点与逐帧累加">2. 首帧零点与逐帧累加</h2>
+<h3 id="21-首帧零点">2.1 首帧零点</h3>
+<p><code>Task/Src/ImuTask.cpp:26</code> 定义 <code>static float yaw_zero</code>，<code>:27</code> 定义 <code>static bool first_run</code>。循环第一次执行到 <code>:65-69</code> 时把融合算法刚算出的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><mi>w</mi></mrow><annotation encoding="application/x-tex">yaw</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span> 写入 <code>yaw_zero</code> 并清 <code>first_run</code>。之后每帧执行</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><msub><mi>w</mi><mrow><mi>o</mi><mi>u</mi><mi>t</mi></mrow></msub><mo>=</mo><mi>y</mi><mi>a</mi><mi>w</mi><mo>−</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mrow><mi>z</mi><mi>e</mi><mi>r</mi><mi>o</mi></mrow></msub></mrow><annotation encoding="application/x-tex">yaw_{out} = yaw - yaw_{zero}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mord mathnormal mtight">o</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>结果写入 <code>volatile float yaw_out</code>（<code>Task/Src/ImuTask.cpp:20</code>、<code>:70</code>）。<code>first_run</code> 记录的是循环首帧，此时四元数刚从单位阵开始积分，融合尚未收敛，零点带有初始误差。是否在正式记录前等待若干帧或做静止平均，属待实测的改进项。</p>
+<h3 id="22-逐帧累加">2.2 逐帧累加</h3>
+<p><code>Task/Src/ImuTask.cpp:77-94</code> 维护 <code>prev_actual_yaw</code> 与 <code>first_actual</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> float</span><span style="color:#24292E"> prev_actual_yaw </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> bool</span><span style="color:#24292E"> first_actual </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> true</span><span style="color:#24292E">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (first_actual) {</span></span>
+<span class="line"><span style="color:#24292E">    prev_actual_yaw </span><span style="color:#D73A49">=</span><span style="color:#24292E"> imu_data.yaw;</span><span style="color:#6A737D">   // 首次运行，将当前实际角度作为基准</span></span>
+<span class="line"><span style="color:#24292E">    first_actual </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> delta_actual </span><span style="color:#D73A49">=</span><span style="color:#24292E"> imu_data.yaw </span><span style="color:#D73A49">-</span><span style="color:#24292E"> prev_actual_yaw;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (delta_actual </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 180.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    delta_actual </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 360.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">} </span><span style="color:#D73A49">else</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> (delta_actual </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">180.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    delta_actual </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 360.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">gimbal_yaw_total </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> delta_actual;</span></span>
+<span class="line"><span style="color:#24292E">prev_actual_yaw </span><span style="color:#D73A49">=</span><span style="color:#24292E"> imu_data.yaw;</span></span></code></pre>
+<p>两个操作数都取自 <code>imu_data.yaw</code>，而 <code>imu_data.yaw</code> 在 <code>:99</code> 才被本帧的新值覆盖。<code>:81</code> 的注释写“将当前实际角度作为基准”，实际读到的是尚未更新的 <code>imu_data.yaw</code>。开机时该字段还是全局零值，逐帧追踪如下表。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>循环次数</th><th>本帧 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><mi>w</mi></mrow><annotation encoding="application/x-tex">yaw</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span></th><th>读到的 <code>imu_data.yaw</code></th><th><code>prev_actual_yaw</code></th><th><code>delta_actual</code></th><th><code>gimbal_yaw_total</code></th></tr></thead><tbody><tr><td>1</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>2</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Y_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td>0</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td></tr><tr><td>3</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>3</mn></msub></mrow><annotation encoding="application/x-tex">Y_3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Y_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>2</mn></msub><mo>−</mo><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_2-Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Y_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td></tr><tr><td>4</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>4</mn></msub></mrow><annotation encoding="application/x-tex">Y_4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">4</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>3</mn></msub></mrow><annotation encoding="application/x-tex">Y_3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Y_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>3</mn></msub><mo>−</mo><msub><mi>Y</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Y_3-Y_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>3</mn></msub></mrow><annotation encoding="application/x-tex">Y_3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td></tr></tbody></table>
+<p>表里的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mi>n</mi></msub></mrow><annotation encoding="application/x-tex">Y_n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> 帧经 ±180 展开后的偏航。两次效果叠加：第一个有效增量是首帧的绝对偏航 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">Y_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，此后每帧增量是相邻两帧差。求和后 <code>gimbal_yaw_total</code> 在数值上等于展开后的绝对偏航，比当前帧滞后一帧，并以上电首帧为锚点。它与 <code>yaw_out</code> 相差常量 <code>yaw_zero</code>，后者只出现在调试路径。</p>
+<h3 id="23-两条路径的分工">2.3 两条路径的分工</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["融合算法输出 yaw 弧度"] --> B["首帧记录 yaw_zero"]
+  A --> C["乘 180 除以 pi 得角度制 yaw"]
+  B --> D["yaw_out 等于 yaw 减 yaw_zero 弧度"]
+  C --> E["写入 imu_data.yaw 角度制"]
+  E --> F["与 prev_actual_yaw 求 delta_actual"]
+  F --> G["正负 180 展开"]
+  G --> H["gimbal_yaw_total 累加"]
+  H --> I["写入 imu_data.gimbal_yaw_total_angle"]
+  I --> J["GimbalTask 外环反馈"]
+  I --> K["UsbConnectTask 视觉反馈"]</pre></div>
+<h2 id="3-零点总角度与调用点">3. 零点、总角度与调用点</h2>
+<h3 id="31-完整链路">3.1 完整链路</h3>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant BMI as BMI088
+  participant FA as FusionAHRS
+  participant IT as ImuTask
+  participant MB as Message_Bus
+  participant GT as GimbalTask
+  participant USB as UsbConnectTask
+  BMI->>IT: gyro 与 accel
+  IT->>FA: update
+  FA-->>IT: q
+  IT->>IT: 求 yaw 并记录 yaw_zero
+  IT->>IT: 角度制转换
+  IT->>IT: delta_actual 展开并累加
+  IT->>MB: imu_data.yaw 与 gimbal_yaw_total_angle
+  MB-->>GT: 外环反馈
+  MB-->>USB: 视觉反馈</pre></div>
+<h3 id="32-关键位置">3.2 关键位置</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>内容</th><th>位置</th></tr></thead><tbody><tr><td><code>yaw_zero</code>、<code>first_run</code> 定义</td><td><code>Task/Src/ImuTask.cpp:26-27</code></td></tr><tr><td>首帧记录零点</td><td><code>Task/Src/ImuTask.cpp:65-69</code></td></tr><tr><td><code>yaw_out</code> 赋值</td><td><code>Task/Src/ImuTask.cpp:70</code></td></tr><tr><td>角度制转换</td><td><code>Task/Src/ImuTask.cpp:74-76</code></td></tr><tr><td>增量展开与累加</td><td><code>Task/Src/ImuTask.cpp:77-94</code></td></tr><tr><td><code>gimbal_yaw_total</code> 全局定义</td><td><code>Task/Src/ImuTask.cpp:22</code></td></tr><tr><td>写入 <code>imu_data</code></td><td><code>Task/Src/ImuTask.cpp:97-107</code></td></tr><tr><td><code>imu_data</code> 结构声明</td><td><code>Message_Bus/message_bus.h:15-20</code></td></tr><tr><td>结构体实例定义</td><td><code>Message_Bus/message_bus.cpp:10</code></td></tr><tr><td>外环消费</td><td><code>Task/Src/GimbalTask.cpp:61-65</code></td></tr><tr><td>视觉消费</td><td><code>Task/Src/UsbConnectTask.cpp:129</code>、<code>:134</code></td></tr></tbody></table>
+<h3 id="33-单位不一致">3.3 单位不一致</h3>
+<p><code>yaw_out</code>、<code>roll_out</code>、<code>pitch_out</code> 在 <code>Task/Src/ImuTask.cpp:70-72</code> 赋的是弧度值，赋值发生在 <code>:74-76</code> 的角度制转换之前。同一循环里写入 <code>imu_data</code> 的 <code>roll</code>、<code>pitch</code>、<code>yaw</code> 是角度制。调试串口读数与总线读数相差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>180</mn><mi mathvariant="normal">/</mi><mi>π</mi></mrow><annotation encoding="application/x-tex">180/\pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">180/</span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span></span></span></span> 倍。</p>
+<h3 id="34-累加值与零点">3.4 累加值与零点</h3>
+<p><code>imu_data.yaw</code> 不减去 <code>yaw_zero</code>，累加值因此不是相对零点的转角。由 2.2 节的追踪，<code>gimbal_yaw_total</code> 近似等于展开后的绝对偏航，锚定在首帧。若外环目标角来自视觉的绝对角，反馈与目标在同一参考系下可比；若目标角被当作相对量，则存在常量偏差 <code>yaw_zero</code>。该偏差是否影响闭环，取决于视觉侧约定的参考系，属待现场确认项。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>位置</th></tr></thead><tbody><tr><td>1</td><td>认为 <code>imu_data.yaw</code> 已减零点</td><td>总线读数与调试读数相差常量</td><td><code>Task/Src/ImuTask.cpp:70</code>、<code>:99</code></td></tr><tr><td>2</td><td>认为 <code>gimbal_yaw_total</code> 从当前 yaw 起算</td><td>上电第 1 帧总角度为 0</td><td><code>Task/Src/ImuTask.cpp:22</code>、<code>:77-93</code></td></tr><tr><td>3</td><td>按注释理解首帧基准</td><td>注释说取当前角，实际读到未更新的字段</td><td><code>Task/Src/ImuTask.cpp:80-83</code></td></tr><tr><td>4</td><td>忽略累加比当前帧滞后一帧</td><td>控制反馈晚一个周期</td><td><code>Task/Src/ImuTask.cpp:86</code>、<code>:94</code></td></tr><tr><td>5</td><td>把累加值当作绝对航向</td><td>无磁力计，长时间漂移</td><td><code>Task/Src/ImuTask.cpp:15</code>、<code>:99</code></td></tr><tr><td>6</td><td>弧度与角度制混用</td><td>调试量与总线量相差约 57 倍</td><td><code>Task/Src/ImuTask.cpp:70-76</code></td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>偏航零点由首帧单个样本记录，只写入调试变量。</li>
+<li><code>imu_data.yaw</code> 是角度制原始偏航，未减零点。</li>
+<li><code>gimbal_yaw_total</code> 逐帧累加相邻偏航差，首帧增量是绝对偏航，结果锚定在首帧。</li>
+<li>累加值比当前帧滞后一帧，与外环目标是否同参考系需要现场核对。</li>
+<li>调试变量是弧度制，总线变量是角度制。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>零点获取</td><td>首帧单样本</td><td>实现简单；代价是首帧抖动会带入常量偏差</td></tr><tr><td>零点作用范围</td><td>只作用于调试变量</td><td>控制路径不受零点误差影响；代价是零点未参与控制基准</td></tr><tr><td>总角度来源</td><td>姿态角增量累加</td><td>与 IMU 姿态一致；代价是继承姿态漂移与跨零处理</td></tr><tr><td>累加实现</td><td>依赖全局 <code>imu_data.yaw</code></td><td>少一个缓存变量；代价是数据依赖跨帧，阅读时容易误判</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>yaw_out</code> 与 <code>imu_data.yaw</code> 的换算关系，并给出 30 度对应的弧度值。</li>
+<li>设首帧偏航为 45 度且此后静止，按 2.2 节的表算出循环 2 与循环 3 的 <code>gimbal_yaw_total</code>。</li>
+<li>说明为什么减去 <code>yaw_zero</code> 不影响增量累加的差值项。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把零点记录改为静止窗口内多帧平均，列出需要增加的状态与判定条件。</li>
+<li>把 <code>prev_actual_yaw</code> 的初始化改为本帧 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><mi>w</mi></mrow><annotation encoding="application/x-tex">yaw</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span>，推导 <code>gimbal_yaw_total</code> 的初值变化，并说明对控制的影响。</li>
+<li>设计一组测试，覆盖上电即转动、上电静止、上电后反向转动三种情形，给出 <code>gimbal_yaw_total</code> 的预期曲线。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>零点、累加与写入（<code>:22-107</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Message_Bus/message_bus.h</code></td><td><code>LocalImuData</code> 声明（<code>:15-20</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Message_Bus/message_bus.cpp</code></td><td>全局实例定义（<code>:10</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>外环消费总角度（<code>:61-65</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>视觉反馈消费总角度（<code>:129</code>、<code>:134</code>）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-角度绕圈与跨零"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-角度绕圈与跨零</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/07-姿态解算与 IMU/04-四元数与零偏/03-角度绕圈与跨零.md</span></div><div class="dfile__body"><h1 id="角度绕圈与跨零">角度绕圈与跨零</h1>
+<p>偏航角由 <code>atan2f</code> 给出，取值范围 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>180</mn><mo separator="true">,</mo><mn>180</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">(-180, 180]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">180</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">180</span><span class="mclose">]</span></span></span></span>，跨越 ±180 度时数值会从一端跳到另一端。直接对两次采样求差，在绕圈附近会得到接近 ±360 度的假增量。累加总角度必须在差值上做展开，把假增量折算回真实转动量。</p>
+<p>展开的判据只有一条：把差值压回 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><mn>180</mn><mo separator="true">,</mo><mn>180</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">(-180, 180]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">180</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">180</span><span class="mclose">]</span></span></span></span>。实现上可以用一次条件分支，也可以用取模加补偿；本工程选前者，因为它不依赖浮点取模的舍入行为。</p>
+<h2 id="1-周期量的等价表示">1. 周期量的等价表示</h2>
+<p>角度满足</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>θ</mi><mo>≡</mo><mi>θ</mi><mo>+</mo><mi>k</mi><mo>⋅</mo><msup><mn>360</mn><mo>∘</mo></msup><mo separator="true">,</mo><mspace width="1em"></mspace><mi>k</mi><mo>∈</mo><mi mathvariant="double-struck">Z</mi></mrow><annotation encoding="application/x-tex">\theta \equiv \theta + k \cdot 360^\circ, \quad k \in \mathbb{Z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≡</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6889em;"></span><span class="mord mathbb">Z</span></span></span></span></p>
+<p>同一个物理朝向对应无数个数值表示。相邻两帧的真实转动 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 落在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><msup><mn>360</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>360</mn><mo>∘</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-360^\circ, 360^\circ)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 内，而原始差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mi>n</mi></msub><mo>−</mo><mi>y</mi><mi>a</mi><msub><mi>w</mi><mrow><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">d = yaw_n - yaw_{n-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.2083em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span> 在绕圈处会接近 ±360。展开的目标是从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>∓</mo><mn>360</mn></mrow><annotation encoding="application/x-tex">d \mp 360</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∓</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">360</span></span></span></span> 里选出绝对值不超过 180 的那个。</p>
+<p>最近表示等价于</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mo>=</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mo stretchy="false">(</mo><mi>d</mi><mo>+</mo><msup><mn>180</mn><mo>∘</mo></msup><mo stretchy="false">)</mo><mtext> </mtext><mo lspace="0.22em" rspace="0.22em"><mrow><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mo><mtext> </mtext><msup><mn>360</mn><mo>∘</mo></msup><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">\Delta = \big((d + 180^\circ) \bmod 360^\circ\big) - 180^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mopen">(</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin"><span class="mord"><span class="mord mathrm">mod</span></span></span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6741em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span></p>
+<p>结果区间是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>180</mn><mo>∘</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">[-180^\circ, 180^\circ)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>。本项目用条件分支实现同一件事，结果区间是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>180</mn><mo>∘</mo></msup><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-180^\circ, 180^\circ]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>，比闭式解多保留一个端点。</p>
+<h2 id="2-单次分支展开">2. 单次分支展开</h2>
+<p><code>Task/Src/ImuTask.cpp:86-91</code> 的实现是</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">float</span><span style="color:#24292E"> delta_actual </span><span style="color:#D73A49">=</span><span style="color:#24292E"> imu_data.yaw </span><span style="color:#D73A49">-</span><span style="color:#24292E"> prev_actual_yaw;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (delta_actual </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 180.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    delta_actual </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 360.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">} </span><span style="color:#D73A49">else</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> (delta_actual </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">180.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    delta_actual </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 360.0</span><span style="color:#D73A49">f</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>判断用严格大于与严格小于，没有循环。</p>
+<h3 id="21-为什么单次分支足够">2.1 为什么单次分支足够</h3>
+<p>两个操作数都是 <code>atan2f</code> 的输出，各自落在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>180</mn><mo>∘</mo></msup><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">(-180^\circ, 180^\circ]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>，原始差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 因此落在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><msup><mn>360</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>360</mn><mo>∘</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-360^\circ, 360^\circ)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>。对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>></mo><msup><mn>180</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">d > 180^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.0391em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6741em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span> 减 360 后落到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-180^\circ, 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span>，对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>&#x3C;</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">d &#x3C; -180^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.0391em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7574em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span> 加 360 后落到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>180</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(0, 180)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">180</span><span class="mclose">)</span></span></span></span>，其余保持不动。三种情形合起来恰好覆盖整个定义域，一次判断即可完成展开。</p>
+<p>编码器域的 <code>handleZeroCross</code> 需要循环，原因是它的两个操作数不是相邻采样：目标角与反馈角可以相差任意整数圈，单次平移只能覆盖 1.5 圈，这一差别见第 3 节。</p>
+<h3 id="22-边界恰为-180-度">2.2 边界恰为 180 度</h3>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><msup><mn>180</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">d = 180^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6741em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span> 时两个分支都不进入，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 保持 180；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">d = -180^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7574em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span> 时保持 -180。两个端点表示同一个半圈旋转，方向相反，属于平局点。结果取值集合是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><msup><mn>180</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>180</mn><mo>∘</mo></msup><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-180^\circ, 180^\circ]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">18</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>，包含 361 个整数值。</p>
+<p>物理上相邻两帧不可能转半圈。陀螺仪量程是 2000 dps，循环周期按 1 ms 估算，单帧最大转角是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Δ</mi><mi>max</mi><mo>⁡</mo></msub><mo>=</mo><mn>2000</mn><mtext> dps</mtext><mo>×</mo><mn>0.001</mn><mtext> s</mtext><mo>=</mo><msup><mn>2</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">\Delta_{\max} = 2000\ \text{dps} \times 0.001\ \text{s} = 2^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">2000</span><span class="mspace"> </span><span class="mord text"><span class="mord">dps</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.001</span><span class="mspace"> </span><span class="mord text"><span class="mord">s</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6741em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span></p>
+<p>真实 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 只在绕圈处接近 ±360，被分支折算；远离绕圈时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi>d</mi><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|d|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal">d</span><span class="mord">∣</span></span></span></span> 只有几度，永不触及 ±180。阈值取半圈，正好落在两种表示等距的位置。</p>
+<h3 id="23-误差累积与符号">2.3 误差累积与符号</h3>
+<p>展开是累加的前置步骤，<code>gimbal_yaw_total</code> 把每一帧的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 永久累加（<code>Task/Src/ImuTask.cpp:93</code>）。一旦某帧漏展开，误差不会自行消失：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">Θ</mi><mi>N</mi></msub><mo>=</mo><mo>∑</mo><msub><mi mathvariant="normal">Δ</mi><mi>n</mi></msub><mo>=</mo><mtext>真值</mtext><mo>±</mo><msup><mn>360</mn><mo>∘</mo></msup></mrow><annotation encoding="application/x-tex">\Theta_N = \sum \Delta_n = \text{真值} \pm 360^\circ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">Θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord cjk_fallback">真值</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">±</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6741em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span></span></span></span></p>
+<p>符号也会翻转。真实转动 -0.5 度而分支未触发时，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span> 记为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>+</mo><mn>359.5</mn></mrow><annotation encoding="application/x-tex">+359.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">+</span><span class="mord">359.5</span></span></span></span> 度，总角度跳升 360 度并保持该偏差。触发漏展开的条件是单帧真实转角超过 180 度，对应角速度超过 180000 dps，远在量程之外，正常运行不会出现。需要关注的是阈值附近的选择：若某帧原始差恰好落在 ±180，两个分支的取舍会让总角度产生 ±360 的固定差。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["读取 imu_data.yaw 与 prev_actual_yaw"] --> B["delta_actual 等于两者之差"]
+  B --> C{"delta_actual 大于 180"}
+  C -- 是 --> D["delta_actual 减 360"]
+  C -- 否 --> E{"delta_actual 小于 -180"}
+  E -- 是 --> F["delta_actual 加 360"]
+  E -- 否 --> G["delta_actual 保持不变"]
+  D --> H["gimbal_yaw_total 累加"]
+  F --> H
+  G --> H
+  H --> I["prev_actual_yaw 更新为本帧读取值"]</pre></div>
+<h2 id="3-与编码器域方案的对照">3. 与编码器域方案的对照</h2>
+<p><code>AnglePID::handleZeroCross</code> 在云台板 <code>PID/Src/angle_pid.cpp:14-30</code> 用 while 循环平移反馈值：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">int32_t</span><span style="color:#24292E"> error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> current;</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 4096</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    current </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> current;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">4096</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    current </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> current;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>底盘板同一函数在 <code>PID/Src/angle_pid.cpp:14-22</code> 改成单次条件判断：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">int32_t</span><span style="color:#24292E"> error </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> current;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 4096</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    current </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">} </span><span style="color:#D73A49">else</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> (error </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">4096</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    current </span><span style="color:#D73A49">-=</span><span style="color:#005CC5"> 8192</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>两处的周期常量来自 DJI 电机编码器每圈 8192 计数，半圈 4096 计数。云台板的 <code>angle_pid_calculate</code>（<code>PID/Src/angle_pid.cpp:41-43</code>）与底盘板对应封装都没有调用点，<code>Task/Src/GimbalTask.cpp:61-65</code>、<code>:85-89</code> 调用的是基类 <code>Calculate</code>，所以运行时走的是 IMU 角度域的展开。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>IMU 角度域（<code>Task/Src/ImuTask.cpp:86-91</code>）</th><th>编码器计数域（<code>PID/Src/angle_pid.cpp:14-30</code>）</th></tr></thead><tbody><tr><td>输入量</td><td>偏航角，度</td><td>编码器计数</td></tr><tr><td>周期</td><td>360</td><td>8192</td></tr><tr><td>阈值</td><td>180</td><td>4096</td></tr><tr><td>平移对象</td><td>差值 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span></td><td>反馈值 <code>current</code></td></tr><tr><td>平移步长</td><td>360</td><td>8192</td></tr><tr><td>结构</td><td>单次 <code>if/else if</code></td><td>云台 <code>while</code>，底盘单次 <code>if</code></td></tr><tr><td>输入间距</td><td>相邻两帧，几度以内</td><td>目标与反馈可差任意圈</td></tr><tr><td>边界</td><td>±180 严格比较，保留原值</td><td>±4096 严格比较，保留原值</td></tr><tr><td>运行状态</td><td>每帧执行</td><td>封装函数无调用点</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant IT as ImuTask 角度域
+  participant EN as 编码器计数域
+  participant GT as GimbalTask
+  IT->>IT: 相邻帧原始差不超过约 2 度
+  IT->>IT: 单次分支折算到正负 180 内
+  EN->>EN: 目标与反馈可能相差多圈
+  EN->>EN: while 反复平移 8192 直到半圈内
+  GT->>GT: 实际调用基类 Calculate 绕过计数域</pre></div>
+<h2 id="4-本工程的展开实现">4. 本工程的展开实现</h2>
+<h3 id="41-数据来源">4.1 数据来源</h3>
+<p><code>Task/Src/ImuTask.cpp:86</code> 的两个操作数是 <code>imu_data.yaw</code> 的相邻两次写入，而 <code>imu_data.yaw</code> 在 <code>:99</code> 更新，<code>prev_actual_yaw</code> 在 <code>:94</code> 更新。展开的输入依赖上一帧的总线字段，首帧差值为 0，这一数据依赖在 02 篇展开。</p>
+<h3 id="42-阈值常量">4.2 阈值常量</h3>
+<p>阈值为字面量 180.0f 与 -180.0f，与 360.0f 的平移步长成对出现，没有抽成常量。若角度的取值范围或单位改变，三处数字需要同步修改。</p>
+<h2 id="5-易错点">5. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>位置</th></tr></thead><tbody><tr><td>1</td><td>直接在累加时不展开</td><td>绕圈处总角度跳变 360 度</td><td><code>Task/Src/ImuTask.cpp:87-91</code></td></tr><tr><td>2</td><td>认为 ±180 会触发平移</td><td>判断是严格比较，等于时保留原值</td><td><code>Task/Src/ImuTask.cpp:87</code>、<code>:89</code></td></tr><tr><td>3</td><td>把角度域阈值 180 与计数域 4096 混用</td><td>量纲错误，展开失效</td><td><code>Task/Src/ImuTask.cpp:87-91</code>、<code>PID/Src/angle_pid.cpp:20-27</code></td></tr><tr><td>4</td><td>认为计数域用 while 是冗余</td><td>目标与反馈可差多圈，单次平移不够</td><td><code>PID/Src/angle_pid.cpp:14-30</code></td></tr><tr><td>5</td><td>忽略漏展开的误差会永久保留</td><td>总角度出现 ±360 固定偏差</td><td><code>Task/Src/ImuTask.cpp:93</code></td></tr><tr><td>6</td><td>以为控制走的是 <code>handleZeroCross</code></td><td>实际调用基类 <code>Calculate</code></td><td><code>Task/Src/GimbalTask.cpp:61-65</code></td></tr></tbody></table>
+<h2 id="6-小结">6. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>角度是周期量，绕圈处的原始差需要用 ±360 折算。</li>
+<li>相邻采样保证原始差落在 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mo>−</mo><msup><mn>360</mn><mo>∘</mo></msup><mo separator="true">,</mo><msup><mn>360</mn><mo>∘</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(-360^\circ, 360^\circ)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">36</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6741em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>，单次分支即可完成展开。</li>
+<li>阈值取半圈 180 度，边界处两个分支都不触发，保留原值。</li>
+<li>单帧最大物理转角约 2 度，正常运行时原始差远小于阈值。</li>
+<li>展开漏掉一次，总角度会永久保留 ±360 度的偏差。</li>
+<li>编码器域周期是 8192 计数、阈值 4096，与角度域是两套独立实现。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>展开结构</td><td>单次 <code>if/else if</code></td><td>判断次数少；代价是仅在相邻采样输入下成立</td></tr><tr><td>阈值常量</td><td>字面量 180 与 360</td><td>直观；代价是单位或周期改变时三处要同改</td></tr><tr><td>边界处理</td><td>严格比较</td><td>半圈平局保留原值；代价是 ±180 两种符号都可能出现</td></tr><tr><td>实现数量</td><td>角度域与计数域各写一份</td><td>各自贴合数据来源；代价是同一概念出现两套阈值</td></tr></tbody></table>
+<h2 id="7-练习">7. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>给定相邻两帧偏航 179 度与 -179 度，求原始差与展开后的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi></mrow><annotation encoding="application/x-tex">\Delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span></span></span></span>。</li>
+<li>写出展开的闭式解，并指出它与代码分支在边界上的差异。</li>
+<li>说明为什么 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mn>180</mn></mrow><annotation encoding="application/x-tex">d = 180</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">180</span></span></span></span> 度时总角度会得到一个固定端点值。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用 2000 dps 量程与实测循环周期估算单帧最大真实转角，判断阈值留有多少余量。</li>
+<li>为 <code>ImuTask</code> 的展开逻辑写一个单元测试，覆盖 0、179.9、-179.9、180、-180、绕圈六种输入。</li>
+<li>把角度域的阈值改成可配置常量，列出需要同步修改的位置，并分析改动对计数域方案的影响。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>角度域 ±180 展开与累加（<code>:86-94</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/PID/Src/angle_pid.cpp</code></td><td>云台 while 版跨零处理（<code>:14-30</code>、<code>:41-43</code>）</td></tr><tr><td><code>2026OmniSentryChassis/PID/Src/angle_pid.cpp</code></td><td>底盘单次 if 版跨零处理（<code>:14-22</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>外环调用基类 <code>Calculate</code>（<code>:61-65</code>、<code>:85-89</code>）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-零偏漂移与抑制"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-零偏漂移与抑制</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/07-姿态解算与 IMU/04-四元数与零偏/04-零偏漂移与抑制.md</span></div><div class="dfile__body"><h1 id="零偏漂移与抑制">零偏漂移与抑制</h1>
+<p>陀螺仪输出里叠着一个与真实角速度无关的直流分量，积分后变成随时间增长的角度误差。云台长时间工作后偏航缓慢转动，多数来自这一项。抑制手段分两类：静态标定在开机时扣掉常量部分，动态估计在运行中跟踪随温度和时间变化的部分。</p>
+<p>零偏抑制的选择取决于工况：云台长时间静止时静态标定足够，机动与温变场景需要运行中估计。本工程把动态估计压缩成一维 EKF，只在判定静止时更新。</p>
+<h2 id="1-零偏与噪声">1. 零偏与噪声</h2>
+<p>陀螺仪误差按频率成分划分，Allan 方差把它们分成几段。下表的随平均时间变化规律按行业常识列出，本项目没有做过完整的 Allan 方差测试，条目属参考性质。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>双对数斜率特征</th><th>常见来源</th></tr></thead><tbody><tr><td>量化噪声</td><td>随平均时间减小</td><td>ADC 量化</td></tr><tr><td>角度随机游走</td><td>随平均时间平方根减小</td><td>白噪声积分</td></tr><tr><td>零偏不稳定性</td><td>在中等平均时间取最小</td><td>1/f 噪声、温度</td></tr><tr><td>速率随机游走</td><td>随平均时间平方根增大</td><td>低频漂移</td></tr><tr><td>速率斜坡</td><td>随平均时间线性增大</td><td>缓慢温漂</td></tr></tbody></table>
+<p>零偏 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">b</span></span></span></span> 与真实角速度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ω</mi></mrow><annotation encoding="application/x-tex">\omega</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span></span></span></span> 的关系写作</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>ω</mi><mo>~</mo></mover><mo>=</mo><mi>ω</mi><mo>+</mo><mi>b</mi><mo>+</mo><mi>n</mi></mrow><annotation encoding="application/x-tex">\tilde{\omega} = \omega + b + n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">b</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span></p>
+<p>积分后的角度误差是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mrow><mi>e</mi><mi>r</mi><mi>r</mi></mrow></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><msubsup><mo>∫</mo><mn>0</mn><mi>t</mi></msubsup><mi>b</mi><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>d</mi><mi>τ</mi><mo>+</mo><msubsup><mo>∫</mo><mn>0</mn><mi>t</mi></msubsup><mi>n</mi><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>d</mi><mi>τ</mi></mrow><annotation encoding="application/x-tex">\theta_{err}(t) = \int_0^t b(\tau)\,d\tau + \int_0^t n(\tau)\,d\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">t</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3443em;vertical-align:-0.3558em;"></span><span class="mop"><span class="mop op-symbol small-op" style="margin-right:0.1945em;position:relative;top:-0.0006em;">∫</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9885em;"><span style="top:-2.3442em;margin-left:-0.1945em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span><span style="top:-3.2579em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3558em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">b</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.3443em;vertical-align:-0.3558em;"></span><span class="mop"><span class="mop op-symbol small-op" style="margin-right:0.1945em;position:relative;top:-0.0006em;">∫</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9885em;"><span style="top:-2.3442em;margin-left:-0.1945em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span><span style="top:-3.2579em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3558em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">n</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span></span></span></span></p>
+<p>常量零偏产生线性增长，白噪声产生随机游走。静态标定只能扣掉开机时刻的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">b</span></span></span></span>，温度变化引起的漂移需要在线估计。本项目没有独立的静态标定流程，开机零点由 <code>yaw_zero</code> 承担，作用范围只到调试变量，见本单元 02。</p>
+<h2 id="2-标量-ekf-估计-z-轴零偏">2. 标量 EKF 估计 Z 轴零偏</h2>
+<p><code>FusionAHRS</code> 内部持有 <code>GyroBiasEKF</code>（<code>Algorithm/Inc/FusionAHRS.h:10-24</code>），只对 Z 轴估计。状态是一维零偏 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>，过程与测量都是标量。预测与更新写成</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>P</mi><mo>−</mo></msup><mo>=</mo><mi>P</mi><mo>+</mo><mi>Q</mi></mrow><annotation encoding="application/x-tex">P^- = P + Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7713em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">−</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mfrac><msup><mi>P</mi><mo>−</mo></msup><mrow><msup><mi>P</mi><mo>−</mo></msup><mo>+</mo><mi>R</mi></mrow></mfrac><mo separator="true">,</mo><mspace width="1em"></mspace><mi>x</mi><mo>←</mo><mi>x</mi><mo>+</mo><mi>K</mi><mo stretchy="false">(</mo><mi>z</mi><mo>−</mo><mi>x</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="1em"></mspace><mi>P</mi><mo>←</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>K</mi><mo stretchy="false">)</mo><msup><mi>P</mi><mo>−</mo></msup></mrow><annotation encoding="application/x-tex">K = \frac{P^-}{P^- + R}, \quad x \leftarrow x + K(z - x), \quad P \leftarrow (1-K)P^-</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3907em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9874em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7027em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mbin mtight">−</span></span></span></span></span></span></span></span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8477em;"><span style="top:-2.931em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mbin mtight">−</span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0213em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mclose">)</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">−</span></span></span></span></span></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.044em;">z</span></span></span></span> 是本帧的 <code>gyroZ</code>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span> 是每采样过程噪声，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> 是测量噪声。更新带条件：只有 <code>isStatic</code> 为真时才执行，运动期间只做预测。</p>
+<h3 id="21-稳态增益">2.1 稳态增益</h3>
+<p>构造函数给 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>=</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">P = 0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup></mrow><annotation encoding="application/x-tex">Q = 10^{-6}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">R = 10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span>（<code>Algorithm/Src/FusionAHRS.cpp:22-28</code>）。静止时反复更新，协方差收敛到固定点，把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>P</mi><mo>−</mo></msup><mo>=</mo><mi>P</mi><mo>+</mo><mi>Q</mi></mrow><annotation encoding="application/x-tex">P^- = P+Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7713em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">−</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span> 代入条件 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>K</mi><mo stretchy="false">)</mo><msup><mi>P</mi><mo>−</mo></msup></mrow><annotation encoding="application/x-tex">P = (1-K)P^-</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0213em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mclose">)</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">−</span></span></span></span></span></span></span></span></span></span></span>，得到</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo stretchy="false">(</mo><mi>P</mi><mo>+</mo><mi>Q</mi><mo stretchy="false">)</mo><mo>=</mo><mi>R</mi><mi>Q</mi></mrow><annotation encoding="application/x-tex">P(P+Q) = RQ</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">Q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal">Q</span></span></span></span></p>
+<p>数值解 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>≈</mo><mn>9.5</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup></mrow><annotation encoding="application/x-tex">P \approx 9.5\times10^{-6}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">9.5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span>，对应增益</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mfrac><mrow><mi>P</mi><mo>+</mo><mi>Q</mi></mrow><mrow><mi>P</mi><mo>+</mo><mi>Q</mi><mo>+</mo><mi>R</mi></mrow></mfrac><mo>≈</mo><mn>0.095</mn></mrow><annotation encoding="application/x-tex">K = \frac{P+Q}{P+Q+R} \approx 0.095</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4055em;vertical-align:-0.4811em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9244em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight">Q</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight">Q</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.095</span></span></span></span></p>
+<p>每个静止采样让估计向测得值移动约 9.5%，等效时间常数约 10.5 个采样。按 1 kHz 折算约 10 ms，收敛很快。运动期间 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span> 每帧加 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span>，协方差缓慢增大，为下一次静止段保留调整幅度。以上数值由常量推算，未经实测标定。</p>
+<h3 id="22-静止检测">2.2 静止检测</h3>
+<p><code>detectStatic</code>（<code>Algorithm/Src/FusionAHRS.cpp:63-71</code>）同时判断角速度模长与加速度模长：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∥</mi><mi>ω</mi><mi mathvariant="normal">∥</mi><mo>&#x3C;</mo><mn>0.02</mn><mo separator="true">,</mo><mspace width="1em"></mspace><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">∣</mo><mi mathvariant="normal">∥</mi><mi>a</mi><mi mathvariant="normal">∥</mi><mo>−</mo><mn>9.81</mn><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">∣</mo><mo>&#x3C;</mo><mn>0.2</mn></mrow><annotation encoding="application/x-tex">\|\omega\| &#x3C; 0.02, \quad \big|\|a\| - 9.81\big| &#x3C; 0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∥</span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="mord">∥</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord">0.02</span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-2.85em;"><span class="pstrut" style="height:3.2em;"></span><span style="width:0.333em;height:1.2em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.333em" height="1.2em" viewBox="0 0 333 1200"><path d="M145 15 v585 v0 v585 c2.667,10,9.667,15,21,15
+c10,0,16.667,-5,20,-15 v-585 v0 v-585 c-2.667,-10,-9.667,-15,-21,-15
+c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v0 v585 h43z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span></span><span class="mord">∥</span><span class="mord mathnormal">a</span><span class="mord">∥</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord">9.81</span><span class="mord"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span style="top:-2.85em;"><span class="pstrut" style="height:3.2em;"></span><span style="width:0.333em;height:1.2em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.333em" height="1.2em" viewBox="0 0 333 1200"><path d="M145 15 v585 v0 v585 c2.667,10,9.667,15,21,15
+c10,0,16.667,-5,20,-15 v-585 v0 v-585 c-2.667,-10,-9.667,-15,-21,-15
+c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v0 v585 h43z"></path></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span></p>
+<p>两项都满足才返回真。阈值为硬编码常量 <code>GYRO_STATIC_THRESH</code>、<code>ACC_STATIC_THRESH</code> 与 <code>GRAVITY</code>（<code>Algorithm/Src/FusionAHRS.cpp:14-16</code>）。<code>ImuTask</code> 传入的角速度来自 <code>BMI088::convertData</code>，该函数在换算后额外乘了 2.0f（<code>BMI088/Src/BMI088.cpp:158-160</code>）。若基数本身已是 rad/s 系数，则 0.02 的实际物理阈值约减半，属按代码推断，需要在 01 单元核实后统一口径。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["每帧 gyro 与 accel"] --> B["detectStatic 判断"]
+  B --> C{"角速度模长小于 0.02"}
+  B --> D{"加速度模长接近 9.81"}
+  C -- 是且 D 成立 --> E["EKF 预测并更新 Z 轴偏置"]
+  C -- 否或 D 不成立 --> F["EKF 只做预测"]
+  E --> G["gz 减去偏置估计"]
+  F --> G
+  G --> H["进入 mahonyUpdate"]</pre></div>
+<h3 id="23-只有-z-轴">2.3 只有 Z 轴</h3>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi></mrow><annotation encoding="application/x-tex">X</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Y</mi></mrow><annotation encoding="application/x-tex">Y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span></span></span></span> 轴不参与偏置估计。横滚与俯仰由加速度计长期校正，零偏被重力观测约束；偏航没有绝对参考，Z 轴零偏只能靠静止段估计。若陀螺仪存在绕 X、Y 的常值偏置且加速度计未完全压住，横滚与俯仰会残留小偏差，属按结构推断。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 运动
+  运动 --> 静止: 角速度与加速度模长同时满足阈值
+  静止 --> 运动: 任一模长越界
+  静止: EKF 更新 Z 轴偏置
+  运动: EKF 只做预测协方差增长</pre></div>
+<h2 id="3-本工程的零偏估计链路">3. 本工程的零偏估计链路</h2>
+<h3 id="31-fusionahrs-的调用链">3.1 FusionAHRS 的调用链</h3>
+<p><code>FusionAHRS::update</code>（<code>Algorithm/Src/FusionAHRS.cpp:73-86</code>）依次执行静止检测、<code>biasEKF_.update(gz, isStatic)</code>、<code>gz -= biasEKF_.getBias()</code>，再把去偏后的角速度送进 <code>mahonyUpdate</code>。偏置只影响 Z 轴，X、Y 原样进入四元数积分。</p>
+<h3 id="32-imutask-中未使用的动态零偏">3.2 ImuTask 中未使用的动态零偏</h3>
+<p><code>ImuTask.cpp</code> 同时定义了一套没有接线的动态零偏参数：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>名称</th><th>位置</th><th>值</th><th>引用情况</th></tr></thead><tbody><tr><td><code>yaw_bias</code></td><td><code>Task/Src/ImuTask.cpp:24</code></td><td>0.0f</td><td>仅定义，无其它引用</td></tr><tr><td><code>GYRO_ZERO_THRESHOLD</code></td><td><code>Task/Src/ImuTask.cpp:29</code></td><td>0.005236f（0.3 deg/s）</td><td>仅定义</td></tr><tr><td><code>BIAS_ALPHA</code></td><td><code>Task/Src/ImuTask.cpp:30</code></td><td>0.999f</td><td>仅定义</td></tr><tr><td><code>LOOP_DT</code></td><td><code>Task/Src/ImuTask.cpp:31</code></td><td>0.001f</td><td>仅定义</td></tr></tbody></table>
+<p>这四个符号在主循环里没有出现，动态零偏补偿停留在预留状态。当前运行的零偏抑制只有 <code>FusionAHRS</code> 的 Z 轴 EKF，且只在 <code>detectStatic</code> 判定静止时更新。这是真实缺陷：运动状态下 Z 轴零偏不被跟踪，而陀螺仪零偏随温度变化，云台持续运动时偏航漂移没有在线补偿。</p>
+<h3 id="33-可落地修法">3.3 可落地修法</h3>
+<p>用静止门限做指数滑动平均，接入现有主循环：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">// 运动间隙估计零偏，静止时缓慢跟踪</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">fabsf</span><span style="color:#24292E">(gyro[</span><span style="color:#005CC5">2</span><span style="color:#24292E">]) </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> GYRO_ZERO_THRESHOLD) {</span></span>
+<span class="line"><span style="color:#24292E">    yaw_bias </span><span style="color:#D73A49">=</span><span style="color:#24292E"> BIAS_ALPHA </span><span style="color:#D73A49">*</span><span style="color:#24292E"> yaw_bias </span><span style="color:#D73A49">+</span><span style="color:#24292E"> (</span><span style="color:#005CC5">1.0</span><span style="color:#D73A49">f</span><span style="color:#D73A49"> -</span><span style="color:#24292E"> BIAS_ALPHA) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> gyro[</span><span style="color:#005CC5">2</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#24292E">gyro[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">-=</span><span style="color:#24292E"> yaw_bias;</span><span style="color:#6A737D">   // 去偏后再送融合</span></span></code></pre>
+<p><code>BIAS_ALPHA</code> 取 0.999、采样 1 kHz 时时间常数约 1 s，兼顾跟踪速度与抗噪。要点有三条：</p>
+<ol>
+<li>去偏应在 <code>ahrs.update</code> 之前完成，否则 EKF 与滑动平均会叠加两次补偿，稳态偏置被过度扣除。</li>
+<li>门限用 <code>GYRO_ZERO_THRESHOLD</code> 判断单轴角速度，静止检测比 <code>detectStatic</code> 的模长判据宽松，运动中也会偶尔采样，需要评估误触发。</li>
+<li><code>LOOP_DT</code> 与 <code>ahrs(1000.0f)</code> 都假设 1 ms 周期，实际周期由 <code>DWT_Delay_ms(1)</code> 加处理时间决定，建议改为读取真实 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> 后再更新 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span>。</li>
+</ol>
+<p>上述改法未经实测，<code>BIAS_ALPHA</code> 与门限需要现场标定。另一条路径是把 <code>yaw_bias</code> 交给 EKF 的初值，减少两套估计器的耦合。</p>
+<h2 id="4-易错点">4. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>位置</th></tr></thead><tbody><tr><td>1</td><td>认为 <code>ImuTask</code> 已做动态零偏</td><td>四个符号只在定义处出现</td><td><code>Task/Src/ImuTask.cpp:24-31</code></td></tr><tr><td>2</td><td>把 EKF 当成全轴估计</td><td>只估计 Z 轴，X、Y 无偏置项</td><td><code>Algorithm/Src/FusionAHRS.cpp:30-41</code>、<code>:79-82</code></td></tr><tr><td>3</td><td>认为静止判定很严格</td><td>阈值是硬编码常量，未按整机噪声标定</td><td><code>Algorithm/Src/FusionAHRS.cpp:14-16</code></td></tr><tr><td>4</td><td>去偏与 EKF 叠加</td><td>零偏被扣两次，姿态反向漂移</td><td><code>Algorithm/Src/FusionAHRS.cpp:82</code></td></tr><tr><td>5</td><td>忽略角速度尺度</td><td>换算里的 2.0f 改变静态阈值的物理含义</td><td><code>BMI088/Src/BMI088.cpp:158-160</code></td></tr><tr><td>6</td><td>认为静止段随时出现</td><td>云台持续运动时 EKF 长期只预测</td><td><code>Algorithm/Src/FusionAHRS.cpp:35-40</code></td></tr></tbody></table>
+<h2 id="5-小结">5. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>陀螺仪零偏积分后变成随时间增长的角度误差。</li>
+<li>Allan 方差把误差分成量化噪声、随机游走、零偏不稳定性等项。</li>
+<li><code>FusionAHRS</code> 用一维 EKF 估计 Z 轴零偏，静止时更新，运动时只预测。</li>
+<li>稳态增益约 0.095，静止段内约 10 ms 收敛，数值由常量推算。</li>
+<li><code>ImuTask</code> 的四个动态零偏符号没有接线，云台只有 EKF 一条抑制路径。</li>
+<li>X、Y 轴无偏置估计，偏航以外的两轴靠加速度计约束。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>偏置维度</td><td>只估 Z 轴</td><td>计算量小；代价是横滚俯仰依赖加速度计校正</td></tr><tr><td>更新时机</td><td>仅静止时</td><td>避免运动误估；代价是持续运动时偏置无补偿</td></tr><tr><td>静止判据</td><td>模长硬阈值</td><td>实现简单；代价是阈值与实际噪声不匹配时漏判或误判</td></tr><tr><td>动态零偏</td><td>预留未接线</td><td>不影响当前行为；代价是缺陷留在代码里，容易误以为已生效</td></tr></tbody></table>
+<h2 id="6-练习">6. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出标量卡尔曼的预测与更新式，说明 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> 各自的物理含义。</li>
+<li>用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup></mrow><annotation encoding="application/x-tex">Q=10^{-6}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">R=10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span> 计算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> 的一阶近似，并估算收敛所需的静止采样数。</li>
+<li>解释为什么偏航的零偏比横滚、俯仰更难抑制。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>按 3.3 节把动态零偏接入主循环，给出接入点在 <code>ahrs.update</code> 前后的两版代码与预期差异。</li>
+<li>用一段静止数据离线拟合零偏，比较 EKF 估计与滑动平均的时间常数。</li>
+<li>设计一个把 <code>LOOP_DT</code> 换成实测 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> 的方案，列出需要改动的宏、函数与调用点。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp</code></td><td>标量 EKF、静止检测与去偏（<code>:14-86</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Inc/FusionAHRS.h</code></td><td><code>GyroBiasEKF</code> 成员（<code>:10-24</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>未接线的动态零偏参数（<code>:24-31</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/BMI088/Src/BMI088.cpp</code></td><td>角速度换算中的 2.0f（<code>:158-160</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/BMI088/BMI088config.h</code></td><td>灵敏度基数（<code>:227</code>、<code>:233</code>）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/07-姿态解算与 IMU/04-四元数与零偏/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<p>姿态链路的故障很少表现为明显跳变，多数是缓慢漂移、常量偏差或单位错位。排查时按四类切分：单位、零点、尺度、参考系。每类都有固定的观测点与对照量。</p>
+<h2 id="1-错误分类">1. 错误分类</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类别</th><th>典型表现</th><th>首要观测点</th></tr></thead><tbody><tr><td>单位</td><td>读数相差约 57 倍，误差量级不对</td><td><code>roll_out</code> 与 <code>imu_data.roll</code> 对比</td></tr><tr><td>零点</td><td>相对偏航有常量偏差，控制稳态偏离</td><td><code>yaw_zero</code> 与首帧 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><mi>w</mi></mrow><annotation encoding="application/x-tex">yaw</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span></td></tr><tr><td>尺度</td><td>角度变化速率与真实转动不一致</td><td>陀螺仪读数与量程、循环周期</td></tr><tr><td>参考系</td><td>总角度与外环目标系统性错位</td><td><code>gimbal_yaw_total</code> 的锚点与视觉约定</td></tr></tbody></table>
+<h2 id="2-单位弧度与角度制">2. 单位：弧度与角度制</h2>
+<p>同一份姿态在代码里有两种单位，分界落在 <code>Task/Src/ImuTask.cpp:74-76</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>变量</th><th>单位</th><th>位置</th></tr></thead><tbody><tr><td><code>roll</code>、<code>pitch</code>、<code>yaw</code>（转换前）</td><td>弧度</td><td><code>Task/Src/ImuTask.cpp:62-64</code></td></tr><tr><td><code>roll_out</code>、<code>pitch_out</code>、<code>yaw_out</code></td><td>弧度</td><td><code>Task/Src/ImuTask.cpp:20</code>、<code>:70-72</code></td></tr><tr><td><code>imu_data.roll</code>、<code>pitch</code>、<code>yaw</code></td><td>度</td><td><code>Task/Src/ImuTask.cpp:74-76</code>、<code>:97-99</code></td></tr><tr><td><code>imu_data.gimbal_yaw_total_angle</code></td><td>度</td><td><code>Task/Src/ImuTask.cpp:100</code></td></tr><tr><td><code>imu_data.gyro</code></td><td>rad/s（含 2 倍系数）</td><td><code>Task/Src/ImuTask.cpp:101-103</code></td></tr><tr><td>外环目标 <code>control_target.gimbal_yaw_angle</code></td><td>度</td><td><code>Task/Src/ControlCenterTask.cpp:69</code></td></tr></tbody></table>
+<p>换算关系是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mtext> rad</mtext><mo>=</mo><mn>57.29578</mn><mtext> deg</mtext></mrow><annotation encoding="application/x-tex">1\ \text{rad} = 57.29578\ \text{deg}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">rad</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">57.29578</span><span class="mspace"> </span><span class="mord text"><span class="mord">deg</span></span></span></span></span></p>
+<p>调试量取弧度、总线量与 PID 取角度，是两套并行数值。用串口读 <code>yaw_out</code> 去核对 <code>imu_data.yaw</code> 的绝对值，会得到约 57 倍的比例差。</p>
+<h2 id="3-零点与参考系">3. 零点与参考系</h2>
+<h3 id="31-零点只落在首帧">3.1 零点只落在首帧</h3>
+<p><code>yaw_zero</code> 在 <code>Task/Src/ImuTask.cpp:65-69</code> 由循环首帧的单个 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mi>a</mi><mi>w</mi></mrow><annotation encoding="application/x-tex">yaw</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span> 记录。首帧四元数从单位阵开始积分，融合尚未收敛，零点带有初始误差。上电瞬间若云台被手推动或机械回弹，零点被污染，之后所有相对偏航都带同一常量偏差。</p>
+<h3 id="32-总角度的锚点">3.2 总角度的锚点</h3>
+<p><code>gimbal_yaw_total</code> 的首个有效增量是首帧绝对偏航，累加值锚定在首帧而不是 0，且比当前帧滞后一帧，推导见本单元 02。外环目标来自视觉的绝对角，反馈是 IMU 参考系下的角度，两者是否同参考系取决于视觉协议约定，属待现场确认项。</p>
+<h3 id="33-无磁力计">3.3 无磁力计</h3>
+<p><code>Task/Src/ImuTask.cpp:15</code> 声明了 <code>mag[3]</code>，全文件没有其它引用。融合输入只有六轴，偏航没有绝对参考，静止时 EKF 抑制零偏，运动时零偏不被跟踪，长时间工作后偏航缓慢漂移。相对姿态可用，绝对航向不可信。</p>
+<h2 id="4-尺度">4. 尺度</h2>
+<p><code>BMI088::convertData</code> 在 <code>BMI088/Src/BMI088.cpp:158-160</code> 把原始值乘以 <code>BMI088_GYRO_2000_SEN</code> 后再乘 2.0f。基数 <code>0.0010652644f</code>（<code>BMI088/BMI088config.h:233</code>）等于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn><mi mathvariant="normal">/</mi><mn>32768</mn></mrow><annotation encoding="application/x-tex">2000/32768</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2000/32768</span></span></span></span> 再乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>π</mi><mi mathvariant="normal">/</mi><mn>180</mn></mrow><annotation encoding="application/x-tex">\pi/180</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="mord">/180</span></span></span></span>，量纲是 rad/s 每 LSB。若该读数成立，实际的 2 倍系数会让角速度偏大一倍，静态阈值与积分步长都要按比例重算。此判断由常量数值推得，属推断，需要在 01 单元用实测数据核对。</p>
+<p>融合类的采样周期在 <code>Task/Src/ImuTask.cpp:19</code> 固定传 1000.0f，主循环末尾是 <code>DWT_Delay_ms(1)</code>（<code>Task/Src/ImuTask.cpp:111</code>）。忙等的 1 ms 加读数、控温、融合与换算的处理时间，实际周期大于 1 ms。四元数积分按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.5</mn><mi mathvariant="normal">/</mi><msub><mi>f</mi><mi>s</mi></msub></mrow><annotation encoding="application/x-tex">0.5/f_s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.5/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 折算，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>s</mi></msub></mrow><annotation encoding="application/x-tex">f_s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 偏大会让积分量偏小，姿态跟踪滞后。<code>LOOP_DT</code> 的 0.001f 与同一假设一致，也没有参与运算。真实周期需要用 DWT 在循环首尾打点测量，属待实测项。</p>
+<h2 id="5-视觉端的四元数对照">5. 视觉端的四元数对照</h2>
+<p><code>Task/Src/UsbConnectTask.cpp:46</code> 声明了 <code>extern std::array&#x3C;float,4> q</code>，但发送路径没有使用融合算法输出的四元数。<code>:129</code> 用欧拉角重新构造：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6F42C1">std</span><span style="color:#24292E">::array</span><span style="color:#D73A49">&#x3C;float</span><span style="color:#24292E">, </span><span style="color:#005CC5">4</span><span style="color:#D73A49">></span><span style="color:#24292E"> q_array </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> eulerToQuaternion</span><span style="color:#24292E">(</span></span>
+<span class="line"><span style="color:#24292E">    imu_data.gimbal_yaw_total_angle, imu_data.roll, imu_data.roll);</span></span></code></pre>
+<p><code>eulerToQuaternion</code>（<code>Task/Src/UsbConnectTask.cpp:19-41</code>）内部把入参当角度制转成弧度，输出标量在前的四元数。<code>:126</code> 的注释写“对于 roll 角度，我们设为 0”，实际传入的是 <code>imu_data.roll</code>，注释与实现不一致，以代码为准。视觉侧拿到的是重新构造的四元数与单独的角度字段（<code>:130-140</code>），字段打包在 <code>Communication/Src/usb_protocol.cpp:11-49</code>。</p>
+<h2 id="6-调试流程">6. 调试流程</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["姿态输出异常"] --> B{"表现是跳变还是缓慢漂移"}
+  B -- 跳变 --> C["检查正负 180 展开与符号"]
+  B -- 缓慢漂移 --> D["检查零偏与角速度尺度"]
+  C --> E["核对弧度与角度制"]
+  D --> F["检查静止段 EKF 是否更新"]
+  E --> G["比对 roll_out 与 imu_data"]
+  F --> H["检查 detectStatic 阈值与 gyro 尺度"]
+  G --> I["确认单位与零点"]
+  H --> J["确认偏置接入点"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant IT as ImuTask
+  participant AH as FusionAHRS
+  participant Z as yaw_zero
+  participant T as gimbal_yaw_total
+  IT->>AH: 首帧 update 从单位四元数开始
+  AH-->>IT: 首帧 q 尚未收敛
+  IT->>Z: 记录首帧 yaw 作为零点
+  IT->>T: 首帧增量为 0
+  IT->>IT: 后续帧逐帧累加并展开
+  IT->>IT: DWT_Delay_ms 忙等 1 ms</pre></div>
+<h2 id="7-常用观测点">7. 常用观测点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>观测点</th><th>位置</th><th>用途</th></tr></thead><tbody><tr><td><code>roll_out</code>、<code>pitch_out</code>、<code>yaw_out</code></td><td><code>Task/Src/ImuTask.cpp:20</code></td><td>弧度制调试量，观察相对零点</td></tr><tr><td><code>DebugUART_Init(&#x26;huart1)</code></td><td><code>Task/Src/ImuTask.cpp:34</code></td><td>调试串口初始化</td></tr><tr><td><code>DWT_Delay_ms(1000)</code></td><td><code>Task/Src/ImuTask.cpp:37</code></td><td>上电等待传感器与融合收敛</td></tr><tr><td><code>imu_data</code> 各字段</td><td><code>Task/Src/ImuTask.cpp:97-107</code></td><td>任务间总线，核对单位与参考系</td></tr><tr><td><code>gimbal_yaw_total</code></td><td><code>Task/Src/ImuTask.cpp:22</code>、<code>:93</code></td><td>观察累加漂移与跨零跳变</td></tr><tr><td><code>detectStatic</code> 结果</td><td><code>Algorithm/Src/FusionAHRS.cpp:63-71</code></td><td>判断静止段是否出现</td></tr></tbody></table>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>易错点</th><th>表现</th><th>位置</th></tr></thead><tbody><tr><td>1</td><td>用调试量核对总线量</td><td>相差约 57 倍，误判为解算错误</td><td><code>Task/Src/ImuTask.cpp:70-76</code></td></tr><tr><td>2</td><td>零点在首帧抖动时被污染</td><td>相对偏航有常量偏差</td><td><code>Task/Src/ImuTask.cpp:65-69</code></td></tr><tr><td>3</td><td>认为 <code>mag</code> 参与解算</td><td>无磁力计，绝对航向不可信</td><td><code>Task/Src/ImuTask.cpp:15</code></td></tr><tr><td>4</td><td>忽略累加依赖总线字段</td><td>跨零错误累积成 ±360 偏差</td><td><code>Task/Src/ImuTask.cpp:86-94</code></td></tr><tr><td>5</td><td>把 <code>ahrs(1000.0f)</code> 当作真实周期</td><td>忙等使实际 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> 更大，积分偏小</td><td><code>Task/Src/ImuTask.cpp:19</code>、<code>:111</code></td></tr><tr><td>6</td><td>认为视觉收到融合四元数</td><td>实际由欧拉角重构</td><td><code>Task/Src/UsbConnectTask.cpp:129</code></td></tr><tr><td>7</td><td>按注释理解视觉四元数分量</td><td>注释说 roll 置 0，代码传 <code>imu_data.roll</code></td><td><code>Task/Src/UsbConnectTask.cpp:126</code>、<code>:129</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>姿态错误按单位、零点、尺度、参考系四类定位。</li>
+<li>弧度与角度制的分界在 <code>Task/Src/ImuTask.cpp:74-76</code>。</li>
+<li>首帧零点受抖动污染，总角度锚定在首帧且滞后一帧。</li>
+<li><code>mag</code> 未使用，偏航没有绝对参考。</li>
+<li>角速度换算的 2 倍系数与忙等周期都会改变等效尺度，两项均为推断或待实测。</li>
+<li>视觉端发送的四元数由欧拉角重构，与融合四元数是两条路径。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>调试量单位</td><td>弧度</td><td>与融合内部一致；代价是与总线量差 57 倍，需显式换算</td></tr><tr><td>循环延时</td><td><code>DWT_Delay_ms(1)</code> 忙等</td><td>实现简单、无需 RTOS 延时；代价是占 CPU，周期随处理时间浮动</td></tr><tr><td>采样频率</td><td>硬编码 1000.0f</td><td>与 1 ms 延时对应；代价是实际周期变化时积分尺度漂移</td></tr><tr><td>视觉四元数</td><td>由欧拉角重构</td><td>可单独选择发送的偏航参考；代价是与融合状态不一致</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出四个观测点，说明各自能区分哪一类错误。</li>
+<li>给定 <code>yaw_out = 0.5</code>，求对应的角度制数值。</li>
+<li>说明 <code>mag[3]</code> 未被使用时，偏航漂移为什么不能靠自身修正。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用 DWT 在循环首尾打点，写出测量真实周期并传给 <code>FusionAHRS</code> 的改动方案。</li>
+<li>设计一个上电静止 1 s 的零点标定流程，列出状态机与判定条件。</li>
+<li>对比视觉端两种四元数来源（融合输出与欧拉角重构），分析各自在自瞄闭环中的影响。</li>
+</ol>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>单位分界、零点、累加与忙等（<code>:15-111</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>视觉端四元数重构（<code>:19-41</code>、<code>:126-140</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp</code></td><td>帧打包（<code>:11-49</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp</code></td><td>静止检测与去偏（<code>:63-86</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/BMI088/Src/BMI088.cpp</code></td><td>角速度换算中的 2.0f（<code>:158-160</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/BMI088/BMI088config.h</code></td><td>灵敏度基数（<code>:233</code>）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>外环目标角来源（<code>:69</code>）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/07-%E5%A7%BF%E6%80%81%E8%A7%A3%E7%AE%97%E4%B8%8E%20IMU/03-Fusion%20AHRS/"><span class="k">← 上一篇</span><span class="t">Fusion AHRS</span><span class="d">姿态解算与 IMU · 5 个文件</span></a><a class="next" href="/tc63/docs/07-%E5%A7%BF%E6%80%81%E8%A7%A3%E7%AE%97%E4%B8%8E%20IMU/05-IMU%E6%B8%A9%E6%8E%A7/"><span class="k">下一篇 →</span><span class="t">IMU温控</span><span class="d">姿态解算与 IMU · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -1,0 +1,884 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>起身策略 · 四足机器人 · 王宇翔</title><meta name="description" content="起身任务要解决的问题、出生姿态的两种设计及其代价、姿态池与关节难度课程，以及观测与动作口径对调度器的影响。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/02-%E8%B5%B7%E8%BA%AB%E7%AD%96%E7%95%A5/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="起身策略 · 四足机器人 · 王宇翔"><meta property="og:description" content="起身任务要解决的问题、出生姿态的两种设计及其代价、姿态池与关节难度课程，以及观测与动作口径对调度器的影响。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/02-%E8%B5%B7%E8%BA%AB%E7%AD%96%E7%95%A5/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/">四足机器人</a><span class="sep" aria-hidden="true">/</span><span class="now">起身策略</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>起身策略</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>起身任务的定义与起点设计</span></a><ul class="toc__heads"><li><a href="#起身任务要解决什么" data-depth="2" data-heading-j="0">起身任务要解决什么</a></li><li><a href="#出生姿态的两种设计" data-depth="2" data-heading-j="1">出生姿态的两种设计</a></li><li><a href="#姿态池与关节难度课程" data-depth="2" data-heading-j="2">姿态池与关节难度课程</a></li><li><a href="#观测与动作口径的连带影响" data-depth="2" data-heading-j="3">观测与动作口径的连带影响</a></li><li><a href="#起点参数速查" data-depth="2" data-heading-j="4">起点参数速查</a></li><li><a href="#与走路任务的关系" data-depth="2" data-heading-j="5">与走路任务的关系</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>动作与观测的结构选择</span></a><ul class="toc__heads"><li><a href="#动作语义的两种写法" data-depth="2" data-heading-j="0">动作语义的两种写法</a></li><li><a href="#有效探索噪声怎么算" data-depth="2" data-heading-j="1">有效探索噪声怎么算</a></li><li><a href="#观测的单帧与历史" data-depth="2" data-heading-j="2">观测的单帧与历史</a></li><li><a href="#非对称-actor-critic" data-depth="2" data-heading-j="3">非对称 actor-critic</a></li><li><a href="#接口改动与调度器的冲突" data-depth="2" data-heading-j="4">接口改动与调度器的冲突</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>奖励设计与退化吸引子</span></a><ul class="toc__heads"><li><a href="#从九项窄峰到两个宽高斯" data-depth="2" data-heading-j="0">从九项窄峰到两个宽高斯</a></li><li><a href="#两个已实测坏掉的奖励项" data-depth="2" data-heading-j="1">两个已实测坏掉的奖励项</a></li><li><a href="#朝向基准取世界竖直还是局部法向" data-depth="2" data-heading-j="2">朝向基准取世界竖直还是局部法向</a></li><li><a href="#门控与足髋距离项" data-depth="2" data-heading-j="3">门控与足髋距离项</a></li><li><a href="#成功奖金与判据对齐" data-depth="2" data-heading-j="4">成功奖金与判据对齐</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>成功判据与交还口径</span></a><ul class="toc__heads"><li><a href="#站立判据的竖直投影" data-depth="2" data-heading-j="0">站立判据的竖直投影</a></li><li><a href="#连续保持与容错计数" data-depth="2" data-heading-j="1">连续保持与容错计数</a></li><li><a href="#失败形态的分类" data-depth="2" data-heading-j="2">失败形态的分类</a></li><li><a href="#交还瞬间的动作处理" data-depth="2" data-heading-j="3">交还瞬间的动作处理</a></li><li><a href="#判据与奖励的一致性检查" data-depth="2" data-heading-j="4">判据与奖励的一致性检查</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="11">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">四足机器人</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>起身任务 / 出生姿态 / 姿态池 / 课程学习 / Go1 / 动作空间 / 动作锚定 / 观测历史</span></div><h1 class="docs__title">起身策略</h1><p class="docs__lead">起身任务要解决的问题、出生姿态的两种设计及其代价、姿态池与关节难度课程，以及观测与动作口径对调度器的影响。</p></header><section class="dfile" id="file-1" data-file="01-起身任务的定义与起点设计"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-起身任务的定义与起点设计</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/02-起身策略/01-起身任务的定义与起点设计.md</span></div><div class="dfile__body"><h1 id="起身任务的定义与起点设计">起身任务的定义与起点设计</h1>
+<p>四足机器人摔倒之后需要自己站起来，才能继续执行任务。这件事对人来说理所当然，对强化学习却是一个长期不收敛的难题：项目用纯 PPO 从零训练 25M 步以上，成功率一直是零；用关键帧示范做行为克隆只能到 5.1%；关键帧状态机本身也只有 20% 到 28%。把成功率做到 77% 以上的关键是重写后的第二版环境，它改变最大的地方是起点设计，而不是网络结构或训练步数。</p>
+<p>起点决定了任务有多难发现。如果一开始就把机器人以任意姿态扔到半空再让它摔到地上，策略要同时学会「怎么落地」和「怎么站起来」两件事；如果直接把它放在站立高度、只把关节和朝向打乱，物理自己会把它放倒，策略只需要专注一件事。公开工作的配方几乎都选了后者，本单元讲的就是这套配方在项目里的落地。</p>
+<h2 id="起身任务要解决什么">起身任务要解决什么</h2>
+<p>任务的形式化定义很短：把机器人从任意摔倒姿态恢复到默认站立姿态，并保持住。姿态用根四元数描述，站立姿态用躯干离地高度与躯干朝上的方向描述。项目里这两条判据都有明确阈值，后面的篇章会展开。</p>
+<p>难题出在中间过程。摔倒后机器人可能仰卧、俯卧、侧躺，四肢的相对关系完全打乱，同一套关节指令在不同起始姿态下效果完全不同。策略要学的是一段有相位的动作序列：先翻身、再收腿、再撑起、最后站住，而每一段的成功都依赖前一段的结果。</p>
+<p>基线的三个数字需要并列看才有意义：纯 PPO 从零 25M 步以上成功率仍为零，关键帧状态机自身 20.1% 到 28.1%，行为克隆单独训练只能到 5.1%（«docs/getup-recipes.md:157-160» 转引项目实验记录）。状态机比学习策略强，说明动作本身可行；克隆只有它的四分之一，说明分布漂移是主要损耗。</p>
+<p>项目早期走过一条弯路：用关键帧状态机生成示范，再让策略模仿或在其上做残差修正。实验记录里的结论是这条路的先验是混沌的：有效扰动只要 ±0.09 rad 就能让状态机成功率从 29.3% 掉到 10.9%（<code>docs/getup-recipes.md:186-192</code> 转引项目实验记录结论）。在这个基础上加噪声的强化学习只会学到退化行为。</p>
+<h2 id="出生姿态的两种设计">出生姿态的两种设计</h2>
+<p>公开实现里的出生方式分成两类，难度差别很大（<code>docs/getup-recipes.md:22-30</code> 与 <code>:88-95</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>出生方式</th><th>做法</th><th>代表实现</th><th>难度</th></tr></thead><tbody><tr><td>站立高度落位</td><td>z 取站立高度，关节与朝向随机</td><td>get-up-isaaclab、官方 Go1Getup 的 40% 情形</td><td>低</td></tr><tr><td>抛下再沉降</td><td>z 取 0.5 m 抛下，等物理沉降</td><td>官方配置的 60% 情形、关键帧示范采集</td><td>高</td></tr></tbody></table>
+<p>抛下的额外代价不只是难度。沉降要在物理里跑几百步才能让自碰撞收敛，项目实测每次重置的耗时在开沉降时是 947 ms，关掉沉降之后降到 6 ms（<code>docs/getup-recipes.md:203-206</code>）。在需要几千万步训练的场景里，这个差距直接决定一轮训练能不能跑完。</p>
+<p>第二版环境选择了站立高度落位，配置里出生高度取相对地面的 0.35 m，平面位置在正负 2 m 内均匀采样，关节在硬限位内采样，朝向用归一化正态四元数均匀随机（<code>envs/go1_getup_v2.py:78-82</code> 与 <code>:193-200</code>）。落地后机器人自己倒下，策略从倒地状态开始学起身。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["重置"] --> B{"出生方式"}
+  B -- "站立高度落位" --> C["物理自己放倒 只需学起身"]
+  B -- "抛下再沉降" --> D["既要学落地又要学起身"]
+  C --> E["重置便宜 6 ms 每次"]
+  D --> F["重置 947 ms 每次 自碰撞需收敛"]
+  C --> G["关节与朝向随机化保证起点覆盖面"]</pre></div>
+<h2 id="姿态池与关节难度课程">姿态池与关节难度课程</h2>
+<p>站立高度落位解决了「学两件事」的问题，但起点分布仍然偏窄：物理自己倒下的姿态集中在少数几种，仰卧与侧躺的比例不足。公开工作的对策是预生成姿态池，把大量已沉降的姿态存成文件，重置时直接取样（<code>docs/getup-recipes.md:186-192</code> 转引 HumanUP 的 20K 姿态数据集做法）。</p>
+<p>项目里对应的工具是姿态池脚本（<code>sim/make_getup_posepool.py:37-50</code>）。它按躺地姿态采样并检查接触数，为起身环境预留容量，产出的结果可以作为初始状态文件给训练使用。这条路线的额外好处是绕开了并行重置的显存问题：项目实测在同一步里做多次重置会让 warp 的内存池崩溃，改用取样文件之后不再触发（<code>docs/getup-recipes.md:203-206</code>）。</p>
+<p>姿态池的采样过程还要顺带核对容量。躺地姿态下每个环境的接触数约为 33 个，而接触槽是全体世界共享的，因此姿态池脚本按每环境 64 个接触预留容量，取默认容量与放大值中的较大者（«sim/make_getup_posepool.py:37-50»）。这项核对属于容量选择的一部分，本仓库的容量单元里展开。</p>
+<p>另一个更轻的课程轴是关节随机化的强度。第二版配置里有一个关节难度系数，取值 1.0 表示完全随机（公开配方原样），取小值则把关节角往默认姿态收（<code>envs/go1_getup_v2.py:96-100</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>joints</mtext><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo stretchy="false">)</mo><mo>⋅</mo><mtext>default</mtext><mo>+</mo><mi>α</mi><mo>⋅</mo><mi>U</mi><mo stretchy="false">(</mo><mtext>limit</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{joints} = (1 - \alpha) \cdot \text{default} + \alpha \cdot U(\text{limit})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8623em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">joints</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord">default</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">U</span><span class="mopen">(</span><span class="mord text"><span class="mord">limit</span></span><span class="mclose">)</span></span></span></span></span>
+<p>这个系数配合续训参数可以做出多阶段课程：先用小 α 在接近站立的姿态上把起身动作学会，再逐步放大 α 到全随机。HumanUP 的两阶段结构正是这个思路，第一阶段在规范姿态上发现动作，第二阶段才放开初始分布（<code>docs/getup-recipes.md:135-141</code>）。</p>
+<h2 id="观测与动作口径的连带影响">观测与动作口径的连带影响</h2>
+<p>起点设计之外，第二版还有两处结构性改动，都与调度器有关。第一处是观测从单帧 91 维变成 42 维乘 5 帧历史，共 210 维（<code>envs/go1_getup_v2.py:33-39</code>）。历史帧让策略能看到关节速度的变化趋势与自己的上一步动作，这对时序性很强的起身动作是必要的。</p>
+<p>代价是观测维度不再与走路策略一致。项目的查看器里有一个按观测形状合并策略的调度器，起身策略与走路策略共用一套观测是它成立的前提；改用历史帧之后这个前提不成立，查看器必须为起身单独维护一段历史缓冲（<code>envs/go1_getup_v2.py:33-39</code> 与 <code>docs/status.md:136-140</code>）。</p>
+<p>第二处是动作语义。第二版把动作锚在名义站立姿态上而不是加在当前关节角上，这一条是公开配方里被反复强调的结构差异，下一节专门展开。</p>
+<h2 id="起点参数速查">起点参数速查</h2>
+<p>第二版的起点与相关时长参数集中在一个配置块里，几个关键值如下（«envs/go1_getup_v2.py:78-104»）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>取值</th><th>依据</th></tr></thead><tbody><tr><td>出生高度</td><td>相对地面 0.35 m</td><td>站立高度直接落位，不抛</td></tr><tr><td>平面范围</td><td>正负 2 m</td><td>覆盖足部落点差异</td></tr><tr><td>关节随机化</td><td>硬限位内均匀采样</td><td>起点姿态全覆盖</td></tr><tr><td>关节难度系数</td><td>默认 1.0</td><td>可按课程调小</td></tr><tr><td>朝向</td><td>归一化正态四元数</td><td>任意朝向等概率</td></tr><tr><td>观测历史</td><td>5 帧</td><td>给策略速度趋势信息</td></tr><tr><td>episode 长度</td><td>400 步</td><td>8 秒，留出学”站住”的时间</td></tr><tr><td>成功保持步数</td><td>25 步</td><td>连续满足判据才算成功</td></tr></tbody></table>
+<p>episode 长度从 300 步提到 400 步是有实测依据的：在 300 步的设置下，策略在末态接近站立的比例是 30.5%，但能连续保持 25 步的只有 1.6%，说明到站时间太晚、没有余量学站住；延长到 8 秒之后把这段时间留出来（«envs/go1_getup_v2.py:70-77»）。</p>
+<p>起点高度取 0.35 m 而不是 0.5 m，也是同一个思路的延伸：从站立高度落位比从半空抛下更容易，而随机关节与朝向仍然保证起点分布的宽度。难度靠课程逐步放开，而不是靠加高度堆出来。</p>
+<h2 id="与走路任务的关系">与走路任务的关系</h2>
+<p>起身策略不是孤立运行的。机器人摔倒由查看器里的调度器检测，起身完成后要把控制权交还走路策略，交还瞬间的动作连续性直接影响成功率。项目的实测显示，交还时做动作混合会让摔倒率从 7.9% 上升到 38.3%，因此默认关闭混合（<code>docs/status.md:118-129</code>）。</p>
+<p>训练规模上要有心理准备。公开工作的四足起身做到收敛需要 1e8 到 1e9 步量级，而项目的单卡吞吐在 3700 到 5500 步每秒之间，2e7 步约 1.5 小时、5e7 步约 4 小时、1e8 步约 8 小时（«docs/getup-recipes.md:190-196»）。按公开配方改完之后如果仍需要 1e8 步，正确的结论是接受跑一晚上，而不是跑 6e6 步就宣判方法无效。</p>
+<p>这套调度与交还的判据、去抖与冷却参数在另外的单元里展开，这里只写到起身策略自身的边界为止：它负责从倒地姿态到站住，站住之后如何交班由调度逻辑决定。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["摔倒姿态"] --> B["关节难度课程 alpha 由小到大"]
+  B --> C["姿态池扩充起点分布"]
+  C --> D["策略学习起身动作序列"]
+  D --> E["连续满足站姿判据 25 步"]
+  E --> F["交还走路策略"]
+  F --> G["调度器检测下一次摔倒"]</pre></div>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>起身任务要把任意摔倒姿态恢复到默认站立姿态并保持住，难点在中间动作序列的相位依赖。</li>
+<li>出生姿态有两种设计：站立高度落位让物理自己放倒，抛下再沉降同时要求策略学落地，后者重置耗时 947 ms 对 6 ms。</li>
+<li>第二版出生高度取相对地面 0.35 m，关节在硬限位内随机，朝向均匀随机，平面位置正负 2 m。</li>
+<li>姿态池把已沉降姿态存成文件供重置取样，关节难度系数 α 可以做从规范姿态到全随机的课程。</li>
+<li>观测改为 42 维乘 5 帧历史后不再与走路策略同形，查看器必须为起身单独维护历史缓冲。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>站立高度落位</td><td>任务更容易发现、重置便宜</td><td>起点分布偏窄，需课程补足</td></tr><tr><td>抛下再沉降</td><td>起点覆盖宽</td><td>重置昂贵、任务更难</td></tr><tr><td>预生成姿态池</td><td>覆盖宽且重置便宜</td><td>需要离线生成与存储</td></tr><tr><td>关节难度系数课程</td><td>从易到难、可分阶段续训</td><td>需要多轮训练与参数管理</td></tr><tr><td>观测带历史帧</td><td>策略可见速度趋势</td><td>打破与走路策略同形的前提</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明起身任务的形式化定义，以及难点为什么在中间动作序列。</li>
+<li>对比两种出生姿态的设计，写出各自的重置耗时与难度差别。</li>
+<li>解释关节难度系数 α 的作用与课程用法。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>设计一套两阶段课程的具体参数，说明每阶段的 α 与续训方式。</li>
+<li>分析姿态池方法为什么能同时解决起点分布与重置显存两个问题。</li>
+<li>讨论观测带历史帧与策略调度合并之间的取舍，给出你的方案。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_getup_v2.py</code></td><td>出生与课程配置（:78-102）、出生实现与重置（:193-200）、观测历史（:33-39）</td></tr><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开配方对照与出生方式（:22-30、:88-95）、姿态池与重置代价（:186-206）、两阶段课程（:135-141）</td></tr><tr><td><code>mjx-go1-getup/docs/status.md</code></td><td>第二版成功率与调度器口径（:24、:136-140）、交还实测（:118-129）</td></tr><tr><td><code>mjx-go1-getup/sim/make_getup_posepool.py</code></td><td>姿态池生成工具（:37-50）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-动作与观测的结构选择"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-动作与观测的结构选择</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/02-起身策略/02-动作与观测的结构选择.md</span></div><div class="dfile__body"><h1 id="动作与观测的结构选择">动作与观测的结构选择</h1>
+<p>起身策略学不会的时候，人们容易去调学习率、网络宽度或训练步数。项目对照公开实现之后发现，最大的差异其实在接口层：动作是怎么定义的，观测里有没有历史。这两项决定了策略面对的是一个什么样的优化问题，也决定了一样的算法和预算能不能学到动作。</p>
+<p>接口层的差别可以概括为两点。旧版本的动作是「在当前关节角上加一个增量」，目标关节角可以漂到任何位置；公开配方的动作是「在名义站立姿态上叠加一个有限的偏移」，可达范围被限制在名义姿态附近。前者要求策略从零学关节角本身，后者只要求它学偏离站姿多少，学习负担完全不同。</p>
+<h2 id="动作语义的两种写法">动作语义的两种写法</h2>
+<p>两种动作语义在代码里只差一行，难度却差一个档（<code>envs/go1_getup_v2.py:8-14</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>公式</th><th>可达范围</th><th>代表实现</th></tr></thead><tbody><tr><td>增量式</td><td>目标等于当前关节角加 0.5 乘动作</td><td>无界，可漂到任意位置</td><td>项目第一版、官方 playground 的走路任务</td></tr><tr><td>锚定式</td><td>目标等于名义站姿加 0.5 乘裁剪后的动作</td><td>名义站姿正负 1.5 rad</td><td>公开的起身配方</td></tr></tbody></table>
+<p>第二版选了锚定式，动作先裁剪到正负 3.0，再经过一阶低通滤波，最后乘 0.5 加到默认姿态上（<code>envs/go1_getup_v2.py:80-85</code> 与 <code>:259-262</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>a</mi><mo>=</mo><mtext>clip</mtext><mo stretchy="false">(</mo><mi>a</mi><mo separator="true">,</mo><mo>±</mo><mn>3.0</mn><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>a</mi><mi>f</mi></msub><mo>=</mo><mn>0.8</mn><mi>a</mi><mo>+</mo><mn>0.2</mn><msub><mi>a</mi><mrow><mi>p</mi><mi>r</mi><mi>e</mi><mi>v</mi></mrow></msub><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>target</mtext><mo>=</mo><mtext>default</mtext><mo>+</mo><mn>0.5</mn><msub><mi>a</mi><mi>f</mi></msub></mrow><annotation encoding="application/x-tex">a = \text{clip}(a, \pm 3.0), \qquad a_f = 0.8 a + 0.2 a_{prev}, \qquad \text{target} = \text{default} + 0.5 a_f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord text"><span class="mord">clip</span></span><span class="mopen">(</span><span class="mord mathnormal">a</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">±</span><span class="mord">3.0</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.8</span><span class="mord mathnormal">a</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9305em;vertical-align:-0.2861em;"></span><span class="mord">0.2</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">target</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord">default</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9305em;vertical-align:-0.2861em;"></span><span class="mord">0.5</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span>
+<p>滤波系数 0.8 让相邻两步的目标关节角不会突变，等效于给动作加了一层平滑。可达范围只有正负 1.5 rad，这个范围足以完成起身，但不足以让关节漂到限位之外的怪异姿态。</p>
+<p>需要留意一点：官方 playground 在走路任务上试过更接近增量语义的动作空间，结论是不如「加到当前关节配置上」好用（<code>docs/getup-recipes.md:56-60</code> 转引官方环境文档）。这条经验说明动作语义没有普适最优解，要按任务的动作是否有明确的参考姿态来选：走路有周期性的名义步态，起身有明确的目标站姿，两种任务都适合锚定式。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["策略输出动作 a"] --> B["裁剪到正负 3.0"]
+  B --> C["一阶低通 0.8 新加 0.2 旧"]
+  C --> D["乘 0.5 加上名义站姿"]
+  D --> E["得到关节目标 范围正负 1.5 rad"]
+  E --> F["交给执行器位置控制"]</pre></div>
+<h2 id="有效探索噪声怎么算">有效探索噪声怎么算</h2>
+<p>探索噪声由两个参数共同决定。策略输出的是带噪声的动作均值，噪声的标准差参数乘上动作缩放系数，才是实际作用到关节目标上的幅度（<code>docs/getup-recipes.md:283-292</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>来源</th><th>噪声初值</th><th>动作缩放</th><th>有效每步噪声</th></tr></thead><tbody><tr><td>brax PPO 默认</td><td>1.0</td><td>未指定</td><td>由任务给出</td></tr><tr><td>HoST 人形起身</td><td>0.8</td><td>1.0</td><td>0.8</td></tr><tr><td>官方 Go1Getup</td><td>1.0</td><td>0.5</td><td>0.5 rad 约 28.6 度</td></tr><tr><td>官方 Franka 精细操作</td><td>1.0</td><td>0.04</td><td>0.04</td></tr></tbody></table>
+<p>0.5 rad 每步是 playground 全套任务里最大的一档。这个幅度让策略在早期能快速探索大的姿态变化，但在微调阶段会破坏已经学好的动作。噪声标准差在训练中是可学习参数，它的初值只影响早期探索的幅度，因此从零训练与微调应该用不同的初值（<code>docs/getup-recipes.md:293-300</code>）。</p>
+<p>项目还记录了另一处与微调相关的失效：参数恢复不恢复优化器状态，Adam 的动量会从零重建。在微调时这会表现为第一次更新就把策略推歪，因此微调要用更小的学习率（<code>docs/getup-recipes.md:293-300</code> 转引项目实验记录）。</p>
+<p>项目针对微调阶段给过一组建议值：噪声初值取 0.3、动作缩放从 0.5 降到 0.25，把有效噪声压到 0.075，同时把学习率降到 1e-5（«docs/getup-recipes.md:301-308» 的建议稿，尚未执行）。这组值在本项目里三次微调都退化了，因此它只能作为把噪声变量固定住的配套措施，不能单独指望它解决问题。</p>
+<p>噪声的分布类型也影响行为。项目用的正态分布不过 tanh 压缩，输出均值可以直接落在行程端点上，这对需要瞬间发力的起身关键动作是必要的；代价是动作可能超出合理范围，因此外层必须保留裁剪（<code>docs/getup-recipes.md:283-292</code>）。</p>
+<h2 id="观测的单帧与历史">观测的单帧与历史</h2>
+<p>第二版的单帧观测由五部分组成，共 42 维（<code>envs/go1_getup_v2.py:33-39</code> 与 <code>:290-300</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组成部分</th><th>维数</th><th>作用</th></tr></thead><tbody><tr><td>机体角速度</td><td>3</td><td>判断翻转趋势</td></tr><tr><td>投影重力方向</td><td>3</td><td>判断躯干朝向</td></tr><tr><td>关节角减默认姿态</td><td>12</td><td>相对站姿的偏差</td></tr><tr><td>关节速度</td><td>12</td><td>判断是否还在动</td></tr><tr><td>上一步原始动作</td><td>12</td><td>让策略知道自己刚做了什么</td></tr></tbody></table>
+<p>单帧 42 维，取 5 帧拼成 210 维作为 actor 输入。历史窗口的作用是把关节速度的变化趋势暴露出来：单帧速度只能说明此刻在动，多帧才能说明是加速还是减速，而起身的相位判断依赖这个信息。</p>
+<p>对照公开配方可以看到同样的选择：isaaclab 用 42 维乘 5 帧共 210 维，HoST 用 76 维乘 6 帧共 456 维（<code>docs/getup-recipes.md:70-76</code> 与 <code>:104-108</code>）。多个独立实现都上历史帧，说明这不是可选项。</p>
+<h2 id="非对称-actor-critic">非对称 actor-critic</h2>
+<p>观测分两套：actor 只看策略实际能拿到的量，critic 额外看特权量。官方 Go1Getup 的 critic 用特权观测键，isaaclab 的特权量包括 PD 增益、足端接触、高度误差与地形倾角（<code>docs/getup-recipes.md:70-76</code>）。</p>
+<p>项目第二版的策略是：critic 只用观测加上少量特权量，不做状态估计模块，也不做高度图特权。这一取舍来自目标定位，项目不追求实机部署，因此不需要把仿真特权量替换成可估量（<code>envs/go1_getup_v2.py:40-43</code>）。代价是策略上限受观测限制，收益是整条链路简单、易复现。</p>
+<p>需要说明的是，非对称结构本身不解决起身难题。公开的起身工作里有实现用、也有实现不用，起作用的是动作锚定、宽奖励与课程这几条（<code>docs/getup-recipes.md:275-280</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["单帧 42 维"] --> B["拼 5 帧 得 210 维"]
+  B --> C["actor 输入"]
+  B --> D["critic 输入"]
+  D --> E["少量特权量 接触 高度 倾角"]
+  F["不追求实机部署"] --> G["不做状态估计与高度图特权"]
+  G --> E</pre></div>
+<h2 id="接口改动与调度器的冲突">接口改动与调度器的冲突</h2>
+<p>观测带历史帧会给工程链路带来一个副作用。项目的查看器按观测形状把策略合并到一套调度流程里，走路策略是单帧的 91 维，起身策略改成 210 维之后两者不再同形，调度器无法共用一段观测装配代码（<code>envs/go1_getup_v2.py:33-39</code>）。</p>
+<p>解决方案是让起身策略自带历史缓冲，查看器在起身模式下单独维护这段缓冲并按帧推进（<code>docs/status.md:136-140</code>）。代价是查看器多一条分支，收益是不必为了迁就调度器退回单帧观测。</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>单帧 42 维</mtext><mo>×</mo><mn>5</mn><mtext>  </mtext><mtext>帧历史</mtext><mo>=</mo><mn>210</mn><mtext>  </mtext><mtext>维</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><mn>91</mn><mtext>  </mtext><mtext>维单帧走路观测与它不同形</mtext></mrow><annotation encoding="application/x-tex">\text{单帧 42 维} \times 5 \; \text{帧历史} = 210 \; \text{维}, \qquad 91 \; \text{维单帧走路观测与它不同形}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord cjk_fallback">单帧</span><span class="mord"> 42 </span><span class="mord cjk_fallback">维</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">5</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord text"><span class="mord cjk_fallback">帧历史</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord">210</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord text"><span class="mord cjk_fallback">维</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">91</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord text"><span class="mord cjk_fallback">维单帧走路观测与它不同形</span></span></span></span></span></span>
+<p>第二版的基线还把观测噪声与动作噪声都关掉了，先拿到一个干净基线再谈域随机化（«envs/go1_getup_v2.py:40-43»）。这也意味着观测维度的改动在这条基线上没有噪声预算的干扰，后续加域随机化时再单独评估。</p>
+<p>这类接口冲突在项目里出现过多次：一项为任务效果做的正确改动，会打破为工程简洁做的既有约定。处理原则是优先保留对任务效果必要的部分，再在工程侧加分支适配，而不是反过来削掉观测。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>动作有两种语义：增量式把目标加在当前关节角上、可达范围无界；锚定式把偏移加在名义站姿上、范围是正负 1.5 rad。</li>
+<li>第二版动作先裁剪到正负 3.0，再一阶低通滤波，系数 0.8 让相邻步骤的目标不会突变。</li>
+<li>有效探索噪声等于噪声标准差初值乘动作缩放，官方起身配置是 1.0 乘 0.5 等于 0.5 rad，是 playground 里最大的一档。</li>
+<li>观测从单帧 42 维拼成 5 帧 210 维，历史窗口提供关节速度趋势；critic 额外看少量特权量，不做状态估计。</li>
+<li>210 维观测不再与走路策略同形，查看器必须为起身单独维护历史缓冲。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>动作锚定加有界裁剪</td><td>只学偏离站姿的量</td><td>可达范围受限，需要确认够用</td></tr><tr><td>一阶低通滤波</td><td>目标平滑、动作连续</td><td>引入一步延迟</td></tr><tr><td>观测带 5 帧历史</td><td>速度趋势可见</td><td>观测维度不再与走路同形</td></tr><tr><td>critic 用少量特权量</td><td>链路简单可复现</td><td>策略上限受观测限制</td></tr><tr><td>不做状态估计模块</td><td>不需要特权量替换</td><td>放弃面向实机的迁移能力</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出两种动作语义的公式与可达范围，说明锚定式为什么更容易学。</li>
+<li>计算官方起身配置的有效探索噪声，并解释为什么它比精细操作任务大一个数量级。</li>
+<li>列出单帧观测的五个组成部分与历史帧数，说明历史带来的信息。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为起身任务设计一套微调用的噪声与学习率组合，说明与从零训练的差别。</li>
+<li>分析观测带历史帧与调度器合并的冲突，给出两种可行的工程解法。</li>
+<li>讨论在追求实机部署时非对称结构需要做哪些调整。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_getup_v2.py</code></td><td>动作锚定与低通（:8-14、:80-85、:259-262）、观测构成（:33-39、:290-300）、目标定位（:40-43）</td></tr><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>动作语义对照（:56-60）、观测历史（:70-76、:104-108）、有效噪声（:283-300）、非对称结构的定位（:275-280）</td></tr><tr><td><code>mjx-go1-getup/docs/status.md</code></td><td>查看器的起身模式与历史缓冲（:136-140）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-奖励设计与退化吸引子"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-奖励设计与退化吸引子</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/02-起身策略/03-奖励设计与退化吸引子.md</span></div><div class="dfile__body"><h1 id="奖励设计与退化吸引子">奖励设计与退化吸引子</h1>
+<p>起身任务的奖励如果写得像走路，策略会找到一条捷径：保持趴着不动，靠几个容易拿到的项把分数堆上去。这属于奖励面本身的退化最优解，不是策略在作弊。项目实测过最典型的一例：一轮训练拿到每回合 468 分，而站立的分数上限是 529，看起来已经接近满分，可是成功率仍然是零。</p>
+<p>分数与目标脱节的原因有两个。一个是奖励由很多窄项叠成，每一项单独都容易拿分；另一个是奖励里最重的朝向项算错了参考方向，导致「把躯干顶到某个角度」比「站直」更划算。后来的版本把奖励压成两个宽高斯，并把朝向基准改成与判据一致的方向，配合成功终止与稀疏奖金，成功率才从零变成可用。</p>
+<h2 id="从九项窄峰到两个宽高斯">从九项窄峰到两个宽高斯</h2>
+<p>两版的奖励结构对比如下（<code>docs/getup-recipes.md:150-156</code> 与 <code>envs/go1_getup_v2.py:105-116</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>结构</th><th>形状</th><th>问题</th></tr></thead><tbody><tr><td>第一版</td><td>9 项加权和加一个稀疏奖金</td><td>高斯很窄，宽度 0.05</td><td>存在台阶与可套利点</td></tr><tr><td>第二版</td><td>2 个宽高斯加 5 个正则项</td><td>高斯宽度 0.316</td><td>结构简单、无窄门</td></tr></tbody></table>
+<p>窄高斯的含义是只有非常接近目标才有分数，稍远就归零。这种形状在早期探索阶段几乎没有梯度，策略收不到「往目标方向走」的信号；反过来，一旦进入窄峰，分数很高，于是策略会优先守住那个姿态而不是继续完成动作。</p>
+<p>第二版的两个正项都是宽高斯（<code>envs/go1_getup_v2.py:342-344</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>track_orientation</mtext><mo>=</mo><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><mo>−</mo><mtext>ori_err</mtext><mi mathvariant="normal">/</mi><mn>0.1</mn><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>track_height</mtext><mo>=</mo><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><mo>−</mo><mi>h</mi><mi mathvariant="normal">_</mi><mi>e</mi><mi>r</mi><mi>r</mi><mi mathvariant="normal">/</mi><mn>0.1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{track\_orientation} = \exp(-\text{ori\_err} / 0.1), \qquad \text{track\_height} = \exp(-h\_err / 0.1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0044em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">track_orientation</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord">−</span><span class="mord text"><span class="mord">ori_err</span></span><span class="mord">/0.1</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">track_height</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord">−</span><span class="mord mathnormal">h</span><span class="mord" style="margin-right:0.0278em;">_</span><span class="mord mathnormal" style="margin-right:0.0278em;">er</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord">/0.1</span><span class="mclose">)</span></span></span></span></span>
+<p>分母 0.1 是方差而不是标准差，因此高斯宽度约为 0.316。高度误差以米为单位，0.316 m 的宽度意味着躯干高度差三四十厘米仍然有不小的分数，探索全程都能拿到梯度。朝向误差同样用这个宽度，对应约 0.316 rad 的角度容差。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["躯干高度误差"] --> B["宽高斯 exp 负误差除方差"]
+  C["朝向误差"] --> D["宽高斯 exp 负误差除方差"]
+  B --> E["两项正奖励"]
+  D --> E
+  F["门控 躯干与目标方向夹角小于阈值"] --> E
+  E --> G["减去 5 项正则以抑制抖动"]
+  G --> H["每步奖励 乘控制周期"]</pre></div>
+<h2 id="两个已实测坏掉的奖励项">两个已实测坏掉的奖励项</h2>
+<p>第一版有两个奖励项的实测值与设计意图严重不符（<code>docs/getup-recipes.md:243-255</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>奖励项</th><th>设计意图</th><th>实测表现</th><th>后果</th></tr></thead><tbody><tr><td>朝向项</td><td>躯干竖直时拿满权重</td><td>站立时只有 0.887 除以 3.0</td><td>顶到某个角度就能套利约 2.1 分每步</td></tr><tr><td>站立静止项</td><td>站着不动拿高分</td><td>站立时只有 0.0003，上限 0.5</td><td>该项几乎不起作用</td></tr></tbody></table>
+<p>朝向项的问题出在参考方向的算法上。项目用它计算重力投影，即便机器人竖直，算出来的方向也与世界竖直方向相差约 46 度，于是「真竖直」只能拿到约三分之一的分数，而把躯干歪到某个中间角度反而更接近算法的输出。策略于是学会了顶住这个角度，而不是站直。</p>
+<p>站立静止项的问题出在输入。该项想惩罚大幅度的控制量，但拿到的是绝对控制目标，数值在 0.8 到 1.5 rad 之间，指数项因此恒接近于零。要让这项起作用，必须传入归一化后的策略动作而不是绝对目标（<code>docs/getup-recipes.md:245-250</code>）。</p>
+<p>这两个例子说明一件事：奖励项的实测值必须单独核对，不能只看公式。两个项都在公式上看起来合理，实测却分别给出了错误的最优方向和几乎恒为零的输出。</p>
+<h2 id="朝向基准取世界竖直还是局部法向">朝向基准取世界竖直还是局部法向</h2>
+<p>朝向误差要有一个参考方向。公开的四足配方用局部地形法向，理由是四足站在坡上躯干本来就随坡倾斜，用世界竖直做基准在坡度较大时期望值不可达（<code>envs/go1_getup_v2.py:16-24</code>）。</p>
+<p>项目的评估判据用的是世界竖直投影，也就是躯干与竖直方向的夹角余弦。两个基准不一致会制造假失败：用地形法向训练出来的策略，末态竖直投影中位数是 0.963，对应约 13.7 度倾斜，92% 的样本落在高度带内，姿态上其实已经站起来了，但世界竖直判据要求大于 0.99 也就是 8.1 度以内，算出来的成功率是零（<code>envs/go1_getup_v2.py:89-94</code>）。</p>
+<p>第二版因此把基准做成可切换的配置项，默认取世界竖直，与判据和查看器保持一致；保留局部法向选项用于复现公开配方（<code>envs/go1_getup_v2.py:89-94</code>）。这条取舍的教训是：奖励的参考系必须与评估的参考系一致，否则训练目标与验收目标会分道扬镳。</p>
+<p>局部法向的计算方式是取当前位置高度的梯度，把切平面法向归一化（<code>envs/go1_getup_v2.py:159-168</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>n</mi><mo>=</mo><mtext>normalize</mtext><mo stretchy="false">(</mo><mo stretchy="false">[</mo><mo>−</mo><msub><mi>g</mi><mi>x</mi></msub><mo separator="true">,</mo><mo>−</mo><msub><mi>g</mi><mi>y</mi></msub><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">n = \text{normalize}([-g_x, -g_y, 1])</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord text"><span class="mord">normalize</span></span><span class="mopen">([</span><span class="mord">−</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">])</span></span></span></span></span>
+<p>梯度用前后各 0.05 m 的高度差估计。这个采样器复用高度场的解析双线性采样，因此整条计算可以留在 jit 内。</p>
+<h2 id="门控与足髋距离项">门控与足髋距离项</h2>
+<p>宽高斯之外还有两个设计细节。第一个是门控：只有当躯干与目标方向的夹角小于 28.6 度时，高度项才给分（<code>envs/go1_getup_v2.py:17-24</code> 与 <code>:344</code>）。门控的作用是避免策略在躺地时也拿到高度分，把「已经翻正」与「还躺着」区分开。</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>gate</mtext><mo>=</mo><mtext>dot</mtext><mo stretchy="false">(</mo><msub><mi>u</mi><mrow><mi>b</mi><mi>o</mi><mi>d</mi><mi>y</mi></mrow></msub><mo separator="true">,</mo><mi>n</mi><mo stretchy="false">)</mo><mo>></mo><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><msup><mn>28.6</mn><mo>∘</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{gate} = \text{dot}(u_{body}, n) > \cos(28.6^\circ)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8095em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">gate</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord text"><span class="mord">dot</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">n</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">cos</span><span class="mopen">(</span><span class="mord">28.</span><span class="mord"><span class="mord">6</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7241em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∘</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+<p>第二个是足髋距离项，鼓励足端落在髋关节正下方，权重 1.5（<code>envs/go1_getup_v2.py:109</code> 与 <code>:346-360</code>）。这一项有一个容易写错的地方：参考点必须是髋体而不是躯干原点。髋在躯干坐标系里的横向偏移是 0.1881 m、纵向约 0.047 m，如果拿躯干原点当参考，这一项会把「足落在髋下」错判成「足要收到躯干中线」，项目在前几版里正是这样写错并导致动作变形的（<code>envs/go1_getup_v2.py:151-157</code>）。</p>
+<p>「足落在髋下」这个目标还有一个小的外张偏置 0.095 m，让四足略微外张而不是并拢，与真实站立姿态一致（<code>envs/go1_getup_v2.py:96-99</code>）。</p>
+<h2 id="成功奖金与判据对齐">成功奖金与判据对齐</h2>
+<p>奖励面还有一个结构性问题：稠密项让策略可以在接近站姿的位置一直待着拿分，而不去触发成功判据。项目实测过「末态接近站立 30.5% 但连续保持 25 步只有 1.6%」的分布，说明到站太晚、站不稳（<code>envs/go1_getup_v2.py:70-77</code>）。</p>
+<p>对策是把成功本身写进奖励。第二版在连续满足站姿判据 25 步的那一步给出一次 600 分奖金，并把 episode 长度从 300 步延长到 400 步（<code>envs/go1_getup_v2.py:70-77</code> 与 <code>:277-284</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>奖励</mtext><mo>=</mo><mtext>稠密项</mtext><mo>+</mo><mn>600</mn><mo>×</mo><mo stretchy="false">[</mo><mtext>连续站住 25 步</mtext><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">\text{奖励} = \text{稠密项} + 600 \times [\text{连续站住 25 步}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">奖励</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord cjk_fallback">稠密项</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">600</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord text"><span class="mord cjk_fallback">连续站住</span><span class="mord"> 25 </span><span class="mord cjk_fallback">步</span></span><span class="mclose">]</span></span></span></span></span>
+<p>600 分约等于 400 步站立能拿到的稠密分，因此「早站起来」比「晚站起来」更划算，策略有动力尽早完成动作而不是磨蹭到回合结束。</p>
+<p>公开工作里同样的思路有不同实现：有的把「连续站立 100 步」直接写成终止条件，有的单独分出一组描述「站起来之后应该保持站立」的奖励并用额外的价值网络优化（<code>docs/getup-recipes.md:290-300</code>）。共同点是让奖励与成功判据指向同一个目标。</p>
+<p>还有一条容易忽略的配置：奖励下界必须放开。第二版把奖励裁剪下界设成负一百万，原因是如果总分被裁剪到零为下界，早期策略全部拿零分，策略梯度就没有信号（<code>envs/go1_getup_v2.py:64-66</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["策略接近站姿"] --> B{"连续满足判据 25 步"}
+  B -- "否" --> C["只拿稠密分 可能磨蹭"]
+  B -- "是" --> D["一次性 600 分奖金"]
+  D --> E["早站比晚站更划算"]
+  F["奖励下界放开到负值"] --> G["早期不因总分为零而失去梯度"]
+  E --> H["稠密与稀疏目标一致"]</pre></div>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>第一版用九项窄峰奖励，策略能拿到 468 分而成功率仍为零，说明分数与目标脱节。</li>
+<li>第二版把正项压成两个宽高斯，方差 0.1 对应宽度 0.316，探索全程都有梯度。</li>
+<li>实测坏掉的两项是朝向项与站立静止项：前者站立只有 0.887 除以 3.0，后者只有 0.0003，都被策略套利或忽略。</li>
+<li>朝向基准必须与评估判据一致，地形法向训练出的策略在世界竖直判据下成功率假零。</li>
+<li>成功奖金 600 分写在连续站住 25 步的那一步，配合放开奖励下界，让稠密信号与成功目标指向同一处。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>两个宽高斯</td><td>全程有梯度、无窄门</td><td>精度依赖其他项与奖金</td></tr><tr><td>朝向基准取世界竖直</td><td>与评估判据一致</td><td>坡面上期望值不可达</td></tr><tr><td>朝向基准取局部法向</td><td>坡面自洽</td><td>与竖直判据不一致产生假失败</td></tr><tr><td>加成功奖金</td><td>抑制磨蹭、目标明确</td><td>需要标定奖金量级</td></tr><tr><td>放开奖励下界</td><td>早期保留梯度</td><td>负奖励需要额外的稳定性保障</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>对比两版奖励的结构，说明窄高斯为什么不利于早期探索。</li>
+<li>解释朝向项与站立静止项各自的实测问题与修法。</li>
+<li>说明门控与足髋距离项的作用，指出足髋距离项的参考点为什么必须是髋体。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为一个新的起身任务设计奖励，要求包含门控、宽高斯与成功奖金并说明标定方式。</li>
+<li>分析假失败现象的产生条件，设计一套让奖励基准与评估基准保持一致的检查流程。</li>
+<li>讨论成功奖金量级的确定方法，给出过大与过小各自的后果。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_getup_v2.py</code></td><td>奖励结构与权重（:105-116）、宽高斯与门控（:342-344）、足髋项与参考点（:109、:151-157、:346-360）、朝向基准切换（:89-94）、成功奖金与回合长度（:70-77、:277-284）、奖励下界（:64-66）</td></tr><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>两版奖励对照（:150-156）、坏掉的奖励项与改法（:243-255）、成功终止与分组奖励（:290-300）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_getup.py</code></td><td>第一版奖励项与判据</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-成功判据与交还口径"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-成功判据与交还口径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/02-起身策略/04-成功判据与交还口径.md</span></div><div class="dfile__body"><h1 id="成功判据与交还口径">成功判据与交还口径</h1>
+<p>起身策略训完之后，评估它的唯一标准是成功率，而成功率对判据的每一个常数都敏感。同一个策略，判据取竖直投影大于 0.99 还是大于 0.95，结果可以从零跳到七成；保持步数要求严格归零还是允许容错，结果又能差四个百分点。项目的记录里专门写了一句提醒：差一个数就得出完全不同的结论。</p>
+<p>判据的另一半是交还。机器人站起来之后控制权要交给走路策略，交还瞬间的动作如何处理，直接决定它会不会立刻又摔倒。项目在这里做过一组十项对照，结论与直觉相反：加平滑混合会让摔倒率成倍上升，默认应当关闭。</p>
+<h2 id="站立判据的竖直投影">站立判据的竖直投影</h2>
+<p>判据的核心量是躯干朝上的方向在世界坐标系里的竖直投影，由根部四元数直接算出（<code>docs/status.md:60-74</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>up_z</mtext><mo>=</mo><mn>1</mn><mo>−</mo><mn>2</mn><mo stretchy="false">(</mo><msubsup><mi>q</mi><mi>y</mi><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>q</mi><mi>z</mi><mn>2</mn></msubsup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{up\_z} = 1 - 2(q_y^2 + q_z^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7406em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">up_z</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2472em;vertical-align:-0.3831em;"></span><span class="mord">2</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-2.453em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3831em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1141em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-2.453em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+<p>这个量等于躯干倾角的余弦。取值为 1 表示完全竖直，取 0 表示侧躺。用它做判据的好处是不需要三角函数，一次乘法就能算出来，方便在查看器里逐帧计算。</p>
+<p>阈值的选择决定成败，对照表如下（<code>docs/status.md:62-74</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>up_z</th><th>倾角</th><th>含义</th></tr></thead><tbody><tr><td>1.00</td><td>0 度</td><td>完全竖直</td></tr><tr><td>0.999</td><td>约 2.6 度</td><td>实测成功时的中位数</td></tr><tr><td>0.99</td><td>8.1 度</td><td>旧硬编码判据，这台机器基本做不到</td></tr><tr><td>0.95</td><td>18.2 度</td><td>当前默认口径</td></tr><tr><td>0.93</td><td>21.6 度</td><td>更宽的备选</td></tr><tr><td>0.30</td><td>72.5 度</td><td>查看器的摔倒阈值</td></tr><tr><td>0.00</td><td>90 度</td><td>侧躺</td></tr></tbody></table>
+<p>实测显示，成功时高度带内最好的竖直投影中位数是 0.999，严格满足 0.99 的要求；但只有 77% 的样本能连续保持 25 帧。这说明判据的瓶颈是「连续」，不是姿态本身（<code>docs/status.md:75-77</code>）。</p>
+<h2 id="连续保持与容错计数">连续保持与容错计数</h2>
+<p>成功判据由两部分组成：竖直投影大于 0.95，且躯干相对正下方地面的高度落在 0.20 到 0.34 m 之间。两者同时满足时保持计数器加一，达到 25 就算成功（<code>docs/status.md:100-108</code>）。</p>
+<p>旧版的做法是任何一帧不满足就把计数器清零。实测在 128 个真实摔倒样本上，严格版成功率 77.3%，容错版是 81.2%，到站时间从 5.71 秒降到 4.89 秒（<code>docs/status.md:100-112</code>）。</p>
+<p>容错的做法是不满足时减一、减到零为止（<code>docs/status.md:104-107</code>）：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>如果满足</mtext><mo>:</mo><mtext>  </mtext><mi>n</mi><mo>+</mo><mo>=</mo><mn>1</mn><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>否则</mtext><mo>:</mo><mtext>  </mtext><mi>n</mi><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{如果满足}: \; n \mathrel{+}= 1, \qquad \text{否则}: \; n = \max(n - 1, 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">如果满足</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel"><span class="mord">+</span></span></span><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">否则</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></span>
+<p>这个改动成立的原因很直接：失败样本里有 26 个（共 29 个失败）属于「其实已经站进高度带，中间掉出 1 到 2 帧就归零」。这类失败属于判据太脆，而不是策略没站起来。容错计数把单帧抖动从失败里排除，同时保留了对没站住的惩罚。</p>
+<p>「连续 25 帧」这个要求本身不能去掉，因为单帧满足可能是摔倒过程中的瞬态。连续帧数与去抖的思想一致，查看器里的摔倒检测也用连续帧计数（<code>docs/status.md:78-98</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["每帧计算竖直投影与相对高度"] --> B{"竖直投影大于阈值"}
+  B -- "否" --> C["计数器减一 减到零为止"]
+  B -- "是" --> D{"高度落在 0.20 到 0.34 m"}
+  D -- "否" --> C
+  D -- "是" --> E["计数器加一"]
+  E --> F{"达到 25"}
+  F -- "否" --> A
+  F -- "是" --> G["判定成功 准备交还"]</pre></div>
+<h2 id="失败形态的分类">失败形态的分类</h2>
+<p>把失败样本按形态分类，可以看出判据参数该往哪调（<code>docs/status.md:100-112</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>失败形态</th><th>数量特征</th><th>含义</th></tr></thead><tbody><tr><td>已进高度带但中途掉帧</td><td>29 个失败里 26 个</td><td>判据太脆，用容错计数解决</td></tr><tr><td>姿态达标但高度不够</td><td>少量</td><td>起身动作没完成</td></tr><tr><td>高度达标但姿态倾斜</td><td>少量</td><td>对应朝向基准不一致的问题</td></tr></tbody></table>
+<p>第一类占绝大多数，说明当时的瓶颈不在策略能力，而在判据的严格程度。第二、三类对应真实的能力缺口，前者要改奖励的高度项，后者要统一奖励与判据的朝向基准。</p>
+<p>还有一个与判据相关的现象：用地形法向作为奖励朝向基准训出来的策略，末态竖直投影中位数是 0.963，落在高度带内的比例高达 92%，但世界竖直判据要求大于 0.99，于是成功率被算成零（<code>envs/go1_getup_v2.py:89-94</code>）。这种假失败只能通过统一参考系来消除，调判据阈值只是掩盖问题。</p>
+<h2 id="交还瞬间的动作处理">交还瞬间的动作处理</h2>
+<p>起身成功之后，控制权要交还给走路策略。这里有三个可选口径：直接切换、在一段时间内把两个策略的动作做加权混合、以及暂时保持起身策略的最后目标（<code>docs/status.md:116-129</code>）。</p>
+<p>项目用 227 个起身终态、每个跑 500 帧做了十组对照，关键结果如下（<code>docs/status.md:118-129</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方案</th><th>摔倒比例</th><th>末态站住比例</th></tr></thead><tbody><tr><td>不混合，直接切换</td><td>7.9%</td><td>85.9%</td></tr><tr><td>走路策略原生基线（对照）</td><td>8.4%</td><td>92.1%</td></tr><tr><td>混合系数 10</td><td>38.3%</td><td>59.5%</td></tr><tr><td>混合系数 30</td><td>73.6%</td><td>35.2%</td></tr><tr><td>一直保持起身最后目标</td><td>90.7%</td><td>0.0%</td></tr></tbody></table>
+<p>直接切换的摔倒率 7.9% 甚至略低于走路策略自身的基线 8.4%，而任何形式的混合都让摔倒率成倍上升。原因是起身「站住」那一帧的动作是顶在裁剪上限上的发力状态，动作中位数的绝对值等于 8.0，也就是裁剪值，目标关节角与关节实际位置相差约 2.7 rad（<code>docs/status.md:123-129</code>）。</p>
+<p>从这样一个极端发力状态开始做混合，前 10 或 30 帧相当于按这个目标去驱动关节，结果是把机器人推倒。这条结论纠正了项目上一轮的默认设置：混合系数曾被默认成 10，实测加重了抽搐，现在默认是 0（<code>docs/status.md:116-129</code>）。</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>终态动作中位数</mtext><mo>=</mo><mn>8.0</mn><mo>=</mo><mtext>裁剪上限</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>目标与关节实际差</mtext><mo>≈</mo><mn>2.7</mn><mtext>  </mtext><mtext>rad</mtext></mrow><annotation encoding="application/x-tex">\text{终态动作中位数} = 8.0 = \text{裁剪上限}, \qquad \text{目标与关节实际差} \approx 2.7 \; \text{rad}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">终态动作中位数</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8.0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord cjk_fallback">裁剪上限</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">目标与关节实际差</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">2.7</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord text"><span class="mord">rad</span></span></span></span></span></span>
+<p>这也解释了一个更深的问题：策略的「站住」是靠持续发力顶住的，而不是安静的静止站姿。要提高交还余量，需要让终态动作变小，这属于奖励项改造的范围（<code>docs/status.md:170-179</code>）。</p>
+<h2 id="判据与奖励的一致性检查">判据与奖励的一致性检查</h2>
+<p>把以上几条放在一起，可以总结出一条检查:奖励里的目标姿态与评估判据必须用同一个参考系、同一个阈值口径。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查项</th><th>不一致的后果</th></tr></thead><tbody><tr><td>朝向参考系</td><td>地形法向训练、世界竖直评估，成功率假零</td></tr><tr><td>高度基准</td><td>奖励用相对地面高度、判据用绝对高度，坡面上全错</td></tr><tr><td>连续步数</td><td>奖励给稠密分、判据要求连续，策略磨蹭不触发</td></tr><tr><td>动作裁剪</td><td>终态顶在裁剪上，交还时混合会推倒机器人</td></tr></tbody></table>
+<p>项目在这四项上都吃过亏，因此每次改判据都要回头核对奖励的同一项，反之亦然。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["起身成功判据触发"] --> B{"交还方式"}
+  B -- "直接切换" --> C["摔倒 7.9% 最稳"]
+  B -- "动作混合" --> D["摔倒 38.3 到 73.6%"]
+  B -- "保持最后目标" --> E["摔倒 90.7%"]
+  F["终态动作顶在裁剪上"] --> D
+  F --> E
+  C --> G["下一步 加安静站立奖励让终态动作变小"]</pre></div>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>站立判据用竖直投影 up_z 等于 1 减两倍的横滚俯仰平方项，取值等于躯干倾角余弦。</li>
+<li>阈值 0.99 对应 8.1 度，这台机器基本做不到；当前默认口径是 0.95 对应 18.2 度。</li>
+<li>成功判据要求竖直投影大于 0.95 且相对高度落在 0.20 到 0.34 m，连续保持 25 帧。</li>
+<li>容错计数把不满足改为减一，成功率从 77.3% 升到 81.2%，到站时间从 5.71 秒降到 4.89 秒。</li>
+<li>交还时直接切换最稳（摔倒 7.9%），任何混合都让摔倒率成倍上升，原因是终态动作顶在裁剪上限。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>带来的能力</th><th>付出的代价</th></tr></thead><tbody><tr><td>竖直投影阈值取 0.95</td><td>成功率可用</td><td>允许 18 度倾斜</td></tr><tr><td>连续保持 25 帧</td><td>排除瞬态误判</td><td>单帧抖动可能造成失败</td></tr><tr><td>容错计数减一</td><td>抗单帧抖动</td><td>需要额外状态项</td></tr><tr><td>交还直接切换</td><td>摔倒率最低</td><td>依赖终态动作不极端</td></tr><tr><td>保留混合选项</td><td>便于对照实验</td><td>默认值必须写死为 0</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出竖直投影的公式并说明它与倾角的关系。</li>
+<li>对比严格计数与容错计数的实测差别，说明失败样本的主要形态。</li>
+<li>复述交还五组对照的结果，解释为什么混合会加重摔倒。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>设计一套判据参数标定流程，要求同时给出阈值、连续步数与容错幅度的依据。</li>
+<li>分析终态动作顶在裁剪上的成因，设计一项能降低终态动作幅度的奖励改造。</li>
+<li>为奖励与判据的一致性检查写一份清单，覆盖参考系、基准、步数与裁剪四项。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/status.md</code></td><td>站立阈值表与实测（:60-77）、摔倒判据（:78-98）、成功判据与容错计数（:100-112）、交还对照（:116-129）、待办（:170-179）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_getup_v2.py</code></td><td>朝向基准切换与假失败记录（:89-94）、成功奖金与保持步数（:70-77、:277-284）</td></tr><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>成功终止与判据对齐（:290-300）</td></tr><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td>评估入口与判据参数</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/01-trot%E9%80%9F%E5%BA%A6%E8%B7%9F%E8%B8%AA%E8%A1%8C%E8%B5%B0/"><span class="k">← 上一篇</span><span class="t">trot速度跟踪行走</span><span class="d">四足机器人 · 5 个文件</span></a><a class="next" href="/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/03-%E6%91%94%E5%80%92%E6%A3%80%E6%B5%8B%E4%B8%8E%E7%AD%96%E7%95%A5%E8%B0%83%E5%BA%A6/"><span class="k">下一篇 →</span><span class="t">摔倒检测与策略调度</span><span class="d">四足机器人 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

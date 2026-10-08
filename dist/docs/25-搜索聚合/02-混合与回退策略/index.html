@@ -1,0 +1,908 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>混合与回退策略 · 搜索聚合 · 王宇翔</title><meta name="description" content="select_top 如何把几十条候选收敛成 5 条抓取名单：结构硬排除、路径去重、静态黑名单先做减法，五路加权信号再做排序，白名单分层取选与相关性门槛负责纠偏，全部判据都能在日志里逐条核对。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/25-%E6%90%9C%E7%B4%A2%E8%81%9A%E5%90%88/02-%E6%B7%B7%E5%90%88%E4%B8%8E%E5%9B%9E%E9%80%80%E7%AD%96%E7%95%A5/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="混合与回退策略 · 搜索聚合 · 王宇翔"><meta property="og:description" content="select_top 如何把几十条候选收敛成 5 条抓取名单：结构硬排除、路径去重、静态黑名单先做减法，五路加权信号再做排序，白名单分层取选与相关性门槛负责纠偏，全部判据都能在日志里逐条核对。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/25-%E6%90%9C%E7%B4%A2%E8%81%9A%E5%90%88/02-%E6%B7%B7%E5%90%88%E4%B8%8E%E5%9B%9E%E9%80%80%E7%AD%96%E7%95%A5/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/25-%E6%90%9C%E7%B4%A2%E8%81%9A%E5%90%88/">搜索聚合</a><span class="sep" aria-hidden="true">/</span><span class="now">混合与回退策略</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>混合与回退策略</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>候选池到抓取名单的筛选</span></a><ul class="toc__heads"><li><a href="#1-筛选发生在搜索之后的第一步" data-depth="2" data-heading-j="0">1. 筛选发生在搜索之后的第一步</a></li><li><a href="#2-结构硬排除先砍掉没有正文价值的-url" data-depth="2" data-heading-j="1">2. 结构硬排除先砍掉没有正文价值的 URL</a></li><li><a href="#3-按路径去重与静态黑名单" data-depth="2" data-heading-j="2">3. 按路径去重与静态黑名单</a></li><li><a href="#4-五路信号与加权" data-depth="2" data-heading-j="3">4. 五路信号与加权</a></li><li><a href="#5-相关性门槛把同名异义挡在评选之外" data-depth="2" data-heading-j="4">5. 相关性门槛把同名异义挡在评选之外</a></li><li><a href="#6-白名单分层取选" data-depth="2" data-heading-j="5">6. 白名单分层取选</a></li><li><a href="#7-评分明细日志的读法" data-depth="2" data-heading-j="6">7. 评分明细日志的读法</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="12">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>域名质量分与自动拉黑</span></a><ul class="toc__heads"><li><a href="#1-域名分的输入与公式" data-depth="2" data-heading-j="0">1. 域名分的输入与公式</a></li><li><a href="#2-静态低质域与子域后缀匹配" data-depth="2" data-heading-j="1">2. 静态低质域与子域后缀匹配</a></li><li><a href="#3-成功与失败如何改写分数" data-depth="2" data-heading-j="2">3. 成功与失败如何改写分数</a></li><li><a href="#4-白名单豁免与启动解封" data-depth="2" data-heading-j="3">4. 白名单豁免与启动解封</a></li><li><a href="#5-exclude-配额的分配顺序" data-depth="2" data-heading-j="4">5. exclude 配额的分配顺序</a></li><li><a href="#6-单例与缓存" data-depth="2" data-heading-j="5">6. 单例与缓存</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="11">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>重搜阈值与跨尝试去重</span></a><ul class="toc__heads"><li><a href="#1-目标有效来源数是自适应的" data-depth="2" data-heading-j="0">1. 目标有效来源数是自适应的</a></li><li><a href="#2-重搜次数与重搜量的公式" data-depth="2" data-heading-j="1">2. 重搜次数与重搜量的公式</a></li><li><a href="#3-跨尝试去重与黑名单二次过滤" data-depth="2" data-heading-j="2">3. 跨尝试去重与黑名单二次过滤</a></li><li><a href="#4-抓取层的-10-分钟窗口" data-depth="2" data-heading-j="3">4. 抓取层的 10 分钟窗口</a></li><li><a href="#5-抓取成功与失败的判定线" data-depth="2" data-heading-j="4">5. 抓取成功与失败的判定线</a></li><li><a href="#6-卡片层的精确与语义去重" data-depth="2" data-heading-j="5">6. 卡片层的精确与语义去重</a></li><li><a href="#7-探索阶段的合并跳过" data-depth="2" data-heading-j="6">7. 探索阶段的合并跳过</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="12">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>多源融合与来源配额</span></a><ul class="toc__heads"><li><a href="#1-来源与关键词的默认配额" data-depth="2" data-heading-j="0">1. 来源与关键词的默认配额</a></li><li><a href="#2-调用侧还有一套不同的默认值" data-depth="2" data-heading-j="1">2. 调用侧还有一套不同的默认值</a></li><li><a href="#3-融合提示词的写法" data-depth="2" data-heading-j="2">3. 融合提示词的写法</a></li><li><a href="#4-同主题合并与多卡拆分" data-depth="2" data-heading-j="3">4. 同主题合并与多卡拆分</a></li><li><a href="#5-探索层级的四个键与两套命名" data-depth="2" data-heading-j="4">5. 探索层级的四个键与两套命名</a></li><li><a href="#6-易错点" data-depth="2" data-heading-j="5">6. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="7">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="8">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="9">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="10">本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">搜索聚合</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>搜索聚合 / URL筛选 / 启发式评分 / 抓取配额 / 域名质量 / 熔断 / 黑名单 / 重搜</span></div><h1 class="docs__title">混合与回退策略</h1><p class="docs__lead">select_top 如何把几十条候选收敛成 5 条抓取名单：结构硬排除、路径去重、静态黑名单先做减法，五路加权信号再做排序，白名单分层取选与相关性门槛负责纠偏，全部判据都能在日志里逐条核对。</p></header><section class="dfile" id="file-1" data-file="01-候选池到抓取名单的筛选"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-候选池到抓取名单的筛选</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/25-搜索聚合/02-混合与回退策略/01-候选池到抓取名单的筛选.md</span></div><div class="dfile__body"><h1 id="候选池到抓取名单的筛选">候选池到抓取名单的筛选</h1>
+<p>搜索适配层把候选池做得很大（博查固定 60 条），抓取层却只愿意付 5 条的代价。中间这一步由 <code>select_top()</code> 完成，定义在 <code>backend/scraper/url_prioritizer.py:106</code>，流水线在搜索返回后立刻调用它（<code>backend/pipeline/pipeline.py:597</code>）。所有判据都是零模型依赖的启发式，不需要额外调用任何 API，因此可以在每次搜索里都跑一遍。</p>
+<p>这里的主题是「怎么挑」；来源侧的协议适配与熔断回退在 25-搜索聚合/01-多引擎适配 里已经写过，两篇的分工是：01 决定候选从哪里来，这里决定哪些候选进入抓取名单。</p>
+<h2 id="1-筛选发生在搜索之后的第一步">1. 筛选发生在搜索之后的第一步</h2>
+<p><code>select_top()</code> 的调用点在领域锚定之后、抓取之前（<code>backend/pipeline/pipeline.py:592</code>、<code>:596</code>）。它接收三个参数：候选列表、查询词与两个可调阈值——<code>top_n</code> 默认取 <code>DOMAIN_QUALITY_TOP_URLS</code>（<code>backend/config.py:132</code>，值为 5），<code>min_score</code> 默认 0.15（<code>backend/scraper/url_prioritizer.py:109</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["候选列表"] --> B["结构硬排除 个人主页/商品页/PR/视频"]
+  B --> C["按 path 去重 剥离 query"]
+  C --> D["静态与自动黑名单剔除"]
+  D --> E["五路信号加权打分"]
+  E --> F{"query 非空?"}
+  F -->|"是"| G["相关性门槛 零重叠剔除 全零则放宽"]
+  F -->|"否"| H["跳过门槛"]
+  G --> I["按总分降序排列"]
+  H --> I
+  I --> J["白名单先取满 top_n"]
+  J --> K["非白名单按分数补位"]
+  K --> L["返回 top_n 条抓取名单"]</pre></div>
+<p>函数的三个阶段在日志里各有痕迹：减法阶段输出排除与去重计数（<code>backend/scraper/url_prioritizer.py:141</code>），相关性门槛输出丢弃条数（<code>backend/scraper/url_prioritizer.py:154</code>），取选阶段逐条打印评分明细（<code>backend/scraper/url_prioritizer.py:178</code>）。</p>
+<h2 id="2-结构硬排除先砍掉没有正文价值的-url">2. 结构硬排除先砍掉没有正文价值的 URL</h2>
+<p>第一道过滤是 URL 结构匹配，命中即丢弃（<code>backend/scraper/url_prioritizer.py:119</code>）。模式清单在 <code>backend/scraper/url_prioritizer.py:31</code>，按用途分成六组：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组别</th><th>典型模式</th><th>排除理由</th></tr></thead><tbody><tr><td>个人主页</td><td><code>/user/</code>、<code>/profile/</code>、<code>/people/</code></td><td>无正文，只有文章列表</td></tr><tr><td>电商商品页</td><td><code>/product/</code>、<code>/goods/</code>、<code>/sku/</code></td><td>参数与营销文案</td></tr><tr><td>电商子域</td><td><code>//item.jd.com/</code>、<code>//detail.tmall.com/</code></td><td>同上，按子域匹配</td></tr><tr><td>GitHub 非内容页</td><td><code>/pull/</code>、<code>/issues/</code>、<code>/commit/</code></td><td>讨论与 diff 不适合做知识卡</td></tr><tr><td>下载与标签聚合</td><td><code>/download/</code>、<code>/tagalbum/</code></td><td>实测在候选池高频出现</td></tr><tr><td>视频页与登录跳转</td><td><code>/video/</code>、<code>/watch\?</code>、<code>/login</code></td><td>JS 渲染抓不到正文</td></tr></tbody></table>
+<p>这些页面大多能抓到内容，但内容没有卡片价值，占掉一个抓取配额就是净损失。除硬排除之外还有一组扣分模式 <code>_LOW_QUALITY_PATH_PATTERNS</code>（<code>backend/scraper/url_prioritizer.py:20</code>），命中只把结构分压到 0.2，不直接出局。</p>
+<h2 id="3-按路径去重与静态黑名单">3. 按路径去重与静态黑名单</h2>
+<p>去重键是 <code>urlparse(url).path</code>，剥离查询串（<code>backend/scraper/url_prioritizer.py:124</code>）。这样 <code>?locationNum=11</code> 与 <code>?locationNum=10</code> 被认作同一页面，避免同一篇文章因为分页参数重复抓取。注释记录了动机：候选池放大到 60 条之后，这类重复显著增多。紧接着是黑名单剔除，判据是 <code>dqc.is_network_blocked(domain)</code>（<code>backend/scraper/url_prioritizer.py:130</code>）。</p>
+<p>这个函数同时匹配精确域名与子域后缀，实现见 <code>backend/scraper/domain_quality.py:348</code>。域名分 <code>d_s</code> 也在这里取到（<code>backend/scraper/url_prioritizer.py:133</code>），黑名单域的分会是 0.0（<code>backend/scraper/domain_quality.py:314</code>），即使不剔除也进不了最终名单。</p>
+<h2 id="4-五路信号与加权">4. 五路信号与加权</h2>
+<p>打分只有一行（<code>backend/scraper/url_prioritizer.py:138</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">total </span><span style="color:#D73A49">=</span><span style="color:#24292E"> d_s </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.30</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> u_s </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.10</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> t_s </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.10</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> s_s </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.30</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> site_s </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.20</span></span></code></pre>
+<p>五路信号的取值范围与含义：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>信号</th><th>来源函数</th><th>取值范围</th><th>权重</th></tr></thead><tbody><tr><td>域名质量 <code>d_s</code></td><td><code>dqc.score()</code></td><td>0.0 至 1.0</td><td>0.30</td></tr><tr><td>URL 结构 <code>u_s</code></td><td><code>_url_structure_score()</code></td><td>0.2 或 1.0</td><td>0.10</td></tr><tr><td>标题 <code>t_s</code></td><td><code>_title_score()</code></td><td>0.1 至 1.0</td><td>0.10</td></tr><tr><td>相关性 <code>s_s</code></td><td><code>_snippet_relevance()</code></td><td>0.0 至 1.0</td><td>0.30</td></tr><tr><td>白名单 <code>site_s</code></td><td><code>_site_quality()</code></td><td>0.5 或 1.0</td><td>0.20</td></tr></tbody></table>
+<p>三路辅助信号各自有明确判据：结构分命中低质路径模式给 0.2（<code>backend/scraper/url_prioritizer.py:74</code>）；标题分为空 0.3、命中「404 / 登录 / 验证码」等关键词 0.1、全大写且长度超过 10 为 0.2、长度不超过 5 为 0.4、其余 1.0（<code>backend/scraper/url_prioritizer.py:81</code>）；相关性分是查询词在摘要中的命中比例（<code>backend/scraper/url_prioritizer.py:95</code>）。</p>
+<p>域名分与相关性分合计占 0.60 权重，说明排序主要由「这个站靠不靠得住」和「摘要里有没有搜索词」决定。白名单信号只值 0.20（取值 0.5 与 1.0 之间差 0.1），单靠它压不住高域名分的低质站，所以后面还需要一道分层取选。</p>
+<h2 id="5-相关性门槛把同名异义挡在评选之外">5. 相关性门槛把同名异义挡在评选之外</h2>
+<p>当 <code>query</code> 非空时，摘要与查询词零重叠的候选不参与排序（<code>backend/scraper/url_prioritizer.py:149</code>）。判定用的是 <code>s_s > 0.0</code>，也就是至少命中一个查询词。门槛只在存在相关候选时生效，全部候选都零重叠时放宽，保证不空手而归（<code>backend/scraper/url_prioritizer.py:150</code>）。</p>
+<p>注释给出了这条规则的实证来源：多义词的搜索结果里，摘要不含搜索词的页面多是同名异概念，白名单硬优先会让它们照样入选。门槛挡的是这类错配，而不是低质站——低质站的问题由域名分与黑名单处理。</p>
+<h2 id="6-白名单分层取选">6. 白名单分层取选</h2>
+<p>排序之后选出名单的方式是分两层（<code>backend/scraper/url_prioritizer.py:162</code>）：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["按总分降序的候选"] --> B["拆成白名单与非白名单两组"]
+  B --> C["白名单组按分数取"]
+  C --> D{"已取满 top_n?"}
+  D -->|"是"| E["结束"]
+  D -->|"否"| F["非白名单组按分数补位"]
+  F --> G{"分数低于 min_score?"}
+  G -->|"是"| E
+  G -->|"否"| H["加入名单 继续补位"]
+  H --> D</pre></div>
+<p>白名单组低于 <code>min_score</code> 的条目直接跳过（<code>backend/scraper/url_prioritizer.py:166</code>），非白名单组一旦遇到低于阈值的条就停止补位（<code>backend/scraper/url_prioritizer.py:174</code>）——因为列表已按分数降序，后面的只会更低。两组都受 <code>top_n</code> 上限约束，最终返回的条数不会超过 5。</p>
+<h2 id="7-评分明细日志的读法">7. 评分明细日志的读法</h2>
+<p>取选阶段会为每条入选链接打印一行明细（<code>backend/scraper/url_prioritizer.py:181</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>1. https://example.com/a  score=0.742 [白名单] (d=1.00 site=1.0 title=1.00 snippet=0.50 struct=1.00)</span></span></code></pre>
+<p>排查低质 URL 入选时按这个顺序看：先看 <code>site</code> 是否为 1.0（白名单是否误入），再看 <code>snippet</code> 是否接近 0（相关性门槛有没有生效），最后看 <code>d</code>（域名质量分是否来自自动拉黑前的历史数据）。减法阶段的汇总日志（<code>backend/scraper/url_prioritizer.py:141</code>）能回答「多少条被结构排除、多少条被去重、多少条被黑名单拦下」，这四项计数与候选总数对不上时，问题通常出在候选池本身。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<ul>
+<li>把 <code>min_score</code> 当成硬门槛。白名单组是「跳过低分条」，非白名单组是「遇到低分条即停止」，两者语义不同。</li>
+<li>以为相关性门槛总会生效。全部候选都零重叠时它被放宽，这时返回的仍是白名单优先的结果。</li>
+<li>用 <code>max_results</code> 控制抓取条数。抓取名单长度由 <code>top_n</code> 决定，而 <code>top_n</code> 读的是 <code>DOMAIN_QUALITY_TOP_URLS</code>。</li>
+<li>忘记 path 去重会剥离查询串。带不同查询参数的同一页面只保留第一条。</li>
+<li>在 <code>select_top()</code> 里期望得到黑名单域的分数。黑名单域的域名分是 0.0，且在打分前就被剔除。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>三段式筛选</td><td>减法（排除、去重、拉黑）、打分、白名单分层取选</td></tr><tr><td>五路信号</td><td>域名质量 0.30、相关性 0.30、白名单 0.20、结构 0.10、标题 0.10</td></tr><tr><td>相关性门槛</td><td>摘要与查询词零重叠的候选不参与排序，全零时放宽</td></tr><tr><td>分层取选</td><td>白名单先取满 <code>top_n</code>，非白名单按分数补位</td></tr><tr><td><code>top_n</code> 来源</td><td><code>DOMAIN_QUALITY_TOP_URLS</code>，默认 5</td></tr><tr><td>可核对性</td><td>减法计数、门槛丢弃数、逐条评分明细三处日志</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>评分方式</td><td>纯启发式加权</td><td>零模型成本，可解释</td><td>权重需要按实证调整</td></tr><tr><td>高质站优先</td><td>分层取选</td><td>白名单不会被高域名分的低质站挤掉</td><td>非白名单只能补位</td></tr><tr><td>相关性门槛</td><td>全零时放宽</td><td>不空手而归</td><td>多义词场景仍可能选错</td></tr><tr><td>路径去重</td><td>剥离查询串</td><td>省抓取配额</td><td>少数按参数区分的页面被合并</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li><code>d_s=0.5</code>、<code>u_s=1.0</code>、<code>t_s=1.0</code>、<code>s_s=0.5</code>、<code>site_s=0.5</code> 时总分是多少？</li>
+<li>一个候选同时命中 <code>/product/</code> 与 <code>/page/</code> 两个模式，它会出局还是只被扣分？说明依据。</li>
+<li><code>query</code> 为空时 <code>select_top()</code> 的行为与传查询词时差在哪一步？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>当前白名单信号的权重是 0.20。设计一组实验，判断把它提高到 0.30 是否会让低质站入选率下降，并写出需要记录的指标。</li>
+<li><code>snippet</code> 相关性只做词面重叠，同义词与英文缩写都算零重叠。给出一个不引入模型的改进方案，并说明它对相关性门槛的影响。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>backend/scraper/url_prioritizer.py</code></td><td><code>select_top</code> 与五路信号实现</td></tr><tr><td><code>backend/scraper/domain_quality.py</code></td><td>域名质量分与黑名单判据</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td><code>select_top</code> 的调用点</td></tr><tr><td><code>backend/config.py</code></td><td><code>DOMAIN_QUALITY_TOP_URLS</code> 等阈值</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-域名质量分与自动拉黑"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-域名质量分与自动拉黑</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/25-搜索聚合/02-混合与回退策略/02-域名质量分与自动拉黑.md</span></div><div class="dfile__body"><h1 id="域名质量分与自动拉黑">域名质量分与自动拉黑</h1>
+<p>前一篇的排序依赖一个叫 <code>d_s</code> 的输入，它来自 <code>backend/scraper/domain_quality.py</code> 的单例缓存 <code>DomainQualityCache</code>。这个模块记录每一次抓取的成功与失败，算出每个域名的质量分，并在连续失败达到阈值时把域名拉黑一段时间。</p>
+<p>它同时维护一张静态低质域表，因为有些站点从不「失败」——请求成功、返回 200，但正文只有几百字节的导航与广告。质量分在两条路径上被消费：<code>select_top()</code> 用它排序（<code>backend/scraper/url_prioritizer.py:133</code>），博查客户端用自动拉黑列表拼 <code>exclude</code> 参数（<code>backend/search/bocha.py:89</code>）。两条路径读的是同一份状态，因此一次抓取失败会同时影响排序与下一轮搜索的候选池。</p>
+<h2 id="1-域名分的输入与公式">1. 域名分的输入与公式</h2>
+<p><code>score()</code>（<code>backend/scraper/domain_quality.py:308</code>）先做静态黑名单检查：精确命中或子域后缀命中直接返回 0.0（<code>backend/scraper/domain_quality.py:314</code>）。</p>
+<p>随后查内存缓存，命中且未过期就返回缓存值（<code>backend/scraper/domain_quality.py:322</code>），缓存有效期 <code>_cache_ttl</code> 是 5 秒（<code>backend/scraper/domain_quality.py:99</code>）。没有缓存时查数据库，按四种情况给出分数：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>判据</th><th>分数</th></tr></thead><tbody><tr><td>无记录</td><td>查询结果为空</td><td>0.5</td></tr><tr><td>熔断中</td><td><code>blocked_until</code> 大于当前时间</td><td>0.0</td></tr><tr><td>样本不足</td><td><code>fetch_count</code> 小于 <code>DOMAIN_QUALITY_MIN_SAMPLES</code>（3）</td><td>0.55</td></tr><tr><td>有足够样本</td><td>其余情况</td><td>见下方公式</td></tr></tbody></table>
+<p>有足够样本时的公式（<code>backend/scraper/domain_quality.py:342</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">total </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(row[</span><span style="color:#032F62">"fetch_count"</span><span style="color:#24292E">], </span><span style="color:#005CC5">1</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">success_rate </span><span style="color:#D73A49">=</span><span style="color:#24292E"> row[</span><span style="color:#032F62">"success_count"</span><span style="color:#24292E">] </span><span style="color:#D73A49">/</span><span style="color:#24292E"> total</span></span>
+<span class="line"><span style="color:#24292E">avg_len </span><span style="color:#D73A49">=</span><span style="color:#24292E"> row[</span><span style="color:#032F62">"total_content_len"</span><span style="color:#24292E">] </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(row[</span><span style="color:#032F62">"success_count"</span><span style="color:#24292E">], </span><span style="color:#005CC5">1</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">content_score </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> min</span><span style="color:#24292E">(avg_len </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 500</span><span style="color:#24292E">, </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">fail_penalty </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> min</span><span style="color:#24292E">(row[</span><span style="color:#032F62">"consecutive_fails"</span><span style="color:#24292E">] </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.15</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.5</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">s </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(success_rate </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.6</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> content_score </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 0.4</span><span style="color:#D73A49"> -</span><span style="color:#24292E"> fail_penalty, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">)</span></span></code></pre>
+<p>成功率占 0.6，正文长度占 0.4，平均正文长度按 500 字符封顶；连续失败每次扣 0.15，最多扣 0.5。样本不足时给 0.55，比无记录的 0.5 略高，含义是「还没验证过，但愿意先试一次」。</p>
+<h2 id="2-静态低质域与子域后缀匹配">2. 静态低质域与子域后缀匹配</h2>
+<p>静态表 <code>_LOW_QUALITY_DOMAINS</code>（<code>backend/scraper/domain_quality.py:31</code>）收录的是「抓取成功但内容无价值」或高频失败的站点，注释写明它们与自动拉黑互补：这些域从不失败，失败计数机制对它们是盲区。</p>
+<p>表内容按注释给出的理由逐条标注，例如付费文档预览站、文档分享站、专利采集站。匹配方式在 <code>is_network_blocked()</code>（<code>backend/scraper/domain_quality.py:348</code>）与 <code>score()</code> 中一致：精确相等或子域后缀。</p>
+<p>注释记录了一次历史问题——早期只做精确匹配，导致 <code>max.book118.com</code>、<code>doc.wendoc.com</code> 这类子域从未被拦住，数据库里有 35 次抓取记录作为佐证。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["score(url)"] --> B{"静态黑名单命中?"}
+  B -->|"精确或子域后缀"| Z["返回 0.0"]
+  B -->|"否"| C{"缓存未过期?"}
+  C -->|"是"| D["返回缓存值"]
+  C -->|"否"| E["查 domain_quality 表"]
+  E --> F{"有无记录?"}
+  F -->|"无"| G["0.5"]
+  F -->|"熔断中"| H["0.0"]
+  F -->|"样本不足"| I["0.55"]
+  F -->|"样本足够"| J["成功率*0.6 + 长度分*0.4 - 失败惩罚"]
+  G --> K["写入缓存"]
+  I --> K
+  J --> K
+  D --> L["返回分数"]
+  K --> L</pre></div>
+<h2 id="3-成功与失败如何改写分数">3. 成功与失败如何改写分数</h2>
+<p><code>record_success()</code>（<code>backend/scraper/domain_quality.py:102</code>）把 <code>fetch_count</code> 与 <code>success_count</code> 各加一，正文长度累加，把 <code>consecutive_fails</code> 与 <code>blocked_until</code> 清零，最后清掉该域名的缓存条目（<code>backend/scraper/domain_quality.py:128</code>）。</p>
+<p>如果这个域名此前处于熔断状态，日志里会多一条解封记录（<code>backend/scraper/domain_quality.py:130</code>）——一次成功抓取就能解除熔断，这比等满 30 天更符合实际。</p>
+<p><code>record_failure()</code>（<code>backend/scraper/domain_quality.py:233</code>）的核心是连续失败计数（<code>backend/scraper/domain_quality.py:262</code>）：读取旧计数加一，达到阈值 <code>DOMAIN_QUALITY_CONSECUTIVE_FAIL_LIMIT</code>（3 次，<code>backend/config.py:129</code>）时写入 <code>blocked_until = now + DOMAIN_QUALITY_BLOCKED_SECONDS</code>（30 天，<code>backend/config.py:130</code>）。未达阈值时只记录失败，不写熔断时间。</p>
+<h2 id="4-白名单豁免与启动解封">4. 白名单豁免与启动解封</h2>
+<p>白名单 <code>_HIGH_QUALITY_DOMAINS</code>（<code>backend/scraper/domain_quality.py:81</code>）是静态表之外的一份名单，涵盖技术社区与部分人文条目站点，匹配方式同样支持子域后缀（<code>backend/scraper/domain_quality.py:202</code>）。</p>
+<p>它的作用有两处：<code>_site_quality()</code> 用它给出 0.5 与 1.0 的白名单信号（<code>backend/scraper/url_prioritizer.py:58</code>），单例初始化时用它做一次解封。</p>
+<p><code>_unblock_whitelisted()</code>（<code>backend/scraper/domain_quality.py:208</code>）在首次获取单例时执行一次，把处于熔断状态的白名单域名清出熔断。注释解释了这条补丁的必要性：白名单豁免是后加的，之前 <code>blog.csdn.net</code> 与 <code>zhuanlan.zhihu.com</code> 这类子域已被拉黑 30 天；熔断期间不被抓取，就永远收不到成功记录来自动解封，形成死锁。</p>
+<h2 id="5-exclude-配额的分配顺序">5. exclude 配额的分配顺序</h2>
+<p>博查的 <code>exclude</code> 参数最多接受 100 个域名（<code>backend/scraper/domain_quality.py:361</code>）。<code>list_blocked()</code>（<code>backend/scraper/domain_quality.py:358</code>）负责把当前应排除的域名凑成这个列表，顺序是静态低质域在前、自动拉黑按封禁时间倒序补位（<code>backend/scraper/domain_quality.py:370</code>）。</p>
+<p>理由是静态表里的站点才是主要浪费源，配额有限时优先保证它们被排除。调用方每 60 秒刷新一次这份列表（<code>backend/search/bocha.py:31</code>），因此新增的自动拉黑域名最多延迟一分钟进入下一次搜索的排除参数。</p>
+<h2 id="6-单例与缓存">6. 单例与缓存</h2>
+<p><code>get_domain_quality()</code>（<code>backend/scraper/domain_quality.py:389</code>）用双检锁维护进程内单例，首次创建时执行白名单解封。5 秒的分数缓存只覆盖 <code>score()</code>，不覆盖数据库写入；写入路径会主动清缓存（<code>backend/scraper/domain_quality.py:128</code>），所以抓取结束后立刻读到的分数是新值。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant F as WebPageTextFetcher
+  participant D as DomainQualityCache
+  participant DB as domain_quality 表
+  F->>D: record_failure(url)
+  D->>DB: 连续失败计数加一
+  alt 计数达到 3
+    D->>DB: blocked_until = now + 30 天
+  end
+  F->>D: record_success(url, 长度)
+  D->>DB: 成功数加一 失败计数清零 熔断清零
+  D->>D: 清除该域名的分数缓存</pre></div>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>认为样本不足与无记录同分。前者 0.55，后者 0.5。</li>
+<li>以为熔断必须等满 30 天。一次成功抓取就会清零 <code>blocked_until</code>。</li>
+<li>忘记静态黑名单做子域后缀匹配。只按精确域名理解会漏掉子域。</li>
+<li>以为 <code>list_blocked()</code> 返回全部拉黑域名。它按 100 个上限截断，且静态域优先。</li>
+<li>在 <code>score()</code> 之外的地方自行判断黑名单。判据只有 <code>is_network_blocked()</code> 一处，重复实现会与子域规则漂移。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>域名分公式</td><td>成功率 0.6 + 正文长度分 0.4 − 连续失败惩罚</td></tr><tr><td>四种取值</td><td>无记录 0.5、熔断 0.0、样本不足 0.55、样本足够走公式</td></tr><tr><td>静态低质表</td><td>抓取成功但无价值或高频失败的域名，子域后缀匹配</td></tr><tr><td>自动拉黑</td><td>连续失败 3 次写 30 天熔断</td></tr><tr><td>白名单豁免</td><td>初始化时解封误熔断的白名单域名</td></tr><tr><td>配额顺序</td><td>静态域优先，自动拉黑按封禁时间倒序补位，上限 100</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>分数缓存</td><td>5 秒内存缓存</td><td>高频排序不重复查库</td><td>写入后需主动清缓存</td></tr><tr><td>熔断解除</td><td>成功即清零</td><td>恢复及时</td><td>偶发成功会推迟拉黑</td></tr><tr><td>静态表匹配</td><td>精确加子域后缀</td><td>覆盖子域浪费源</td><td>新增站点需要人工维护</td></tr><tr><td>配额分配</td><td>静态域优先</td><td>保证主要浪费源被排除</td><td>新拉黑域名可能排不进去</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>某域名 <code>fetch_count=4</code>、<code>success_count=3</code>、正文总长 900、<code>consecutive_fails=1</code>，算出它的分数。</li>
+<li>域名被拉黑后，下一次抓取成功会写回什么值？指出对应的代码行。</li>
+<li><code>list_blocked(limit=10)</code> 时静态低质域与自动拉黑的相对顺序是什么？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>当前公式里正文长度按 500 字符封顶。设计一组数据说明把上限提高到 1500 会改变哪些站点的排序，并指出需要重新观察的指标。</li>
+<li>白名单解封只在单例创建时执行一次。若进程长期运行且白名单新增域名，给出一个不重启进程的补救方案。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>backend/scraper/domain_quality.py</code></td><td>分数、静态表、自动拉黑与配额</td></tr><tr><td><code>backend/scraper/url_prioritizer.py</code></td><td>消费域名分与黑名单判据</td></tr><tr><td><code>backend/search/bocha.py</code></td><td>拉黑列表进入 exclude 参数</td></tr><tr><td><code>backend/config.py</code></td><td>阈值与常量定义</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-重搜阈值与跨尝试去重"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-重搜阈值与跨尝试去重</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/25-搜索聚合/02-混合与回退策略/03-重搜阈值与跨尝试去重.md</span></div><div class="dfile__body"><h1 id="重搜阈值与跨尝试去重">重搜阈值与跨尝试去重</h1>
+<p>搜索返回 5 条候选不等于拿到 5 份正文。抓取会失败、内容可能过短、域名可能在黑名单里，最后进入卡片生成的「有效来源」往往少于预期。<code>backend/pipeline/pipeline.py</code> 在抓取之后有一个重搜循环，补足到目标条数为止；与此同时，多层去重保证补进来的链接不会与已经处理过的重复。</p>
+<p>去重按数据流顺序分四层：重搜循环内部的 URL 去重、抓取层的短时间窗去重、卡片层的标题与语义查重，以及探索阶段的合并跳过。</p>
+<h2 id="1-目标有效来源数是自适应的">1. 目标有效来源数是自适应的</h2>
+<p>重搜的触发条件是 <code>len(processed) &#x3C; target_sources</code>（<code>backend/pipeline/pipeline.py:624</code>）。目标是三个量的最小值（<code>backend/pipeline/pipeline.py:622</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">early_stop </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> getattr</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.processor, </span><span style="color:#032F62">"early_stop"</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">) </span><span style="color:#D73A49">or</span><span style="color:#005CC5"> 3</span></span>
+<span class="line"><span style="color:#24292E">target_sources </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> min</span><span style="color:#24292E">(early_stop, </span><span style="color:#005CC5">max</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#005CC5">len</span><span style="color:#24292E">(results) </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">))</span></span></code></pre>
+<p><code>early_stop</code> 取自处理器的同名属性，搜索场景里配置为 2（<code>backend/pipeline/factory.py:48</code>）。<code>len(results) - 1</code> 的含义是「允许一个来源失败」：3 条候选要求 2 条有效，5 条要求 4 条，但再与 <code>early_stop=2</code> 取最小后实际要求是 2 条。注释记录了旧逻辑的问题——硬编码 3 在只有 3 条候选时零容错，任何网络抖动都会触发重搜。</p>
+<h2 id="2-重搜次数与重搜量的公式">2. 重搜次数与重搜量的公式</h2>
+<p>重搜最多执行 2 次（<code>backend/pipeline/pipeline.py:620</code>），每次向来源请求的条数随尝试次数增长（<code>backend/pipeline/pipeline.py:635</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">more_results </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.source.search(query, </span><span style="color:#E36209">max_results</span><span style="color:#D73A49">=</span><span style="color:#24292E">max_sources </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> re_search_attempt </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 2</span><span style="color:#24292E">)</span></span></code></pre>
+<p>第一次尝试请求 <code>2 × max_sources + 2</code> 条，第二次再加 2 条。注释说明这样写是为了避免固定大数值导致失败后来源滚雪球式增长、把卡片生成的输入撑得过长。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["抓取完成 processed"] --> B{"len(processed) &#x3C; target_sources?"}
+  B -->|"否"| Z["进入卡片生成"]
+  B -->|"是"| C{"re_search_attempt &#x3C; 2?"}
+  C -->|"否"| Z
+  C -->|"是"| D["按 max_sources*2+attempt*2 重搜"]
+  D --> E["过滤 seen_urls 与黑名单"]
+  E --> F{"有新的 URL?"}
+  F -->|"是"| G["抓取新 URL 并并入 processed"]
+  F -->|"否"| H["提示全部覆盖或被屏蔽"]
+  G --> B
+  H --> B</pre></div>
+<p>重搜量与目标条数没有直接关系：目标说的是「还需要几条有效来源」，重搜量说的是「再去问来源要多少条候选」，后者只与 <code>max_sources</code> 和尝试次数有关。</p>
+<h2 id="3-跨尝试去重与黑名单二次过滤">3. 跨尝试去重与黑名单二次过滤</h2>
+<p>进入重搜之前先把已处理的 URL 收进集合（<code>backend/pipeline/pipeline.py:618</code>），补进来的候选要同时满足两条：不在 <code>seen_urls</code> 里，且未被域名黑名单拦截（<code>backend/pipeline/pipeline.py:636</code>）。</p>
+<p>集合在每次重搜后用全部返回结果更新（<code>backend/pipeline/pipeline.py:641</code>），这样同一批结果不会在后续尝试里被重复考虑。黑名单在重搜路径上是第二次过滤：第一次发生在 <code>select_top()</code> 内部（<code>backend/scraper/url_prioritizer.py:130</code>），但重搜调用的是来源客户端的 <code>search()</code>，没有经过 <code>select_top()</code>。两处的判据相同，都是 <code>is_network_blocked()</code>。</p>
+<h2 id="4-抓取层的-10-分钟窗口">4. 抓取层的 10 分钟窗口</h2>
+<p><code>WebPageTextFetcher.fetch()</code> 在发起抓取前查一次原始页面存储（<code>backend/pipeline/defaults.py:130</code>）：如果同一 URL 在 600 秒内抓过，直接返回 <code>None</code>，日志记一条 <code>recently fetched</code>（<code>backend/pipeline/defaults.py:139</code>）。</p>
+<p>这个窗口针对的是并发探索分支——多条分支同时展开时很容易搜到同一页面，重复抓取既慢又浪费域名配额。窗口的判据写在代码里而不是配置里，取值是字面量 600。时间戳读自 <code>fetched_at</code> 字段，缺失或解析失败时不阻断抓取（<code>backend/pipeline/defaults.py:142</code>）。</p>
+<h2 id="5-抓取成功与失败的判定线">5. 抓取成功与失败的判定线</h2>
+<p>抓取抛异常记失败（<code>backend/pipeline/defaults.py:149</code>），正文长度小于 1000 字符同样记失败并返回 <code>None</code>（<code>backend/pipeline/defaults.py:151</code>），成功路径才调用 <code>record_success()</code>（<code>backend/pipeline/defaults.py:158</code>）。这条长度线解释了为什么「200 响应但只有导航」的站点会被自动拉黑：这类站点的请求是成功的，问题出在内容不足。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant P as Pipeline
+  participant F as WebPageTextFetcher
+  participant D as RawPageStore
+  participant Q as DomainQualityCache
+  P->>F: fetch(source)
+  F->>D: get(url) 查 10 分钟窗口
+  alt 窗口内已抓过
+    D-->>F: 命中
+    F-->>P: None 跳过
+  else 需要抓取
+    F->>F: web_fetcher.fetch(url)
+    alt 抛异常或正文不足 1000 字符
+      F->>Q: record_failure(url)
+      F-->>P: None
+    else 抓取成功
+      F->>Q: record_success(url, 长度)
+      F-->>P: FetchResult
+    end
+  end</pre></div>
+<h2 id="6-卡片层的精确与语义去重">6. 卡片层的精确与语义去重</h2>
+<p>保存之前有两道查重。精确匹配按标题查库（<code>backend/storage/sqlite_card_store.py:390</code>），语义查重复用向量检索、阈值更高（<code>backend/storage/sqlite_card_store.py:399</code>），方法是相似度、默认 0.85。</p>
+<p>探索主题的合并判据走另一套口径：<code>backend/pipeline/pipeline.py:398</code> 取常量 <code>MERGE_DISTANCE_THRESHOLD</code>（<code>backend/pipeline/pipeline.py:35</code>，值为 0.40）作为向量检索的阈值（<code>backend/pipeline/pipeline.py:422</code>）。</p>
+<p>一个是相似度下限，一个是距离上限，比较时不要混用。持久化阶段跳过多少张由持久化器的 <code>last_skipped</code> 决定（<code>backend/pipeline/pipeline.py:688</code>），有跳过时向前端推一条「去重: 跳过 N 张重复卡片」的进度（<code>backend/pipeline/pipeline.py:693</code>）。</p>
+<h2 id="7-探索阶段的合并跳过">7. 探索阶段的合并跳过</h2>
+<p><code>try_keyword_merge()</code>（<code>backend/pipeline/pipeline.py:406</code>）对每个探索主题先做向量检索，命中已有卡片就跳过建卡并累计 <code>merged_count</code>（<code>backend/pipeline/pipeline.py:448</code>）；标题完全相同的主题走 <code>title_skipped</code> 计数（<code>backend/pipeline/pipeline.py:445</code>）。</p>
+<p>两者汇总成一条进度消息（<code>backend/pipeline/pipeline.py:457</code>）。这一层去重发生在卡片已经存在于知识库之后，目标是防止同一主题在探索中被反复建卡。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<ul>
+<li>以为目标来源数固定是 3。它由 <code>early_stop</code> 与候选数共同决定，当前实际值是 2。</li>
+<li>以为重搜也走 <code>select_top()</code>。重搜直接调用 <code>source.search()</code>，只做 URL 去重与黑名单过滤。</li>
+<li>忘记重搜量与目标条数无关。前者按 <code>max_sources</code> 放大，后者按候选数与 <code>early_stop</code> 计算。</li>
+<li>把正文过短当作成功。小于 1000 字符会记失败，连续三次就进入 30 天熔断。</li>
+<li>以为 10 分钟窗口是配置项。它是 <code>defaults.py</code> 里的字面量 600。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>目标来源数</td><td><code>min(early_stop, max(1, 候选数 - 1))</code>，当前为 2</td></tr><tr><td>重搜上限</td><td>最多 2 次</td></tr><tr><td>重搜量</td><td><code>max_sources × 2 + 尝试序号 × 2</code></td></tr><tr><td>跨尝试去重</td><td><code>seen_urls</code> 集合，重搜后按全部返回结果更新</td></tr><tr><td>抓取窗口</td><td>同一 URL 600 秒内不重复抓取</td></tr><tr><td>卡片去重</td><td>标题精确匹配与向量语义查重，阈值 0.85</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>目标条数</td><td>按候选数自适应</td><td>小候选池不再频繁重搜</td><td>实际目标随场景变化</td></tr><tr><td>重搜量</td><td>随尝试次数小幅放大</td><td>输入长度可控</td><td>候选不足时补不满</td></tr><tr><td>短窗去重</td><td>600 秒内存判据</td><td>并发分支不重复抓取</td><td>内容更新快的页面被跳过</td></tr><tr><td>语义查重</td><td>复用向量检索且阈值更高</td><td>避免近似主题重复建卡</td><td>阈值偏高会漏掉真实重复</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li><code>max_sources=2</code> 时，两次重搜各请求多少条候选？</li>
+<li>候选数 4、<code>early_stop=2</code> 时目标来源数是多少？写出计算过程。</li>
+<li>重搜返回的 10 条全部已在 <code>seen_urls</code> 中，循环会怎么走？说明依据。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>重搜路径不经过 <code>select_top()</code>，补进来的链接只做黑名单过滤。给出一个把排序也应用到重搜结果的方案，并说明对目标条数判定的影响。</li>
+<li>10 分钟窗口写死在 <code>defaults.py</code>。设计一个把它提为配置项的改造，并说明需要同步修改哪些调用点。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>backend/pipeline/pipeline.py</code></td><td>重搜循环、跨尝试去重与卡片去重统计</td></tr><tr><td><code>backend/pipeline/defaults.py</code></td><td>抓取窗口、长度线与成败记录</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>标题查重与语义查重</td></tr><tr><td><code>backend/scraper/url_prioritizer.py</code></td><td>首次黑名单过滤</td></tr><tr><td><code>backend/config.py</code></td><td><code>MERGE_DISTANCE_THRESHOLD</code> 等常量</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-多源融合与来源配额"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-多源融合与来源配额</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/25-搜索聚合/02-混合与回退策略/04-多源融合与来源配额.md</span></div><div class="dfile__body"><h1 id="多源融合与来源配额">多源融合与来源配额</h1>
+<p>抓取名单收敛到 5 条以内之后，最终进入模型的通常只有 2 条。配额在这里承担两个职责：限制单张卡片的输入长度，降低模型排队压力；把「多来源」压成「一张卡片」，避免同一概念在知识库里出现多份近乎重复的条目。</p>
+<p>融合本身由提示词完成，规则写在 <code>backend/ai/openai_provider.py</code> 的两个提示词模板里。配额与融合规则是这里的主题，评分与筛选在前两篇，重搜与去重在前一篇。</p>
+<h2 id="1-来源与关键词的默认配额">1. 来源与关键词的默认配额</h2>
+<p><code>PIPELINE_DEFAULTS</code> 里与配额相关的常量有四条：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>常量</th><th>定义行</th><th>值</th><th>含义</th></tr></thead><tbody><tr><td><code>max_sources</code></td><td><code>backend/config.py:98</code></td><td>2</td><td>单次搜索最大来源数</td></tr><tr><td><code>max_topics</code></td><td><code>backend/config.py:99</code></td><td>5</td><td>最大联想关键词数</td></tr><tr><td><code>expand_max_sources</code></td><td><code>backend/config.py:102</code></td><td>2</td><td>扩展搜索最大来源数</td></tr><tr><td><code>expand_max_topics</code></td><td><code>backend/config.py:103</code></td><td>5</td><td>扩展搜索最大关键词数</td></tr></tbody></table>
+<p><code>max_sources</code> 的注释记录了一次下调：从 5 降到 2，理由是「一次卡片 2 个来源即可，大幅降低 LLM 排队压力」（<code>backend/config.py:98</code>）。</p>
+<p><code>expand_max_sources</code> 的注释说明它与 <code>max_sources</code> 保持一致，控制单卡输入量与耗时（<code>backend/config.py:102</code>）。另有两个重搜相关的常量没有读者：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>常量</th><th>定义行</th><th>值</th><th>读取位置</th></tr></thead><tbody><tr><td><code>re_search_threshold</code></td><td><code>backend/config.py:104</code></td><td>3</td><td>无</td></tr><tr><td><code>re_search_max_results</code></td><td><code>backend/config.py:105</code></td><td>5</td><td>无</td></tr></tbody></table>
+<p>流水线里的重搜逻辑并不读这两条：目标条数按候选数自适应计算，重搜次数上限写成字面量 2（<code>backend/pipeline/pipeline.py:620</code>），重搜量按 <code>max_sources</code> 推导（<code>backend/pipeline/pipeline.py:635</code>）。修改这两个常量不会改变运行时行为，这一点与 25-搜索聚合/01-多引擎适配 里记录的百度配置常量属于同一类问题。</p>
+<h2 id="2-调用侧还有一套不同的默认值">2. 调用侧还有一套不同的默认值</h2>
+<p><code>create_pipeline()</code> 的关键词数默认值是 7（<code>backend/pipeline/factory.py:35</code>），流水线 API 的文档同样写默认 7（<code>backend/pipeline/api.py:226</code>），而 <code>PIPELINE_DEFAULTS.max_topics</code> 是 5。两条路径各自持有默认值，工厂的参数会直接覆盖配置常量，因此以工厂与 API 的签名为准更贴近实际行为。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["搜索候选 select_top 后的名单"] --> B["抓取与摘要 有效来源数"]
+  B --> C{"有效来源不足?"}
+  C -->|"是"| D["重搜补充 最多 2 次"]
+  C -->|"否"| E["送入融合提示词"]
+  D --> E
+  E --> F["来源正文各截断 30000 字符"]
+  F --> G["融合提示词 不区分来源"]
+  G --> H{"是否同一主题?"}
+  H -->|"是"| I["生成 1 张卡片"]
+  H -->|"否"| J["按子主题各生成 1 张 最多 3 张"]
+  I --> K["标题与语义去重后保存"]
+  J --> K</pre></div>
+<h2 id="3-融合提示词的写法">3. 融合提示词的写法</h2>
+<p>单卡融合模板从 <code>backend/ai/openai_provider.py:569</code> 开始，核心原则有四条：任务是综合多来源形成连贯文章（<code>backend/ai/openai_provider.py:572</code>）；不区分也不提及来源，读起来像百科条目（<code>backend/ai/openai_provider.py:573</code>）；保留关键数据、公式、人名、机构名与时间节点（<code>backend/ai/openai_provider.py:574</code>）；把讨论同一概念的内容融合在一起、消除冗余（<code>backend/ai/openai_provider.py:575</code>）。</p>
+<p>具体规则里还有三条与配额直接相关：正文中禁止出现「来源0」「来源1」「根据某来源」等字样（<code>backend/ai/openai_provider.py:582</code>）；标题必须是独立领域概念的名词性短语，且与搜索关键词一致或为其直接子主题（<code>backend/ai/openai_provider.py:580</code>）；数学公式统一使用 <code>$...$</code> 或 <code>$$...$$</code>（<code>backend/ai/openai_provider.py:585</code>）。</p>
+<p>格式上禁止「概述 / 核心内容 / 关键细节」三段式模板（<code>backend/ai/openai_provider.py:577</code>）。每条来源的正文在拼进提示词前统一截断到 30000 字符（<code>backend/ai/openai_provider.py:562</code>），并且整段来源文本会被包裹成单一不可信数据边界（<code>backend/ai/openai_provider.py:566</code>）。配额 2 与截断 30000 共同定义了提示词的上限规模。</p>
+<h2 id="4-同主题合并与多卡拆分">4. 同主题合并与多卡拆分</h2>
+<p>融合结果还带一个自评字段：提示词要求模型输出 §confidence§（0.0 至 1.0），并给出 1.0、0.8、0.6 三档的口径（§backend/ai/openai_provider.py:587§）。</p>
+<p>多来源高度一致时取高值，来源充分但有少量推断时取中值——这个自评不参与排序，但可以在卡片质量评估里作为参考。多来源模板（<code>backend/ai/openai_provider.py:689</code>）在融合之前先做一次判断：所有来源讲同一主题时生成 1 张卡片并融合全部信息（<code>backend/ai/openai_provider.py:692</code>）；来源横跨多个子主题时，为每个子主题各生成 1 张独立卡片，最多 3 张（<code>backend/ai/openai_provider.py:693</code>）。两张卡的拆分上限是 3，与 <code>max_topics</code> 的配额相互独立。</p>
+<h2 id="5-探索层级的四个键与两套命名">5. 探索层级的四个键与两套命名</h2>
+<p>主题提取的提示词按探索层级分支，字典的四个键是 <code>default</code>、<code>downstream</code>、<code>peer</code>、<code>upstream</code>（<code>backend/ai/openai_provider.py:350</code> 至 <code>:367</code>），取不到时回退到 <code>default</code>（<code>backend/ai/openai_provider.py:370</code>）。四个层级描述的是主题与当前内容的关系：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>键</th><th>提取方向</th><th>示例</th></tr></thead><tbody><tr><td><code>default</code></td><td>足够具体的同层概念</td><td>「法拉利」而非「汽车品牌」</td></tr><tr><td><code>downstream</code></td><td>更具体的术语、事件与技术点</td><td>内容里的专有名词</td></tr><tr><td><code>peer</code></td><td>同一抽象层次的可比对象</td><td>品牌之间的并列</td></tr><tr><td><code>upstream</code></td><td>更高层次的上位概念</td><td>由「保时捷」到「汽车」</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["extract_related_topics(search_level)"] --> B{"键名匹配?"}
+  B -->|"default"| C["足够具体的同层概念"]
+  B -->|"downstream"| D["更具体的术语与事件"]
+  B -->|"peer"| E["同层可比对象"]
+  B -->|"upstream"| F["更高层次的上位概念"]
+  B -->|"其他任何值"| G["回退到 default"]
+  C --> H["按 max_topics 截断"]
+  D --> H
+  E --> H
+  F --> H
+  G --> H
+  H --> I["返回主题列表"]</pre></div>
+<p>返回值在客户端侧还会再截一次：提取出的主题按 <code>max_topics</code> 截断后才交给流水线（<code>backend/ai/openai_provider.py:400</code>）。</p>
+<p>配额与截断因此有两道——提示词要求不超出主题数，客户端再按参数硬截。函数签名的文档字符串写的是 <code>default/downstream/peer/upstream</code>（<code>backend/ai/openai_provider.py:387</code>），而流水线 API 的参数说明写的是 <code>default/lower/sibling/parent</code>（<code>backend/pipeline/api.py:96</code>）。</p>
+<p>两套名字指向同一个参数，实际生效的是提示词字典里的四个键；按 <code>lower</code> 或 <code>parent</code> 传入只会落到 <code>default</code> 分支。这是一处文档与实现不一致，使用该参数时需要以 <code>openai_provider.py</code> 的键名为准。</p>
+<h2 id="6-易错点">6. 易错点</h2>
+<ul>
+<li>修改 <code>re_search_threshold</code> 或 <code>re_search_max_results</code> 期待生效。两者没有读取点。</li>
+<li>用 <code>PIPELINE_DEFAULTS.max_topics</code> 推断接口默认值。工厂与 API 的默认是 7。</li>
+<li>把 <code>max_sources</code> 与 <code>top_n</code> 当成同一个量。前者是搜索请求的来源上限，后者是抓取名单长度。</li>
+<li>传入 <code>search_level="sibling"</code> 期待同级提取。字典里没有这个键，会回退到 <code>default</code>。</li>
+<li>以为来源正文不截断。每条正文在入模前截到 30000 字符。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>来源配额</td><td><code>max_sources</code> 与 <code>expand_max_sources</code> 均为 2</td></tr><tr><td>关键词配额</td><td>配置常量 5，工厂与 API 默认 7</td></tr><tr><td>无读者常量</td><td><code>re_search_threshold</code> 与 <code>re_search_max_results</code></td></tr><tr><td>融合规则</td><td>不区分来源、保留关键数据、消除冗余、禁止来源字样</td></tr><tr><td>输出模式</td><td>同主题 1 张，多子主题最多 3 张</td></tr><tr><td>层级键名</td><td><code>default/downstream/peer/upstream</code>，其余回退 <code>default</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>来源数下调</td><td>5 降到 2</td><td>模型排队压力小</td><td>单卡信息面收窄</td></tr><tr><td>正文截断</td><td>每条 30000 字符</td><td>输入规模可控</td><td>超长页面尾部信息丢失</td></tr><tr><td>多子主题拆分</td><td>最多 3 张</td><td>避免主题混杂</td><td>卡片数量增加</td></tr><tr><td>层级命名</td><td>提示词键名与 API 文档不同</td><td>实现稳定</td><td>调用方易传错</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>单次搜索最多送入融合提示词的来源条数是多少？指出对应的配置行。</li>
+<li><code>search_level="parent"</code> 时会走到哪个分支？说明判据。</li>
+<li>多来源模板在什么条件下只生成 1 张卡片？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给出一个把 <code>re_search_threshold</code> 与 <code>re_search_max_results</code> 接进重搜逻辑的方案，说明需要调整的计算式。</li>
+<li>来源正文按 30000 字符截断，多来源拼接后仍在模型窗口内。设计一个按总长度动态分配配额的方案，并说明对卡片质量的可能影响。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>backend/ai/openai_provider.py</code></td><td>融合提示词、多卡拆分与层级字典</td></tr><tr><td><code>backend/config.py</code></td><td>配额常量与无读者常量</td></tr><tr><td><code>backend/pipeline/factory.py</code></td><td>调用侧的默认参数</td></tr><tr><td><code>backend/pipeline/api.py</code></td><td>接口文档与层级命名</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td>重搜逻辑与目标条数计算</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/25-%E6%90%9C%E7%B4%A2%E8%81%9A%E5%90%88/01-%E5%A4%9A%E5%BC%95%E6%93%8E%E9%80%82%E9%85%8D/"><span class="k">← 上一篇</span><span class="t">多引擎适配</span><span class="d">搜索聚合 · 4 个文件</span></a><a class="next" href="/tc63/docs/25-%E6%90%9C%E7%B4%A2%E8%81%9A%E5%90%88/03-%E4%B8%93%E7%94%A8%E6%95%B0%E6%8D%AE%E6%BA%90/"><span class="k">下一篇 →</span><span class="t">专用数据源</span><span class="d">搜索聚合 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

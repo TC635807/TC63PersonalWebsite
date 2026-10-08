@@ -1,0 +1,2830 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>裁判系统协议 · 串口通信与协议 · 王宇翔</title><meta name="description" content="裁判系统单向链路的 USART6 与 DMA 接收配置、两块板的接线差异，以及 0xA5 帧的逐字段偏移与两处校验的覆盖范围"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/05-%E8%A3%81%E5%88%A4%E7%B3%BB%E7%BB%9F%E5%8D%8F%E8%AE%AE/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="裁判系统协议 · 串口通信与协议 · 王宇翔"><meta property="og:description" content="裁判系统单向链路的 USART6 与 DMA 接收配置、两块板的接线差异，以及 0xA5 帧的逐字段偏移与两处校验的覆盖范围"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/05-%E8%A3%81%E5%88%A4%E7%B3%BB%E7%BB%9F%E5%8D%8F%E8%AE%AE/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/">串口通信与协议</a><span class="sep" aria-hidden="true">/</span><span class="now">裁判系统协议</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>裁判系统协议</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>裁判系统链路与帧格式</span></a><ul class="toc__heads"><li><a href="#usart6-的物理参数与-dma-资源" data-depth="2" data-heading-j="0">USART6 的物理参数与 DMA 资源</a></li><li><a href="#两块板的接线差异" data-depth="2" data-heading-j="1">两块板的接线差异</a></li><li><a href="#0xa5-帧的逐字段偏移" data-depth="2" data-heading-j="2">0xA5 帧的逐字段偏移</a></li><li><a href="#两处校验的覆盖范围" data-depth="2" data-heading-j="3">两处校验的覆盖范围</a></li><li><a href="#帧头结构体为什么没有被使用" data-depth="2" data-heading-j="4">帧头结构体为什么没有被使用</a></li><li><a href="#接收缓冲与回调时机" data-depth="2" data-heading-j="5">接收缓冲与回调时机</a></li><li><a href="#链路层面的易错点" data-depth="2" data-heading-j="6">链路层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>命令码与数据段</span></a><ul class="toc__heads"><li><a href="#cmd_id-是数据段布局的唯一分派依据" data-depth="2" data-heading-j="0">cmd_id 是数据段布局的唯一分派依据</a></li><li><a href="#比赛信息与场地事件命令" data-depth="2" data-heading-j="1">比赛信息与场地事件命令</a></li><li><a href="#机器人信息命令" data-depth="2" data-heading-j="2">机器人信息命令</a></li><li><a href="#交互雷达与敌方命令" data-depth="2" data-heading-j="3">交互、雷达与敌方命令</a></li><li><a href="#六个已解析命令的数据段偏移" data-depth="2" data-heading-j="4">六个已解析命令的数据段偏移</a></li><li><a href="#0x0001-game_status_t11-字节referee_decodeh86-94" data-depth="3" data-heading-j="5">0x0001 game_status_t（11 字节，referee_decode.h:86-94）</a></li><li><a href="#0x0201-robot_status_t13-字节referee_decodeh151-165" data-depth="3" data-heading-j="6">0x0201 robot_status_t（13 字节，referee_decode.h:151-165）</a></li><li><a href="#0x0202-power_heat_data_t14-字节referee_decodeh170-181" data-depth="3" data-heading-j="7">0x0202 power_heat_data_t（14 字节，referee_decode.h:170-181）</a></li><li><a href="#0x0203-robot_pos_t12-字节referee_decodeh187-192" data-depth="3" data-heading-j="8">0x0203 robot_pos_t（12 字节，referee_decode.h:187-192）</a></li><li><a href="#0x0206-hurt_data_t1-字节referee_decodeh210-214" data-depth="3" data-heading-j="9">0x0206 hurt_data_t（1 字节，referee_decode.h:210-214）</a></li><li><a href="#0x0207-shoot_data_t7-字节referee_decodeh219-227" data-depth="3" data-heading-j="10">0x0207 shoot_data_t（7 字节，referee_decode.h:219-227）</a></li><li><a href="#定义了结构体却无分支的命令" data-depth="2" data-heading-j="11">定义了结构体却无分支的命令</a></li><li><a href="#长度校验为什么写成-len--sizeof" data-depth="2" data-heading-j="12">长度校验为什么写成 len &lt; sizeof</a></li><li><a href="#命令码层面的易错点" data-depth="2" data-heading-j="13">命令码层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="14">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="15">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="16">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="17">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="18">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="19">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="20">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>RefereeProtocol 状态机</span></a><ul class="toc__heads"><li><a href="#状态机全景" data-depth="2" data-heading-j="0">状态机全景</a></li><li><a href="#逐态动作与转移" data-depth="2" data-heading-j="1">逐态动作与转移</a></li><li><a href="#长度字段的-200-上限" data-depth="2" data-heading-j="2">长度字段的 200 上限</a></li><li><a href="#crc8-与-crc16-的覆盖范围" data-depth="2" data-heading-j="3">CRC8 与 CRC16 的覆盖范围</a></li><li><a href="#零长数据段与结束判断" data-depth="2" data-heading-j="4">零长数据段与结束判断</a></li><li><a href="#buffer_-的边界核算" data-depth="2" data-heading-j="5">buffer_ 的边界核算</a></li><li><a href="#失步与重同步" data-depth="2" data-heading-j="6">失步与重同步</a></li><li><a href="#回调注册与运行上下文" data-depth="2" data-heading-j="7">回调注册与运行上下文</a></li><li><a href="#状态机层面的易错点" data-depth="2" data-heading-j="8">状态机层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>RefereeDecode 字段映射</span></a><ul class="toc__heads"><li><a href="#零拷贝映射到-g_referee_info" data-depth="2" data-heading-j="0">零拷贝映射到 g_referee_info</a></li><li><a href="#0x0001-game_statusreferee_decodecpp33-46" data-depth="3" data-heading-j="1">0x0001 GAME_STATUS（referee_decode.cpp:33-46）</a></li><li><a href="#0x0201-robot_status52-73" data-depth="3" data-heading-j="2">0x0201 ROBOT_STATUS（:52-73）</a></li><li><a href="#0x0202-power_heat_data79-93" data-depth="3" data-heading-j="3">0x0202 POWER_HEAT_DATA（:79-93）</a></li><li><a href="#0x0203-robot_pos99-112" data-depth="3" data-heading-j="4">0x0203 ROBOT_POS（:99-112）</a></li><li><a href="#0x0206-hurt_data118-130" data-depth="3" data-heading-j="5">0x0206 HURT_DATA（:118-130）</a></li><li><a href="#0x0207-shoot_data136-150" data-depth="3" data-heading-j="6">0x0207 SHOOT_DATA（:136-150）</a></li><li><a href="#pack1-决定了-sizeof-与对齐" data-depth="2" data-heading-j="7">pack(1) 决定了 sizeof 与对齐</a></li><li><a href="#小端与位域顺序的隐含前提" data-depth="2" data-heading-j="8">小端与位域顺序的隐含前提</a></li><li><a href="#updated-标志的实际语义" data-depth="2" data-heading-j="9">updated 标志的实际语义</a></li><li><a href="#两块板的定义位置与消费点" data-depth="2" data-heading-j="10">两块板的定义位置与消费点</a></li><li><a href="#映射层面的易错点" data-depth="2" data-heading-j="11">映射层面的易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="12">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="13">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="14">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="15">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="16">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="17">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="18">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>裁判系统易错点与调试</span></a><ul class="toc__heads"><li><a href="#五层链路上的故障分层" data-depth="2" data-heading-j="0">五层链路上的故障分层</a></li><li><a href="#已知缺陷与高频错误清单" data-depth="2" data-heading-j="1">已知缺陷与高频错误清单</a></li><li><a href="#物理层与中断-dma-层的调试" data-depth="2" data-heading-j="2">物理层与中断 DMA 层的调试</a></li><li><a href="#解帧层的条件断点" data-depth="2" data-heading-j="3">解帧层的条件断点</a></li><li><a href="#映射层的核对点" data-depth="2" data-heading-j="4">映射层的核对点</a></li><li><a href="#离线重算校验" data-depth="2" data-heading-j="5">离线重算校验</a></li><li><a href="#应用层打印的约束" data-depth="2" data-heading-j="6">应用层打印的约束</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">串口通信与协议</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>裁判系统 / USART6 / DMA / 帧格式 / CRC8 / CRC16 / 命令码 / 数据段</span></div><h1 class="docs__title">裁判系统协议</h1><p class="docs__lead">裁判系统单向链路的 USART6 与 DMA 接收配置、两块板的接线差异，以及 0xA5 帧的逐字段偏移与两处校验的覆盖范围</p></header><section class="dfile" id="file-1" data-file="01-裁判系统链路与帧格式"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-裁判系统链路与帧格式</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/05-裁判系统协议/01-裁判系统链路与帧格式.md</span></div><div class="dfile__body"><h1 id="裁判系统链路与帧格式">裁判系统链路与帧格式</h1>
+<blockquote>
+<p>对象是云台板固件 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code> 与底盘板固件 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。两块板的裁判系统协议代码逐字节相同，接线与中断注册不同。</p>
+<p>本页只讲链路与帧结构。解帧状态机在 <code>03-RefereeProtocol状态机</code>，命令码与数据段在 <code>02-命令码与数据段</code>，字段落库在 <code>04-RefereeDecode字段映射</code>。</p>
+</blockquote>
+<p>裁判系统是比赛主办方提供的数据源，向机器人主控下行播报比赛状态、机器人血量、热量与功率、场地位置、伤害事件、射击弹速、增益状态等。链路是单向的：下位机只接收，不向裁判系统发送。本工程两块板都没有构造裁判系统上行帧的代码，<code>Uart_Transmit_DMA</code> 有实现但没有调用点。</p>
+<p>数据方向决定了三项工程事实：接收通路可以只用 DMA 加空闲中断，不需要发送状态机；帧解析只需要按字节流推进，不需要处理发送应答；断线时表现为数据停更，不会表现为发送失败。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    REF["裁判系统&#x3C;br/>主办方串口"] -->|"115200 8N1"| U6["USART6&#x3C;br/>PG9 RX / PG14 TX"]
+    U6 --> IDLE["空闲中断 IDLE"]
+    U6 --> DMA["DMA2_Stream1 CH5&#x3C;br/>PERIPH 到 MEMORY"]
+    DMA --> BUF["UsartDma 双缓冲&#x3C;br/>rx_buf_[2][256]"]
+    IDLE --> IRQ["Uart_IRQHandler(huart6)"]
+    IRQ --> CB["RefereeUartCallback"]
+    BUF --> CB
+    CB --> RC["RefereeCallback&#x3C;br/>逐字节 input"]
+    RC --> RP["RefereeProtocol&#x3C;br/>10 态解帧"]
+    RP -->|"CRC16 通过"| ON["RefereeDecode::onFrame"]
+    ON --> GI["g_referee_info"]
+    GIM["云台板：无 Uart_Init&#x3C;br/>中断空实现"] -.->|"未接通"| U6</pre></div>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/usart.c</code></td><td>USART6 参数、GPIO、DMA 与 NVIC</td></tr><tr><td><code>Core/Src/main.c</code></td><td>两块板的注册差异</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>中断入口与 USER CODE 段</td></tr><tr><td><code>Communication/Src/referee_protocol.cpp</code></td><td>帧同步、校验与数据段指针</td></tr><tr><td><code>Communication/Inc/referee_decode.h</code></td><td>帧头结构体与 pack</td></tr><tr><td><code>Communication/Src/referee_decode.cpp</code></td><td>回调与字段落库</td></tr></tbody></table>
+<h2 id="usart6-的物理参数与-dma-资源">USART6 的物理参数与 DMA 资源</h2>
+<p>两块板的 <code>MX_USART6_UART_Init</code> 参数一致，逐字段如下（底盘板 <code>Core/Src/usart.c:94-120</code>，云台板 <code>Core/Src/usart.c:104-115</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>配置项</th><th>取值</th><th>含义</th></tr></thead><tbody><tr><td><code>Instance</code></td><td><code>USART6</code></td><td>六个 USART 中的第 6 个</td></tr><tr><td><code>BaudRate</code></td><td>115200</td><td>与裁判系统串口速率一致</td></tr><tr><td><code>WordLength</code></td><td><code>UART_WORDLENGTH_8B</code></td><td>8 位数据</td></tr><tr><td><code>StopBits</code></td><td><code>UART_STOPBITS_1</code></td><td>1 位停止位</td></tr><tr><td><code>Parity</code></td><td><code>UART_PARITY_NONE</code></td><td>无校验，8N1</td></tr><tr><td><code>Mode</code></td><td><code>UART_MODE_TX_RX</code></td><td>收发都开，实际只用 RX</td></tr><tr><td><code>HwFlowCtl</code></td><td><code>UART_HWCONTROL_NONE</code></td><td>无硬件流控</td></tr><tr><td><code>OverSampling</code></td><td><code>UART_OVERSAMPLING_16</code></td><td>16 倍过采样</td></tr></tbody></table>
+<p>引脚固定为 PG14 作 TX、PG9 作 RX，复用 <code>GPIO_AF8_USART6</code>，输出速度 <code>GPIO_SPEED_FREQ_VERY_HIGH</code>（<code>Core/Src/usart.c:213-222</code>）。DMA 与中断在 MSP 回调里配置：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>资源</th><th>实例</th><th>通道</th><th>方向</th><th>模式</th></tr></thead><tbody><tr><td>RX</td><td><code>DMA2_Stream1</code></td><td><code>DMA_CHANNEL_5</code></td><td>PERIPH 到 MEMORY</td><td><code>DMA_NORMAL</code></td></tr><tr><td>TX</td><td><code>DMA2_Stream6</code></td><td><code>DMA_CHANNEL_5</code></td><td>MEMORY 到 PERIPH</td><td><code>DMA_CIRCULAR</code></td></tr><tr><td>NVIC</td><td><code>USART6_IRQn</code></td><td>抢占优先级 5</td><td>子优先级 0</td><td>使能</td></tr></tbody></table>
+<p>DMA 初始化后分别用 <code>__HAL_LINKDMA</code> 挂到 <code>huart6.hdmarx</code> 与 <code>huart6.hdmatx</code>（<code>Core/Src/usart.c:226-259</code>），NVIC 在 <code>Core/Src/usart.c:261-263</code>。CubeMX 给 RX 配的是 <code>DMA_NORMAL</code>，但运行期 <code>UsartDma::Init</code> 直接对 <code>DMA_SxCR</code> 置双缓冲位并自己启动 DMA，不经过 <code>HAL_UART_Receive_DMA</code>（<code>Communication/Src/usart_dma.cpp:40-44</code>、<code>:148</code>）。这一层与 CubeMX 配置的差异在 <code>01-UART+DMA收发</code> 里展开。</p>
+<p>发送方向虽然配了 <code>DMA2_Stream6</code> 并链接到 <code>hdmatx</code>，但全工程没有裁判系统上行帧，这条流只被初始化过，没有启动过。</p>
+<h2 id="两块板的接线差异">两块板的接线差异</h2>
+<p>底盘板在初始化末尾注册两个串口实例（<code>Core/Src/main.c:131-132</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6F42C1">Uart_Init</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">huart3</span><span style="color:#24292E">, MyUartCallbackFun);</span><span style="color:#6A737D">   // huart3是连接遥控器的UART实例</span></span>
+<span class="line"><span style="color:#6F42C1">Uart_Init</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">huart6</span><span style="color:#24292E">, RefereeUartCallback);</span><span style="color:#6A737D"> // huart6是裁判系统</span></span></code></pre>
+<p>云台板只注册了遥控器（<code>Core/Src/main.c:125</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6F42C1">Uart_Init</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">huart3</span><span style="color:#24292E">, MyUartCallbackFun);</span><span style="color:#6A737D"> // huart3是连接遥控器的UART实例</span></span></code></pre>
+<p>差异不止初始化这一处。底盘板的中断服务函数在 <code>HAL_UART_IRQHandler</code> 之前插入了自定义处理（<code>Core/Src/stm32f4xx_it.c:359-368</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> USART6_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#6A737D">  /* USER CODE BEGIN USART6_IRQn 0 */</span></span>
+<span class="line"><span style="color:#6F42C1">  Uart_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">huart6);</span></span>
+<span class="line"><span style="color:#6A737D">  /* USER CODE END USART6_IRQn 0 */</span></span>
+<span class="line"><span style="color:#6F42C1">  HAL_UART_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">huart6);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>云台板同名函数的两段 USER CODE 都是空的（<code>Core/Src/stm32f4xx_it.c:359-368</code>），没有 <code>Uart_IRQHandler(&#x26;huart6)</code>。因此云台板上的 <code>huart6</code> 既没有启动 DMA，空闲中断也没有被使能，<code>USART6_IRQHandler</code> 不会产生有效处理。</p>
+<p>共享代码在云台板上仍然被编译：<code>Communication/Src/referee_decode.cpp:9-11</code> 定义了 <code>g_referee_info</code>、<code>refereeproto</code>、<code>referee_decode</code> 三个全局对象，<code>CMakeLists.txt:94-97</code> 把它们列进源文件。<code>refereeproto.input</code> 的唯一调用点在 <code>RefereeCallback</code>（<code>Communication/Src/referee_decode.cpp:159-165</code>），而 <code>RefereeCallback</code> 只被底盘板的 <code>RefereeUartCallback</code> 调用（<code>Core/Src/main.c:79-81</code>）。云台板上这条链没有入口，对象存在但收不到数据。底盘板的 <code>RefereeUartCallback</code> 只做一次转发：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> RefereeUartCallback</span><span style="color:#24292E">(</span><span style="color:#D73A49">volatile</span><span style="color:#D73A49"> uint8_t*</span><span style="color:#E36209"> buf</span><span style="color:#24292E">, </span><span style="color:#D73A49">int</span><span style="color:#E36209"> len</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#6F42C1">  RefereeCallback</span><span style="color:#24292E">(buf, len);</span><span style="color:#6A737D">  // 调用裁判系统解码</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>两处缺失的效果不同：没有 <code>Uart_Init</code> 时 DMA 与空闲中断都没打开，硬件层面收不到字节；没有中断里的 <code>Uart_IRQHandler</code> 时字节进了双缓冲但没人取走，表现为数据停在缓冲区而 <code>g_referee_info</code> 不变。</p>
+<h2 id="0xa5-帧的逐字段偏移">0xA5 帧的逐字段偏移</h2>
+<p>裁判系统帧以 <code>0xA5</code> 起始，长度字段小端，<code>cmd_id</code> 小端，两处校验分别为 CRC8 与 CRC16，CRC16 以小端存放。设数据段长度为 <code>n</code>，一帧共 <code>9+n</code> 字节：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>长度</th><th>字段</th><th>编码</th><th>说明</th></tr></thead><tbody><tr><td>0</td><td>1</td><td>SOF</td><td>固定 <code>0xA5</code></td><td>帧起始字节</td></tr><tr><td>1</td><td>1</td><td><code>len</code> 低字节</td><td>小端</td><td>数据段长度 <code>n</code></td></tr><tr><td>2</td><td>1</td><td><code>len</code> 高字节</td><td>小端</td><td>与低字节合成 <code>data_len_</code></td></tr><tr><td>3</td><td>1</td><td><code>seq</code></td><td>单字节</td><td>包序号，代码只存不查</td></tr><tr><td>4</td><td>1</td><td>CRC8</td><td>单字节</td><td>覆盖偏移 0 到 3</td></tr><tr><td>5</td><td>1</td><td><code>cmd_id</code> 低字节</td><td>小端</td><td>命令码</td></tr><tr><td>6</td><td>1</td><td><code>cmd_id</code> 高字节</td><td>小端</td><td>与低字节合成 <code>cmd_id_</code></td></tr><tr><td>7</td><td><code>n</code></td><td>data</td><td>按命令定义</td><td>数据段</td></tr><tr><td>7+n</td><td>1</td><td>CRC16 低字节</td><td>小端</td><td>覆盖偏移 0 到 6+n</td></tr><tr><td>8+n</td><td>1</td><td>CRC16 高字节</td><td>小端</td><td>覆盖偏移 0 到 6+n</td></tr></tbody></table>
+<p>长度字段只描述数据段，不含 7 字节帧头与 2 字节 CRC16。CRC16 的覆盖范围从 SOF 一直到最后 1 字节数据，超过 <code>cmd_id</code> 所在的偏移：解帧代码用 <code>index_-2</code> 作长度，此时 <code>index_</code> 已计入两字节 CRC16，所以实际覆盖 <code>7+n</code> 字节（<code>Communication/Src/referee_protocol.cpp:114-119</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    subgraph FRAME["一帧 9+n 字节"]
+        A0["偏移 0&#x3C;br/>SOF 0xA5"]
+        A1["偏移 1-2&#x3C;br/>len 小端"]
+        A2["偏移 3&#x3C;br/>seq"]
+        A3["偏移 4&#x3C;br/>CRC8"]
+        A4["偏移 5-6&#x3C;br/>cmd_id 小端"]
+        A5["偏移 7 到 6+n&#x3C;br/>data n 字节"]
+        A6["偏移 7+n 到 8+n&#x3C;br/>CRC16 小端"]
+        A0 --> A1 --> A2 --> A3 --> A4 --> A5 --> A6
+    end
+    subgraph CRC["校验覆盖"]
+        C8["CRC8 覆盖&#x3C;br/>偏移 0 到 3"]
+        C16["CRC16 覆盖&#x3C;br/>偏移 0 到 6+n"]
+    end
+    A3 -.-> C8
+    A6 -.-> C16</pre></div>
+<h2 id="两处校验的覆盖范围">两处校验的覆盖范围</h2>
+<p>两处校验的算法与参数不同，覆盖范围也不一样：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>校验</th><th>覆盖字节</th><th>长度参数</th><th>初值</th><th>源码</th></tr></thead><tbody><tr><td>CRC8</td><td>SOF、len 低、len 高、seq 共 4 字节</td><td>固定 4</td><td><code>0xFF</code></td><td><code>referee_protocol.cpp:68</code></td></tr><tr><td>CRC16</td><td>SOF 到最后 1 字节数据，共 <code>7+n</code> 字节</td><td><code>index_-2</code></td><td><code>0xFFFF</code></td><td><code>:118-119</code></td></tr></tbody></table>
+<p>CRC8 只覆盖前 4 字节，不把 <code>cmd_id</code> 算进去；CRC16 从 <code>buffer_[0]</code> 起算，包含帧头与 <code>cmd_id</code>，但不含它自己的两个字节。两处校验都通过之后才调用回调，回调的数据段指针是 <code>&#x26;buffer_[7]</code>，长度是 <code>data_len_</code>（<code>Communication/Src/referee_protocol.cpp:125-126</code>）。</p>
+<p>帧头在 <code>Communication/Inc/referee_decode.h:18-24</code> 另有一份结构体定义：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">struct</span><span style="color:#005CC5"> referee_frame_header_t</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#24292E">  sof;</span><span style="color:#6A737D">          // 数据帧起始字节 0xA5</span></span>
+<span class="line"><span style="color:#D73A49">    uint16_t</span><span style="color:#24292E"> data_length;</span><span style="color:#6A737D">  // data长度</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#24292E">  seq;</span><span style="color:#6A737D">          // 包序号</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#24292E">  crc8;</span><span style="color:#6A737D">         // 对上面三者进行CRC8校验</span></span>
+<span class="line"><span style="color:#24292E">};</span></span></code></pre>
+<h2 id="帧头结构体为什么没有被使用">帧头结构体为什么没有被使用</h2>
+<p>该结构体没有被解析代码使用，<code>RefereeProtocol</code> 是按状态逐字节写入 <code>buffer_</code> 再按固定偏移读取的。整份头文件被 <code>#pragma pack(push,1)</code> 与 <code>#pragma pack(pop)</code> 包住（<code>Communication/Inc/referee_decode.h:15</code>、<code>:450</code>），所以这个 5 字节结构体在内存中与线上布局一致。</p>
+<p>不使用的直接原因是解帧需要在 CRC8 通过之前就按固定偏移写字节，而结构体映射要求先有一块已校验的内存。两者顺序相反：结构体适合在整帧到手之后解释，状态机适合逐字节推进。保留这份定义的价值是文档作用，它写明了帧头四个字段的名称与含义，调试时对照更方便。</p>
+<h2 id="接收缓冲与回调时机">接收缓冲与回调时机</h2>
+<p><code>RefereeProtocol</code> 用一块固定缓冲 <code>buffer_[256]</code>（<code>Communication/Inc/referee_protocol.h:41</code>），配合 <code>index_</code> 记录写入位置。接收由 <code>UsartDma</code> 的空闲中断路径驱动：空闲回调算出本轮字节数 <code>UART_RX_BUF_LEN - NDTR</code>，再调用注册的 <code>decode_cb_</code>（<code>Communication/Src/usart_dma.cpp:81-116</code>）。对裁判系统，这个回调就是 <code>RefereeUartCallback</code>，它把整段缓冲逐字节喂给 <code>refereeproto.input</code>。</p>
+<p>数据段指针是 <code>&#x26;buffer_[7]</code>，长度是 <code>data_len_</code>（<code>Communication/Src/referee_protocol.cpp:125-126</code>）。CRC16 通过之前回调不会触发，所以 <code>onFrame</code> 拿到的 <code>data</code> 一定通过了 CRC8 与 CRC16 两层校验。</p>
+<p>底盘板的数据消费点在控制任务里：<code>Task/Src/ControlCenterTask.cpp:123</code> 用 <code>g_referee_info.bullet_speed</code> 统计发弹，<code>:127</code> 又把它随裁判数据发到 CAN。云台板没有任何文件读 <code>g_referee_info</code>，只有 <code>referee_decode.cpp</code> 的写入。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant REF as 裁判系统
+    participant U6 as USART6 与 DMA2_Stream1
+    participant IRQ as USART6_IRQHandler
+    participant DMA as UsartDma 空闲回调
+    participant CB as RefereeCallback
+    participant RP as RefereeProtocol
+    participant ON as RefereeDecode::onFrame
+    REF->>U6: 连续字节流，115200 8N1
+    U6->>DMA: 写入 rx_buf_[0] 或 rx_buf_[1]
+    Note over REF,U6: 帧间出现空闲
+    U6->>IRQ: 置 IDLE 标志
+    IRQ->>DMA: Uart_IRQHandler(huart6)
+    DMA->>DMA: rx_data_len_ = 256 - NDTR
+    DMA->>CB: decode_cb_(buf, rx_data_len_)
+    CB->>RP: 逐字节 input(byte)
+    RP->>RP: 推进 10 个解析状态
+    alt CRC16 通过
+        RP->>ON: frame_cb_(cmd_id, buffer_[7], data_len)
+        ON->>ON: 写 g_referee_info
+    else CRC16 失败
+        RP->>RP: reset()，本帧丢弃
+    end</pre></div>
+<h2 id="链路层面的易错点">链路层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>本项目的对应位置</th></tr></thead><tbody><tr><td>把 <code>len</code> 当整帧长度</td><td>按 <code>len</code> 分配或校验缓冲，少算 9 字节</td><td>帧长是 <code>9+n</code>，<code>len</code> 只是数据段</td></tr><tr><td>认为 CRC16 只覆盖数据段</td><td>手动算校验时把帧头排除，校验对不上</td><td><code>referee_protocol.cpp:118-119</code> 从 <code>buffer_[0]</code> 起算</td></tr><tr><td>认为 CRC8 覆盖整个帧头</td><td>把 <code>cmd_id</code> 也算进去</td><td>只覆盖前 4 字节（SOF、len、len、seq）</td></tr><tr><td>在云台板找裁判数据</td><td>全局对象存在，数值一直是初值</td><td>云台板 <code>main.c:125</code> 未注册 <code>huart6</code>，中断也未调用 <code>Uart_IRQHandler</code></td></tr><tr><td>认为 <code>seq</code> 被校验</td><td>期待乱序包被丢弃</td><td>代码写入 <code>buffer_</code> 后不再比较，乱序不报错</td></tr><tr><td>把 <code>cmd_id</code> 按大端解析</td><td>0x0201 被读成 0x0102</td><td>小端，`cmd_id_ = byte</td></tr><tr><td>期待 <code>referee_frame_header_t</code> 被使用</td><td>在其上打断点没有命中</td><td>解析器按固定下标读写，该结构体是备用定义</td></tr><tr><td>认为 TX 流会发数据</td><td>在 <code>DMA2_Stream6</code> 上等波形</td><td>裁判链路单向，TX 流从未启动</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>裁判系统链路单向，主控只收不发；本工程没有裁判系统上行帧。</li>
+<li>物理层是 USART6，115200 8N1，PG9 收、PG14 发，RX 走 <code>DMA2_Stream1</code>，NVIC 优先级 5。</li>
+<li>底盘板注册 <code>huart6</code> 并在中断里调用 <code>Uart_IRQHandler</code>；云台板两处都没有接。</li>
+<li>帧以 <code>0xA5</code> 起始，<code>len</code> 与 <code>cmd_id</code> 小端，数据段从偏移 7 起，整帧 <code>9+n</code> 字节。</li>
+<li>CRC8 覆盖前 4 字节，初值 <code>0xFF</code>；CRC16 覆盖偏移 0 到最后 1 字节数据，初值 <code>0xFFFF</code>，两字节小端。</li>
+<li>回调只在 CRC16 通过后触发，回调数据指针为 <code>&#x26;buffer_[7]</code>。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>帧同步</td><td>固定 <code>0xA5</code> 起始字节</td><td>实现简单，无转义开销</td><td>数据段出现 <code>0xA5</code> 时靠长度字段区分，失步后要重同步</td></tr><tr><td>长度表示</td><td><code>len</code> 只含数据段</td><td>与官方手册一致</td><td>读代码的人容易按整帧理解</td></tr><tr><td>校验分层</td><td>帧头 CRC8 加整帧 CRC16</td><td>CRC8 便宜，CRC16 兜住数据</td><td>两处校验范围不同，手写解析要分别对齐</td></tr><tr><td>接收方式</td><td>空闲中断加 DMA 双缓冲</td><td>CPU 占用低</td><td>云台板漏接其中任一环就完全收不到</td></tr><tr><td>数据落库</td><td>逐字段拷贝到 <code>g_referee_info</code></td><td>调用方不接触原始缓冲</td><td>字段增加时要同步维护枚举、结构体与分支</td></tr><tr><td>帧头定义</td><td>保留结构体但不使用</td><td>调试时可对照字段名</td><td>结构与实际解析路径不一致，易误以为在生效</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>0x0201</code> 机器人状态帧数据段长度为 13 时的整帧字节数，以及 CRC16 覆盖的字节数。</li>
+<li>一帧的 <code>len</code> 字段两个字节分别是 <code>0x0A</code>、<code>0x00</code>，数据段是多少字节？<code>cmd_id</code> 位于哪个偏移？</li>
+<li>按偏移表，说明 <code>RefereeProtocol</code> 在 <code>WAIT_CRC8</code> 状态时 <code>buffer_</code> 里已经有哪些字节。</li>
+<li>底盘板上 <code>g_referee_info</code> 被哪个任务读取，读取的是哪个字段？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>云台板已经初始化了 USART6、配置了 DMA，只补 <code>Uart_Init(&#x26;huart6, RefereeUartCallback)</code> 与中断里的 <code>Uart_IRQHandler</code> 两处即可打通接收。说明这两处各自解决的问题，以及只补其中一处会出现什么现象。</li>
+<li>假设把数据段长度上限从 200 放宽到 260，<code>buffer_[256]</code> 与 <code>index_ >= 7 + data_len_</code> 的判断会发生什么？给出需要同步修改的常量与位置。</li>
+<li>帧同步丢失后，某一帧的 <code>0xA5</code> 恰好落在上一帧的 CRC8 位置上。按现有 <code>WAIT_CRC8</code> 分支的处理，这个字节会被怎样处置，是否可能丢掉一个合法帧的起点？</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryChassis/Core/Src/main.c</code></td><td><code>RefereeUartCallback</code>（:79-81）、注册 <code>huart6</code>（:132）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>只注册 <code>huart3</code>（:125）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/stm32f4xx_it.c</code></td><td><code>USART6_IRQHandler</code> 调用 <code>Uart_IRQHandler</code>（:359-368）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td>同名中断的 USER CODE 为空（:359-368）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/usart.c</code></td><td>USART6 参数（:94-120）、GPIO（:213-222）、DMA（:226-259）、NVIC（:261-263）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>同名参数与 DMA 配置（:104-115、:204-267）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_protocol.h</code></td><td>10 态枚举（:25-37）、<code>buffer_[256]</code>（:41）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>CRC8 覆盖 4 字节（:68）、数据指针（:125）、CRC16 范围（:118-119）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>全局对象（:9-11）、<code>RefereeCallback</code>（:159-165）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_decode.h</code></td><td><code>referee_frame_header_t</code>（:18-24）、<code>pack</code>（:15、:450）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲回调与字节数（:81-116）、启动 DMA（:33-48）</td></tr><tr><td><code>2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>读取 <code>bullet_speed</code>（:123、:127）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-命令码与数据段"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-命令码与数据段</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/05-裁判系统协议/02-命令码与数据段.md</span></div><div class="dfile__body"><h1 id="命令码与数据段">命令码与数据段</h1>
+<blockquote>
+<p>命令码枚举与数据段结构体都在 <code>Communication/Inc/referee_decode.h</code>，两块板逐字节相同。帧格式与校验范围见 <code>01-裁判系统链路与帧格式</code>，字段如何写入 <code>g_referee_info</code> 见 <code>04-RefereeDecode字段映射</code>。</p>
+</blockquote>
+<p>裁判系统的所有下行数据共用同一种帧结构。帧头的 <code>cmd_id</code> 是唯一分派依据，它决定后面 <code>len</code> 字节如何解释。命令码在 <code>Communication/Inc/referee_decode.h:31-80</code> 的 <code>RefCmdID</code> 命名空间里按官方功能分组枚举：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>分组</th><th>码段</th><th>结构体前缀</th></tr></thead><tbody><tr><td>比赛信息</td><td>0x0001 到 0x0003</td><td><code>game_</code></td></tr><tr><td>场地事件</td><td>0x0101 到 0x0105</td><td><code>event_</code>、<code>referee_warning_t</code>、<code>dart_info_t</code></td></tr><tr><td>机器人信息</td><td>0x0201 到 0x020E</td><td><code>robot_</code>、<code>power_heat_data_t</code>、<code>buff_t</code> 等</td></tr><tr><td>机器人交互</td><td>0x0301 到 0x0310</td><td><code>robot_interaction</code>、<code>map_</code>、<code>custom_</code></td></tr><tr><td>雷达/图传</td><td>0x0F01、0x0F02</td><td>无结构体，仅注释占位</td></tr><tr><td>敌方信息</td><td>0x0A01 到 0x0A06</td><td>无结构体，仅注释占位</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    FRAME["0xA5 帧&#x3C;br/>cmd_id + data"] --> SW["RefereeDecode::onFrame&#x3C;br/>switch(cmd_id)"]
+    SW --> G0["比赛信息 0x00xx&#x3C;br/>GAME_STATUS 已解析"]
+    SW --> G1["场地事件 0x01xx&#x3C;br/>无分支"]
+    SW --> G2["机器人信息 0x02xx&#x3C;br/>6 个分支已解析"]
+    SW --> G3["机器人交互 0x03xx&#x3C;br/>无分支"]
+    SW --> G4["雷达/图传 0x0Fxx&#x3C;br/>无分支"]
+    SW --> G5["敌方信息 0x0Axx&#x3C;br/>无分支"]
+    G2 --> S1["ROBOT_STATUS 0x0201"]
+    G2 --> S2["POWER_HEAT_DATA 0x0202"]
+    G2 --> S3["ROBOT_POS 0x0203"]
+    G2 --> S4["HURT_DATA 0x0206"]
+    G2 --> S5["SHOOT_DATA 0x0207"]
+    S6["BUFF 0x0204&#x3C;br/>结构体有、分支无"] -.-> G2</pre></div>
+<h2 id="cmd_id-是数据段布局的唯一分派依据">cmd_id 是数据段布局的唯一分派依据</h2>
+<p>帧结构本身与命令无关，长度字段只给出数据段的字节数，不给出类型。解释数据段所需的信息全部来自 <code>cmd_id</code>：它决定用哪个结构体、按什么偏移取字段、长度校验的上限是多少。三者的关系是</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>数据段字节数</mtext><mo>=</mo><mtext mathvariant="monospace">sizeof</mtext><mo stretchy="false">(</mo><mtext>该 cmd_id 对应的结构体</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{数据段字节数} = \texttt{sizeof}(\text{该 cmd\_id 对应的结构体})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">数据段字节数</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord texttt">sizeof</span></span><span class="mopen">(</span><span class="mord text"><span class="mord cjk_fallback">该</span><span class="mord"> cmd_id </span><span class="mord cjk_fallback">对应的结构体</span></span><span class="mclose">)</span></span></span></span></p>
+<p>成立的前提是结构体按 1 字节对齐。头文件用 <code>#pragma pack(push,1)</code> 保证了这一点（<code>referee_decode.h:15</code>、<code>:450</code>），因此表中列出的结构体 <code>sizeof</code> 对线上长度即为数据段长度。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Communication/Inc/referee_decode.h</code></td><td>命令码枚举与全部数据段结构体</td></tr><tr><td><code>Communication/Src/referee_decode.cpp</code></td><td>六个解析分支与长度校验</td></tr><tr><td><code>Communication/Src/referee_protocol.cpp</code></td><td>帧长与数据段指针</td></tr></tbody></table>
+<h2 id="比赛信息与场地事件命令">比赛信息与场地事件命令</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>cmd_id</th><th>枚举名</th><th>结构体</th><th>数据段</th><th>onFrame</th></tr></thead><tbody><tr><td>0x0001</td><td><code>GAME_STATUS</code></td><td><code>game_status_t</code></td><td>11</td><td>解析（<code>referee_decode.cpp:33-46</code>）</td></tr><tr><td>0x0002</td><td><code>GAME_RESULT</code></td><td><code>game_result_t</code></td><td>1</td><td>无分支</td></tr><tr><td>0x0003</td><td><code>ROBOT_HP</code></td><td><code>game_robot_HP_t</code></td><td>16</td><td>无分支</td></tr><tr><td>0x0101</td><td><code>EVENT_DATA</code></td><td><code>event_data_t</code></td><td>4</td><td>无分支</td></tr><tr><td>0x0104</td><td><code>REFEREE_WARNING</code></td><td><code>referee_warning_t</code></td><td>3</td><td>无分支</td></tr><tr><td>0x0105</td><td><code>DART_INFO</code></td><td><code>dart_info_t</code></td><td>3</td><td>无分支</td></tr></tbody></table>
+<p>0x0102 与 0x0103 没有出现在枚举里，与 0x0205 一样属于未登记项。这一组里只有 0x0001 有解析分支，其余五个结构体定义了但不落库。</p>
+<h2 id="机器人信息命令">机器人信息命令</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>cmd_id</th><th>枚举名</th><th>结构体</th><th>数据段</th><th>onFrame</th></tr></thead><tbody><tr><td>0x0201</td><td><code>ROBOT_STATUS</code></td><td><code>robot_status_t</code></td><td>13</td><td>解析（<code>:52-73</code>）</td></tr><tr><td>0x0202</td><td><code>POWER_HEAT_DATA</code></td><td><code>power_heat_data_t</code></td><td>14</td><td>解析（<code>:79-93</code>）</td></tr><tr><td>0x0203</td><td><code>ROBOT_POS</code></td><td><code>robot_pos_t</code></td><td>12</td><td>解析（<code>:99-112</code>）</td></tr><tr><td>0x0204</td><td><code>BUFF</code></td><td><code>buff_t</code></td><td>8</td><td>无分支</td></tr><tr><td>0x0206</td><td><code>HURT_DATA</code></td><td><code>hurt_data_t</code></td><td>1</td><td>解析（<code>:118-130</code>）</td></tr><tr><td>0x0207</td><td><code>SHOOT_DATA</code></td><td><code>shoot_data_t</code></td><td>7</td><td>解析（<code>:136-150</code>）</td></tr><tr><td>0x0208</td><td><code>PROJECTILE_ALLOW</code></td><td><code>projectile_allowance_t</code></td><td>8</td><td>无分支</td></tr><tr><td>0x0209</td><td><code>RFID_STATUS</code></td><td><code>rfid_status_t</code></td><td>5</td><td>无分支</td></tr><tr><td>0x020A</td><td><code>DART_CLIENT_CMD</code></td><td><code>dart_client_cmd_t</code></td><td>6</td><td>无分支</td></tr><tr><td>0x020B</td><td><code>GROUND_ROBOT_POS</code></td><td><code>ground_robot_position_t</code></td><td>40</td><td>无分支</td></tr><tr><td>0x020C</td><td><code>RADAR_MARK_DATA</code></td><td><code>radar_mark_data_t</code></td><td>2</td><td>无分支</td></tr><tr><td>0x020D</td><td><code>SENTRY_INFO</code></td><td><code>sentry_info_t</code></td><td>6</td><td>无分支</td></tr><tr><td>0x020E</td><td><code>RADAR_INFO</code></td><td><code>radar_info_t</code></td><td>1</td><td>无分支</td></tr></tbody></table>
+<p>0x0205 在枚举里没有定义，0x020A 之前也不是连续排列。命令码的连续性由官方手册决定，代码只登记了用到的部分。</p>
+<h2 id="交互雷达与敌方命令">交互、雷达与敌方命令</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>cmd_id</th><th>枚举名</th><th>结构体</th><th>数据段</th><th>onFrame</th></tr></thead><tbody><tr><td>0x0301</td><td><code>ROBOT_INTERACTION</code></td><td><code>robot_interaction_data_t</code></td><td>118</td><td>无分支</td></tr><tr><td>0x0302</td><td><code>CUSTOM_ROBOT_DATA</code></td><td><code>custom_robot_data_t</code></td><td>30</td><td>无分支</td></tr><tr><td>0x0303</td><td><code>MAP_COMMAND</code></td><td><code>map_command_t</code></td><td>12</td><td>无分支</td></tr><tr><td>0x0304</td><td><code>REMOTE_CONTROL</code></td><td><code>remote_control_t</code></td><td>12</td><td>无分支</td></tr><tr><td>0x0305</td><td><code>MAP_ROBOT_DATA</code></td><td><code>map_robot_data_t</code></td><td>24</td><td>无分支</td></tr><tr><td>0x0306</td><td><code>CUSTOM_CLIENT_DATA</code></td><td><code>custom_client_data_t</code></td><td>8</td><td>无分支</td></tr><tr><td>0x0307</td><td><code>MAP_DATA</code></td><td><code>map_data_t</code></td><td>105</td><td>无分支</td></tr><tr><td>0x0308</td><td><code>CUSTOM_INFO</code></td><td><code>custom_info_t</code></td><td>34</td><td>无分支</td></tr><tr><td>0x0309</td><td><code>ROBOT_CUSTOM_DATA</code></td><td><code>robot_custom_data_t</code></td><td>30</td><td>无分支</td></tr><tr><td>0x0310</td><td><code>ROBOT_CUSTOM_DATA_2</code></td><td><code>robot_custom_data_2_t</code></td><td>150</td><td>无分支</td></tr><tr><td>0x0F01</td><td><code>RADAR_CHANNEL_SET</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0F02</td><td><code>RADAR_CHANNEL_QUERY</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0A01</td><td><code>ENEMY_ROBOT_POS</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0A02</td><td><code>ENEMY_ROBOT_HP</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0A03</td><td><code>ENEMY_PROJECTILE_ALLOW</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0A04</td><td><code>ENEMY_MACRO_STATUS</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0A05</td><td><code>ENEMY_BUFF_STATUS</code></td><td>无</td><td>未定义</td><td>无分支</td></tr><tr><td>0x0A06</td><td><code>INTERFERENCE_KEY</code></td><td>无</td><td>未定义</td><td>无分支</td></tr></tbody></table>
+<p><code>0x0310</code> 与 <code>0x0309</code> 的枚举名相差一个后缀，数值却跳了 7。按官方命令码表，自定义数据相关的一对通常是 0x0309 与 0x030A，此处疑似应为 <code>0x030A</code>。该结论未经现场抓包核对，待现场确认；改动前不要按 0x0309 推导 0x0310 的语义。</p>
+<p>两个雷达命令码与八个敌方命令码只登记了枚举值与注释，没有结构体。收到这类帧时状态机会正常校验并通过，进入 <code>onFrame</code> 后落到 <code>default</code>，数据段被完整丢弃。</p>
+<h2 id="六个已解析命令的数据段偏移">六个已解析命令的数据段偏移</h2>
+<p><code>RefereeDecode::onFrame</code> 只覆盖 6 个命令。数据段的字段顺序与字节宽度按结构体定义排列，下面的偏移以数据段首字节为 0。</p>
+<h3 id="0x0001-game_status_t11-字节referee_decodeh86-94">0x0001 <code>game_status_t</code>（11 字节，<code>referee_decode.h:86-94</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0 位 0-3</td><td><code>uint8_t:4</code></td><td><code>game_type</code></td><td>比赛类型</td></tr><tr><td>0 位 4-7</td><td><code>uint8_t:4</code></td><td><code>game_progress</code></td><td>比赛阶段</td></tr><tr><td>1-2</td><td><code>uint16_t</code></td><td><code>stage_remain_time</code></td><td>当前阶段剩余秒数</td></tr><tr><td>3-10</td><td><code>uint64_t</code></td><td><code>SyncTimeStamp</code></td><td>时间戳，未被解析写入</td></tr></tbody></table>
+<h3 id="0x0201-robot_status_t13-字节referee_decodeh151-165">0x0201 <code>robot_status_t</code>（13 字节，<code>referee_decode.h:151-165</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0</td><td><code>uint8_t</code></td><td><code>robot_id</code></td><td>机器人 ID</td></tr><tr><td>1</td><td><code>uint8_t</code></td><td><code>robot_level</code></td><td>等级</td></tr><tr><td>2-3</td><td><code>uint16_t</code></td><td><code>current_HP</code></td><td>当前血量</td></tr><tr><td>4-5</td><td><code>uint16_t</code></td><td><code>maximum_HP</code></td><td>血量上限</td></tr><tr><td>6-7</td><td><code>uint16_t</code></td><td><code>shooter_barrel_cooling_value</code></td><td>枪口冷却值，未落库</td></tr><tr><td>8-9</td><td><code>uint16_t</code></td><td><code>shooter_barrel_heat_limit</code></td><td>热量上限，未落库</td></tr><tr><td>10-11</td><td><code>uint16_t</code></td><td><code>chassis_power_limit</code></td><td>底盘功率上限</td></tr><tr><td>12 位 0-2</td><td><code>uint8_t:1</code></td><td><code>power_management_*_output</code></td><td>云台/底盘/发射机构三路输出开关</td></tr></tbody></table>
+<h3 id="0x0202-power_heat_data_t14-字节referee_decodeh170-181">0x0202 <code>power_heat_data_t</code>（14 字节，<code>referee_decode.h:170-181</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0-1</td><td><code>uint16_t</code></td><td><code>reserved1</code></td><td>保留，未落库</td></tr><tr><td>2-3</td><td><code>uint16_t</code></td><td><code>reserved2</code></td><td>保留，未落库</td></tr><tr><td>4-7</td><td><code>float</code></td><td><code>reserved3</code></td><td>保留浮点，未落库</td></tr><tr><td>8-9</td><td><code>uint16_t</code></td><td><code>buffer_energy</code></td><td>缓冲能量</td></tr><tr><td>10-11</td><td><code>uint16_t</code></td><td><code>shooter_17mm_heat</code></td><td>17mm 枪口热量</td></tr><tr><td>12-13</td><td><code>uint16_t</code></td><td><code>shooter_42mm_heat</code></td><td>42mm 枪口热量</td></tr></tbody></table>
+<h3 id="0x0203-robot_pos_t12-字节referee_decodeh187-192">0x0203 <code>robot_pos_t</code>（12 字节，<code>referee_decode.h:187-192</code>）</h3>
+<p>三个 <code>float</code> 依次为 <code>x</code>、<code>y</code>、<code>angle</code>，各占 4 字节，未落库的字段不存在。</p>
+<h3 id="0x0206-hurt_data_t1-字节referee_decodeh210-214">0x0206 <code>hurt_data_t</code>（1 字节，<code>referee_decode.h:210-214</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0 位 0-3</td><td><code>uint8_t:4</code></td><td><code>armor_id</code></td><td>受击装甲板 ID</td></tr><tr><td>0 位 4-7</td><td><code>uint8_t:4</code></td><td><code>hurt_HP_deduction_reason</code></td><td>扣血原因</td></tr></tbody></table>
+<h3 id="0x0207-shoot_data_t7-字节referee_decodeh219-227">0x0207 <code>shoot_data_t</code>（7 字节，<code>referee_decode.h:219-227</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0</td><td><code>uint8_t</code></td><td><code>bullet_type</code></td><td>弹种</td></tr><tr><td>1</td><td><code>uint8_t</code></td><td><code>shooter_number</code></td><td>发射机构编号</td></tr><tr><td>2</td><td><code>uint8_t</code></td><td><code>launching_frequency</code></td><td>发射射频</td></tr><tr><td>3-6</td><td><code>float</code></td><td><code>initial_speed</code></td><td>初始弹速</td></tr></tbody></table>
+<h2 id="定义了结构体却无分支的命令">定义了结构体却无分支的命令</h2>
+<p>0x0204 <code>buff_t</code>（<code>referee_decode.h:197-205</code>）是最典型的一处。该结构体在头文件里定义完整，但 <code>onFrame</code> 的 <code>switch</code> 没有 <code>RefCmdID::BUFF</code> 分支（<code>referee_decode.cpp:27-155</code>），也不存在对应的 <code>g_referee_info</code> 字段。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>类型</th><th>字段</th></tr></thead><tbody><tr><td>0</td><td><code>uint8_t</code></td><td><code>recovery_buff</code></td></tr><tr><td>1-2</td><td><code>uint16_t</code></td><td><code>cooling_buff</code></td></tr><tr><td>3</td><td><code>uint8_t</code></td><td><code>defence_buff</code></td></tr><tr><td>4</td><td><code>uint8_t</code></td><td><code>vulnerability_buff</code></td></tr><tr><td>5-6</td><td><code>uint16_t</code></td><td><code>attack_buff</code></td></tr><tr><td>7</td><td><code>uint8_t</code></td><td><code>remaining_energy</code></td></tr></tbody></table>
+<p>收到 0x0204 帧时会落到 <code>default: break;</code>，不做任何处理。同类情形还有 0x0208 到 0x020E 与全部 0x03xx 命令：结构体与长度都在头文件里，解析分支一个都没有。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant REF as 裁判系统
+    participant RP as RefereeProtocol
+    participant ON as RefereeDecode::onFrame
+    participant GI as g_referee_info
+    REF->>RP: 0x0001 数据段 11 字节
+    RP->>ON: GAME_STATUS
+    ON->>GI: game_type / game_progress / stage_remain_time
+    REF->>RP: 0x0204 数据段 8 字节
+    RP->>ON: BUFF
+    ON-->>ON: default，丢弃
+    REF->>RP: 0x0202 数据段 14 字节
+    RP->>ON: POWER_HEAT_DATA
+    ON->>GI: buffer_energy / shooter_heat_17mm / shooter_heat_42mm
+    REF->>RP: 0x0310 数据段 150 字节
+    RP->>ON: ROBOT_CUSTOM_DATA_2
+    ON-->>ON: default，丢弃</pre></div>
+<h2 id="长度校验为什么写成-len--sizeof">长度校验为什么写成 len &#x3C; sizeof</h2>
+<p>每个已解析分支都以同一形式做前置校验：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E">(len </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> sizeof</span><span style="color:#24292E">(</span><span style="color:#005CC5">game_status_t</span><span style="color:#24292E">))</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E">;</span></span></code></pre>
+<p>6 处校验分别在 <code>Communication/Src/referee_decode.cpp:35</code>、<code>:54</code>、<code>:81</code>、<code>:101</code>、<code>:120</code>、<code>:138</code>。语义是「短于结构体长度就丢弃」，等于长度通过。因为结构体被 <code>pack(1)</code> 压到与线上一致，<code>sizeof</code> 就是官方数据段长度；若改成默认对齐，<code>game_status_t</code> 会因 <code>uint64_t</code> 的 8 字节对齐膨胀到 16 字节，11 字节的合法帧会被全部拒绝。这一点在 <code>04-RefereeDecode字段映射</code> 里作为对齐风险展开。</p>
+<p>校验写成小于而非不等于，是有意为之：官方可能给同一个命令加长数据段，多出的尾部被忽略，旧固件仍能工作。代价是长度异常变大时不会告警。</p>
+<p><code>len</code> 的类型是 <code>uint16_t</code>，<code>sizeof</code> 是无符号整数。比较时 <code>len</code> 向更宽的无符号类型提升，不存在负数被当成大正数的情况。</p>
+<p>未登记的命令走 <code>default</code> 分支（<code>referee_decode.cpp:153-154</code>），只是 <code>break</code>。解析层不记录丢弃的 <code>cmd_id</code>，因此无法从代码侧统计哪些命令在被忽略。</p>
+<h2 id="命令码层面的易错点">命令码层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>把 <code>0x0310</code> 当官方值</td><td>与上位机对不上，或按 0x030A 的长度解析失败</td><td><code>referee_decode.h:68</code>，待现场确认</td></tr><tr><td>认为定义了结构体就会解析</td><td>0x0204 有完整结构体却收不到数据</td><td><code>referee_decode.cpp:27-155</code> 无 <code>BUFF</code> 分支</td></tr><tr><td>认为 <code>sizeof</code> 与线上长度总是相等</td><td>去掉 <code>pack</code> 后合法帧被拒</td><td><code>referee_decode.h:15</code>、<code>:450</code></td></tr><tr><td>给数据段加末尾对齐填充</td><td>多算 1 到 3 字节，偏移全错</td><td>结构体按 1 字节对齐，无填充</td></tr><tr><td>按枚举顺序推断命令码连续</td><td>0x0204 之后直接是 0x0206</td><td><code>referee_decode.h:44-46</code></td></tr><tr><td>认为 0x0F01、0x0A01 组有结构体</td><td>找不到对应定义</td><td>只有注释占位（<code>referee_decode.h:418-448</code>）</td></tr><tr><td>用大端读多字节字段</td><td><code>stage_remain_time</code> 等数值异常</td><td>数据段多字节整数为小端</td></tr><tr><td>按 <code>len</code> 反推命令码</td><td>长度只描述数据段，不含 9 字节帧开销</td><td>帧长是 <code>9+n</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>cmd_id</code> 决定数据段布局，共 6 个功能分组，官方码段不连续。</li>
+<li>代码登记了 37 个命令码，<code>onFrame</code> 只解析其中 6 个；其余落到 <code>default</code>。</li>
+<li>数据段结构体按 <code>pack(1)</code> 布局，<code>sizeof</code> 即线上长度。</li>
+<li>每个解析分支先做 <code>len &#x3C; sizeof</code> 校验，短的丢弃，等长的通过。</li>
+<li>0x0204 <code>BUFF</code> 有结构体无分支，是「定义了但未接线」的一处。</li>
+<li><code>0x0310</code> 疑似 <code>0x030A</code> 笔误，待现场确认。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>枚举覆盖</td><td>登记 37 个官方命令</td><td>头文件不臃肿</td><td>新命令要手动补，未登记的静默丢弃</td></tr><tr><td>长度校验</td><td><code>len &#x3C; sizeof</code> 才丢弃</td><td>兼容官方加长数据段</td><td>多余字节被忽略，不会告警</td></tr><tr><td>结构体布局</td><td><code>pack(1)</code></td><td><code>sizeof</code> 与线上一致</td><td>成员可能跨缓存行，访问略慢</td></tr><tr><td>解析范围</td><td>只解析 6 个命令</td><td>代码短，写点明确</td><td>其余 31 个命令的数据无法从应用层取到</td></tr><tr><td>未命中处理</td><td><code>default: break</code></td><td>未知命令不影响解析</td><td>丢弃行为不可观测</td></tr><tr><td>命令登记</td><td>雷达与敌方组只留枚举</td><td>保留码位，便于后续补结构体</td><td>收到帧后数据被完整丢弃</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 0x0001、0x0201、0x0203、0x0207 四个命令的数据段长度与整帧长度。</li>
+<li><code>0x0310</code> 按 <code>robot_custom_data_2_t</code> 解析时数据段是 150 字节，整帧多少字节？是否超过 <code>buffer_[256]</code> 的容量核算？</li>
+<li><code>game_status_t</code> 里 <code>SyncTimeStamp</code> 是 <code>uint64_t</code>，它是否被写入 <code>g_referee_info</code>？在哪个分支？</li>
+<li>列出三个「定义了结构体但 <code>onFrame</code> 无分支」的命令码。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>若把 <code>#pragma pack</code> 去掉，逐个数出至少三个结构体的 <code>sizeof</code> 变化，并说明哪一处长度校验会因此拒绝合法帧。</li>
+<li>假设要在 <code>onFrame</code> 里增加 0x0204 <code>BUFF</code> 的解析，列出需要同步修改的三处：枚举是否已存在、结构体、<code>RefereeInfo</code> 字段，并给出新增字段的数据类型建议。</li>
+<li>0x0F01、0x0F02 只登记了命令码没有结构体。按官方手册补齐这两个命令的数据段时，需要先确认哪些信息，才能保证 <code>len &#x3C; sizeof</code> 校验成立？</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_decode.h</code></td><td><code>RefCmdID</code>（:31-80）、全部数据段结构体（:86-416）、<code>pack</code>（:15、:450）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>6 个解析分支（:33-150）、长度校验（:35、:54、:81、:101、:120、:138）、<code>default</code>（:153-154）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>帧长与数据段指针（:99、:125）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-RefereeProtocol状态机"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-RefereeProtocol状态机</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/05-裁判系统协议/03-RefereeProtocol状态机.md</span></div><div class="dfile__body"><h1 id="refereeprotocol-状态机">RefereeProtocol 状态机</h1>
+<blockquote>
+<p>实现在 <code>Communication/Inc/referee_protocol.h:25-37</code> 的 <code>State</code> 枚举与 <code>Communication/Src/referee_protocol.cpp:26-134</code> 的 <code>input</code> 函数，两块板逐字节相同。帧字段布局见 <code>01-裁判系统链路与帧格式</code>，校验通过后的字段映射见 <code>04-RefereeDecode字段映射</code>。</p>
+</blockquote>
+<p>串口给出的是无边界的字节流，接收方必须自己找出帧的起点与终点。裁判系统帧的起点固定为 <code>0xA5</code>，长度由帧内 <code>len</code> 字段给出，于是解帧可以写成一台有限状态机：每来一个字节，按当前状态决定写到哪里、下一个状态是什么。</p>
+<p>状态机的状态数等于需要顺序确认的字段数。帧头有 SOF、len 低、len 高、seq、CRC8 五个位置，<code>cmd_id</code> 有两个字节，数据段长度可变，CRC16 有两个字节。合并同类状态后共 10 个：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>状态</th><th>对应字段</th><th>进入该状态时已确认的字节数</th></tr></thead><tbody><tr><td><code>WAIT_SOF</code></td><td>帧起始</td><td>0</td></tr><tr><td><code>WAIT_LEN_L</code></td><td><code>len</code> 低字节</td><td>1</td></tr><tr><td><code>WAIT_LEN_H</code></td><td><code>len</code> 高字节</td><td>2</td></tr><tr><td><code>WAIT_SEQ</code></td><td><code>seq</code></td><td>3</td></tr><tr><td><code>WAIT_CRC8</code></td><td>帧头 CRC8</td><td>4</td></tr><tr><td><code>WAIT_CMDID_L</code></td><td><code>cmd_id</code> 低字节</td><td>5</td></tr><tr><td><code>WAIT_CMDID_H</code></td><td><code>cmd_id</code> 高字节</td><td>6</td></tr><tr><td><code>WAIT_DATA</code></td><td>数据段</td><td>7</td></tr><tr><td><code>WAIT_CRC16_L</code></td><td>帧尾 CRC16 低字节</td><td>7+n</td></tr><tr><td><code>WAIT_CRC16_H</code></td><td>帧尾 CRC16 高字节</td><td>8+n</td></tr></tbody></table>
+<p>状态在头文件里以 <code>enum State</code> 定义，初值 <code>WAIT_SOF</code>（<code>Communication/Inc/referee_protocol.h:39</code>）。对象只有三块持久状态：<code>buffer_[256]</code>、<code>index_</code>、<code>data_len_</code> 与 <code>cmd_id_</code>（<code>referee_protocol.h:41-45</code>）。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Communication/Inc/referee_protocol.h</code></td><td>状态枚举、初值与缓冲成员</td></tr><tr><td><code>Communication/Src/referee_protocol.cpp</code></td><td><code>input</code> 状态机与 <code>reset</code></td></tr><tr><td><code>Communication/Src/referee_decode.cpp</code></td><td>回调注册与逐字节喂数</td></tr><tr><td><code>Communication/Src/usart_dma.cpp</code></td><td>空闲回调与重入标志</td></tr></tbody></table>
+<h2 id="状态机全景">状态机全景</h2>
+<p><code>reset()</code> 把所有状态清回起点，是两条失败路径的公共终点（<code>Communication/Src/referee_protocol.cpp:18-24</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> WAIT_SOF
+    WAIT_SOF --> WAIT_LEN_L : 字节等于 0xA5
+    WAIT_SOF --> WAIT_SOF : 其它字节忽略
+    WAIT_LEN_L --> WAIT_LEN_H : 记 len 低字节
+    WAIT_LEN_H --> WAIT_SEQ : data_len_ 不超过 200
+    WAIT_LEN_H --> WAIT_SOF : data_len_ 超过 200，reset
+    WAIT_SEQ --> WAIT_CRC8 : 记 seq
+    WAIT_CRC8 --> WAIT_CMDID_L : CRC8 通过
+    WAIT_CRC8 --> WAIT_SOF : CRC8 失败，reset
+    WAIT_CMDID_L --> WAIT_CMDID_H : 记 cmd_id 低字节
+    WAIT_CMDID_H --> WAIT_CRC16_L : data_len_ 等于 0
+    WAIT_CMDID_H --> WAIT_DATA : data_len_ 大于 0
+    WAIT_DATA --> WAIT_CRC16_L : index_ 达到 7 加 data_len_
+    WAIT_CRC16_L --> WAIT_CRC16_H : 记 CRC16 低字节
+    WAIT_CRC16_H --> WAIT_SOF : 校验完成，reset</pre></div>
+<h2 id="逐态动作与转移">逐态动作与转移</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>状态</th><th>收到字节后的动作</th><th>去向</th><th>源码</th></tr></thead><tbody><tr><td><code>WAIT_SOF</code></td><td>字节等于 <code>0xA5</code> 时写入 <code>buffer_[0]</code>，<code>index_</code> 置 1；否则丢字节并留在本态</td><td><code>WAIT_LEN_L</code></td><td><code>referee_protocol.cpp:30-37</code></td></tr><tr><td><code>WAIT_LEN_L</code></td><td><code>buffer_[index_++]</code>，<code>data_len_ = byte</code></td><td><code>WAIT_LEN_H</code></td><td><code>:39-43</code></td></tr><tr><td><code>WAIT_LEN_H</code></td><td>`data_len_</td><td>= byte &#x3C;&#x3C; 8`，合成 16 位长度</td><td>超过 200 回 <code>WAIT_SOF</code>，否则 <code>WAIT_SEQ</code></td></tr><tr><td><code>WAIT_SEQ</code></td><td>存 <code>seq</code>，不校验</td><td><code>WAIT_CRC8</code></td><td><code>:59-62</code></td></tr><tr><td><code>WAIT_CRC8</code></td><td>存字节后算 <code>crc8_calc(buffer_, 4, 0xFF)</code> 并与该字节比较</td><td>相等进 <code>WAIT_CMDID_L</code>，否则 <code>WAIT_SOF</code></td><td><code>:64-78</code></td></tr><tr><td><code>WAIT_CMDID_L</code></td><td><code>cmd_id_ = byte</code></td><td><code>WAIT_CMDID_H</code></td><td><code>:80-84</code></td></tr><tr><td><code>WAIT_CMDID_H</code></td><td>`cmd_id_</td><td>= byte &#x3C;&#x3C; 8`</td><td>长度为 0 进 <code>WAIT_CRC16_L</code>，否则 <code>WAIT_DATA</code></td></tr><tr><td><code>WAIT_DATA</code></td><td>逐字节存数据段，每字节后检查 <code>index_ >= 7 + data_len_</code></td><td>达成进 <code>WAIT_CRC16_L</code></td><td><code>:96-103</code></td></tr><tr><td><code>WAIT_CRC16_L</code></td><td>存 CRC16 低字节</td><td><code>WAIT_CRC16_H</code></td><td><code>:105-108</code></td></tr><tr><td><code>WAIT_CRC16_H</code></td><td>存高字节，拼出 <code>recv_crc16</code>，算 <code>crc16_calc(buffer_, index_-2, 0xFFFF)</code></td><td>无条件回 <code>WAIT_SOF</code></td><td><code>:110-132</code></td></tr></tbody></table>
+<p>两个字段的读取顺序需要留意。<code>data_len_</code> 是先取低字节再或上高字节左移 8 位，<code>cmd_id_</code> 同样，都是小端。<code>seq</code> 被写入缓冲但既不比较也不参与任何判断。</p>
+<p>十个状态里只有 <code>WAIT_DATA</code> 的驻留时间可变，其余每个字节恰好推进一次。<code>WAIT_SOF</code> 是唯一一个会连续吞掉多个字节的状态，它靠比较 <code>0xA5</code> 挑出起点。</p>
+<h2 id="长度字段的-200-上限">长度字段的 200 上限</h2>
+<p>长度字段两字节合成后立即检查：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E">(data_len_ </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 200</span><span style="color:#24292E">)</span><span style="color:#6A737D">  // 安全保护</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#6F42C1">    reset</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>该判断在 <code>Communication/Src/referee_protocol.cpp:49-52</code>。触发时整帧丢弃，且当前这个高字节不会被重新当作 SOF 使用。200 是官方单帧数据段的上限，代码把它同时当作缓冲越界保护。</p>
+<p>把上限写成 200 而不是按缓冲容量 256 反推，是因为越界保护要留出帧头与 CRC16 的余量：一帧最多 <code>9+200</code> 字节，仍小于 256。若上限按 256 来写，最大写入下标会越过缓冲边界。</p>
+<h2 id="crc8-与-crc16-的覆盖范围">CRC8 与 CRC16 的覆盖范围</h2>
+<p><code>crc8_calc</code> 的三个参数是数据指针、长度、初值，调用处传入 <code>buffer_</code>、4、<code>0xFF</code>（<code>referee_protocol.cpp:68</code>）。4 字节正好是 SOF、len 低、len 高、seq，此时 <code>index_</code> 为 5，<code>buffer_[4]</code> 存的就是待比较的 CRC8 本身。把 <code>cmd_id</code> 也纳入帧头校验会算错，帧头校验的范围由协议规定为前 4 字节。</p>
+<p><code>WAIT_CRC16_H</code> 先拼接收值，再算校验值：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">uint16_t</span><span style="color:#24292E"> recv_crc16 </span><span style="color:#D73A49">=</span></span>
+<span class="line"><span style="color:#24292E">    buffer_[index_</span><span style="color:#D73A49">-</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">|</span></span>
+<span class="line"><span style="color:#24292E">    (buffer_[index_</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">uint16_t</span><span style="color:#24292E"> calc_crc16 </span><span style="color:#D73A49">=</span></span>
+<span class="line"><span style="color:#6F42C1">    crc16_calc</span><span style="color:#24292E">(buffer_, index_</span><span style="color:#D73A49">-</span><span style="color:#005CC5">2</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">FFFF</span><span style="color:#24292E">);</span></span></code></pre>
+<p>接收值低字节在前、高字节在后，为小端。计算长度是 <code>index_-2</code>：此时 <code>index_</code> 等于 <code>9+n</code>，减 2 得 <code>7+n</code>，覆盖 SOF 到最后 1 字节数据，不含两字节 CRC16。初值 <code>0xFFFF</code>。两值相等才调用回调，随后无论结果都执行 <code>reset()</code>（<code>referee_protocol.cpp:121-130</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>校验</th><th>覆盖字节</th><th>长度参数</th><th>初值</th></tr></thead><tbody><tr><td>CRC8</td><td>SOF 到 seq</td><td>固定 4</td><td><code>0xFF</code></td></tr><tr><td>CRC16</td><td>SOF 到最后 1 字节数据</td><td><code>index_-2</code></td><td><code>0xFFFF</code></td></tr></tbody></table>
+<h2 id="零长数据段与结束判断">零长数据段与结束判断</h2>
+<p><code>WAIT_CMDID_H</code> 里 <code>data_len_ == 0</code> 时直接跳到 CRC16 低字节（<code>referee_protocol.cpp:90-93</code>），不进入 <code>WAIT_DATA</code>。零长帧整帧 9 字节，CRC16 覆盖前 7 字节。</p>
+<p><code>WAIT_DATA</code> 每收一字节把 <code>index_</code> 加一，再判断是否达到 <code>7 + data_len_</code>（<code>referee_protocol.cpp:99</code>）。用累加下标而不是另设计数器，好处是与 CRC16 的 <code>index_</code> 语义一致，代价是下标与「已收数据字节数」需要换算。</p>
+<h2 id="buffer_-的边界核算">buffer_ 的边界核算</h2>
+<p>数据段上限 200 保证了写入不越界。逐态算下标：SOF 到 <code>cmd_id</code> 高字节共 7 次写入，数据段 <code>n</code> 次，CRC16 两次，最大写入下标为 <code>8+n</code>，最大 <code>index_</code> 为 <code>9+n</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>量</th><th>表达式</th><th>上限</th></tr></thead><tbody><tr><td>数据段</td><td><code>n</code></td><td>200</td></tr><tr><td>缓冲容量</td><td><code>sizeof(buffer_)</code></td><td>256</td></tr><tr><td>最大写入下标</td><td><code>8+n</code></td><td>208</td></tr><tr><td>最终 <code>index_</code></td><td><code>9+n</code></td><td>209</td></tr><tr><td>剩余空间</td><td><code>256-(9+n)</code></td><td>47</td></tr></tbody></table>
+<p><code>WAIT_DATA</code> 的结束位置 <code>7+200</code> 等于 207，两字节 CRC16 写到下标 208，都在 256 之内。上限若放宽到 247，最大下标会顶到 255；再大就会越过 <code>buffer_[256]</code>。代码没有在每次写入前做运行时下标检查，安全性完全依赖 200 的上限判断。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    IN["input(byte)"] --> CHK{"当前状态"}
+    CHK -->|"WAIT_SOF"| S1["字节等于 0xA5？&#x3C;br/>否则丢弃"]
+    S1 -->|"是"| W["写 buffer_[index_++]"]
+    CHK -->|"WAIT_LEN_H"| S2["合成 data_len_"]
+    S2 -->|"超过 200"| RST["reset()"]
+    S2 -->|"不超过"| W
+    CHK -->|"WAIT_CRC8"| S3["算 CRC8 并比较"]
+    S3 -->|"失败"| RST
+    S3 -->|"通过"| W
+    CHK -->|"WAIT_DATA"| S4["index_ 达到 7 加 data_len_？"]
+    S4 -->|"未达到"| W
+    S4 -->|"达到"| W
+    CHK -->|"WAIT_CRC16_H"| S5["算 CRC16 并比较"]
+    S5 -->|"相等"| CB["frame_cb_ 回调"]
+    S5 -->|"不等"| RST
+    CB --> RST
+    W --> NX["转入下一状态"]</pre></div>
+<h2 id="失步与重同步">失步与重同步</h2>
+<p>状态机没有帧间超时，也没有「空闲即复位」。<code>UsartDma</code> 的空闲中断只负责把这一批字节交给回调，<code>RefereeProtocol</code> 的状态跨调用保留。由此有两类行为：</p>
+<ol>
+<li>一帧被截断时，状态停在中间位置，后续字节继续按该状态解释，直到某个判断失败或长度走完才复位；</li>
+<li>复位时当前字节被消费掉，不会重新按 SOF 判断。</li>
+</ol>
+<p>以 <code>WAIT_CRC8</code> 失败为例，若这帧的 CRC8 位置恰好来了一个新帧的 <code>0xA5</code>，比较失败后 <code>reset()</code> 把该字节丢弃，新帧的第一个字节损失，必须等下一个 <code>0xA5</code> 才能重新同步。这是固定起始字节协议在错误帧之后的常见代价。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant B as 字节流
+    participant SM as RefereeProtocol
+    participant CB as frame_cb_
+    B->>SM: 0xA5
+    Note over SM: WAIT_SOF 到 WAIT_LEN_L，buffer_[0]
+    B->>SM: 0x0D
+    Note over SM: WAIT_LEN_L 到 WAIT_LEN_H
+    B->>SM: 0x00
+    Note over SM: data_len_ 等于 13，进入 WAIT_SEQ
+    B->>SM: seq
+    Note over SM: WAIT_SEQ 到 WAIT_CRC8
+    B->>SM: crc8
+    Note over SM: CRC8 通过，进入 WAIT_CMDID_L
+    B->>SM: 0x01
+    B->>SM: 0x02
+    Note over SM: cmd_id_ 等于 0x0201，进入 WAIT_DATA
+    B->>SM: 13 字节数据段
+    Note over SM: index_ 达到 20，进入 WAIT_CRC16_L
+    B->>SM: crc16 低字节
+    B->>SM: crc16 高字节
+    alt CRC16 相等
+        SM->>CB: frame_cb_(0x0201, buffer_[7], 13)
+    else CRC16 不等
+        Note over SM: 丢弃本帧
+    end
+    Note over SM: reset() 回到 WAIT_SOF</pre></div>
+<h2 id="回调注册与运行上下文">回调注册与运行上下文</h2>
+<p><code>RefereeProtocol</code> 不持有回调以外的依赖。构造时把回调存进 <code>frame_cb_</code>，<code>RefereeDecode</code> 在构造里注册成员函数转发（<code>Communication/Src/referee_decode.cpp:13-20</code>）。<code>WAIT_CRC16_H</code> 调用回调前判空（<code>referee_protocol.cpp:123</code>），所以 <code>refereeproto(nullptr)</code> 状态下即使有数据也只丢弃不崩。</p>
+<p>解析全程在中断上下文执行：<code>RefereeCallback</code> 由 <code>RefereeUartCallback</code> 在 <code>USART6_IRQHandler</code> 里调用，逐字节 <code>input</code>（<code>Communication/Src/referee_decode.cpp:158-165</code>）。一帧 209 字节的最坏情况下，中断里要跑 209 次状态机，外加一次 CRC16 表查，属于可接受的短临界区。<code>UsartDma</code> 用 <code>callback_busy_</code> 防止空闲回调重入（<code>Communication/Src/usart_dma.cpp:61-64</code>），但该标志不覆盖协议状态机本身。</p>
+<h2 id="状态机层面的易错点">状态机层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为空闲会产生复位</td><td>截断帧之后的状态一直保留</td><td>状态机没有超时逻辑，<code>reset</code> 只由校验与长度触发</td></tr><tr><td>复位后期望当前字节被重解释</td><td>丢失一个可能的 <code>0xA5</code></td><td><code>referee_protocol.cpp:71</code>、<code>:51</code> 直接 <code>reset()</code></td></tr><tr><td>用 <code>data_len_</code> 当整帧长度</td><td><code>WAIT_DATA</code> 的结束条件算错</td><td>结束条件是 <code>7 + data_len_</code>（<code>:99</code>）</td></tr><tr><td>把 <code>index_</code> 当数据字节数</td><td>少算 7 字节帧头</td><td><code>index_</code> 含帧头与 <code>cmd_id</code></td></tr><tr><td>认为 CRC8 用了整个缓冲</td><td>校验范围随 <code>index_</code> 变化</td><td>固定传 4（<code>:68</code>）</td></tr><tr><td>认为 CRC16 覆盖全帧</td><td>把两字节 CRC16 也纳入计算</td><td>长度取 <code>index_-2</code>（<code>:119</code>）</td></tr><tr><td>放宽 200 上限不改缓冲</td><td>写入越过 <code>buffer_[256]</code></td><td>无运行时下标检查，仅靠 <code>:49</code> 的上限</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>解帧是字节流上的 10 态状态机，起点 <code>WAIT_SOF</code>，终点 <code>WAIT_CRC16_H</code>。</li>
+<li><code>data_len_</code> 与 <code>cmd_id_</code> 小端合成；<code>seq</code> 只存不查。</li>
+<li>两处校验各自有独立的覆盖范围：CRC8 前 4 字节、CRC16 前 <code>7+n</code> 字节，初值分别为 <code>0xFF</code> 与 <code>0xFFFF</code>。</li>
+<li>超过 200 的数据段直接复位，是缓冲保护的唯一依赖。</li>
+<li>最大帧 209 字节，<code>buffer_[256]</code> 余 47 字节。</li>
+<li>状态机无超时，截断帧会保留状态直到后续判断失败。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>解帧方式</td><td>逐字节有限状态机</td><td>不依赖帧间间隔，缓冲小</td><td>每个字节一次 <code>switch</code>，状态跨调用保留</td></tr><tr><td>越界保护</td><td>只判 <code>data_len_ > 200</code></td><td>判断便宜</td><td>依赖该常量与缓冲容量同步维护</td></tr><tr><td>失步恢复</td><td>仅在校验失败时复位</td><td>逻辑简单</td><td>复位吃掉当前字节，可能多丢一帧起点</td></tr><tr><td>缓冲策略</td><td>单块 <code>buffer_</code> 复用</td><td>无动态分配</td><td>回调内必须拷贝或立即消费</td></tr><tr><td>回调时机</td><td>CRC16 通过后</td><td>上层不接触坏帧</td><td>坏帧对上层不可见，无法统计误码率</td></tr><tr><td>序号处理</td><td><code>seq</code> 只存不查</td><td>少一次比较</td><td>乱序与丢帧不可观测</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>画出数据段长度 0、1、200 三种情况下 <code>input</code> 经过的状态序列。</li>
+<li><code>WAIT_LEN_H</code> 收到的两个字节为 <code>0xC8</code>、<code>0x00</code> 时会发生什么？<code>0x00</code>、<code>0x01</code> 呢？</li>
+<li>数据段 200 字节时，最大写入下标与最终 <code>index_</code> 各是多少？<code>buffer_</code> 还剩多少字节。</li>
+<li><code>WAIT_CRC16_H</code> 里 <code>recv_crc16</code> 的两个字节分别对应帧的哪个偏移？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>把 <code>data_len_</code> 上限从 200 调到 250 会让最大写入下标变成多少？据此判断 <code>buffer_[256]</code> 是否仍安全，并给出两种不改缓冲的替代做法。</li>
+<li>为状态机增加空闲超时复位：说明需要哪一层提供时间基准（<code>UsartDma</code> 的空闲回调或独立定时器），以及超时判断放在复位路径的哪个位置才不会误伤正常帧。</li>
+<li><code>WAIT_SOF</code> 之外的任一状态收到新帧 <code>0xA5</code> 时不会被识别为起点。分析这一设计的利弊，并给出一种代价最小的改进思路。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_protocol.h</code></td><td><code>State</code> 十态（:25-37）、初值（:39）、<code>buffer_[256]</code>（:41）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td><code>input</code> 状态机（:26-134）、<code>reset</code>（:18-24）、len 保护（:49-52）、CRC8（:68）、数据段结束（:99）、CRC16（:110-130）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>回调注册（:13-20）、<code>RefereeCallback</code>（:158-165）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲回调重入标志（:61-64）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-RefereeDecode字段映射"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-RefereeDecode字段映射</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/05-裁判系统协议/04-RefereeDecode字段映射.md</span></div><div class="dfile__body"><h1 id="refereedecode-字段映射">RefereeDecode 字段映射</h1>
+<blockquote>
+<p>实现在 <code>Communication/Inc/referee_decode.h</code> 与 <code>Communication/Src/referee_decode.cpp</code>，两块板逐字节相同，仅 <code>g_referee_info</code> 的定义位置不同。帧结构见 <code>01-裁判系统链路与帧格式</code>，解帧状态机见 <code>03-RefereeProtocol状态机</code>，命令码与数据段布局见 <code>02-命令码与数据段</code>。</p>
+</blockquote>
+<p><code>RefereeProtocol</code> 校验通过后调用 <code>frame_cb_(cmd_id, &#x26;buffer_[7], data_len_)</code>，把数据段首指针交给上层。<code>RefereeDecode::onFrame</code> 负责把这条原始指针解释成具体字段，并写入全局 <code>g_referee_info</code>。映射采用零拷贝：不复制数据段，直接把指针 <code>reinterpret_cast</code> 成对应结构体指针，再逐字段取值。</p>
+<p><code>g_referee_info</code>（类型 <code>RefereeInfo</code>）是所有下游代码唯一能看到裁判数据的地方。字段清单在 <code>Communication/Inc/referee_decode.h:456-499</code>，声明为全局对象在 <code>:501</code>。</p>
+<p>零拷贝的成立依赖三个隐含前提：结构体按 1 字节对齐、线上字节序与主机一致、位域分配顺序与编译器一致。三者都在默认配置下成立，改动任一项都会让字段静默取错值，而不是报错。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    CB["frame_cb_(cmd_id, data, len)"] --> SW{"switch(cmd_id)"}
+    SW -->|"0x0001 GAME_STATUS"| K1["len 小于 sizeof(game_status_t) 则 return"]
+    SW -->|"0x0201 ROBOT_STATUS"| K2["len 小于 sizeof(robot_status_t) 则 return"]
+    SW -->|"0x0202 POWER_HEAT_DATA"| K3["len 小于 sizeof(power_heat_data_t) 则 return"]
+    SW -->|"0x0203 ROBOT_POS"| K4["len 小于 sizeof(robot_pos_t) 则 return"]
+    SW -->|"0x0206 HURT_DATA"| K5["len 小于 sizeof(hurt_data_t) 则 return"]
+    SW -->|"0x0207 SHOOT_DATA"| K6["len 小于 sizeof(shoot_data_t) 则 return"]
+    SW -->|"其它"| DEF["default，无动作"]
+    K1 --> P["reinterpret_cast 成结构体指针"]
+    K2 --> P
+    K3 --> P
+    K4 --> P
+    K5 --> P
+    K6 --> P
+    P --> W["逐字段写入 g_referee_info"]
+    W --> U["updated = true"]</pre></div>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Communication/Inc/referee_decode.h</code></td><td><code>pack</code>、<code>RefereeInfo</code> 与全局声明</td></tr><tr><td><code>Communication/Src/referee_decode.cpp</code></td><td>六个解析分支</td></tr><tr><td><code>Communication/Src/referee_protocol.cpp</code></td><td>小端合成与 CRC16</td></tr><tr><td>底盘板 <code>Message_Bus</code></td><td><code>g_referee_info</code> 的定义位置</td></tr><tr><td>底盘板 <code>ControlCenterTask.cpp</code></td><td>唯一消费点</td></tr></tbody></table>
+<h2 id="零拷贝映射到-g_referee_info">零拷贝映射到 g_referee_info</h2>
+<p>六个分支的形状一致，以 0x0207 为例：</p>
+<ol>
+<li>判 <code>len &#x3C; sizeof(shoot_data_t)</code>，不满足则 <code>return</code>，不置 <code>updated</code>。</li>
+<li><code>reinterpret_cast</code> 数据段指针为 <code>shoot_data_t*</code>。</li>
+<li>逐字段取值写入 <code>g_referee_info</code>。</li>
+<li>六个字段都写完之后置 <code>updated = true</code>。</li>
+</ol>
+<p>映射表按命令列出结构体字段、<code>g_referee_info</code> 目标字段与写入行号。未列出的结构体成员不被读取。</p>
+<h3 id="0x0001-game_statusreferee_decodecpp33-46">0x0001 GAME_STATUS（<code>referee_decode.cpp:33-46</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体字段</th><th>类型</th><th>目标字段</th><th>写入行</th></tr></thead><tbody><tr><td><code>game_type</code></td><td>位域 4 位</td><td><code>game_type</code></td><td><code>:40</code></td></tr><tr><td><code>game_progress</code></td><td>位域 4 位</td><td><code>game_progress</code></td><td><code>:41</code></td></tr><tr><td><code>stage_remain_time</code></td><td><code>uint16_t</code></td><td><code>stage_remain_time</code></td><td><code>:42</code></td></tr><tr><td><code>SyncTimeStamp</code></td><td><code>uint64_t</code></td><td>无</td><td>不读取</td></tr></tbody></table>
+<h3 id="0x0201-robot_status52-73">0x0201 ROBOT_STATUS（<code>:52-73</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体字段</th><th>类型</th><th>目标字段</th><th>写入行</th></tr></thead><tbody><tr><td><code>robot_id</code></td><td><code>uint8_t</code></td><td><code>robot_id</code></td><td><code>:59</code></td></tr><tr><td><code>robot_level</code></td><td><code>uint8_t</code></td><td><code>robot_level</code></td><td><code>:60</code></td></tr><tr><td><code>current_HP</code></td><td><code>uint16_t</code></td><td><code>current_hp</code></td><td><code>:62</code></td></tr><tr><td><code>maximum_HP</code></td><td><code>uint16_t</code></td><td><code>max_hp</code></td><td><code>:63</code></td></tr><tr><td><code>chassis_power_limit</code></td><td><code>uint16_t</code></td><td><code>chassis_power_limit</code></td><td><code>:65</code></td></tr><tr><td><code>power_management_gimbal_output</code></td><td>位域 1 位</td><td><code>gimbal_output</code></td><td><code>:67</code></td></tr><tr><td><code>power_management_chassis_output</code></td><td>位域 1 位</td><td><code>chassis_output</code></td><td><code>:68</code></td></tr><tr><td><code>power_management_shooter_output</code></td><td>位域 1 位</td><td><code>shooter_output</code></td><td><code>:69</code></td></tr><tr><td><code>shooter_barrel_cooling_value</code>、<code>shooter_barrel_heat_limit</code></td><td><code>uint16_t</code></td><td>无</td><td>不读取</td></tr></tbody></table>
+<h3 id="0x0202-power_heat_data79-93">0x0202 POWER_HEAT_DATA（<code>:79-93</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体字段</th><th>类型</th><th>目标字段</th><th>写入行</th></tr></thead><tbody><tr><td><code>buffer_energy</code></td><td><code>uint16_t</code></td><td><code>buffer_energy</code></td><td><code>:86</code></td></tr><tr><td><code>shooter_17mm_heat</code></td><td><code>uint16_t</code></td><td><code>shooter_heat_17mm</code></td><td><code>:88</code></td></tr><tr><td><code>shooter_42mm_heat</code></td><td><code>uint16_t</code></td><td><code>shooter_heat_42mm</code></td><td><code>:89</code></td></tr><tr><td><code>reserved1</code>、<code>reserved2</code>、<code>reserved3</code></td><td>保留</td><td>无</td><td>不读取</td></tr></tbody></table>
+<h3 id="0x0203-robot_pos99-112">0x0203 ROBOT_POS（<code>:99-112</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体字段</th><th>类型</th><th>目标字段</th><th>写入行</th></tr></thead><tbody><tr><td><code>x</code></td><td><code>float</code></td><td><code>robot_x</code></td><td><code>:106</code></td></tr><tr><td><code>y</code></td><td><code>float</code></td><td><code>robot_y</code></td><td><code>:107</code></td></tr><tr><td><code>angle</code></td><td><code>float</code></td><td><code>robot_angle</code></td><td><code>:108</code></td></tr></tbody></table>
+<h3 id="0x0206-hurt_data118-130">0x0206 HURT_DATA（<code>:118-130</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体字段</th><th>类型</th><th>目标字段</th><th>写入行</th></tr></thead><tbody><tr><td><code>armor_id</code></td><td>位域 4 位</td><td><code>hurt_armor_id</code></td><td><code>:125</code></td></tr><tr><td><code>hurt_HP_deduction_reason</code></td><td>位域 4 位</td><td><code>hurt_type</code></td><td><code>:126</code></td></tr></tbody></table>
+<h3 id="0x0207-shoot_data136-150">0x0207 SHOOT_DATA（<code>:136-150</code>）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体字段</th><th>类型</th><th>目标字段</th><th>写入行</th></tr></thead><tbody><tr><td><code>bullet_type</code></td><td><code>uint8_t</code></td><td><code>bullet_type</code></td><td><code>:143</code></td></tr><tr><td><code>shooter_number</code></td><td><code>uint8_t</code></td><td><code>shooter_id</code></td><td><code>:144</code></td></tr><tr><td><code>launching_frequency</code></td><td><code>uint8_t</code></td><td><code>shoot_freq</code></td><td><code>:145</code></td></tr><tr><td><code>initial_speed</code></td><td><code>float</code></td><td><code>bullet_speed</code></td><td><code>:146</code></td></tr></tbody></table>
+<p>六个分支的结构体字段命名与目标字段命名并不一一对应：<code>current_HP</code> 对应 <code>current_hp</code>，<code>shooter_number</code> 对应 <code>shooter_id</code>，<code>hurt_HP_deduction_reason</code> 对应 <code>hurt_type</code>。改字段名时两侧要同时改。</p>
+<p>每个分支在取字段前都有 <code>len &#x3C; sizeof(结构体)</code> 的判断，不满足则 <code>return</code>，不置 <code>updated</code>。数据段比结构体长时按结构体的字节数读取，多出的尾部忽略。</p>
+<h2 id="pack1-决定了-sizeof-与对齐">pack(1) 决定了 sizeof 与对齐</h2>
+<p>线上结构体全部包在 <code>#pragma pack(push,1)</code> 与 <code>#pragma pack(pop)</code> 之间（<code>Communication/Inc/referee_decode.h:15</code>、<code>:450</code>）。压缩到 1 字节对齐后，<code>sizeof</code> 与线上数据段长度相等，且 <code>alignof</code> 为 1，任意字节偏移的 <code>reinterpret_cast</code> 都不会触发未对齐访问。</p>
+<p>去掉 <code>pack</code> 会同时改变两件东西。下面是用同一份头文件去掉 pack 前后编译得到的 <code>sizeof</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体</th><th>pack(1)</th><th>默认对齐</th><th>差值来源</th></tr></thead><tbody><tr><td><code>game_status_t</code></td><td>11</td><td>16</td><td><code>uint64_t</code> 要求 8 字节对齐，前面补 5 字节</td></tr><tr><td><code>robot_status_t</code></td><td>13</td><td>14</td><td>结构体对齐 2，末尾补 1 字节</td></tr><tr><td><code>power_heat_data_t</code></td><td>14</td><td>16</td><td><code>float</code> 要求 4 字节对齐，末尾补 2 字节</td></tr><tr><td><code>buff_t</code></td><td>8</td><td>10</td><td><code>uint16_t</code> 前后各补 1 字节</td></tr><tr><td><code>shoot_data_t</code></td><td>7</td><td>8</td><td><code>float</code> 前补 1 字节</td></tr><tr><td><code>robot_pos_t</code></td><td>12</td><td>12</td><td>三个 <code>float</code> 无填充</td></tr><tr><td><code>hurt_data_t</code></td><td>1</td><td>1</td><td>单个字节，无填充</td></tr><tr><td><code>referee_frame_header_t</code></td><td>5</td><td>6</td><td><code>uint16_t</code> 后补 1 字节</td></tr></tbody></table>
+<p><code>onFrame</code> 的长度校验写的是 <code>len &#x3C; sizeof(结构体)</code>。去掉 pack 后 <code>game_status_t</code> 的 <code>sizeof</code> 变成 16，11 字节的合法数据段会被判为过短，比赛状态数据全部丢失。<code>RefereeInfo</code> 定义在 <code>pragma pack(pop)</code> 之后（<code>referee_decode.h:456-499</code>），不参与线上映射，它是普通结构体，本机编译 <code>sizeof</code> 为 48。</p>
+<p>对齐还决定访问方式。pack 到 1 之后 <code>uint16_t</code> 与 <code>float</code> 成员可能落在奇数地址上，Cortex-M4 支持非对齐的字访问，但同一成员的访问会拆成多次总线动作，这是压缩布局的效率代价。</p>
+<h2 id="小端与位域顺序的隐含前提">小端与位域顺序的隐含前提</h2>
+<p>帧内所有多字节整数按小端存放：<code>data_len_</code> 与 <code>cmd_id_</code> 的合成方式是低字节在前（<code>referee_protocol.cpp:47</code>、<code>:88</code>），CRC16 的接收值同样低字节在前（<code>:114-116</code>）。数据段里的 <code>uint16_t</code>、<code>uint64_t</code> 与 <code>float</code> 通过 <code>reinterpret_cast</code> 直接按主机字节序读取，隐含前提是线上也是小端。Cortex-M4 为小端，与官方协议的整数编码一致；<code>float</code> 字段（<code>robot_pos_t</code> 的三个坐标、<code>shoot_data_t</code> 的弹速、<code>power_heat_data_t</code> 的 <code>reserved3</code>）的线上字节序按官方手册为小端，此处属按手册推断，未在两块板上抓包核对。</p>
+<p>位域顺序同样依赖编译器。<code>game_status_t</code> 把 <code>game_type</code> 与 <code>game_progress</code> 声明在同一个 <code>uint8_t</code> 里，各占 4 位；<code>hurt_data_t</code> 的 <code>armor_id</code> 与 <code>hurt_HP_deduction_reason</code> 同样。GCC 在小端目标上把先声明的位域放在低位，因此 <code>game_type</code> 占字节 0 的低 4 位，<code>game_progress</code> 占高 4 位。这一顺序由编译器 ABI 决定，属推断，未在目标板上核对。</p>
+<h2 id="updated-标志的实际语义">updated 标志的实际语义</h2>
+<p><code>RefereeInfo::updated</code> 初值为 <code>false</code>（<code>Communication/Inc/referee_decode.h:498</code>），六个分支在写完全部字段后都置 <code>true</code>。全工程没有把 <code>updated</code> 清回 <code>false</code> 的代码，也没有重置接口。</p>
+<p>由此它的语义是「自本机启动以来成功解析过至少一帧」，而不是「本帧刚更新」。按命令区分也做不到：任一分支置位后，其它命令的更新无法从该标志看出，各字段也没有各自的版本号或时间戳。把 <code>updated</code> 当逐帧新数据标志会造成两个后果：首次置位后的每一轮循环都会当成有新数据；某一路命令断更时无法察觉。</p>
+<p>全局对象没有读写锁或双缓冲。写入发生在 <code>USART6_IRQHandler</code> 的中断上下文，读取发生在任务上下文。Cortex-M4 对对齐的 16 位与 32 位读写是单指令，单个字段不会撕裂，但一组跨命令的字段可能来自不同帧。底盘板只读 <code>bullet_speed</code>（<code>Task/Src/ControlCenterTask.cpp:123</code>），没有这种跨字段一致性问题。</p>
+<h2 id="两块板的定义位置与消费点">两块板的定义位置与消费点</h2>
+<p>两块板的 <code>referee_decode.cpp</code> 只有一行不同：云台板在 <code>:9</code> 定义 <code>g_referee_info</code>，底盘板在 <code>:9</code> 写成 <code>extern</code>，定义本体放在 <code>Message_Bus/message_bus.cpp:13</code>，并在 <code>Message_Bus/message_bus.h:60</code> 声明。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>板</th><th>定义位置</th><th>读取者</th><th>读到的字段</th></tr></thead><tbody><tr><td>云台板</td><td><code>Communication/Src/referee_decode.cpp:9</code></td><td>无</td><td>无</td></tr><tr><td>底盘板</td><td><code>Message_Bus/message_bus.cpp:13</code></td><td><code>Task/Src/ControlCenterTask.cpp:123</code>、<code>:127</code></td><td><code>bullet_speed</code></td></tr></tbody></table>
+<p>云台板的 <code>onFrame</code> 同样会被链接进固件，但因为没有接收通路，六个分支不会被执行，<code>updated</code> 永远保持 <code>false</code>。底盘板在 1 ms 控制周期里读第 123 行的弹速做发弹统计，第 127 行把统计值随裁判数据发到 CAN。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant RP as RefereeProtocol
+    participant ON as RefereeDecode::onFrame
+    participant GI as g_referee_info
+    participant TK as ControlCenterTask
+    RP->>ON: 0x0207，data 指向 buffer_[7]，len 等于 7
+    ON->>ON: len 小于 sizeof(shoot_data_t) 吗
+    Note over ON: 7 小于 7 为假，继续
+    ON->>ON: reinterpret_cast 成 shoot_data_t 指针
+    ON->>GI: bullet_type 与 shooter_id 与 shoot_freq
+    ON->>GI: bullet_speed
+    ON->>GI: updated 置 true
+    GI->>TK: 读 bullet_speed 统计发弹
+    TK->>TK: 计算 TotalAmmoShooted
+    Note over GI,TK: 读取发生在任务上下文，写入发生在中断上下文</pre></div>
+<h2 id="映射层面的易错点">映射层面的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为结构体没有 pack</td><td>手动按默认对齐算偏移，字段全错</td><td><code>referee_decode.h:15</code>、<code>:450</code></td></tr><tr><td>去掉 pack 后长度校验拒绝合法帧</td><td>11 字节状态帧被丢弃</td><td><code>referee_decode.cpp:35</code> 的 <code>sizeof</code> 变为 16</td></tr><tr><td>把 <code>updated</code> 当逐帧标志</td><td>每轮循环都读到「有新数据」</td><td>置位后无清除代码，<code>:44</code> 等六处</td></tr><tr><td>认为六个分支覆盖全部字段</td><td>枪口冷却值、热量上限、保留字段取不到</td><td>结构体成员未写入 <code>g_referee_info</code></td></tr><tr><td>按结构体字段名找目标字段</td><td><code>shooter_number</code>、<code>hurt_HP_deduction_reason</code> 找不到</td><td>目标名是 <code>shooter_id</code>、<code>hurt_type</code></td></tr><tr><td>在云台板读裁判字段</td><td>全是初值 0</td><td>无接收通路，分支不执行</td></tr><tr><td>认为位域顺序跨编译器一致</td><td>换编译器后高低位颠倒</td><td>位域分配属实现定义</td></tr><tr><td>把 <code>RefereeInfo</code> 也当成线上结构体</td><td>按 48 字节去算数据段长度</td><td><code>RefereeInfo</code> 在 <code>pack(pop)</code> 之后，不参与映射</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>onFrame</code> 是 <code>cmd_id</code> 到字段的六路分派，只覆盖 0x0001、0x0201、0x0202、0x0203、0x0206、0x0207。</li>
+<li>每个分支先判 <code>len &#x3C; sizeof(结构体)</code>，再 <code>reinterpret_cast</code> 取字段，零拷贝。</li>
+<li>线上结构体在 <code>#pragma pack(push,1)</code> 区间内，<code>sizeof</code> 等于数据段长度，且指针偏移任意字节都对齐安全。</li>
+<li><code>g_referee_info</code> 是唯一下游出口，部分字段重命名后写入，保留字段与冷却值、热量上限未落库。</li>
+<li><code>updated</code> 置位后从不复位，语义是「解析过至少一帧」，与逐帧新数据无关。</li>
+<li>云台板只定义不消费；底盘板在 <code>ControlCenterTask</code> 里读 <code>bullet_speed</code>。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>字段获取</td><td><code>reinterpret_cast</code> 零拷贝</td><td>无逐字节拼接开销</td><td>依赖线上字节序与主机一致</td></tr><tr><td>结构体布局</td><td><code>pack(1)</code></td><td><code>sizeof</code> 与对齐都可控</td><td>成员可能跨字访问，效率略低</td></tr><tr><td>校验粒度</td><td>每条命令单独 <code>len</code> 判断</td><td>单条命令损坏不影响其它</td><td>六处判断重复，新增命令要照抄</td></tr><tr><td>数据落库</td><td>只映射关心的字段</td><td><code>RefereeInfo</code> 精简</td><td>未映射字段要改代码才能取到</td></tr><tr><td>更新标志</td><td>单个全局 <code>updated</code></td><td>实现最省</td><td>无法区分命令与帧，且不可复位</td></tr><tr><td>并发访问</td><td>中断写、任务读</td><td>无需队列</td><td>跨字段读取可能来自不同帧</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li><code>game_status_t</code> 的 <code>SyncTimeStamp</code> 是 8 字节，为什么 <code>onFrame</code> 不读它？如果以后要用，需要改哪几处？</li>
+<li><code>power_heat_data_t</code> 的 <code>reserved3</code> 被声明为 <code>float</code>。写出在 pack(1) 下它占用的偏移区间，并说明它与默认对齐下的差值。</li>
+<li>底盘板读到 <code>updated</code> 为 <code>true</code> 时，能否断定 <code>bullet_speed</code> 就是本帧 0x0207 写入的值？说明理由。</li>
+<li>列出 <code>hurt_data_t</code> 两个位域字段各自映射到的目标字段名，并说明为什么它们是同字节的两个半字节。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>把 <code>g_referee_info</code> 改成双缓冲加一个序号，让任务侧能拿到同一帧的一致快照。说明写入侧与读取侧各需要什么同步原语，以及 Cortex-M4 上哪些操作本身是原子的。</li>
+<li>现在 <code>updated</code> 无法区分命令。设计一种按命令分组的更新标志（例如位掩码或每个字段的时间戳），给出结构与置位、清除的时机。</li>
+<li><code>onFrame</code> 直接用 <code>reinterpret_cast</code> 读取 <code>float</code> 字段。若把固件迁移到默认对齐会怎样，若迁移到大端处理器又会怎样？分别给出需要改动的部分。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_decode.h</code></td><td><code>pack</code>（:15、:450）、<code>RefereeInfo</code>（:456-499）、<code>updated</code> 初值（:498）、全局声明（:501）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>六个解析分支（:33-150）、<code>updated</code> 置位（:44 等六处）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>小端合成（:47、:88）、CRC16 接收值（:114-116）</td></tr><tr><td><code>2026OmniSentryChassis/Message_Bus/message_bus.cpp</code></td><td><code>g_referee_info</code> 定义（:13）</td></tr><tr><td><code>2026OmniSentryChassis/Message_Bus/message_bus.h</code></td><td>全局声明（:60）</td></tr><tr><td><code>2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>读取 <code>bullet_speed</code>（:123、:127）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_protocol.h</code></td><td><code>buffer_[256]</code>（:41）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/05-裁判系统协议/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="裁判系统易错点与调试">裁判系统易错点与调试</h1>
+<blockquote>
+<p>前四页分别讲链路与帧格式、命令码与数据段、解帧状态机、字段映射。本页把两块板的实际缺陷与定位方法汇总。源码引用中的行号以 <code>2026OmniSentryGimbal</code> 与 <code>2026OmniSentryChassis</code> 仓库为准。</p>
+</blockquote>
+<p>裁判系统从线缆到应用字段是一条五段链路，任何一段断开都表现为「数据不动」。逐层向前定位比从头读代码快：物理层看 PG9 有没有波形，中断与 DMA 层看空闲回调有没有被命中，解帧层看状态机有没有走到校验通过，映射层看 <code>onFrame</code> 有没有命中，消费层看谁在读 <code>g_referee_info</code>。</p>
+<p>两处已知的断裂在中断与 DMA 层：云台板没有 <code>Uart_Init(&#x26;huart6, ...)</code>，且 <code>USART6_IRQHandler</code> 的 USER CODE 段为空。底盘板两处都接好，是全工程唯一有裁判数据通路的板。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    START["裁判数据不更新"] --> L0{"PG9 上有波形吗"}
+    L0 -->|"无"| PHY["物理层&#x3C;br/>线序、TX-RX 交叉、地线、波特率"]
+    L0 -->|"有"| L1{"USART6_IRQHandler 里&#x3C;br/>调用了 Uart_IRQHandler 吗"}
+    L1 -->|"否"| IRQ["中断未接&#x3C;br/>补 Uart_IRQHandler(&#x26;huart6)"]
+    L1 -->|"是"| L2{"Uart_Init(&#x26;huart6, ...)&#x3C;br/>注册了吗"}
+    L2 -->|"否"| REG["未注册&#x3C;br/>DMA 未启动、空闲中断未使能"]
+    L2 -->|"是"| L3{"RefereeCallback 被调用吗"}
+    L3 -->|"否"| DMA["DMA 双缓冲与 NDTR 路径检查"]
+    L3 -->|"是"| L4{"onFrame 命中断点吗"}
+    L4 -->|"否"| PROTO["解帧层&#x3C;br/>CRC8、CRC16、len 上限、失步"]
+    L4 -->|"是"| L5{"g_referee_info 字段对吗"}
+    L5 -->|"否"| MAP["映射层&#x3C;br/>字节序、偏移、pack、位域"]
+    L5 -->|"是"| CONS["消费层&#x3C;br/>读取者与 updated 语义"]</pre></div>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td>两块板 <code>Core/Src/main.c</code></td><td>注册差异</td></tr><tr><td>两块板 <code>Core/Src/stm32f4xx_it.c</code></td><td>中断入口</td></tr><tr><td><code>Communication/Src/referee_protocol.cpp</code></td><td>校验、上限与数据指针</td></tr><tr><td><code>Communication/Inc/referee_decode.h</code></td><td>pack、位域与 <code>updated</code></td></tr><tr><td><code>Communication/Src/referee_decode.cpp</code></td><td>六路分派与全局定义</td></tr><tr><td><code>Algorithm/Src/CRC8.cpp</code>、<code>CRC16.cpp</code></td><td>离线重算用的实现</td></tr></tbody></table>
+<h2 id="五层链路上的故障分层">五层链路上的故障分层</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层次</th><th>关注点</th><th>关键判据</th></tr></thead><tbody><tr><td>物理层</td><td>PG9 有没有符合 115200 8N1 的波形</td><td>逻辑分析仪能解出字节</td></tr><tr><td>中断与 DMA</td><td><code>USART6_IRQHandler</code> 是否调用 <code>Uart_IRQHandler</code>，<code>Uart_Init</code> 是否注册</td><td>空闲回调被命中</td></tr><tr><td>解帧层</td><td>状态机是否走到 <code>WAIT_CRC16_H</code> 并校验通过</td><td><code>state_</code>、<code>data_len_</code>、CRC 比较</td></tr><tr><td>映射层</td><td><code>onFrame</code> 是否命中，字段是否按小端与 pack 布局读取</td><td><code>cmd_id</code> 与 <code>g_referee_info</code></td></tr><tr><td>消费层</td><td>谁读 <code>g_referee_info</code>，<code>updated</code> 怎么用</td><td>读取者与更新语义</td></tr></tbody></table>
+<p>五层里只有第一层需要外部仪器，其余四层都能用断点与变量观察。定位顺序从后往前也成立：先确认 <code>onFrame</code> 是否命中，命中则直接跳到映射层，不命中再往前查解帧与中断。</p>
+<h2 id="已知缺陷与高频错误清单">已知缺陷与高频错误清单</h2>
+<p>下表汇总两页源码里已核实的缺陷与协议层易错点，按定位层次排列。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层次</th><th>现象</th><th>根因</th><th>位置</th></tr></thead><tbody><tr><td>中断与 DMA</td><td>云台板裁判字段恒为初值</td><td>未注册 <code>huart6</code>，DMA 未启动、空闲中断未使能</td><td>云台 <code>Core/Src/main.c:125</code></td></tr><tr><td>中断与 DMA</td><td>云台板断点打在 <code>onFrame</code> 从不命中</td><td><code>USART6_IRQHandler</code> 的 USER CODE 为空，未调用 <code>Uart_IRQHandler</code></td><td>云台 <code>Core/Src/stm32f4xx_it.c:359-368</code></td></tr><tr><td>中断与 DMA</td><td>底盘板有波形但回调不触发</td><td>注册缺失或 USART6 NVIC 未使能</td><td>底盘 <code>Core/Src/main.c:132</code>、<code>Core/Src/usart.c:261-263</code></td></tr><tr><td>解帧</td><td>CRC16 始终不相等</td><td>计算范围写成只覆盖数据段，未包含帧头与 <code>cmd_id</code></td><td><code>referee_protocol.cpp:118-119</code></td></tr><tr><td>解帧</td><td>CRC8 始终不相等</td><td>把 <code>cmd_id</code> 也算进帧头校验</td><td><code>referee_protocol.cpp:68</code></td></tr><tr><td>解帧</td><td><code>cmd_id</code> 读成 0x0102</td><td>按大端解析</td><td><code>referee_protocol.cpp:88</code></td></tr><tr><td>解帧</td><td>数据段取值整体偏移 7 字节</td><td>从帧首而不是 <code>buffer_[7]</code> 取数据</td><td><code>referee_protocol.cpp:125</code></td></tr><tr><td>解帧</td><td>帧被整批丢弃</td><td>数据段超过 200，触发上限保护</td><td><code>referee_protocol.cpp:49-52</code></td></tr><tr><td>解帧</td><td>失步后连续丢几帧</td><td>无帧间超时，复位消费掉当前字节</td><td><code>referee_protocol.cpp:71</code>、<code>:51</code></td></tr><tr><td>解帧</td><td>乱序包未按序丢弃</td><td><code>seq</code> 只存不查</td><td><code>referee_protocol.cpp:59-62</code></td></tr><tr><td>映射</td><td>去掉 <code>pack</code> 后合法帧被拒</td><td><code>sizeof</code> 膨胀，<code>len &#x3C; sizeof</code> 判负</td><td><code>referee_decode.h:15</code>、<code>referee_decode.cpp:35</code></td></tr><tr><td>映射</td><td>位域高低位颠倒</td><td>位域分配由编译器 ABI 决定</td><td><code>referee_decode.h:88-89</code></td></tr><tr><td>映射</td><td>0x0204 增益数据收不到</td><td><code>buff_t</code> 无对应 <code>switch</code> 分支</td><td><code>referee_decode.cpp:27-155</code></td></tr><tr><td>映射</td><td><code>updated</code> 每轮都读成新数据</td><td>置位后无清除代码</td><td><code>referee_decode.h:498</code></td></tr><tr><td>消费</td><td>云台板没有字段读取者</td><td>全工程无 <code>g_referee_info</code> 的读取点</td><td>云台 <code>Communication/Src/referee_decode.cpp:9</code></td></tr><tr><td>消费</td><td>底盘板只拿到弹速</td><td>仅 <code>ControlCenterTask</code> 读 <code>bullet_speed</code></td><td>底盘 <code>Task/Src/ControlCenterTask.cpp:123</code></td></tr><tr><td>消费</td><td>一组字段来自不同帧</td><td>中断写、任务读，无快照</td><td>全局对象，无锁</td></tr></tbody></table>
+<p>其中云台板的接收通路缺失是整条链的入口问题，其余协议层错误在底盘板上才会实际暴露。协议层最容易被误改的是 CRC16 覆盖范围、<code>cmd_id</code> 字节序与数据段起始偏移三处，它们都在 <code>referee_protocol.cpp</code> 的同一个文件里。</p>
+<h2 id="物理层与中断-dma-层的调试">物理层与中断 DMA 层的调试</h2>
+<p>物理层用逻辑分析仪或示波器接 PG9，确认有波形且能按 115200 8N1 解出字节。裁判系统是主办方设备，机器人端只接它的 TX 到 PG9，同时确认共地。若波形存在但字节错乱，先怀疑波特率或采样点，再怀疑协议。</p>
+<p>中断与 DMA 层在 <code>USART6_IRQHandler</code> 与 <code>Uart_IRQHandler</code> 上打断点，确认中断进入。<code>UsartDma::IRQHandler</code> 先判 IDLE 标志再进入空闲回调（<code>Communication/Src/usart_dma.cpp:50-72</code>）。空闲回调里可观察两个量：</p>
+<ul>
+<li><code>rx_data_len_ = UART_RX_BUF_LEN - NDTR</code>（<code>:88</code>），值应在 1 到 256 之间；</li>
+<li><code>hdmarx->Instance->CR</code> 的 <code>DMA_SxCR_CT</code> 位决定读取 <code>rx_buf_[0]</code> 还是 <code>rx_buf_[1]</code>（<code>:90-93</code>）。</li>
+</ul>
+<p>云台板在这一层就会看到断点不命中，因为中断里没有自定义调用，DMA 也从未启动。</p>
+<h2 id="解帧层的条件断点">解帧层的条件断点</h2>
+<p>在 <code>RefereeProtocol::input</code> 或 <code>reset</code> 上设条件断点，观察 <code>state_</code>、<code>index_</code>、<code>data_len_</code>、<code>cmd_id_</code> 四个变量，可以直接判断失步位置：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>断点现象</th><th>判断</th></tr></thead><tbody><tr><td><code>state_</code> 停在 <code>WAIT_SOF</code></td><td>未收到 <code>0xA5</code>，或前序帧 CRC8 失败后被复位</td></tr><tr><td><code>state_</code> 停在 <code>WAIT_DATA</code></td><td>数据段长度与实际字节数不符，帧被截断</td></tr><tr><td><code>WAIT_CRC16_H</code> 中 <code>calc_crc16 != recv_crc16</code></td><td>覆盖范围、字节序或数据段内容有误</td></tr><tr><td><code>data_len_</code> 恒为 0</td><td>长度字段解析错误，或帧本身是零长命令</td></tr></tbody></table>
+<p><code>data_len_</code> 超过 200 而状态回到 <code>WAIT_SOF</code> 是上限保护生效，不是失步。区分办法是看 <code>reset</code> 的调用来源：上限判断在 <code>WAIT_LEN_H</code>，失步复位在 <code>WAIT_CRC8</code> 或 CRC16 比较处。</p>
+<h2 id="映射层的核对点">映射层的核对点</h2>
+<p>在 <code>onFrame</code> 的六个 <code>case</code> 上打断点，确认命中的 <code>cmd_id</code> 与 <code>len</code>。<code>data</code> 指针应等于 <code>&#x26;buffer_[7]</code>。若命令码命中但字段值异常，按下面三项逐个排除：</p>
+<ol>
+<li><code>pack</code> 是否仍在头文件里（<code>referee_decode.h:15</code>、<code>:450</code>），结构体 <code>sizeof</code> 是否等于数据段长度。</li>
+<li>位域是否被改动，<code>game_type</code> 与 <code>game_progress</code> 的高低半字节是否符合预期。</li>
+<li>目标字段名是否与结构体字段名不同，例如 <code>shooter_number</code> 写入的是 <code>shooter_id</code>。</li>
+</ol>
+<h2 id="离线重算校验">离线重算校验</h2>
+<p>把逻辑分析仪捕获的一帧字节按偏移表切分，用工程内同一份 CRC 实现重算：CRC8 覆盖前 4 字节、初值 <code>0xFF</code>；CRC16 覆盖 <code>7+n</code> 字节、初值 <code>0xFFFF</code>（<code>Algorithm/Src/CRC16.cpp:31-41</code>、<code>Algorithm/Src/CRC8.cpp:26-33</code>）。通用校验工具的默认参数（初值、反射方式、最终异或）与这里的调用不一定相同，重算时必须显式指定这三项与覆盖范围，否则会得到假阳性。</p>
+<h2 id="应用层打印的约束">应用层打印的约束</h2>
+<p>调试串口是 <code>huart1</code>，两块板分别在 <code>Task/Src/ImuTask.cpp:33</code> 与 <code>:34</code> 调用 <code>DebugUART_Init(&#x26;huart1)</code>。<code>SendDebugData</code> 用格式字符串描述参数（<code>BSP/Inc/debug.h:29-41</code>），例如 <code>SendDebugData("hh", cmd_id, len)</code> 发送两个 <code>uint16_t</code>。输出走 <code>HAL_UART_Transmit</code> 阻塞发送，超时上限 100 ms（<code>debug.h:19</code>），只能在任务上下文调用，不能放进 <code>onFrame</code> 或中断里。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant T as 排查者
+    participant LA as 逻辑分析仪 PG9
+    participant IRQ as USART6_IRQHandler
+    participant RP as RefereeProtocol
+    participant ON as RefereeDecode::onFrame
+    T->>LA: 抓 PG9 波形
+    alt PG9 无波形
+        LA-->>T: 物理层问题，检查线序与共地
+    else 有波形
+        LA-->>T: 能解出 115200 8N1 字节
+        T->>IRQ: 断点 Uart_IRQHandler(&#x26;huart6)
+        alt 断点不命中
+            IRQ-->>T: 中断注册或 DMA 启动问题
+        else 断点命中
+            T->>RP: 断点 input，观察 state_ 与 data_len_
+            alt state_ 停在 WAIT_CRC8
+                RP-->>T: CRC8 范围或波特率误码
+            else state_ 停在 WAIT_CRC16_H
+                RP-->>T: CRC16 覆盖范围、字节序或数据内容
+            else 进入 onFrame
+                T->>ON: 检查 cmd_id、len 与字段
+                ON-->>T: 字段异常则查 pack 与位域
+            end
+        end
+    end</pre></div>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>故障按物理层、中断与 DMA、解帧、映射、消费五层定位，逐层向后排除。</li>
+<li>云台板断在中断与 DMA 层：未注册 <code>huart6</code>，中断里也没有 <code>Uart_IRQHandler</code>；底盘板两处都接好。</li>
+<li>解帧层的高风险三处是 CRC8 覆盖 4 字节、CRC16 覆盖 <code>7+n</code> 字节、数据段从 <code>buffer_[7]</code> 取。</li>
+<li>映射层依赖 <code>pack(1)</code> 与 GCC 小端位域分配，去掉任一前提都会让合法帧取到错值或被拒。</li>
+<li><code>updated</code> 只置位不复位，云台板没有读取者，底盘板只读 <code>bullet_speed</code>。</li>
+<li>调试串口是 <code>huart1</code>，阻塞发送不能放进中断。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>断线表现</td><td>仅数据停更</td><td>无错误上报路径，链路简单</td><td>故障不可自检，只能靠外部观测</td></tr><tr><td>校验失败处理</td><td>静默 <code>reset</code></td><td>不打断后续帧</td><td>无错误计数，误码率不可见</td></tr><tr><td>未登记命令</td><td><code>default</code> 丢弃</td><td>解析层不被未知命令影响</td><td>丢失命令不可观测</td></tr><tr><td>全局数据</td><td>单实例 <code>g_referee_info</code></td><td>使用零成本</td><td>无快照，跨字段一致性弱</td></tr><tr><td>调试输出</td><td>阻塞式 <code>HAL_UART_Transmit</code></td><td>调用简单</td><td>只能任务上下文使用，长输出占时间</td></tr><tr><td>长度上限</td><td>200 硬编码</td><td>判断便宜，越界保护明确</td><td>与缓冲容量的关系只写在注释里</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>云台板接上裁判系统后依然没有数据，按五层顺序列出前三步检查点，并指出在哪一层能最快定位。</li>
+<li>一帧在 <code>WAIT_CRC16_H</code> 比较失败。列出三个优先检查点，并说明每个检查点对应的偏移或参数。</li>
+<li>为什么 <code>SendDebugData</code> 不能放在 <code>onFrame</code> 里调用？给出一条替代做法。</li>
+<li>离线重算 CRC16 时，为什么必须用工程内的 <code>crc16_calc</code> 或确认初值与覆盖范围，而不用校验工具的默认配置？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>在裁判系统未接入的情况下自测解帧与映射：用一帧已知字节调用 <code>RefereeCallback</code>（声明在 <code>Communication/Inc/referee_decode.h:524</code>），走完状态机与 <code>onFrame</code>，检查 <code>g_referee_info</code>。说明 <code>refereeproto</code> 全局对象为何不能直接调用，以及自测代码应放在哪一层。</li>
+<li>为误码率统计增加分类计数：统计 CRC8 失败、CRC16 失败、长度超限三类复位次数。说明计数变量放在哪个函数、是否需要 <code>volatile</code>、读取端如何取快照。</li>
+<li>若要把底盘板收到的裁判数据经 CAN 转发给云台板，设计帧标识符、数据段布局与校验方式，并说明如何保证两侧字段定义一致。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>未注册 <code>huart6</code>（:125）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td><code>USART6_IRQHandler</code> 空 USER CODE（:359-368）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/main.c</code></td><td>注册 <code>huart6</code>（:132）</td></tr><tr><td><code>2026OmniSentryChassis/Core/Src/usart.c</code></td><td>USART6 NVIC（:261-263）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>CRC8（:68）、<code>cmd_id</code>（:88）、数据指针（:125）、CRC16（:118-119）、上限与复位（:49-52、:71）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_decode.h</code></td><td><code>pack</code>（:15）、位域（:88-89）、<code>updated</code>（:498）、<code>RefereeCallback</code> 声明（:524）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_decode.cpp</code></td><td>六路分派（:27-155）、全局定义（:9）</td></tr><tr><td><code>2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>读取 <code>bullet_speed</code>（:123）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲回调（:81-99）、双缓冲字节数（:88-93）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td><code>DebugUART_Init(&#x26;huart1)</code>（:34）</td></tr><tr><td><code>2026OmniSentryChassis/BSP/Inc/debug.h</code></td><td>打印格式与超时（:19、:29-41）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp</code></td><td>CRC16 实现（:31-41）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/CRC8.cpp</code></td><td>CRC8 实现（:26-33）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/04-DBUS%E9%81%A5%E6%8E%A7/"><span class="k">← 上一篇</span><span class="t">DBUS遥控</span><span class="d">串口通信与协议 · 5 个文件</span></a><a class="next" href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/06-%E4%B8%8A%E4%BD%8D%E6%9C%BA%E5%B0%81%E5%8C%85%E8%84%9A%E6%9C%AC/"><span class="k">下一篇 →</span><span class="t">上位机封包脚本</span><span class="d">串口通信与协议 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

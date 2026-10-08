@@ -7,11 +7,12 @@ updated: 2026-10-07
 
 # NVIC 与优先级分组
 
-> 本页对着三处源码：HAL 的分组设置（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c`）、
-> CMSIS 的优先级编码（`Drivers/CMSIS/Include/core_cm4.h`），以及本工程每个外设的 MspInit。
-> 所有数字都可以在仓库里逐个核对。
+核对对象是三处源码：HAL 的分组设置 `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c`、CMSIS 的优先级编码 `Drivers/CMSIS/Include/core_cm4.h`，以及本工程每个外设的 MspInit。所有数字都可以在仓库里逐个核对。
 
-## 1. 概念：异常、中断与 NVIC
+Cortex-M4 把处理器响应的事件统称为异常，其中外设中断全部经过 NVIC 排优先级。异常分类与优先级寄存器的位宽是基础，分组决定 4 位如何切成抢占位与子优先级位，最终结果体现在本工程全部中断的优先级分布上。
+
+
+## 1. 异常、中断与 NVIC
 
 Cortex-M4 把手头发生的事情统称为异常（Exception）。异常分两类：内核异常（复位、NMI、HardFault、SVC、PendSV、SysTick）和外部中断（IRQ0 到 IRQ239）。外设中断全部属于后一类，比如本工程的 `CAN1_RX0_IRQn` 与 `DMA1_Stream1_IRQn`。
 
@@ -38,7 +39,7 @@ HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
 
 第二行的含义是允许 NVIC 接受这个请求，与"外设是否发出请求"无关。外设侧的寄存器没有配好，NVIC 使能了也不会有中断。
 
-## 2. 机制：4 位有效位与三段拆分
+## 2. 4 位有效位与三段拆分
 
 ### 2.1 优先级寄存器只有高 4 位有效
 
@@ -140,7 +141,7 @@ sequenceDiagram
   B-->>M: B 返回
 ```
 
-## 3. 落到本项目
+## 3. 本工程的分组与优先级分布
 
 ### 3.1 分组在 HAL_Init 里设定，早于任何外设初始化
 
@@ -199,7 +200,7 @@ $$configKERNEL\_INTERRUPT\_PRIORITY = 15 \ll 4 = 240 = 0\text{xF0}$$
 
 $$configMAX\_SYSCALL\_INTERRUPT\_PRIORITY = 5 \ll 4 = 80 = 0\text{x}50$$
 
-FreeRTOS 的 port 直接写 `BASEPRI` 寄存器，不做 CMSIS 那次左移，所以它的宏里必须自己左移 `8 - configPRIO_BITS` 位。这里依赖的 `configPRIO_BITS` 来自 CMSIS 的 `__NVIC_PRIO_BITS`，与 NVIC 分组来自同一个硬件事实。分组换成 `NVIC_PRIORITYGROUP_2` 时，`configPRIO_BITS` 仍然是 4，因为硬件有效位数没变，两者不会因此矛盾；但如果把 `configPRIO_BITS` 手写成 5 或 3，FreeRTOS 换算出的门槛就会落在错误的位上。
+FreeRTOS 的 port 直接写 `BASEPRI` 寄存器，不做 CMSIS 那次左移，所以它的宏里必须自己左移 `8 - configPRIO_BITS` 位。这里依赖的 `configPRIO_BITS` 来自 CMSIS 的 `__NVIC_PRIO_BITS`，与 NVIC 分组来自同一个硬件事实。分组换成 `NVIC_PRIORITYGROUP_2` 时，`configPRIO_BITS` 仍然是 4，因为硬件有效位数没变，两者不会因此矛盾；但如果把 `configPRIO_BITS` 手写成 5 或 3，FreeRTOS 换算出的阈值就会落在错误的位上。
 
 ### 3.3 本工程全部中断的优先级
 
@@ -236,12 +237,12 @@ FreeRTOS 的 port 直接写 `BASEPRI` 寄存器，不做 CMSIS 那次左移，�
 
 `Core/Src/stm32f4xx_it.c` 里因此找不到 `PendSV_Handler` 与 `SysTick_Handler` 的函数体，它们的实体在 `Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c`。
 
-### 3.4 数值 5 与 FreeRTOS 门槛的关系
+### 3.4 数值 5 与 FreeRTOS 阈值的关系
 
 数值 5 恰好等于 `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY`。这一相等带来两个结论：
 
 1. 全部外设中断都在内核可管理范围内，ISR 里调用 `FromISR` 版本的 API 是合法的。本工程唯一这样用的是 USB 中断里的 `xQueueSendFromISR`。
-2. 裕量为零。任何一个外设中断的数值被改成 4，它就能在 FreeRTOS 临界区中间插进来，包括队列内部改读写指针的那几行。临界区与 BASEPRI 的完整推导在 01-FreeRTOS 单元的《临界区与中断安全》，本页只给出与 NVIC 相关的部分：
+2. 裕量为零。任何一个外设中断的数值被改成 4，它就能在 FreeRTOS 临界区中间插进来，包括队列内部改读写指针的那几行。临界区与 BASEPRI 的完整推导在 01-FreeRTOS 单元的《临界区与中断安全》，这里只给出与 NVIC 相关的部分：
 
 $$5 = configLIBRARY\_MAX\_SYSCALL\_INTERRUPT\_PRIORITY$$
 
@@ -330,20 +331,20 @@ NVIC 里 0 最高、15 最低。写成 `HAL_NVIC_SetPriority(USART3_IRQn, 15, 0)
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/startup_stm32f407xx.s` | 向量表（:127-158）、`Default_Handler` 死循环（:111-115）、弱符号别名（:285-295） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | `HAL_Init()` 与初始化顺序（:95-131） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | `configPRIO_BITS`（:95-100）、阈值与内核优先级（:104-117）、异常处理函数重定向（:127-133） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量的优先级与使能（:48-61） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个接收向量（:125-128、:158-161） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | `TIM1_UP_TIM10_IRQn` 使能（:83-84）、TIM10 参数（:42-63） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | `USART3_IRQn` 与 `USART6_IRQn`（:198-199、:262-263） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_msp.c` | `PendSV_IRQn` 取 15（:75） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基与优先级（:41-112） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY` 为 15（:151） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | `OTG_FS_IRQn` 优先级（:94-95） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | 分组设置（:173） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c` | `HAL_NVIC_SetPriority()` 转 CMSIS（:163-174） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h` | 五个分组常量（:88-96） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h` | `__NVIC_SetPriority()`（:1814-1822）、`NVIC_EncodePriority()`（:1861-1870） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | `__NVIC_PRIO_BITS` 为 4（:49） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Chassis/`（同仓库对比） | 两份板的外设优先级设置一致 |
+| `2026OmniSentryGimbal/startup_stm32f407xx.s` | 向量表（:127-158）、`Default_Handler` 死循环（:111-115）、弱符号别名（:285-295） |
+| `2026OmniSentryGimbal/Core/Src/main.c` | `HAL_Init()` 与初始化顺序（:95-131） |
+| `2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | `configPRIO_BITS`（:95-100）、阈值与内核优先级（:104-117）、异常处理函数重定向（:127-133） |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量的优先级与使能（:48-61） |
+| `2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个接收向量（:125-128、:158-161） |
+| `2026OmniSentryGimbal/Core/Src/tim.c` | `TIM1_UP_TIM10_IRQn` 使能（:83-84）、TIM10 参数（:42-63） |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | `USART3_IRQn` 与 `USART6_IRQn`（:198-199、:262-263） |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_msp.c` | `PendSV_IRQn` 取 15（:75） |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基与优先级（:41-112） |
+| `2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY` 为 15（:151） |
+| `2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | `OTG_FS_IRQn` 优先级（:94-95） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | 分组设置（:173） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c` | `HAL_NVIC_SetPriority()` 转 CMSIS（:163-174） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h` | 五个分组常量（:88-96） |
+| `2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h` | `__NVIC_SetPriority()`（:1814-1822）、`NVIC_EncodePriority()`（:1861-1870） |
+| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | `__NVIC_PRIO_BITS` 为 4（:49） |
+| `2026OmniSentryGimbal/Chassis/`（同仓库对比） | 两份板的外设优先级设置一致 |

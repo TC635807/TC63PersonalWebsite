@@ -1,0 +1,793 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Playwright浏览器渲染 · 网页抓取与反爬 · 王宇翔</title><meta name="description" content="BrowserEngine 把 Chromium 的生命周期收进一个带锁的单例，启动失败时把原因留在 unavailable_reason 而不是抛异常，崩溃后只丢弃句柄等待下次重建，上下文参数与初始化脚本在启动时一次性配好。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/01-Playwright%E6%B5%8F%E8%A7%88%E5%99%A8%E6%B8%B2%E6%9F%93/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="Playwright浏览器渲染 · 网页抓取与反爬 · 王宇翔"><meta property="og:description" content="BrowserEngine 把 Chromium 的生命周期收进一个带锁的单例，启动失败时把原因留在 unavailable_reason 而不是抛异常，崩溃后只丢弃句柄等待下次重建，上下文参数与初始化脚本在启动时一次性配好。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/01-Playwright%E6%B5%8F%E8%A7%88%E5%99%A8%E6%B8%B2%E6%9F%93/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/">网页抓取与反爬</a><span class="sep" aria-hidden="true">/</span><span class="now">Playwright浏览器渲染</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>Playwright浏览器渲染</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>单例 Chromium 的启动与回收</span></a><ul class="toc__heads"><li><a href="#1-单例信号量与两个上限" data-depth="2" data-heading-j="0">1. 单例、信号量与两个上限</a></li><li><a href="#2-启动路径与不可用原因" data-depth="2" data-heading-j="1">2. 启动路径与不可用原因</a></li><li><a href="#3-上下文的四项参数与初始化脚本" data-depth="2" data-heading-j="2">3. 上下文的四项参数与初始化脚本</a></li><li><a href="#4-清理与启动失败的收尾" data-depth="2" data-heading-j="3">4. 清理与启动失败的收尾</a></li><li><a href="#5-崩溃标记与单例重置" data-depth="2" data-heading-j="4">5. 崩溃标记与单例重置</a></li><li><a href="#6-不可用原因写给谁看" data-depth="2" data-heading-j="5">6. 不可用原因写给谁看</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="11">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>渲染抓取的等待策略与结果契约</span></a><ul class="toc__heads"><li><a href="#1-返回契约与附带信息" data-depth="2" data-heading-j="0">1. 返回契约与附带信息</a></li><li><a href="#2-页面超时与导航等待" data-depth="2" data-heading-j="1">2. 页面超时与导航等待</a></li><li><a href="#3-状态码在这一步取回" data-depth="2" data-heading-j="2">3. 状态码在这一步取回</a></li><li><a href="#4-模拟鼠标与滚轮信号" data-depth="2" data-heading-j="3">4. 模拟鼠标与滚轮信号</a></li><li><a href="#5-加载后的额外等待" data-depth="2" data-heading-j="4">5. 加载后的额外等待</a></li><li><a href="#6-两条失败分支与收尾" data-depth="2" data-heading-j="5">6. 两条失败分支与收尾</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="11">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>整体超时保护与浏览器崩溃恢复</span></a><ul class="toc__heads"><li><a href="#1-为什么单页超时不够" data-depth="2" data-heading-j="0">1. 为什么单页超时不够</a></li><li><a href="#2-shield-与-wait_for-的组合" data-depth="2" data-heading-j="1">2. shield 与 wait_for 的组合</a></li><li><a href="#3-放弃等待时消费异常" data-depth="2" data-heading-j="2">3. 放弃等待时消费异常</a></li><li><a href="#4-内外两层超时的差值" data-depth="2" data-heading-j="3">4. 内外两层超时的差值</a></li><li><a href="#5-抓取层的重试与这层保护的关系" data-depth="2" data-heading-j="4">5. 抓取层的重试与这层保护的关系</a></li><li><a href="#6-崩溃恢复的完整路径" data-depth="2" data-heading-j="5">6. 崩溃恢复的完整路径</a></li><li><a href="#7-并发闸门在超时与崩溃下的状态" data-depth="2" data-heading-j="6">7. 并发闸门在超时与崩溃下的状态</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="12">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>失败原因翻译与浏览器不可用降级</span></a><ul class="toc__heads"><li><a href="#1-三个翻译入口" data-depth="2" data-heading-j="0">1. 三个翻译入口</a></li><li><a href="#2-状态码表的边界" data-depth="2" data-heading-j="1">2. 状态码表的边界</a></li><li><a href="#3-网络错误码的匹配顺序" data-depth="2" data-heading-j="2">3. 网络错误码的匹配顺序</a></li><li><a href="#4-识别不出时的截断策略" data-depth="2" data-heading-j="3">4. 识别不出时的截断策略</a></li><li><a href="#5-浏览器不可用的降级链路" data-depth="2" data-heading-j="4">5. 浏览器不可用的降级链路</a></li><li><a href="#6-抓取层如何使用这些文本" data-depth="2" data-heading-j="5">6. 抓取层如何使用这些文本</a></li><li><a href="#7-与分层回退的衔接" data-depth="2" data-heading-j="6">7. 与分层回退的衔接</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="12">本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">网页抓取与反爬</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>浏览器渲染 / Playwright / 生命周期 / 并发控制 / 等待策略 / 超时 / 结果契约 / 超时保护</span></div><h1 class="docs__title">Playwright浏览器渲染</h1><p class="docs__lead">BrowserEngine 把 Chromium 的生命周期收进一个带锁的单例，启动失败时把原因留在 unavailable_reason 而不是抛异常，崩溃后只丢弃句柄等待下次重建，上下文参数与初始化脚本在启动时一次性配好。</p></header><section class="dfile" id="file-1" data-file="01-单例Chromium的启动与回收"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-单例Chromium的启动与回收</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/01-Playwright浏览器渲染/01-单例Chromium的启动与回收.md</span></div><div class="dfile__body"><h1 id="单例-chromium-的启动与回收">单例 Chromium 的启动与回收</h1>
+<p>用真实浏览器抓 HTML 与用 HTTP 客户端抓 HTML，成本差在进程上：每抓一个 URL 就起一个 Chromium，几个请求之后内存就会被吃满。<code>src/better_crawler/browser.py</code> 因此把浏览器做成进程内单例，用一个信号量限制同时在跑的页面数，用一个异步锁保证启动与清理不会并发执行。</p>
+<p>它不涉及具体站点的反爬对抗，那些上下文参数与初始化脚本在 26-网页抓取与反爬/03-反爬与浏览器指纹 里单独展开；分层回退的顺序在 02-分层回退 里。单例的生命周期只有启动与回收两端，中间被并发请求复用。</p>
+<h2 id="1-单例信号量与两个上限">1. 单例、信号量与两个上限</h2>
+<p><code>BrowserEngine</code>（<code>src/better_crawler/browser.py:75</code>）的构造函数接收两个参数：是否无头、并发上限，默认值为模块常量 <code>_MAX_CONCURRENCY = 5</code>（<code>src/better_crawler/browser.py:35</code>）。并发用 <code>asyncio.Semaphore</code> 实现（<code>src/better_crawler/browser.py:80</code>），生命周期操作则用 <code>asyncio.Lock</code> 串行化（<code>src/better_crawler/browser.py:84</code>）。</p>
+<p>两把同步原语的获取顺序固定：先在抓取入口拿信号量，再在启动时拿锁，不存在反向持有，因此不会互相等待。信号量在构造函数里创建而不是在启动时创建，这样并发上限在实例生命周期内固定，不需要随浏览器重建而重置。两个上限解决不同问题：并发上限限制同时打开的页面数，避免 Chromium 因内存压力崩溃；锁限制启动与清理这类会改写句柄的操作，避免两次启动各建一个浏览器实例。</p>
+<p>模块注释把这一条写在最前面（<code>src/better_crawler/browser.py:6</code>）。单例的边界是进程：部署多个 worker 时每个进程各持一个 Chromium，总内存随进程数增长。需要更严格的资源隔离时，把浏览器放到独立服务里比在同进程里加锁更有效。</p>
+<h2 id="2-启动路径与不可用原因">2. 启动路径与不可用原因</h2>
+<p><code>start()</code>（<code>src/better_crawler/browser.py:94</code>）返回布尔值，任何失败都不抛异常，而是把原因写进 <code>_unavailable_reason</code>。它有三道早退：句柄已存在就直接返回真（<code>src/better_crawler/browser.py:96</code>）；此前已判定不可用直接返回假（<code>src/better_crawler/browser.py:98</code>）；进入锁之后再做一次句柄检查（<code>src/better_crawler/browser.py:101</code>），这道双重检查用来覆盖等待锁期间别的协程已完成启动的情况。</p>
+<p>锁内分两个阶段。先导入 <code>playwright.async_api</code>，这一步可能耗时几十毫秒，期间其他协程在锁外排队，不会重复发起启动，导入失败时写入安装提示「pip install playwright &#x26;&#x26; playwright install chromium」（<code>src/better_crawler/browser.py:106</code>）。</p>
+<p>导入失败与启动异常被分开处理，原因是两者对应完全不同的处置：前者要改环境，提示里直接给出两条安装命令；后者要看异常文本，可能是缺系统依赖或权限问题。两者都会让引擎从此不可用，但提示信息不同。导入成功才实际启动：先起 Playwright，再以 <code>_LAUNCH_ARGS</code> 启动 Chromium，最后建上下文并注入初始化脚本（<code>src/better_crawler/browser.py:112</code> 至 <code>:128</code>）。</p>
+<p>启动过程任何异常都落到同一条降级分支，写入原因后清空句柄并返回假（<code>src/better_crawler/browser.py:131</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["start()"] --> B{"句柄已存在?"}
+  B -->|"是"| Z1["返回 True"]
+  B -->|"否"| C{"已判不可用?"}
+  C -->|"是"| Z2["返回 False"]
+  C -->|"否"| D["获取异步锁"]
+  D --> E{"锁内再查句柄"}
+  E -->|"已存在"| Z1
+  E -->|"不存在"| F["导入 playwright"]
+  F -->|"ImportError"| G["写入安装提示并返回 False"]
+  F -->|"成功"| H["启动 Playwright 与 Chromium"]
+  H --> I["建上下文 注入初始化脚本"]
+  I -->|"成功"| Z1
+  H -->|"异常"| J["写入启动失败原因 清理句柄 返回 False"]</pre></div>
+<h2 id="3-上下文的四项参数与初始化脚本">3. 上下文的四项参数与初始化脚本</h2>
+<p>上下文在启动时一次性建好，参数有四组（<code>src/better_crawler/browser.py:117</code> 至 <code>:126</code>）：用户代理取模块常量 <code>_UA</code>（<code>src/better_crawler/browser.py:38</code>），视口固定 1080×600，语言固定 <code>zh-CN</code>，请求头补齐 <code>sec-ch-ua</code> 系列与 <code>Accept-Language</code>。</p>
+<p>视口取一个小尺寸而不是常见的高分屏尺寸，是为了减少首屏渲染面积、缩短单页耗时；语言与请求头里的语言偏好保持一致，避免服务端按 IP 与头部推断出不同的地区版本。模块注释解释了为什么这几项必须一起给：UA 与 <code>sec-ch-ua</code> 的版本号不一致会被反爬识别（<code>src/better_crawler/browser.py:37</code>）。</p>
+<p>初始化脚本 <code>_NAVIGATOR_OVERRIDE</code>（<code>src/better_crawler/browser.py:45</code>）在上下文层通过 <code>add_init_script()</code> 注入（<code>src/better_crawler/browser.py:128</code>），对每个新建页面生效。注入发生在任何页面创建之前，因此不需要在每个页面里重复执行；脚本内容本身只改导航器属性，不阻塞页面加载。</p>
+<p>它改写的是导航器上的几个属性，具体项与生效范围在 26-网页抓取与反爬/03-反爬与浏览器指纹 里展开。初始化脚本注入在上下文上，每次导航都会执行一次，它不做网络拦截也不改写页面内容，因此页面拿到的文本与真实浏览器一致。</p>
+<h2 id="4-清理与启动失败的收尾">4. 清理与启动失败的收尾</h2>
+<p><code>close()</code>（<code>src/better_crawler/browser.py:137</code>）在锁内调用 <code>_cleanup_locked()</code>（<code>src/better_crawler/browser.py:141</code>）。清理按上下文、浏览器、Playwright 三层依次关闭，每层的异常都被吞掉，因为关闭失败不影响主流程（<code>src/better_crawler/browser.py:150</code>）。</p>
+<p>最后三个句柄统一置空（<code>src/better_crawler/browser.py:157</code>）。这使 <code>close()</code> 具备幂等性：重复调用只是对空句柄再做一次跳过，调用方不需要记录状态；进程退出时句柄也会随进程结束释放，显式关闭主要服务于测试与长驻进程的重配场景。这使 <code>close()</code> 具备幂等性：重复调用只是对空句柄再做一次跳过，不需要调用方记录状态。</p>
+<p>进程退出时即使没有显式关闭，句柄也会随进程结束释放，显式关闭主要服务于测试与长驻进程里的重配场景。启动失败走的是同一个清理函数（<code>src/better_crawler/browser.py:134</code>），因此失败后不存在半开的句柄——状态只有「可用」与「明确不可用」两种。这一点对上层很重要：下次调用 <code>start()</code> 时会重新尝试导入与启动，而不是因为上一次失败就永久放弃，因为只有导入失败与启动异常这两种情况才会写入 <code>unavailable_reason</code>。</p>
+<p>这里要补一句：写入 <code>unavailable_reason</code> 之后，<code>start()</code> 的第二道早退会直接返回假（<code>src/better_crawler/browser.py:98</code>），也就是说启动失败之后不会再自动重试。要恢复需要重建实例或清掉该字段。</p>
+<h2 id="5-崩溃标记与单例重置">5. 崩溃标记与单例重置</h2>
+<p>运行期崩溃与启动失败是两条不同的路径。抓取过程中捕获到异常时，引擎会拿异常文本与 <code>_CRASH_MARKERS</code>（<code>src/better_crawler/browser.py:66</code>）逐个比对，命中则调用 <code>_mark_crashed()</code>（<code>src/better_crawler/browser.py:161</code>）。</p>
+<p>标记动作只有一步：把三个句柄置空。标记本身不做关闭调用，理由是崩溃后关闭操作大概率也会失败，交给下一次启动的清理逻辑兜底更省事。标记清单里既有 Playwright 的关闭异常文本，也有 CDP 协议错误文本（<code>src/better_crawler/browser.py:66</code>），覆盖了句柄失效的常见表述。</p>
+<p>置空之后，下一次 <code>start()</code> 会因为句柄为空重新走启动流程，单例因此自动重建。标记发生时正在排队的请求不受影响：它们进入抓取逻辑后才发现上下文为空，于是走一次新的启动；并发上限仍由信号量把住，重建期间不会有大量页面同时打开。崩溃标记不写 <code>unavailable_reason</code>，这一点决定了它与启动失败的行为差异：崩溃可以自愈，启动失败不会自动重试。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant F as Fetcher
+  participant E as BrowserEngine
+  participant C as Chromium
+  F->>E: fetch_html_guarded(url)
+  E->>E: start()
+  alt 首次调用
+    E->>C: launch + new_context
+  end
+  E->>C: new_page + goto
+  C-->>E: 渲染后的 HTML
+  E->>C: page.close()
+  E-->>F: HTML 或 None
+  Note over E,C: 命中崩溃标记时置空句柄，下次调用重建</pre></div>
+<h2 id="6-不可用原因写给谁看">6. 不可用原因写给谁看</h2>
+<p><code>unavailable_reason</code> 是一个只读属性（<code>src/better_crawler/browser.py:89</code>）。内部有两个读者：<code>fetch_html()</code> 在浏览器不可用时把它写进结果的错误字段（<code>src/better_crawler/browser.py:190</code>），抓取层则把这条原因带回响应，让调用方看到「未安装 Playwright」而不是笼统的失败（<code>src/better_crawler/fetcher.py:162</code>）。</p>
+<p>启动成功的路径不会清掉这个字段吗？会——它只在从未成功启动过时才有值，因为写入点只有两处 ImportError 与启动异常（<code>src/better_crawler/browser.py:106</code>、<code>:132</code>），成功分支里没有对它赋值。这条原因会一路传到抓取层的结果说明里（<code>src/better_crawler/fetcher.py:162</code>），调用方据此可以区分「环境没装浏览器」与「这个页面抓不到」两类失败。不可用原因不参与重试判断：它只用于说明失败原因，抓取层是否重试由自己的策略决定。</p>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>以为启动失败会自动重试。写入 <code>unavailable_reason</code> 后 <code>start()</code> 直接返回假。</li>
+<li>把崩溃与启动失败当成同一类。崩溃只置空句柄，下次调用会重建。</li>
+<li>在锁外检查句柄就动手启动。双重检查在锁内还有一次，绕过它会出现两个 Chromium。</li>
+<li>逐个页面新建上下文。上下文在启动时建好并复用，初始化脚本按上下文生效。</li>
+<li>只改 UA 不改 <code>sec-ch-ua</code>。两者版本不一致会暴露自动化特征。</li>
+<li>以为 <code>close()</code> 与启动可以并发。两者都要拿同一把锁，先到先执行。</li>
+<li>在抓取循环里频繁调用 <code>close()</code>。关闭后下一次抓取会重新启动浏览器，启动成本远高于复用。</li>
+<li>把导入失败当成环境无关的小事。它决定后续所有请求走哪条降级路径。</li>
+<li>认为并发上限可以随请求数动态调整。信号量在构造时创建，运行期不变。</li>
+<li>以为浏览器实例会随进程共享。单例是进程内的，多进程各起一个。</li>
+<li>在浏览器不可用时仍期待拿到部分结果。<code>fetch_html()</code> 直接返回 <code>None</code>。</li>
+<li>在浏览器不可用时仍期待拿到部分结果。<code>fetch_html()</code> 直接返回 <code>None</code>。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>单例</td><td>进程内一个 Chromium，句柄三项：Playwright、浏览器、上下文</td></tr><tr><td>并发闸门</td><td><code>asyncio.Semaphore</code>，默认上限 5</td></tr><tr><td>启动返回</td><td>布尔值，失败原因写 <code>unavailable_reason</code></td></tr><tr><td>上下文参数</td><td>UA、视口、语言与客户端提示头一次性配好</td></tr><tr><td>初始化脚本</td><td>上下文级注入，对所有页面生效</td></tr><tr><td>启动耗时</td><td>首次调用承担，之后复用</td></tr><tr><td>崩溃处理</td><td>命中标记后只置空句柄，下次调用重建</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>启动失败</td><td>不抛异常只记原因</td><td>上层按降级处理</td><td>失败后不再自动重试</td></tr><tr><td>并发粒度</td><td>信号量限制页面数</td><td>避免 OOM</td><td>高峰期排队等待</td></tr><tr><td>句柄清理</td><td>三层逐级关闭且吞异常</td><td>关闭失败不影响主流程</td><td>资源泄漏只在日志可见</td></tr><tr><td>上下文复用</td><td>启动时建一次</td><td>页面创建快</td><td>页面级差异无法单独配置</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>并发上限为 5 时，第 6 个页面请求会走哪一步？说明判据所在行。</li>
+<li><code>start()</code> 在句柄为空的第二次调用（第一次启动失败）会做什么？</li>
+<li>清理函数为什么要吞掉三层的关闭异常？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>当前启动失败后不会自动重试。设计一个带冷却时间的重试方案，说明状态字段如何扩展。</li>
+<li>上下文在启动时建一次。给出一个让部分页面使用不同视口的改造方案，并说明对初始化脚本的影响。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/browser.py</code></td><td>单例、启动、上下文与崩溃标记</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>引擎的构造与调用方</td></tr><tr><td><code>src/better_crawler/errors.py</code></td><td>启动与抓取失败的说明文本</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-渲染抓取的等待策略与结果契约"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-渲染抓取的等待策略与结果契约</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/01-Playwright浏览器渲染/02-渲染抓取的等待策略与结果契约.md</span></div><div class="dfile__body"><h1 id="渲染抓取的等待策略与结果契约">渲染抓取的等待策略与结果契约</h1>
+<p>渲染抓取的难点不在”把页面打开”，而在”什么时候取内容”。导航完成不等于正文渲染完成：单页应用在 domcontentloaded 之后还要发几个请求才把正文填进 DOM，取早了拿到的还是空壳。</p>
+<p><code>fetch_html()</code>（<code>src/better_crawler/browser.py:170</code>）用三个可调项处理这件事——整页超时、加载后额外等待、是否模拟用户动作。另一个设计点是返回契约：函数只返回 HTML 字符串或 None，状态码与失败原因走一个可选的输出参数。等待的三个旋钮、状态码什么时候拿得到、以及超时与异常分别落到哪个返回分支，是这段代码的三处关键。</p>
+<h2 id="1-返回契约与附带信息">1. 返回契约与附带信息</h2>
+<p><code>PageFetch</code>（<code>src/better_crawler/browser.py:24</code>）是一个三字段的数据类：状态码、错误文本与默认值（<code>src/better_crawler/browser.py:31</code>）。</p>
+<p>模块注释解释了为什么不直接返回元组：保持”返回 HTML 字符串或 None”这个简单契约不变，调用方在只关心正文时完全不感知附带信息（<code>src/better_crawler/browser.py:28</code>）。</p>
+<p>这个取舍的代价是调用方要自己传一个可变对象进来接收信息。抓取层确实这么用：构造一个 <code>PageFetch</code> 实例，传给 <code>fetch_html_guarded()</code>，失败时读它的 <code>error</code> 字段决定说明文本（<code>src/better_crawler/fetcher.py:154</code>）。</p>
+<p>默认值让 <code>PageFetch</code> 在成功路径上保持干净：状态码写真实值，错误字段留空。调用方判断成功与否只看返回的 HTML 是否为 <code>None</code>，不需要读附带字段。</p>
+<h2 id="2-页面超时与导航等待">2. 页面超时与导航等待</h2>
+<p>超时参数的单位是秒，进入函数后先换算成毫秒，并且设了一个 5 秒的下限：<code>page_timeout_ms = max(int(timeout * 1000), 5000)</code>（<code>src/better_crawler/browser.py:193</code>）。</p>
+<p>下限的意义是保护调用方：即使传入极小的值，页面也至少有一次 5 秒的机会，避免因为参数误写导致全部请求立刻超时。导航等待用的是 <code>domcontentloaded</code> 而不是 <code>load</code>（<code>src/better_crawler/browser.py:200</code>）。</p>
+<p><code>load</code> 会等到所有子资源加载完，图片与广告多的页面会把时间耗在无关资源上；<code>domcontentloaded</code> 只等 DOM 就绪，剩下的渲染时间交给后面的固定等待。这个组合把”等待”拆成可控的两段，而不是一个不可预测的总时长。</p>
+<p>超时参数由抓取层传入，默认 25 秒（<code>src/better_crawler/fetcher.py:103</code>）。秒与毫秒的换算只在这一处发生，其余地方都按毫秒传递。</p>
+<h2 id="3-状态码在这一步取回">3. 状态码在这一步取回</h2>
+<p><code>page.goto()</code> 返回响应对象，状态码从这里写进结果（<code>src/better_crawler/browser.py:202</code>）。注意两处条件：一是必须先传入结果对象，二是响应不为空——跳转过程中某些导航可能没有关联响应。</p>
+<p>状态码的用途是区分”页面不存在”与”抓取被拦”。抓取层把它带进响应字段（<code>src/better_crawler/fetcher.py:167</code>），错误翻译模块据此给出说明。2xx/3xx 的状态码不会生成错误说明，因为请求本身是成功的，此时抓不到正文属于内容问题。</p>
+<h2 id="4-模拟鼠标与滚轮信号">4. 模拟鼠标与滚轮信号</h2>
+<p><code>simulate_user</code> 默认为真（<code>src/better_crawler/browser.py:175</code>）。开启时执行两个动作：鼠标移动到随机坐标（<code>src/better_crawler/browser.py:206</code>），滚轮向下滚动一个随机距离（<code>src/better_crawler/browser.py:209</code>）。</p>
+<p>坐标从 100 到 300、滚动量从 200 到 400 之间取随机值。代码注释解释了为什么不点击：点击固定坐标可能误触链接导致页面跳走（<code>src/better_crawler/browser.py:205</code>）。</p>
+<p>移动与滚动只产生输入信号，不产生导航副作用；对依赖”用户已交互”才加载正文的页面，这两个动作足以触发懒加载。滚动量上限 400 像素也意味着这只触发首屏之后的少量内容——需要完整长文的页面靠这一个动作拿不全。随机取值是为了避免固定轨迹：固定坐标与固定滚动量在多站点之间会形成可识别的模式，随机区间让每次抓取的输入信号都不同。</p>
+<h2 id="5-加载后的额外等待">5. 加载后的额外等待</h2>
+<p>两个动作之后还有一段固定等待：<code>wait_after_load</code> 默认 1.2 秒（<code>src/better_crawler/browser.py:174</code>），大于零时用 <code>page.wait_for_timeout()</code> 睡眠对应毫秒数（<code>src/better_crawler/browser.py:211</code>）。这是最朴素也最稳的一种等待：不依赖任何选择器，给渲染留固定预算。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["fetch_html(url, timeout, wait_after_load, simulate_user)"] --> B{"引擎可用?"}
+  B -->|"否"| C["写错误原因 返回 None"]
+  B -->|"是"| D["换算超时 下限 5000ms"]
+  D --> E["获取并发信号量"]
+  E --> F["new_page"]
+  F --> G["goto wait_until=domcontentloaded"]
+  G --> H["记录状态码"]
+  H --> I{"simulate_user?"}
+  I -->|"是"| J["鼠标移动 滚轮下滚"]
+  I -->|"否"| K["跳过"]
+  J --> L{"wait_after_load > 0?"}
+  K --> L
+  L -->|"是"| M["wait_for_timeout 固定等待"]
+  L -->|"否"| N["跳过"]
+  M --> O["page.content()"]
+  N --> O
+  O --> P["finally 关闭页面"]</pre></div>
+<p>固定等待的问题是双向的：页面一秒内就渲染完时白等，超过 1.2 秒才出正文时仍然拿空壳。它换来的是实现简单与不依赖站点结构——换成等待某个选择器，规则会随站点改版失效。把 <code>wait_after_load</code> 设为 0 可以关掉这段等待，适合已知服务端渲染的站点；默认值偏向保守，用等待时间换取更低的空壳率。</p>
+<h2 id="6-两条失败分支与收尾">6. 两条失败分支与收尾</h2>
+<p>失败分两类。<code>asyncio.TimeoutError</code>（<code>src/better_crawler/browser.py:213</code>）对应整页导航超时，错误文本写成”页面加载超时（>N 秒）“（<code>src/better_crawler/browser.py:216</code>）。</p>
+<p>其余异常走通用分支（<code>src/better_crawler/browser.py:218</code>），先把异常文本与崩溃标记比对，命中就重置单例（<code>src/better_crawler/browser.py:220</code>），再调用错误翻译函数生成说明（<code>src/better_crawler/browser.py:224</code>）。</p>
+<p>无论成功还是失败，页面都在 <code>finally</code> 里关闭（<code>src/better_crawler/browser.py:228</code>），关闭异常同样被吞掉（<code>src/better_crawler/browser.py:231</code>）。页面是按请求新建的，关掉它不影响上下文与浏览器，因此下一次请求可以直接复用引擎。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant F as Fetcher
+  participant E as BrowserEngine
+  participant P as Page
+  F->>E: fetch_html(url, timeout, page)
+  E->>P: new_page()
+  E->>P: goto(url, domcontentloaded, timeout)
+  P-->>E: Response(status)
+  E->>E: result.status = status
+  E->>P: mouse.move + mouse.wheel
+  E->>P: wait_for_timeout(1200)
+  E->>P: content()
+  P-->>E: HTML
+  E->>P: close()
+  E-->>F: HTML 或 None</pre></div>
+<p>两类失败都返回 <code>None</code>，调用方只能靠附带字段区分原因，这也是 <code>PageFetch</code> 存在的意义。</p>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>以为导航完成就等于正文就绪。<code>domcontentloaded</code> 之后还要靠固定等待补渲染时间。</li>
+<li>传入小于 5 秒的超时并期待它生效。函数会把下限抬到 5000 毫秒。</li>
+<li>把状态码当成正文质量的判据。2xx 只说明请求成功，不说明内容有效。</li>
+<li>认为模拟用户会点击链接。实现只做鼠标移动与滚轮滚动。</li>
+<li>忘记关闭页面。页面在 <code>finally</code> 里关闭，即使异常路径也不会泄漏。</li>
+<li>认为两类失败在返回值上有区别。超时与异常都返回 <code>None</code>，差异只在附带字段里。</li>
+<li>把 <code>wait_after_load</code> 的默认值当成对所有站点都够用。它偏向保守，慢站点仍可能取到空壳。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>返回契约</td><td>成功返回 HTML 字符串，失败返回 <code>None</code></td></tr><tr><td>附带信息</td><td><code>PageFetch</code> 带状态码与错误原因</td></tr><tr><td>超时下限</td><td><code>max(timeout * 1000, 5000)</code></td></tr><tr><td>导航条件</td><td><code>domcontentloaded</code></td></tr><tr><td>交互模拟</td><td>鼠标移动到随机坐标，滚轮下滚 200 至 400 像素</td></tr><tr><td>加载后等待</td><td>默认 1.2 秒固定睡眠</td></tr><tr><td>收尾</td><td><code>finally</code> 关闭页面，异常被吞</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>附加信息</td><td>输出参数而非元组</td><td>返回契约不变</td><td>调用方要传入可变对象</td></tr><tr><td>等待方式</td><td>固定睡眠</td><td>不依赖站点结构</td><td>快页面白等、慢页面仍旧取空</td></tr><tr><td>导航条件</td><td><code>domcontentloaded</code></td><td>不等无关子资源</td><td>需额外等待补渲染</td></tr><tr><td>交互模拟</td><td>只移动与滚动</td><td>无导航副作用</td><td>拿不到需要点击展开的内容</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>传入 <code>timeout=1</code> 时页面导航的实际超时是多少毫秒？写出计算式。</li>
+<li><code>result.status</code> 在什么条件下不会被写入？</li>
+<li>页面在成功路径与异常路径下分别由哪一行代码关闭？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>固定等待无法兼顾快慢页面。设计一个用正文长度或网络空闲作为判据的替代方案，说明它如何处理”正文为空但页面正常”的情况。</li>
+<li>模拟用户只滚动 400 像素，长文页面可能只加载首屏。给出一个分段滚动到底部的方案，并说明它与超时的关系。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/browser.py</code></td><td>等待参数、状态码与失败分支</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>调用方与 <code>PageFetch</code> 的使用</td></tr><tr><td><code>src/better_crawler/errors.py</code></td><td>异常文本的翻译</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-整体超时保护与浏览器崩溃恢复"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-整体超时保护与浏览器崩溃恢复</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/01-Playwright浏览器渲染/03-整体超时保护与浏览器崩溃恢复.md</span></div><div class="dfile__body"><h1 id="整体超时保护与浏览器崩溃恢复">整体超时保护与浏览器崩溃恢复</h1>
+<p>单页导航超时只能覆盖 <code>goto</code> 这一步。页面创建、上下文获取、信号量排队以及最后的 <code>content()</code> 调用都可能在导航超时之外卡住，而抓取层需要的是一个确定的等待上限。</p>
+<p><code>fetch_html_guarded()</code>（<code>src/better_crawler/browser.py:235</code>）就是这层保险：它在 <code>fetch_html()</code> 外面再套一个整体超时。</p>
+<p>难点在于放弃等待之后怎么处理那个还在跑的任务。直接取消会触发 Playwright 内部的 future 异常泄漏，所以这里的做法是”不取消、只放弃等待”，用一个回调把结果或异常消费掉。这种模式、内外两层超时的关系，以及崩溃之后引擎如何自愈，是这里的三个要点。</p>
+<h2 id="1-为什么单页超时不够">1. 为什么单页超时不够</h2>
+<p>单页导航超时由 <code>page_timeout_ms</code> 控制，只作用于 <code>page.goto()</code>（<code>src/better_crawler/browser.py:199</code>）。</p>
+<p>从进入 <code>fetch_html()</code> 到调用 <code>goto</code> 之间还有几步等待：拿并发信号量（<code>src/better_crawler/browser.py:195</code>）、新建页面（<code>src/better_crawler/browser.py:198</code>）。</p>
+<p>如果浏览器已经崩溃或上下文处于异常状态，这两步可能长时间不返回，此时 <code>goto</code> 的超时根本没机会生效。模块注释把这一点写成设计前提：超时取消会让 Playwright 内部 future 异常泄漏（<code>src/better_crawler/browser.py:7</code>）。因此外层需要的是一个”等待上限”，而不是”取消信号”。</p>
+<h2 id="2-shield-与-wait_for-的组合">2. shield 与 wait_for 的组合</h2>
+<p>实现只有三行：先把 <code>fetch_html()</code> 包成任务（<code>src/better_crawler/browser.py:248</code>），再用 <code>asyncio.wait_for()</code> 等待 <code>asyncio.shield()</code> 包过的任务，超时时间取传入值加 5 秒（<code>src/better_crawler/browser.py:252</code>）。</p>
+<p>两个函数的职责要分清楚。<code>shield()</code> 的作用是让外层取消不传递给内层任务：<code>wait_for()</code> 超时会取消它等待的对象，包一层 shield 之后，取消落在 shield 上，底层抓取任务继续跑完。外层因此拿到超时控制权，底层任务不受影响。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant F as Fetcher
+  participant G as fetch_html_guarded
+  participant T as fetch_html 任务
+  F->>G: fetch_html_guarded(url, timeout=25)
+  G->>T: ensure_future(fetch_html)
+  G->>G: wait_for(shield(task), 30)
+  alt 任务先完成
+    T-->>G: HTML
+    G-->>F: HTML
+  else 外层先超时
+    G->>T: 不取消，仅放弃等待
+    G->>T: add_done_callback 消费异常
+    G-->>F: None 与超时说明
+  end</pre></div>
+<p>这 5 秒不是一个精调值，它覆盖的是页面创建与信号量排队的量级；如果上层传了很短的超时，差值保证内层仍有机会先报出更具体的导航错误。</p>
+<h2 id="3-放弃等待时消费异常">3. 放弃等待时消费异常</h2>
+<p>超时分支做的第一件事是给任务挂回调（<code>src/better_crawler/browser.py:254</code>）：回调里调用 <code>t.exception()</code>，任务未被取消时才取。</p>
+<p>这一句是关键——它把任务最终抛出的异常标记为”已处理”，从而避免解释器打印”future exception was never retrieved”，也避免 Playwright 内部因为异常未消费而进入不一致状态（<code>src/better_crawler/browser.py:255</code>）。</p>
+<p>随后写一条 debug 日志并设置结果的错误文本为”抓取超时（>N 秒）“（<code>src/better_crawler/browser.py:259</code>）。函数返回 <code>None</code>，与普通失败路径一致。</p>
+<p>需要注意的是：底层任务仍然会跑完，它占用的信号量槽位也会一直占到那次抓取结束。也就是说外层超时并不能立刻释放并发额度，只是让调用方不用继续等。回调是个 lambda，闭包捕获任务对象本身，不引用任何局部可变状态，因此任务结束得再晚也能安全消费异常。</p>
+<h2 id="4-内外两层超时的差值">4. 内外两层超时的差值</h2>
+<p>内层超时是 <code>timeout</code> 秒，外层是 <code>timeout + 5</code> 秒，多出的 5 秒是给页面创建、信号量排队与结果回传留的余量（<code>src/better_crawler/browser.py:252</code>）。</p>
+<p>如果两层取同一个值，外层会先触发，内层精心区分过的”导航超时”与”抓取超时”两种说明就会被吞掉。这个差值让两条错误文本各有归属：内层超时产生”页面加载超时（>N 秒）“（<code>src/better_crawler/browser.py:216</code>），外层超时产生”抓取超时（>N 秒）“（<code>src/better_crawler/browser.py:259</code>）。调用方看到后者时，问题更可能出在排队或引擎状态上，而不是目标站点慢。</p>
+<h2 id="5-抓取层的重试与这层保护的关系">5. 抓取层的重试与这层保护的关系</h2>
+<p>抓取层为浏览器这一档设置了独立的重试次数，默认 2 次，循环次数是重试数加一（<code>src/better_crawler/fetcher.py:151</code>）。每轮调用 <code>fetch_html_guarded()</code> 并传入同一个结果对象（<code>src/better_crawler/fetcher.py:154</code>），最后一轮失败时把错误原因写成说明（<code>src/better_crawler/fetcher.py:162</code>）。</p>
+<p>重试与超时的组合意味着最坏耗时是”轮数乘以整体超时”。外层超时不会取消底层任务这一点在重试场景下尤其要考虑：上一轮放弃等待的任务仍在占用信号量，下一轮要排队，重试间隔实际被拉长。重试循环复用同一个结果对象，因此每轮失败都会覆盖上一轮的错误文本，最终留下的说明来自最后一次尝试。</p>
+<h2 id="6-崩溃恢复的完整路径">6. 崩溃恢复的完整路径</h2>
+<p>崩溃识别的入口在通用异常分支：把异常文本与 <code>_CRASH_MARKERS</code> 比对，命中就调用 <code>_mark_crashed()</code>（<code>src/better_crawler/browser.py:220</code>）。</p>
+<p>标记动作是把 Playwright、浏览器、上下文三个句柄置空（<code>src/better_crawler/browser.py:161</code>）。置空之后，下一次 <code>start()</code> 会发现句柄为空，重新走启动流程（<code>src/better_crawler/browser.py:96</code>）。</p>
+<p>这条恢复路径不需要外层介入，也不会写入 <code>unavailable_reason</code>，因此不会像启动失败那样被永久判为不可用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["fetch_html 抛异常"] --> B{"命中崩溃标记?"}
+  B -->|"是"| C["_mark_crashed 置空三个句柄"]
+  B -->|"否"| D["只写错误说明"]
+  C --> E["本次返回 None"]
+  D --> E
+  E --> F["下一次 fetch_html"]
+  F --> G["start 发现句柄为空"]
+  G --> H["重新启动 Playwright 与 Chromium"]
+  H --> I["正常抓取"]</pre></div>
+<h2 id="7-并发闸门在超时与崩溃下的状态">7. 并发闸门在超时与崩溃下的状态</h2>
+<p>信号量的获取在 <code>fetch_html()</code> 内、页面创建之前（<code>src/better_crawler/browser.py:195</code>），释放由 <code>async with</code> 保证。</p>
+<p>外层超时放弃等待时，内层任务仍持有槽位，直到它自己结束；崩溃重置句柄则不影响信号量本身，因为信号量属于引擎对象而不属于浏览器。页面关闭在 <code>finally</code> 里执行（<code>src/better_crawler/browser.py:228</code>），所以正常超时路径不会残留页面对象。</p>
+<p>可能残留的是那种”卡在系统调用里”的情况，此时页面对象要等到底层任务被进程回收。超时与放弃等待都只记 debug 日志：这类事件在批量抓取里很常见，写成 warning 会淹没更需要关注的环境错误。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<ul>
+<li>以为外层超时会取消底层抓取。实现只放弃等待，任务继续跑到结束。</li>
+<li>把两层超时设成同一个值。这样内层的导航超时说明永远不会出现。</li>
+<li>忽略重试与超时的乘数效应。最坏耗时是轮数乘以整体超时。</li>
+<li>认为崩溃会写进 <code>unavailable_reason</code>。只有导入失败与启动异常会写。</li>
+<li>手动取消返回的任务。取消会让 Playwright 的 future 异常泄漏。</li>
+<li>从错误文本反推是哪一层超时。内层写「页面加载超时」，外层写「抓取超时」。</li>
+<li>以为放弃等待会释放并发额度。槽位由底层任务继续持有。这两条超时路径都不需要测试桩：把 <code>timeout</code> 调小、指向一个迟迟不响应的地址，就能分别触发内层与外层。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>外层超时</td><td><code>wait_for</code> 加 <code>shield</code>，时长取 <code>timeout + 5</code></td></tr><tr><td>放弃等待</td><td>不取消任务，挂 <code>done_callback</code> 消费异常</td></tr><tr><td>两种超时</td><td>内层对应导航，外层对应排队与引擎状态</td></tr><tr><td>重试</td><td>抓取层循环 <code>browser_retries + 1</code> 轮</td></tr><tr><td>崩溃恢复</td><td>置空三个句柄，下次启动自动重建</td></tr><tr><td>信号量</td><td>属于引擎对象，超时期间仍被占用</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>超时处理</td><td>不取消只放弃</td><td>避免 future 异常泄漏</td><td>槽位滞后释放</td></tr><tr><td>内外差值</td><td>外层多 5 秒</td><td>保留两条错误说明</td><td>最坏耗时增加 5 秒</td></tr><tr><td>崩溃恢复</td><td>只置空句柄</td><td>可自愈且不需要外部介入</td><td>无主动关闭，资源晚释放</td></tr><tr><td>错误消费</td><td>回调里取 <code>exception()</code></td><td>消除未处理异常告警</td><td>异常细节只进日志</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>传入 <code>timeout=25</code> 时内外两层超时分别是多少秒？</li>
+<li>外层超时后底层任务会被取消吗？说明依据所在的代码行。</li>
+<li><code>_mark_crashed()</code> 之后引擎处于什么状态？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>外层超时不取消任务，导致信号量槽位滞后释放。设计一个既保留异常消费又能尽快释放槽位的方案。</li>
+<li>崩溃恢复只置空句柄，没有主动关闭旧进程。分析这种做法的风险与适用场景。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/browser.py</code></td><td>外层超时、异常消费与崩溃恢复</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>重试循环与错误说明</td></tr><tr><td><code>src/better_crawler/errors.py</code></td><td>异常文本翻译</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-失败原因翻译与浏览器不可用降级"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-失败原因翻译与浏览器不可用降级</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/01-Playwright浏览器渲染/04-失败原因翻译与浏览器不可用降级.md</span></div><div class="dfile__body"><h1 id="失败原因翻译与浏览器不可用降级">失败原因翻译与浏览器不可用降级</h1>
+<p>渲染抓取失败的原因很多：页面本来就不存在、触发了反爬、域名解析失败、代理没通、浏览器根本没装起来。如果统一报成”提取不到有效正文”，调用方就无法判断该换 URL、该重试、还是该修环境。<code>src/better_crawler/errors.py</code> 的存在就是为了把底层错误翻译成能直接指导下一步动作的说明。</p>
+<p>翻译规则本身很短，重要的是它划出的边界——哪些情况该给状态码解释，哪些不该。要看的是三件事：状态码与网络错误码怎么翻译、识别不出时怎么兜底、以及浏览器不可用时这条说明怎样一路传到响应里。</p>
+<h2 id="1-三个翻译入口">1. 三个翻译入口</h2>
+<p>模块对外暴露三个函数：状态码翻译（<code>src/better_crawler/errors.py:58</code>）、网络错误识别（<code>src/better_crawler/errors.py:74</code>）、浏览器异常总入口（<code>src/better_crawler/errors.py:84</code>）。第三个是前两个的组合：先尝试识别网络错误，识别不出再回退到截断后的原始信息。</p>
+<p>模块开头的注释把用途写得很直接：区分”页面有问题”和”抓取被拦”很重要，前者该换 URL，后者可以重试（<code>src/better_crawler/errors.py:7</code>）。表驱动的好处在这一层很明显：新增一个状态码只改字典，不动函数；需要留意的是字典本身的取值口径，比如 <code>521</code> 与 <code>522</code> 明确写成 Cloudflare 报错而不是笼统的 5xx。</p>
+<h2 id="2-状态码表的边界">2. 状态码表的边界</h2>
+<p>状态码表覆盖 24 个常见取值（<code>src/better_crawler/errors.py:16</code>），从 400 的「请求无效」到 522 的「连接源站超时」。几个与抓取场景直接相关的条目：403 标注「可能触发反爬」，404 是「页面不存在」，429 是「被限流」，521 与 522 明确写出是 Cloudflare 报错。</p>
+<p>翻译函数有一条硬边界：状态码为空或小于 400 时直接返回空字符串（<code>src/better_crawler/errors.py:64</code>）。注释解释了原因——2xx 与 3xx 表示请求本身成功，此时提取不到正文属于内容问题，用状态码解释反而误导（<code>src/better_crawler/errors.py:61</code>）。</p>
+<p>表里查不到时按区间兜底：500 以上写「服务端错误」（<code>src/better_crawler/errors.py:69</code>），其余写「客户端错误」（<code>src/better_crawler/errors.py:71</code>）。几个与抓取决策直接相关的条目如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>状态码</th><th>说明</th><th>可采取的动作</th></tr></thead><tbody><tr><td>403</td><td>服务器拒绝访问（可能触发反爬）</td><td>换抓取路径或换 URL</td></tr><tr><td>404</td><td>页面不存在</td><td>换 URL</td></tr><tr><td>410</td><td>页面已永久移除</td><td>放弃该地址</td></tr><tr><td>429</td><td>请求过于频繁（被限流）</td><td>降低频率后重试</td></tr><tr><td>451</td><td>因法律原因不可访问</td><td>放弃该地址</td></tr><tr><td>503</td><td>服务暂不可用</td><td>稍后重试</td></tr><tr><td>521</td><td>源站不可达（Cloudflare 报错）</td><td>稍后重试</td></tr><tr><td>522</td><td>连接源站超时（Cloudflare 报错）</td><td>稍后重试</td></tr></tbody></table>
+<h2 id="3-网络错误码的匹配顺序">3. 网络错误码的匹配顺序</h2>
+<p>网络错误是一张有序元组（<code>src/better_crawler/errors.py:39</code>），匹配方式是子串包含，返回第一个命中的说明（<code>src/better_crawler/errors.py:78</code>）。顺序有意义，注释专门写了这一点（<code>src/better_crawler/errors.py:38</code>），因为前缀相近的错误码会互相包含。</p>
+<p>表里有两组容易看错的条目：<code>ERR_NAME_NOT_RESOLVED</code> 与 <code>ERR_NAME_RESOLUTION_FAILED</code> 都映射到 DNS 问题，先出现的先匹配；<code>ERR_CONNECTION_TIMED_OUT</code> 在 <code>ERR_TIMED_OUT</code> 之前，前者更具体。<code>ERR_CERT</code> 与 <code>ERR_SSL</code> 用前缀匹配，因此证书与握手类错误都能被这两条覆盖。常用条目与它们的指向如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>错误码</th><th>说明</th><th>指向</th></tr></thead><tbody><tr><td><code>ERR_NAME_NOT_RESOLVED</code></td><td>域名无法解析</td><td>DNS 或域名拼写</td></tr><tr><td><code>ERR_INTERNET_DISCONNECTED</code></td><td>本机网络已断开</td><td>运行环境</td></tr><tr><td><code>ERR_CONNECTION_REFUSED</code></td><td>连接被拒绝</td><td>端口或服务未启动</td></tr><tr><td><code>ERR_CONNECTION_TIMED_OUT</code></td><td>连接超时</td><td>网络或链路</td></tr><tr><td><code>ERR_EMPTY_RESPONSE</code></td><td>服务器返回空响应</td><td>服务端</td></tr><tr><td><code>ERR_TOO_MANY_REDIRECTS</code></td><td>重定向次数过多</td><td>目标站点</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["浏览器异常 message"] --> B{"describe_net_error"}
+  B -->|"命中网络错误表"| C["返回对应说明"]
+  B -->|"未命中"| D["压缩空白并截断 150 字符"]
+  D --> E{"截断后为空?"}
+  E -->|"是"| F["浏览器抓取失败"]
+  E -->|"否"| G["浏览器抓取失败: 截断文本"]
+  C --> H["写入 PageFetch.error"]
+  G --> H
+  F --> H</pre></div>
+<h2 id="4-识别不出时的截断策略">4. 识别不出时的截断策略</h2>
+<p>兜底分支先把连续空白压成单个空格，再截到 150 个字符（<code>src/better_crawler/errors.py:93</code>），最后拼上”浏览器抓取失败:“前缀（<code>src/better_crawler/errors.py:94</code>）。压缩是为了让多行堆栈变成单行，截断是为了不把整段堆栈塞进响应字段。注释里的取舍写得很清楚：保留原文总比丢掉好，但需要控制长度（<code>src/better_crawler/errors.py:87</code>）。</p>
+<p>因此这条兜底路径的信息量介于”什么都没说”和”把堆栈原样返回”之间。截断策略对所有未识别异常一视同仁，包括引擎内部错误与页面脚本错误；翻译层不做归因，只保证文本可读且长度可控。</p>
+<h2 id="5-浏览器不可用的降级链路">5. 浏览器不可用的降级链路</h2>
+<p>不可用有两种来源：导入失败与启动异常，两者都会写入引擎的 <code>unavailable_reason</code>（<code>src/better_crawler/browser.py:106</code>、<code>:132</code>）。抓取入口在取页面之前先调用 <code>start()</code>，不可用时把这段原因直接写进结果对象的错误字段（<code>src/better_crawler/browser.py:190</code>）。</p>
+<p>抓取层随后把它当成失败说明的一部分：最后一轮仍失败时，把该原因作为响应里的说明文本（<code>src/better_crawler/fetcher.py:162</code>）。这条链路让”没装 Playwright”这类环境问题不会被误报成目标站点的问题。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["fetch_html 入口"] --> B["start()"]
+  B -->|"可用"| C["正常渲染抓取"]
+  B -->|"ImportError"| D["写入安装提示"]
+  B -->|"启动异常"| E["写入启动失败原因"]
+  D --> F["result.error"]
+  E --> F
+  F --> G["fetch_html 返回 None"]
+  G --> H["抓取层写入响应说明"]</pre></div>
+<h2 id="6-抓取层如何使用这些文本">6. 抓取层如何使用这些文本</h2>
+<p>抓取结果带三个可观测字段：命中哪条抓取路径（<code>src/better_crawler/fetcher.py:42</code>）、是否成功、以及失败说明。浏览器档成功时也会记录状态码（<code>src/better_crawler/fetcher.py:167</code>），失败时则写入说明。调用方拿到的是结构化字段而不是一段自由文本，翻译函数只负责生成其中的人类可读部分。</p>
+<p>这套分工让错误文本有确定的生成点：状态码与网络错误在 <code>errors.py</code> 翻译，超时在浏览器引擎内生成，不可用原因在启动路径生成。三处的文本风格一致，都以可操作的动作结尾或给出明确的服务端状态。</p>
+<h2 id="7-与分层回退的衔接">7. 与分层回退的衔接</h2>
+<p>这些说明文本有一个直接的消费者：分层回退。当浏览器档失败时，说明文本进入下一档的决策——状态码指向反爬或限流时可以换用带指纹的 HTTP 档，DNS 与证书类错误则换档也不会成功。分层顺序本身在 26-网页抓取与反爬/02-分层回退 里展开。反过来说，翻译层不需要知道有几档：它只产出人类可读的说明与调用方自行判断的原始状态码，档位选择留给抓取层。这条边界让新增档位不必改翻译规则。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<ul>
+<li>用状态码解释 2xx 页面的空正文。这类情况不返回状态码说明。</li>
+<li>依赖未命中网络错误表时的原文。它会被压缩并截断到 150 字符。</li>
+<li>把「未安装 Playwright」当成页面问题。它由启动路径生成，与目标站点无关。</li>
+<li>认为错误说明里有完整堆栈。兜底分支只保留单行截断文本。</li>
+<li>忽略状态码表的区间兜底。表外状态码按 4xx 与 5xx 分两类返回。</li>
+<li>把说明文本当成可以解析的结构。结构化字段是状态码与错误码，文本只供人读。</li>
+<li>在翻译层里写档位选择逻辑。档位决策属于抓取层。</li>
+<li>认为未识别异常会丢信息。兜底分支保留压缩后的前 150 字符。状态码与网络错误码两张表都是纯数据，新增映射不需要改函数；需要改动的是匹配顺序，因为子串匹配依赖先后关系。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>状态码表</td><td>24 个条目，覆盖 400 到 522</td></tr><tr><td>翻译边界</td><td>只对 400 以上返回说明</td></tr><tr><td>网络错误表</td><td>有序元组，子串匹配取第一条</td></tr><tr><td>兜底文本</td><td>压缩空白后截断 150 字符</td></tr><tr><td>不可用原因</td><td>导入失败或启动异常写入</td></tr><tr><td>传递路径</td><td>引擎到结果对象再到响应说明</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>状态码范围</td><td>只翻译 400 以上</td><td>避免把内容问题说成请求问题</td><td>2xx 空正文没有专门提示</td></tr><tr><td>表驱动</td><td>状态码与错误码各一张表</td><td>新增映射成本低</td><td>表外取值只能走区间兜底</td></tr><tr><td>兜底</td><td>截断而不是丢弃</td><td>保留可诊断信息</td><td>堆栈细节丢失</td></tr><tr><td>匹配顺序</td><td>具体项排在前面</td><td>相近错误码不会误判</td><td>新条目必须注意插入位置</td></tr></tbody></table>
+<p>说明文本里不含 URL 或堆栈的完整内容，因此它适合直接放进面向用户的响应，不需要再做一层脱敏。</p>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>状态码 200 且正文为空时，<code>describe_status()</code> 返回什么？</li>
+<li>异常文本同时包含 <code>ERR_CONNECTION_TIMED_OUT</code> 与 <code>ERR_TIMED_OUT</code> 时命中哪一条？</li>
+<li>浏览器未安装时，这段原因在代码里经过哪几个字段传递到响应？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>兜底路径固定截断 150 字符。设计一个保留关键错误码、只截断堆栈行的方案。</li>
+<li>当前翻译函数是纯函数且无外部依赖。给出一个为它们补单元测试的用例清单，覆盖表内、表外与空输入三类。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/errors.py</code></td><td>状态码与网络错误的翻译规则</td></tr><tr><td><code>src/better_crawler/browser.py</code></td><td>不可用原因与错误字段写入</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>结果字段与说明文本的组装</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/25-%E6%90%9C%E7%B4%A2%E8%81%9A%E5%90%88/03-%E4%B8%93%E7%94%A8%E6%95%B0%E6%8D%AE%E6%BA%90/"><span class="k">← 上一篇</span><span class="t">专用数据源</span><span class="d">搜索聚合 · 3 个文件</span></a><a class="next" href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/02-%E5%88%86%E5%B1%82%E5%9B%9E%E9%80%80/"><span class="k">下一篇 →</span><span class="t">分层回退</span><span class="d">网页抓取与反爬 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

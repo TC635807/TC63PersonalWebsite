@@ -1,0 +1,863 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>CMake与双交叉工具链 · 嵌入式构建与调试 · 王宇翔</title><meta name="description" content="哨兵两板顶层 CMakeLists 的目标定义、源文件与包含目录登记方式，以及底盘与云台的差异清单。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/01-CMake%E4%B8%8E%E5%8F%8C%E4%BA%A4%E5%8F%89%E5%B7%A5%E5%85%B7%E9%93%BE/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="CMake与双交叉工具链 · 嵌入式构建与调试 · 王宇翔"><meta property="og:description" content="哨兵两板顶层 CMakeLists 的目标定义、源文件与包含目录登记方式，以及底盘与云台的差异清单。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/01-CMake%E4%B8%8E%E5%8F%8C%E4%BA%A4%E5%8F%89%E5%B7%A5%E5%85%B7%E9%93%BE/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/">嵌入式构建与调试</a><span class="sep" aria-hidden="true">/</span><span class="now">CMake与双交叉工具链</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>CMake与双交叉工具链</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>CMake 工程结构与双板同构</span></a><ul class="toc__heads"><li><a href="#1-顶层文件由-cubemx-只生成一次" data-depth="2" data-heading-j="0">1. 顶层文件由 CubeMX 只生成一次</a></li><li><a href="#2-目标图与命令顺序" data-depth="2" data-heading-j="1">2. 目标图与命令顺序</a></li><li><a href="#3-从配置到构建的命令链" data-depth="2" data-heading-j="2">3. 从配置到构建的命令链</a></li><li><a href="#4-源文件怎么登记" data-depth="2" data-heading-j="3">4. 源文件怎么登记</a></li><li><a href="#5-include-路径与宏来自哪里" data-depth="2" data-heading-j="4">5. include 路径与宏来自哪里</a></li><li><a href="#6-两板的差异清单" data-depth="2" data-heading-j="5">6. 两板的差异清单</a></li><li><a href="#7-双板同构下的易错点" data-depth="2" data-heading-j="6">7. 双板同构下的易错点</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>交叉编译工具链与编译选项</span></a><ul class="toc__heads"><li><a href="#1-两份工具链文件与预设的关系" data-depth="2" data-heading-j="0">1. 两份工具链文件与预设的关系</a></li><li><a href="#2-generic-系统名与编译器检测" data-depth="2" data-heading-j="1">2. Generic 系统名与编译器检测</a></li><li><a href="#3-目标三元组由三个选项锁定" data-depth="2" data-heading-j="2">3. 目标三元组由三个选项锁定</a></li><li><a href="#4-标志的传播路径" data-depth="2" data-heading-j="3">4. 标志的传播路径</a></li><li><a href="#5-优化级别与段粒度" data-depth="2" data-heading-j="4">5. 优化级别与段粒度</a></li><li><a href="#6-gnu-侧的命令与前缀" data-depth="2" data-heading-j="5">6. GNU 侧的命令与前缀</a></li><li><a href="#7-工具链与内核配置的接口" data-depth="2" data-heading-j="6">7. 工具链与内核配置的接口</a></li><li><a href="#8-手工核对工具链的步骤" data-depth="2" data-heading-j="7">8. 手工核对工具链的步骤</a></li><li><a href="#9-工具链相关的易错点" data-depth="2" data-heading-j="8">9. 工具链相关的易错点</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>链接脚本与内存布局</span></a><ul class="toc__heads"><li><a href="#1-三段-memory-与设备容量" data-depth="2" data-heading-j="0">1. 三段 MEMORY 与设备容量</a></li><li><a href="#2-栈顶与符号计算" data-depth="2" data-heading-j="1">2. 栈顶与符号计算</a></li><li><a href="#3-段到区域的映射" data-depth="2" data-heading-j="2">3. 段到区域的映射</a></li><li><a href="#4-地址分离与启动期搬运" data-depth="2" data-heading-j="3">4. 地址分离与启动期搬运</a></li><li><a href="#5-ccmram-段为什么是空的" data-depth="2" data-heading-j="4">5. CCMRAM 段为什么是空的</a></li><li><a href="#6-tls-符号与-discard-的来源" data-depth="2" data-heading-j="5">6. TLS 符号与 /DISCARD/ 的来源</a></li><li><a href="#7-链接选项与段回收" data-depth="2" data-heading-j="6">7. 链接选项与段回收</a></li><li><a href="#8-从-map-读实际占用" data-depth="2" data-heading-j="7">8. 从 map 读实际占用</a></li><li><a href="#9-占用里最大的一块" data-depth="2" data-heading-j="8">9. 占用里最大的一块</a></li><li><a href="#10-链接脚本相关的易错点" data-depth="2" data-heading-j="9">10. 链接脚本相关的易错点</a></li><li><a href="#11-小结" data-depth="2" data-heading-j="10">11. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#12-练习" data-depth="2" data-heading-j="13">12. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="16">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">嵌入式构建与调试</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>CMake / 嵌入式构建 / 哨兵固件 / 工程结构 / 交叉编译 / arm-none-eabi / starm-clang / FPU</span></div><h1 class="docs__title">CMake与双交叉工具链</h1><p class="docs__lead">哨兵两板顶层 CMakeLists 的目标定义、源文件与包含目录登记方式，以及底盘与云台的差异清单。</p></header><section class="dfile" id="file-1" data-file="01-CMake工程结构与双板同构"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-CMake工程结构与双板同构</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/01-CMake与双交叉工具链/01-CMake工程结构与双板同构.md</span></div><div class="dfile__body"><h1 id="cmake-工程结构与双板同构">CMake 工程结构与双板同构</h1>
+<p>两块板的工程结构几乎一样：顶层一份 <code>CMakeLists.txt</code> 维护手工代码，<code>cmake/stm32cubemx/</code> 下另一份承载 CubeMX 生成物，工具链文件与链接脚本逐字节相同。差异集中在任务与协议源文件清单上，改一块板时能不能照搬到另一块，取决于这两份清单的差异。</p>
+<blockquote>
+<p>依据两板顶层 <code>CMakeLists.txt</code>（底盘 157 行、云台 163 行）与 <code>cmake/stm32cubemx/CMakeLists.txt</code>（148 行，两板逐字节相同），给出目标图、文件登记规则与两板差异。未加板名前缀的路径默认指底盘板。</p>
+</blockquote>
+<h2 id="1-顶层文件由-cubemx-只生成一次">1. 顶层文件由 CubeMX 只生成一次</h2>
+<p>CMake 工程的最小闭环是：<code>project()</code> 声明语言与工程名，<code>add_executable()</code> 声明唯一产物，再用三条 <code>target_*</code> 命令把源文件、头文件路径与链接库挂到该目标。CubeMX 生成物体量大且会重生成，本工程把它单独放进 <code>cmake/stm32cubemx/</code> 子目录，用 INTERFACE 目标承载头文件与宏，用 OBJECT 库承载驱动源码。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>目录</th><th>来源</th><th>登记位置</th></tr></thead><tbody><tr><td><code>Core/</code>、<code>Drivers/</code>、<code>Middlewares/</code>、<code>USB_DEVICE/</code></td><td>CubeMX 生成</td><td><code>cmake/stm32cubemx/CMakeLists.txt:28-78</code></td></tr><tr><td><code>BSP/</code>、<code>Task/</code>、<code>PID/</code>、<code>Algorithm/</code>、<code>Communication/</code>、<code>Message_Bus/</code>、<code>BMI088/</code>、<code>Chassis/</code>、<code>Debug_vars/</code></td><td>手工维护</td><td>顶层 <code>CMakeLists.txt:34-92</code></td></tr><tr><td><code>referee/</code>（仅底盘板）</td><td>手工维护</td><td>底盘 <code>CMakeLists.txt:90-91</code></td></tr></tbody></table>
+<p>这段在回答：顶层文件为什么可以手改，而子目录里的文件不行？顶层注释写明这份文件只在首次转换时生成一次（<code>CMakeLists.txt:3-7</code>），之后由使用者维护：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cmake"><code><span class="line"><span style="color:#6A737D">#</span></span>
+<span class="line"><span style="color:#6A737D"># This file is generated only once,</span></span>
+<span class="line"><span style="color:#6A737D"># and is not re-generated if converter is called multiple times.</span></span>
+<span class="line"><span style="color:#6A737D">#</span></span>
+<span class="line"><span style="color:#6A737D"># User is free to modify the file as much as necessary</span></span>
+<span class="line"><span style="color:#6A737D">#</span></span></code></pre>
+<p>这句注释是后续推断的前提：顶层文件的内容不受 <code>.ioc</code> 重生成影响，而 <code>cmake/stm32cubemx/</code> 下的文件会被覆盖。把新增源文件写进 <code>cmake/stm32cubemx/CMakeLists.txt</code>，下一次重新生成就丢；写进顶层则保留。</p>
+<p>两板顶层文件的目录清单按同一顺序排列，手写代码先列任务与算法，再列通信与数据层。顺序本身对编译没有影响，但对照两板差异时按同一顺序读，能更快看出哪一块是某板独有的。</p>
+<h2 id="2-目标图与命令顺序">2. 目标图与命令顺序</h2>
+<p>这几条命令的先后顺序为什么不能颠倒？配置阶段的顺序不能颠倒。<code>add_executable</code> 必须先于 <code>target_sources</code>、<code>target_include_directories</code>、<code>target_link_libraries</code>，否则目标还不存在，命令直接报错。文件里 <code>project()</code> 在 <code>:27</code>，目标在 <code>:34</code>，三条挂载命令分别在 <code>:103</code>、<code>:120</code>、<code>:153</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["project(sentriomeni2026) :27"] --> B["add_executable 目标 :34"]
+  B --> C["target_sources 追加源文件 :103"]
+  B --> D["target_include_directories 头文件路径 :120"]
+  B --> E["target_link_libraries 链接库 :153"]
+  A --> F["add_subdirectory(cmake/stm32cubemx) :95"]
+  F --> G["stm32cubemx INTERFACE 宏与头文件 :113"]
+  G --> H["STM32_Drivers OBJECT :118"]
+  G --> I["USB_Device_Library OBJECT :124"]
+  G --> J["FreeRTOS OBJECT :129"]
+  H --> E
+  I --> E
+  J --> E</pre></div>
+<p>C 语言标准在 <code>:10-12</code> 定为 C11，并打开 GNU 扩展。构建类型默认 Debug 的写法是变量为空才赋值（<code>:15-18</code>），因此命令行传 <code>-DCMAKE_BUILD_TYPE=Release</code> 或预设注入 Release 时不会被覆盖。<code>:24</code> 打开 <code>CMAKE_EXPORT_COMPILE_COMMANDS</code>，生成 <code>compile_commands.json</code> 供 clangd 使用。</p>
+<p>子工程里 <code>stm32cubemx</code> 是 INTERFACE 库，只导出 <code>MX_Include_Dirs</code> 与 <code>MX_Defines_Syms</code> 两组属性（<code>:113-115</code>）。三个 OBJECT 库各自 <code>target_link_libraries(... PUBLIC stm32cubemx)</code>（<code>:120</code>、<code>:126</code>、<code>:131</code>），继承同一套宏与包含路径。CubeMX 生成的应用源文件不建库，直接 <code>target_sources</code> 加到可执行目标（<code>:134</code>）。</p>
+<p>OBJECT 库与普通静态库的区别在于链接方式：OBJECT 库的目标文件直接进最终产物，不经过归档，因此它的编译选项与宏会原样作用到 HAL 与 FreeRTOS 源码。这也是把 CubeMX 侧拆成三个 OBJECT 库的原因。</p>
+<p>三个库分别对应 STM32 驱动、USB 设备库与 FreeRTOS，拆分依据是它们各有独立的源文件清单与包含路径需求。可执行目标最终只写一个库名，靠 INTERFACE 属性把三者的依赖串起来。</p>
+<h2 id="3-从配置到构建的命令链">3. 从配置到构建的命令链</h2>
+<p>配置阶段与构建阶段各做了什么？预设与工具链的配合方式决定了构建命令：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant Dev as 开发者
+  participant CM as CMake
+  participant NJ as Ninja
+  participant CD as clangd
+  Dev->>CM: cmake --preset Debug
+  CM->>CM: 读 CMakePresets.json 与 toolchain file
+  CM->>NJ: 生成 build/Debug/build.ninja
+  CM->>CD: 写出 compile_commands.json
+  Dev->>NJ: cmake --build --preset Debug
+  NJ->>NJ: 编译并链接 sentriomeni2026.elf</pre></div>
+<p>配置阶段只做探测与生成，编译发生在构建阶段。两个阶段的错误来源不同：配置阶段报找不到编译器或工具链文件，构建阶段报语法与链接错误。遇到报错先看它出现在哪个阶段，能直接缩小范围。</p>
+<p><code>compile_commands.json</code> 只在配置阶段写出，编辑器用它做跳转与补全。改了 <code>add_executable</code> 清单之后要重新配置一次，否则索引与真实编译单元不一致，跳转会指向不存在的文件。</p>
+<h2 id="4-源文件怎么登记">4. 源文件怎么登记</h2>
+<p>源文件清单长什么样？底盘板的源文件清单跨 59 行（<code>:34-92</code>），云台板跨 67 行（<code>:34-100</code>）。清单同时列出 <code>.h</code> 与 <code>.cpp</code>，头文件只用于 IDE 索引，不参与编译。底盘板节选：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cmake"><code><span class="line"><span style="color:#D73A49">add_executable</span><span style="color:#24292E">(</span><span style="color:#D73A49">${CMAKE_PROJECT_NAME}</span></span>
+<span class="line"><span style="color:#24292E">        BSP/Src/bsp_can.cpp</span></span>
+<span class="line"><span style="color:#24292E">        Task/Src/ControlCenterTask.cpp</span></span>
+<span class="line"><span style="color:#24292E">        Task/Src/ChassisTask.cpp</span></span>
+<span class="line"><span style="color:#24292E">        referee/Src/RefereeReading.cpp</span></span>
+<span class="line"><span style="color:#24292E">        referee/Inc/RefereeReading.h</span></span>
+<span class="line"><span style="color:#24292E">)</span></span></code></pre>
+<p><code>:103-117</code> 的 <code>target_sources</code> 再次传入一批目录名，如 <code>PID/Src</code>、<code>Algorithm/Src</code>、<code>Task/Src</code>。CMake 的 <code>target_sources</code> 参数是源文件路径，目录不是合法源文件；该段是否被生成器忽略、还是与 <code>add_executable</code> 的清单重复，按代码推导属冗余写法，待实测确认。决定编译哪些 <code>.cpp</code> 的是 <code>add_executable</code> 的清单，漏登记会直接表现为未定义引用。</p>
+<p>两条命令的语义差别是决定性的：<code>add_executable</code> 定义目标时给出的清单构成目标的初始源文件集合，<code>target_sources</code> 是在目标存在后追加。追加目录名不会让 CMake 去扫描目录，也不存在隐式收集。</p>
+<p>清单里同时出现 <code>.h</code> 与 <code>.cpp</code> 是为了让 IDE 与 clangd 能索引头文件，CMake 会忽略其中的头文件。判断某个文件有没有进构建，看它是不是 <code>.cpp</code> 或 <code>.c</code>。</p>
+<h2 id="5-include-路径与宏来自哪里">5. include 路径与宏来自哪里</h2>
+<p>宏与包含路径从哪里来？包含路径分两块：顶层 <code>:120-142</code> 给出工程自建目录，子工程 <code>cmake/stm32cubemx/CMakeLists.txt:12-25</code> 给出 CubeMX 目录。底盘板的 <code>:138-139</code> 指向 <code>referee</code> 与 <code>referee/Inc</code>，云台板 <code>:129</code> 指向 <code>USB_DEVICE/App</code>。宏定义在顶层留空（<code>:145-147</code>），实际宏来自子工程：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cmake"><code><span class="line"><span style="color:#D73A49">set</span><span style="color:#24292E">(MX_Defines_Syms</span></span>
+<span class="line"><span style="color:#24292E">    USE_HAL_DRIVER</span></span>
+<span class="line"><span style="color:#24292E">    STM32F407xx</span></span>
+<span class="line"><span style="color:#24292E">    $&#x3C;$&#x3C;CONFIG:Debug>:DEBUG></span></span>
+<span class="line"><span style="color:#24292E">)</span></span></code></pre>
+<p><code>$&#x3C;$&#x3C;CONFIG:Debug>:DEBUG></code> 是生成器表达式，只在 Debug 配置展开为 <code>DEBUG</code>。<code>:150</code> 的 <code>list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)</code> 删掉 C 隐式链接库里的 <code>ob</code>，避免 C++ 源文件把 <code>libob.a</code> 带进链接。最后 <code>:153-154</code> 只链接 <code>stm32cubemx</code> 一个库名，实际展开为三个 OBJECT 库及其继承属性。</p>
+<p>宏的可见范围由目标继承关系决定：<code>USE_HAL_DRIVER</code> 与 <code>STM32F407xx</code> 挂在 INTERFACE 目标上，三个 OBJECT 库和可执行目标都能看到。若某个手写源文件需要 HAL 头文件却报找不到，先查它所属的目标有没有继承这套属性。</p>
+<p>顶层留空的宏段（<code>:145-147</code>）不是遗漏，手写代码的宏由子工程统一提供。两板共用同一份子工程，因此两板的宏集合完全相同，差异只可能出现在源文件与 include 清单上。</p>
+<h2 id="6-两板的差异清单">6. 两板的差异清单</h2>
+<p>两板差异集中在任务与协议实现：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>底盘板</th><th>云台板</th></tr></thead><tbody><tr><td>顶层文件行数</td><td>157</td><td>163</td></tr><tr><td>专属任务源</td><td><code>Task/Src/ChassisTask.cpp:82</code></td><td><code>Task/Src/GimbalTask.cpp:61</code>、<code>Task/Src/FireTask.cpp:84</code></td></tr><tr><td>USB 协议</td><td>无 <code>usb_decode.cpp</code></td><td><code>Communication/Src/usb_decode.cpp:88</code></td></tr><tr><td>姿态算法</td><td>仅 <code>Algorithm/Src/MahonyAHRS.c:68</code></td><td>另有 <code>Algorithm/Src/FusionAHRS.cpp:92</code></td></tr><tr><td>裁判系统</td><td>独立 <code>referee/Src/RefereeReading.cpp:14-18</code>，全文件 18 行，只有 <code>check_shoot_times_Speed</code> 有实现</td><td>复用 <code>Communication/Src/referee_protocol.cpp:94</code></td></tr><tr><td>include 差异</td><td>多 <code>referee</code>、<code>referee/Inc:138-139</code></td><td>多 <code>USB_DEVICE/App:129</code></td></tr><tr><td>build 预设</td><td><code>buildPresets.Debug-1</code> 指向不存在的 <code>Debug-1</code>（<code>CMakePresets.json:30-31</code>）</td><td><code>buildPresets.Debug</code> 指向 <code>Debug</code>（<code>CMakePresets.json:30-31</code>）</td></tr></tbody></table>
+<p>云台板顶层同样列出 <code>referee_protocol.cpp</code> 与 <code>referee_decode.cpp</code>（<code>:94-97</code>），但云台仓库没有 <code>referee/</code> 目录，这两个文件位于 <code>Communication/Src/</code>。两板的 <code>cmake/gcc-arm-none-eabi.cmake</code>、<code>cmake/starm-clang.cmake</code>、<code>cmake/stm32cubemx/CMakeLists.txt</code> 与 <code>STM32F407XX_FLASH.ld</code> 经逐字节比对完全相同，工程差异只在任务清单与 include 清单。</p>
+<p>预设的差异会直接表现为构建失败。底盘板的构建预设名是 <code>Debug-1</code>，而配置预设名是 <code>Debug</code>，<code>cmake --build --preset Debug-1</code> 找不到对应的配置预设；云台板两侧都叫 <code>Debug</code>，命令能正常执行。</p>
+<p>两板的预设文件结构相同，只有这一个字段不一致。核对两板差异时把 <code>CMakePresets.json</code> 也列进清单，不要只比顶层 <code>CMakeLists.txt</code>。</p>
+<h2 id="7-双板同构下的易错点">7. 双板同构下的易错点</h2>
+<p>六类里最常见的是清单漂移：新增 <code>.cpp</code> 只放进目录、没写进 <code>add_executable</code>，直到链接期才报未定义引用。先查这一条，再看预设与缓存。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>新增 <code>.cpp</code> 只放进目录、没写进 <code>add_executable</code></td><td>链接期报未定义引用</td><td><code>CMakeLists.txt:34-92</code></td></tr><tr><td>把 <code>target_sources</code> 当成自动收集目录</td><td>目录参数被忽略或报错，源文件未进构建</td><td><code>CMakeLists.txt:103-117</code></td></tr><tr><td>两板 <code>.ioc</code>、<code>.ld</code>、<code>CMakeLists.txt</code> 同名</td><td>混淆构建目录与产物</td><td>两板根目录</td></tr><tr><td>删除 <code>REMOVE_ITEM ... ob</code></td><td>C++ 源文件链接时带入 <code>libob.a</code></td><td><code>CMakeLists.txt:150</code></td></tr><tr><td>用 <code>Debug-1</code> 预设构建底盘板</td><td>找不到配置预设，构建失败</td><td><code>CMakePresets.json:30-31</code></td></tr><tr><td>多个 <code>cmake-build-*</code> 目录并存</td><td>缓存里的工具链与当前 <code>PATH</code> 不匹配</td><td>两板根目录</td></tr></tbody></table>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>顶层 <code>CMakeLists.txt</code> 由 CubeMX 只生成一次，之后手工维护；<code>cmake/stm32cubemx/</code> 下的文件在重生成时被覆盖。</li>
+<li>每板只有一个可执行目标 <code>sentriomeni2026</code>，工程自建源码靠 <code>add_executable</code> 的显式清单登记。</li>
+<li>CubeMX 侧用 INTERFACE 目标 <code>stm32cubemx</code> 统一导出宏与 include，三个 OBJECT 库分别承载 HAL、USB 与 FreeRTOS。</li>
+<li>两板的工具链文件、子工程 CMakeLists 与链接脚本完全相同，差异集中在任务与协议源文件清单。</li>
+<li>底盘板的 <code>Debug-1</code> 构建预设指向不存在的配置预设，云台板没有这个问题。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>生成物如何组织</td><td>CubeMX 输出放子目录、自建目录放顶层</td><td>重生成不触碰手工源码</td><td>自建文件要手工登记</td></tr><tr><td>源文件登记方式</td><td><code>add_executable</code> 显式清单</td><td>依赖关系清晰、可增量</td><td>增删文件容易漏改</td></tr><tr><td>是否拆分库</td><td>仅 CubeMX 侧拆 OBJECT 库</td><td>自建代码零链接配置</td><td>应用侧无法单独复用</td></tr></tbody></table>
+<p>工程结构的核对结论可以压缩成三句话：生成物在子目录、手工代码在顶层清单、两板差异在源文件与 include 两处。三句话与本节的三张表一一对应。</p>
+<h2 id="9-练习">9. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>在底盘板 <code>CMakeLists.txt</code> 中找出 <code>add_executable</code> 清单与 <code>target_sources</code> 参数的重合项，列出后者里所有不是文件的参数。</li>
+<li>对照两板顶层文件的 include 路径段，写出底盘板独有与云台板独有的目录，并给出行号。</li>
+<li>打开 <code>cmake/stm32cubemx/CMakeLists.txt</code>，说明 <code>stm32cubemx</code> 目标的类型以及它导出的两类属性分别在哪一行。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>新增 <code>Task/Src/DemoTask.cpp</code> 与对应头文件，写出需要改动的顶层文件行号；在不动 <code>add_executable</code> 清单的情况下验证是否出现未定义引用。</li>
+<li>把云台板的 <code>CMakePresets.json</code> 改成底盘板的 <code>Debug-1</code> 写法，用 <code>cmake --preset Debug</code> 与 <code>cmake --build --preset Debug-1</code> 分别验证配置与构建阶段的报错差异。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code></td><td>底盘板根目录</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code></td><td>云台板根目录</td></tr><tr><td><code>CMakeLists.txt</code></td><td>顶层目标、源文件与 include 登记，底盘 157 行、云台 163 行</td></tr><tr><td><code>cmake/stm32cubemx/CMakeLists.txt</code></td><td>CubeMX 生成物的 INTERFACE 与 OBJECT 目标，148 行</td></tr><tr><td><code>CMakePresets.json</code></td><td>构建预设，底盘 <code>Debug-1</code> 为缺陷项</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-交叉编译工具链与编译选项"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-交叉编译工具链与编译选项</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/01-CMake与双交叉工具链/02-交叉编译工具链与编译选项.md</span></div><div class="dfile__body"><h1 id="交叉编译工具链与编译选项">交叉编译工具链与编译选项</h1>
+<blockquote>
+<p><code>cmake/gcc-arm-none-eabi.cmake</code>（43 行）与 <code>cmake/starm-clang.cmake</code>（65 行）在两板间经逐字节比对完全相同；浮点 ABI 的寄存器行为按 ARM 架构手册描述，标注为按手册。</p>
+</blockquote>
+<p>工程结构与两板差异见同单元 <code>01-CMake工程结构与双板同构.md</code>，只讲工具链与编译标志。</p>
+<h2 id="1-两份工具链文件与预设的关系">1. 两份工具链文件与预设的关系</h2>
+<p>交叉编译是主机编译、目标运行：主机是 x86_64，目标是 Cortex-M4。CMake 用 toolchain file 描述目标系统、编译器前缀与目标专用选项，避免把它们写进业务 <code>CMakeLists.txt</code>。本工程准备了两份 toolchain file，仓库里的构建预设只引用 GNU 那份（<code>CMakePresets.json:9</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th><code>gcc-arm-none-eabi.cmake</code></th><th><code>starm-clang.cmake</code></th></tr></thead><tbody><tr><td>编译器 ID</td><td><code>GNU</code>（<code>:4-5</code>）</td><td><code>Clang</code>（<code>:4-5</code>）</td></tr><tr><td>命令前缀</td><td><code>arm-none-eabi-</code>（<code>:9</code>）</td><td><code>starm-</code>（<code>:8</code>）</td></tr><tr><td>C 与 C++ 编译器</td><td><code>arm-none-eabi-gcc</code> 与 <code>g++</code>（<code>:11-13</code>）</td><td><code>starm-clang</code> 与 <code>starm-clang++</code>（<code>:10-12</code>）</td></tr><tr><td>链接器</td><td><code>arm-none-eabi-g++</code>（<code>:14</code>）</td><td><code>starm-clang</code>（<code>:13</code>）</td></tr><tr><td>库模式</td><td>固定 newlib nano</td><td><code>STARM_HYBRID</code>、<code>STARM_NEWLIB</code>、<code>STARM_PICOLIBC</code>（<code>:23-28</code>）</td></tr><tr><td>默认库模式</td><td>不适用</td><td><code>STARM_PICOLIBC</code>（<code>:28</code>）</td></tr><tr><td>目标选项</td><td><code>TARGET_FLAGS</code>（<code>:25</code>）</td><td><code>TARGET_FLAGS</code>（<code>:37</code>）</td></tr><tr><td>链接期库</td><td><code>m</code>（<code>:43</code>）</td><td>仅 HYBRID 模式设 <code>m</code>（<code>:54</code>）</td></tr></tbody></table>
+<p>两份文件都只在配置阶段被读一次，读入之后其中的变量固化进生成器文件。改工具链文件后必须重新配置，只重新构建不会生效。</p>
+<p>预设里只挂了 GNU 那份，意味着默认构建路径只有一条被验证过。starm-clang 那份文件的正确性需要额外手工验证，不能假定它与 GNU 那份行为一致。</p>
+<h2 id="2-generic-系统名与编译器检测">2. Generic 系统名与编译器检测</h2>
+<p>两份文件都以 <code>CMAKE_SYSTEM_NAME Generic</code> 开头（<code>:1</code>），把目标系统名设为 Generic，关闭主机系统的库探测。<code>CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY</code>（GNU <code>:22</code>、Clang <code>:21</code>）让 CMake 的编译器检测只编译成静态库、不做链接，否则交叉环境缺少 startup 与链接脚本时检测会失败。</p>
+<p>两份文件还手动写了 <code>CMAKE_C_COMPILER_ID</code> 与 <code>CMAKE_CXX_COMPILER_ID</code>（GNU <code>:4-5</code>、Clang <code>:4-5</code>）。CMake 通常依据编译器试运行结果自行判定这两个变量，手动赋值与后续检测的先后关系属待确认；无论最终取哪个值，实际生效的是下面各项编译器命令与标志。</p>
+<p>系统名设成 Generic 还有一层作用：CMake 不会去寻找目标系统的 <code>libc</code> 与 <code>libm</code> 路径，所有库都由命令行显式给出。交叉环境的库查找由编译器自带的 sysroot 完成，不由 CMake 的主机路径推导。</p>
+<p><code>CMAKE_TRY_COMPILE_TARGET_TYPE</code> 只在检测阶段起作用，正式构建仍按 <code>.elf</code> 链接。这两行一起解决的是“交叉环境下 CMake 首次配置就失败”的问题。</p>
+<h2 id="3-目标三元组由三个选项锁定">3. 目标三元组由三个选项锁定</h2>
+<p>目标能力由三个选项共同确定：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>ARMv7E-M</mtext><mo>+</mo><mtext>FPv4-SP</mtext><mo>+</mo><mtext>hard-float</mtext></mrow><annotation encoding="application/x-tex">\text{ARMv7E-M} + \text{FPv4-SP} + \text{hard-float}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord">ARMv7E-M</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord">FPv4-SP</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">hard-float</span></span></span></span></span></p>
+<ul>
+<li><code>-mcpu=cortex-m4</code>：选择 ARMv7E-M 指令集，启用 Thumb-2、硬件除法与 DSP 扩展。</li>
+<li><code>-mfpu=fpv4-sp-d16</code>：选择单精度浮点单元 FPv4-SP，16 个双精度寄存器（D0-D15），对应 32 个单精度寄存器 S0-S31。</li>
+<li><code>-mfloat-abi=hard</code>：浮点参数用 S0-S15 传递，浮点返回值在 S0，函数调用不为浮点参数占用 r0-r3。<code>softfp</code> 使用同样的 FPU 指令但参数走通用寄存器，<code>soft</code> 全部用软件模拟。按 ARM 架构手册，<code>hard</code> 与 <code>softfp</code> 的目标文件在链接时不兼容，会报 ABI 属性不一致。</li>
+</ul>
+<p>三个选项必须同时进入 C、C++、汇编与链接。任一翻译单元漏掉 <code>-mfloat-abi=hard</code>，它的浮点参数就按通用寄存器传递，与其它单元链接后调用约定不一致，现象可能是参数错值而不是链接错误。</p>
+<p>链接期的第三个选项同样重要：链接命令不带 <code>-mfloat-abi=hard</code> 时，选到的 libgcc 与 libc 是另一套变体，即使所有目标文件都用 hard 编译，链接结果仍可能与预期不符。</p>
+<p>从仓库内已有的构建产物 <code>build/Debug/sentriomeni2026.map</code> 可见，链接器选取的库路径带 <code>thumb/v7e-m+fp/hard</code> 后缀，与上面的三元组一致（该结论来自历史 map，属构建产物观察）。</p>
+<h2 id="4-标志的传播路径">4. 标志的传播路径</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["TARGET_FLAGS :25"] --> B["CMAKE_C_FLAGS :27"]
+  B --> C["CMAKE_ASM_FLAGS :28"]
+  B --> D["CMAKE_CXX_FLAGS :36"]
+  A --> E["CMAKE_EXE_LINKER_FLAGS :38"]
+  E --> F["-T STM32F407XX_FLASH.ld :39"]
+  E --> G["--specs=nano.specs :40"]
+  E --> H["-Map 与 --gc-sections :41"]</pre></div>
+<p><code>starm-clang.cmake</code> 的传播路径相同，差别在多一步库模式选择：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["STARM_TOOLCHAIN_CONFIG :28"] --> B{"取值"}
+  B -->|STARM_HYBRID| C["TOOLCHAIN_MULTILIBS 指向 GNU multilib :31"]
+  B -->|STARM_NEWLIB| D["--config=newlib.cfg :33"]
+  B -->|STARM_PICOLIBC| E["TOOLCHAIN_MULTILIBS 保持为空"]
+  C --> F["TARGET_FLAGS 拼接 :37"]
+  D --> F
+  E --> F
+  F --> G["链接期追加 -lcrt0-hosted -z norelro :58"]</pre></div>
+<p>目标标志进入四组变量，库模式进入链接标志。两处的差别在于作用范围：<code>TARGET_FLAGS</code> 影响每个编译单元，库模式只影响链接期选哪套 libc。</p>
+<h2 id="5-优化级别与段粒度">5. 优化级别与段粒度</h2>
+<p>优化级别与调试信息成对设置。GNU 侧 Debug 为 <code>-O0 -g3</code>（<code>:31</code>），Release 为 <code>-Os -g0</code>（<code>:32</code>）；starm-clang 侧 Debug 为 <code>-Og -g3</code>（<code>:43</code>），Release 为 <code>-Oz -g0</code>（<code>:44</code>）。两套 C++ 选项一致：<code>-fno-rtti -fno-exceptions -fno-threadsafe-statics</code>（GNU <code>:36</code>、Clang <code>:48</code>），<code>-Wall -fdata-sections -ffunction-sections</code> 也一致（GNU <code>:29</code>、Clang <code>:41</code>）。</p>
+<p><code>-Og</code> 在保留调试信息的同时做不干扰调试的优化，<code>-O0</code> 完全关闭优化；<code>-Oz</code> 以体积为目标的优化强于 <code>-Os</code>。<code>-fdata-sections</code> 与 <code>-ffunction-sections</code> 把每个函数、每个数据放到独立段，链接期配合 <code>--gc-sections</code> 才允许逐函数回收未引用代码（GNU <code>:41</code>、Clang <code>:63</code>）。</p>
+<p>Debug 与 Release 的差异不止优化级别：<code>-g3</code> 与 <code>-g0</code> 决定镜像里有没有调试信息，<code>-O0</code> 与 <code>-Os</code> 决定变量能不能在调试器里直接看。用 Release 产物复现 Debug 下的问题，往往在第一步就卡在看不到变量上。</p>
+<p>两套 C++ 选项关闭了 RTTI、异常与线程安全静态变量初始化。这些特性在嵌入式环境里会引入额外代码与运行时依赖，关掉之后 C++ 的可用子集变小，类的静态成员初始化顺序也要自己保证。</p>
+<h2 id="6-gnu-侧的命令与前缀">6. GNU 侧的命令与前缀</h2>
+<p>GNU 那份文件的核心是把所有工具都指向同一个前缀：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cmake"><code><span class="line"><span style="color:#D73A49">set</span><span style="color:#24292E">(TOOLCHAIN_PREFIX                arm-none-eabi-)</span></span>
+<span class="line"><span style="color:#D73A49">set</span><span style="color:#24292E">(CMAKE_C_COMPILER                </span><span style="color:#D73A49">${TOOLCHAIN_PREFIX}</span><span style="color:#24292E">gcc)</span></span>
+<span class="line"><span style="color:#D73A49">set</span><span style="color:#24292E">(CMAKE_ASM_COMPILER              </span><span style="color:#D73A49">${CMAKE_C_COMPILER}</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">set</span><span style="color:#24292E">(CMAKE_CXX_COMPILER              </span><span style="color:#D73A49">${TOOLCHAIN_PREFIX}</span><span style="color:#24292E">g++)</span></span>
+<span class="line"><span style="color:#D73A49">set</span><span style="color:#24292E">(CMAKE_LINKER                    </span><span style="color:#D73A49">${TOOLCHAIN_PREFIX}</span><span style="color:#24292E">g++)</span></span></code></pre>
+<p>汇编器复用 C 编译器（<code>:11-12</code>）。汇编选项里 GNU 写 <code>-x assembler-with-cpp -MMD -MP</code>（<code>:28</code>），starm-clang 写 <code>-x assembler-with-cpp -MP</code>（<code>:40</code>），少了 <code>-MMD</code>，即默认不生成汇编的依赖文件，改动头文件后的增量重编覆盖面略窄。</p>
+<p>链接命令由 <code>CMAKE_EXE_LINKER_FLAGS</code> 拼接。GNU 侧在 <code>:38</code> 先放 <code>TARGET_FLAGS</code>，<code>:39</code> 用绝对路径指定 <code>STM32F407XX_FLASH.ld</code>，<code>:40</code> 加 <code>--specs=nano.specs</code>，<code>:41</code> 生成 map 并开启 <code>--gc-sections</code>，<code>:42</code> 打开 <code>--print-memory-usage</code>。starm-clang 侧对应 <code>:50</code>、<code>:62</code>、<code>:63</code>、<code>:65</code>，并额外加 <code>-z noexecstack</code>（<code>:64</code>）。库模式分支在 <code>:52-60</code>：HYBRID 用 <code>--gcc-specs=nano.specs</code> 并链 <code>m</code>，NEWLIB 用 <code>-lcrt0-nosys</code>，PICOLIBC 用 <code>-lcrt0-hosted -z norelro</code>。</p>
+<p>子工程把 <code>TOOLCHAIN_LINK_LIBRARIES</code> 直接拼进链接库列表（<code>cmake/stm32cubemx/CMakeLists.txt:107-111</code>）。GNU 与 HYBRID 模式下该变量为 <code>m</code>，默认的 PICOLIBC 模式下未被赋值，因此 <code>MX_LINK_LIBS</code> 里对应条目为空。</p>
+<p>库模式与业务代码之间的接口就是这个变量。切到 PICOLIBC 后若业务代码使用 <code>sinf</code>、<code>sqrtf</code> 这类函数，是否还需要显式链接数学库取决于该模式是否内建，这属于需要实测的部分。</p>
+<p>两份文件都定义了 <code>CMAKE_OBJCOPY</code> 与 <code>CMAKE_SIZE</code>（GNU <code>:15-16</code>、Clang <code>:14-15</code>），并把三种语言的可执行后缀统一成 <code>.elf</code>（<code>:18-20</code>）。两板顶层 <code>CMakeLists.txt</code> 与子工程里都没有 <code>add_custom_command</code> 或 <code>add_custom_target</code>（已核查），默认构建只产出 ELF；要生成 <code>.bin</code> 或 <code>.hex</code> 需要另加自定义命令，这一步属按代码推导的缺口。</p>
+<h2 id="7-工具链与内核配置的接口">7. 工具链与内核配置的接口</h2>
+<p>HAL 与 FreeRTOS 的配置与浮点设置一致：驱动侧定义 <code>USE_HAL_DRIVER</code> 与 <code>STM32F407xx</code>（<code>cmake/stm32cubemx/CMakeLists.txt:5-9</code>），FreeRTOS 选用 ARM_CM4F 端口（<code>:20</code>、<code>:99</code>）。<code>Core/Inc/FreeRTOSConfig.h:55</code> 写着 <code>configENABLE_FPU 0</code>，而 FreeRTOS 内核在 <code>Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:990-991</code> 给出的默认值是 1。在 ARM_CM4F 端口源码里没有找到对 <code>configENABLE_FPU</code> 的引用，FPU 上下文的惰性保存由 <code>port.c:443</code> 与 <code>port.c:465</code> 依据 LR 的 EXC_RETURN 位判断，因此该宏在本工程是否生效属待确认。</p>
+<p>浮点指令在业务代码里普遍存在，例如 <code>PID/Src/speed_pid.cpp:9-11</code> 的构造函数全部使用 <code>float</code> 参数，这些函数能否用硬件 FPU 取决于 <code>TARGET_FLAGS</code> 是否一致地传到每个编译单元。</p>
+<p>工具链与内核配置的接口就在编译选项上：<code>-mfloat-abi=hard</code> 决定函数怎么传浮点参数，FPU 端口的上下文保存决定任务切换时浮点寄存器是否被保存。两者必须同时成立，只配一个都会在特定调用路径上出错。</p>
+<p><code>configENABLE_FPU</code> 的取值与端口实现的关系还没确认，核对时不要只看配置文件里的 0，要看端口源码实际用了哪个判据。</p>
+<h2 id="8-手工核对工具链的步骤">8. 手工核对工具链的步骤</h2>
+<p>不依赖构建系统，也可以手工核对工具链是否按预期生效：</p>
+<ol>
+<li>用 <code>arm-none-eabi-gcc -###</code> 打印实际展开的编译命令，确认三个目标选项都在。</li>
+<li>用 <code>arm-none-eabi-readelf -A 目标文件</code> 查看 ABI 属性，确认 hard-float。</li>
+<li>用 <code>arm-none-eabi-readelf -S</code> 查看段表，确认 <code>-ffunction-sections</code> 生效后函数各自成段。</li>
+<li>用 <code>arm-none-eabi-size 产物.elf</code> 对照 map 里的 Flash 与 RAM 合计。</li>
+</ol>
+<p>四步都是只读命令，不改动构建产物。第 2 步的 ABI 属性是判断 hard 与 softfp 混用的直接依据。</p>
+<p>四步里的前三步只看目标文件，不看链接产物，适合在增量构建后快速抽查；第四步看整包体积，适合在改动链接脚本或优化级别后核对。两组命令都不需要接线，桌面环境即可执行。</p>
+<h2 id="9-工具链相关的易错点">9. 工具链相关的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>混用 <code>-mfloat-abi=hard</code> 与 <code>softfp</code> 编译的目标文件或库</td><td>链接报 ABI 属性不一致（按手册）</td><td>两份 <code>TARGET_FLAGS</code></td></tr><tr><td>工具链 bin 目录不在 <code>PATH</code></td><td>配置期报找不到 <code>arm-none-eabi-gcc</code></td><td><code>gcc-arm-none-eabi.cmake:8</code></td></tr><tr><td>直接用 <code>cmake -G Ninja</code> 而不指定 toolchain</td><td>用主机 gcc 生成无法在 F407 运行的产物</td><td>需 <code>-DCMAKE_TOOLCHAIN_FILE</code></td></tr><tr><td>以为构建预设能用 starm-clang</td><td>预设只引用 GNU 文件，需手动指定</td><td><code>CMakePresets.json:9</code></td></tr><tr><td>用 <code>Debug-1</code> 预设构建底盘板</td><td>配置预设不存在，构建失败</td><td><code>CMakePresets.json:30-31</code></td></tr><tr><td>Release 用 <code>-g0</code></td><td>无法做符号级调试，只能靠 map 与串口</td><td><code>gcc-arm-none-eabi.cmake:32</code></td></tr><tr><td>默认 PICOLIBC 下期待链接 <code>m</code></td><td><code>MX_LINK_LIBS</code> 里该条目为空</td><td><code>starm-clang.cmake:52-58</code></td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>两份 toolchain file 结构相同，差别在命令前缀、编译器 ID、库模式分支与优化级别。</li>
+<li><code>-mcpu=cortex-m4</code>、<code>-mfpu=fpv4-sp-d16</code>、<code>-mfloat-abi=hard</code> 共同锁定目标三元组，决定所选 libgcc 与 libc 变体。</li>
+<li><code>TARGET_FLAGS</code> 同时进入 C、C++、汇编与链接标志，任何一处缺失都会导致 ABI 或指令集不一致。</li>
+<li>优化级别在 Debug 与 Release 成对设置：GNU 用 <code>-O0</code> 与 <code>-Os</code>，starm-clang 用 <code>-Og</code> 与 <code>-Oz</code>。</li>
+<li>构建预设只覆盖 GNU 工具链，clang 工具链需要手工传 <code>CMAKE_TOOLCHAIN_FILE</code>。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>默认工具链</td><td>GNU Arm Embedded</td><td>与 CubeMX 生成物和 FreeRTOS 端口兼容</td><td>无法直接用 clang 的体积优势</td></tr><tr><td>Debug 优化</td><td><code>-O0</code> 或 <code>-Og</code></td><td>变量与单步行为可预测</td><td>代码体积与执行速度偏离发布版</td></tr><tr><td>Release 优化</td><td><code>-Os</code> 或 <code>-Oz</code></td><td>节省 Flash</td><td><code>-g0</code> 后调试只能看反汇编与 map</td></tr><tr><td>段粒度</td><td><code>-fdata-sections -ffunction-sections</code></td><td>配合 <code>--gc-sections</code> 回收未引用代码</td><td>目标文件段数变多</td></tr></tbody></table>
+<p>工具链文件的改动面很小，但影响面覆盖全部编译单元。核对时要同时看编译命令与链接命令，只看其中一处无法判断 ABI 是否一致。</p>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>打开 <code>cmake/gcc-arm-none-eabi.cmake</code>，写出 <code>TARGET_FLAGS</code> 的三个选项以及它们分别在哪一行进入 C 标志与链接标志。</li>
+<li>对照两份工具链文件，列出 <code>TOOLCHAIN_PREFIX</code> 的所有使用位置，并说明链接器选择上的差异。</li>
+<li>在 <code>cmake/starm-clang.cmake</code> 里指出三种 <code>STARM_TOOLCHAIN_CONFIG</code> 的链接差异，并说明哪一种在文件里被设为默认。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>用 <code>cmake -DCMAKE_TOOLCHAIN_FILE=cmake/starm-clang.cmake</code> 配置云台板，记录默认 PICOLIBC 模式下的链接命令，与 GNU 模式的 <code>--specs=nano.specs</code> 做对照（属未实测命令）。</li>
+<li>把 Release 的 <code>-Os -g0</code> 临时改为 <code>-Os -g3</code>，对比 map 文件体积与可用的调试信息，说明体积增量的来源（属未实测命令）。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code></td><td>底盘板根目录</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code></td><td>云台板根目录</td></tr><tr><td><code>cmake/gcc-arm-none-eabi.cmake</code></td><td>GNU 工具链文件，43 行</td></tr><tr><td><code>cmake/starm-clang.cmake</code></td><td>starm-clang 工具链文件，65 行</td></tr><tr><td><code>cmake/stm32cubemx/CMakeLists.txt</code></td><td>链接库列表与 HAL 宏，148 行</td></tr><tr><td><code>CMakePresets.json</code></td><td>预设只引用 GNU 工具链</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td><code>configENABLE_FPU</code> 等内核配置</td></tr><tr><td><code>PID/Src/speed_pid.cpp</code></td><td>大量使用 <code>float</code> 的业务代码样例</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-链接脚本与内存布局"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-链接脚本与内存布局</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/01-CMake与双交叉工具链/03-链接脚本与内存布局.md</span></div><div class="dfile__body"><h1 id="链接脚本与内存布局">链接脚本与内存布局</h1>
+<p>链接脚本回答两件事：物理存储区长什么样，输入段分别放到哪里。它还定义启动代码要用的符号，如栈顶、<code>.data</code> 在 Flash 中的源地址、<code>.bss</code> 的起止。F407IGH6 的 192 KiB SRAM 分成不连续的 128 KiB 主 SRAM 与 64 KiB CCMRAM，脚本用三段 <code>MEMORY</code> 表达。</p>
+<blockquote>
+<p>依据 <code>STM32F407XX_FLASH.ld</code>（269 行，两板逐字节相同）与启动文件 <code>startup_stm32f407xx.s</code>，并用仓库内已有构建产物 <code>build/Debug/sentriomeni2026.map</code> 核对实际占用。map 数字来自历史构建，重新构建会变化。</p>
+</blockquote>
+<p>工程结构与两板差异见同单元 <code>01-CMake工程结构与双板同构.md</code>，只讲存储区划分与段映射。</p>
+<h2 id="1-三段-memory-与设备容量">1. 三段 MEMORY 与设备容量</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>区域</th><th>起始地址</th><th>长度</th><th>属性</th><th>本工程用途</th></tr></thead><tbody><tr><td>FLASH</td><td><code>0x08000000</code></td><td>1024 KiB</td><td>rx</td><td>向量表、代码、只读数据、初始化值</td></tr><tr><td>RAM</td><td><code>0x20000000</code></td><td>128 KiB</td><td>xrw</td><td><code>.data</code>、<code>.bss</code>、FreeRTOS 堆、栈</td></tr><tr><td>CCMRAM</td><td><code>0x10000000</code></td><td>64 KiB</td><td>xrw</td><td><code>.ccmram</code>，本工程未使用</td></tr></tbody></table>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>MEMORY</span></span>
+<span class="line"><span>{</span></span>
+<span class="line"><span>  RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 128K</span></span>
+<span class="line"><span>  CCMRAM (xrw)   : ORIGIN = 0x10000000, LENGTH = 64K</span></span>
+<span class="line"><span>  FLASH (rx)     : ORIGIN = 0x8000000, LENGTH = 1024K</span></span>
+<span class="line"><span>}</span></span></code></pre>
+<p>脚本注释把目标描述为 STM32F407IGHx，1024 KiB Flash 与 192 KiB RAM（<code>:9-10</code>）。192 KiB 是 128 KiB 主 SRAM 加 64 KiB CCMRAM 的和，地址不连续，因此必须分成两段。把两段合并成一段会让链接器把变量放到两段之间的空隙里，运行期访问到不存在的地址。</p>
+<p><code>ORIGIN</code> 与 <code>LENGTH</code> 的数值来自芯片手册，改动它们要同时改启动文件与时钟配置，不属于常规调整项。CCMRAM 的 <code>(xrw)</code> 属性表示可执行、可读写，它挂在 CPU 的专用总线上，与主 SRAM 的访问路径不同。</p>
+<h2 id="2-栈顶与符号计算">2. 栈顶与符号计算</h2>
+<p>链接期先算两个符号。栈顶放在主 SRAM 的最高地址：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="monospace">_estack</mtext><mo>=</mo><mtext mathvariant="monospace">ORIGIN(RAM)</mtext><mo>+</mo><mtext mathvariant="monospace">LENGTH(RAM)</mtext><mo>=</mo><mn>0</mn><mi>x</mi><mn>20000000</mn><mo>+</mo><mn>0</mn><mi>x</mi><mn>20000</mn><mo>=</mo><mn>0</mn><mi>x</mi><mn>20020000</mn></mrow><annotation encoding="application/x-tex">\texttt{\_estack} = \texttt{ORIGIN(RAM)} + \texttt{LENGTH(RAM)} = 0x20000000 + 0x20000 = 0x20020000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7063em;vertical-align:-0.0951em;"></span><span class="mord text"><span class="mord texttt">_estack</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord texttt">ORIGIN(RAM)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord texttt">LENGTH(RAM)</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">20000000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">20000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">20020000</span></span></span></span></p>
+<p>对应 <code>STM32F407XX_FLASH.ld:64</code>。启动文件把 <code>_estack</code> 装入 SP（<code>startup_stm32f407xx.s:61</code>），因此主栈不会落在 CCMRAM。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mi>x</mi><mn>20000</mn></mrow><annotation encoding="application/x-tex">0x20000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">20000</span></span></span></span> 是 128 KiB 的十六进制写法，相加得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mi>x</mi><mn>20020000</mn></mrow><annotation encoding="application/x-tex">0x20020000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span><span class="mord mathnormal">x</span><span class="mord">20020000</span></span></span></span>。</p>
+<p>堆与栈的最小检查量是 <code>_Min_Heap_Size = 0x200</code>、<code>_Min_Stack_Size = 0x400</code>（<code>:66-67</code>），它们只在 <code>._user_heap_stack</code> 里占位，用于链接期判断剩余 RAM 是否够用（<code>:249-257</code>），不代表实际可用堆的大小。两个符号的作用时机是链接期：若主 SRAM 已被占满，链接器报该段溢出，而不是在运行期才暴露。</p>
+<h2 id="3-段到区域的映射">3. 段到区域的映射</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  subgraph FLASH["FLASH 0x08000000 / 1024 KiB"]
+    V[".isr_vector 向量表 :73-78"]
+    T[".text 代码 :81-95"]
+    R[".rodata 只读数据 :98-104"]
+    X[".ARM.extab 与 .ARM :106-120"]
+    I["init 与 fini 数组 :122-149"]
+  end
+  subgraph RAM["RAM 0x20000000 / 128 KiB"]
+    D[".data 已初始化变量 :174-184"]
+    TB[".tdata 与 .tbss :187-218"]
+    B[".bss 未初始化变量 :232-242"]
+    HS["._user_heap_stack 检查区 :249-257"]
+  end
+  subgraph CCM["CCMRAM 0x10000000 / 64 KiB"]
+    C[".ccmram :159-168"]
+  end
+  I --> T
+  D -. "LMA 在 Flash，VMA 在 RAM" .-> T
+  C -. "LMA 在 Flash，VMA 在 CCMRAM" .-> T</pre></div>
+<p><code>.isr_vector</code> 用 <code>KEEP</code> 防止被回收，<code>.text</code>、<code>.rodata</code> 与异常索引表都落在 FLASH。<code>.data</code> 写成 <code>>RAM AT> FLASH</code>（<code>:174-184</code>），表示运行地址在 RAM、加载地址在 FLASH，初值由启动代码搬运。<code>.ccmram</code> 同理写成 <code>>CCMRAM AT> FLASH</code>（<code>:159-168</code>），脚本为它定义了 <code>_siccmram = LOADADDR(.ccmram)</code>（<code>:151</code>）。</p>
+<p><code>.bss</code> 与 <code>.tbss</code> 带 <code>NOLOAD</code>（<code>:210</code>、<code>:232</code>），只占地址不占 Flash。判断一个段会不会进镜像，看它有没有 <code>NOLOAD</code>：带 <code>NOLOAD</code> 的段在 ELF 里分配地址但不占用加载空间，烧录文件里没有它的内容。</p>
+<h2 id="4-地址分离与启动期搬运">4. 地址分离与启动期搬运</h2>
+<p>链接脚本把 VMA 与 LMA 分开表示之后，启动代码必须自己把初值搬过去。执行顺序是固定的：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant HW as 复位向量
+  participant RH as Reset_Handler
+  participant LD as 链接脚本符号
+  HW->>RH: 向量表第 0 项装入 SP
+  RH->>RH: bl SystemInit
+  RH->>LD: 读 _sidata、_sdata、_edata
+  RH->>RH: 循环拷贝 .data 到 RAM
+  RH->>LD: 读 _sbss、_ebss
+  RH->>RH: 循环清零 .bss
+  RH->>RH: bl __libc_init_array
+  RH->>RH: 进入 main</pre></div>
+<p>搬运与清零的代码在 <code>startup_stm32f407xx.s:66-95</code>：<code>_sidata</code> 到 <code>_sdata</code>、<code>_edata</code> 的循环拷贝在前，<code>_sbss</code> 到 <code>_ebss</code> 的循环清零在后，<code>:98</code> 调用 <code>__libc_init_array</code> 执行 C++ 静态构造，之后进入 <code>main</code>。</p>
+<p>顺序不能交换。<code>.bss</code> 清零若放在 <code>.data</code> 搬运之前，搬运过程写在 RAM 里的值不会被清掉；搬运若放在 <code>__libc_init_array</code> 之后，静态构造函数会先看到未初始化的变量。三段顺序与三个符号组一一对应：<code>_sidata/_sdata/_edata</code> 一组，<code>_sbss/_ebss</code> 一组。</p>
+<h2 id="5-ccmram-段为什么是空的">5. CCMRAM 段为什么是空的</h2>
+<p>脚本注释对 CCMRAM 有一段提醒：若把带初值的变量放进该段，启动代码需要同步修改（<code>:153-158</code>）。核对启动文件后，它只引用 <code>_sidata</code>、<code>_sdata</code>、<code>_edata</code>、<code>_sbss</code>、<code>_ebss</code>，没有引用 <code>_siccmram</code>；工程源码里也检索不到 <code>.ccmram</code> 段属性（已核查）。该段当前为空，CCMRAM 未使用。</p>
+<p>CCMRAM 的定位需要三处同时改动：链接脚本已就绪，启动文件缺搬运代码，源码缺段属性。只改其中一处不会生效，反而可能让变量落在没有初值的地址上。</p>
+<h2 id="6-tls-符号与-discard-的来源">6. TLS 符号与 /DISCARD/ 的来源</h2>
+<p>TLS 相关符号 <code>__tdata_start</code>、<code>__tls_base</code> 等（<code>:196-230</code>）由 CubeMX 模板附带，本工程的任务栈由 FreeRTOS 管理，不依赖这些符号。<code>/DISCARD/</code> 段排除 <code>libc.a</code>、<code>libm.a</code>、<code>libgcc.a</code> 的条目（<code>:262-267</code>），按 ST 模板的注释用于去掉标准库的调试信息，具体丢弃范围属按模板推导。</p>
+<p>这两部分都属于模板带来的内容，与业务无关。核对链接脚本时把它们与业务段分开看：业务段决定内存布局，模板段决定链接期的杂项处理，出问题的排查方向完全不同。</p>
+<h2 id="7-链接选项与段回收">7. 链接选项与段回收</h2>
+<p>两板共用同一份链接脚本，工具链文件用 <code>-T</code> 指向它（<code>gcc-arm-none-eabi.cmake:39</code>），并开启 <code>--gc-sections</code> 与 <code>-Map</code>（<code>:41</code>）。<code>--gc-sections</code> 要与 <code>-ffunction-sections -fdata-sections</code>（<code>:29</code>）配合，否则每个目标文件只有一个 <code>.text</code> 段，回收粒度到不了函数。</p>
+<p>两个选项的作用可以分开理解：前者把每个函数与数据放进独立段，后者让链接器丢弃没有引用的段。缺任何一个，未引用代码都会留在镜像里；两者都开时，被丢弃的函数不会出现在 map 的段列表里。</p>
+<h2 id="8-从-map-读实际占用">8. 从 map 读实际占用</h2>
+<p>从已有 map 可以读出实际占用。下表数字取自 <code>build/Debug/sentriomeni2026.map</code>，属历史构建结果：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>指标</th><th>底盘板 Debug</th><th>云台板 Debug</th><th>容量</th></tr></thead><tbody><tr><td><code>.data</code> 起止</td><td><code>0x20000000</code> 到 <code>0x200000a0</code></td><td><code>0x20000000</code> 到 <code>0x200001a4</code></td><td>128 KiB</td></tr><tr><td><code>.data</code> 大小</td><td>0xa0 = 160 B</td><td>0x1a4 = 420 B</td><td>128 KiB</td></tr><tr><td><code>.bss</code> 大小</td><td><code>_ebss - _sbss</code> = 45512 B</td><td><code>_ebss - _sbss</code> = 54244 B</td><td>128 KiB</td></tr><tr><td>堆栈检查区</td><td>0x200 + 0x400 = 1536 B</td><td>同</td><td>128 KiB</td></tr><tr><td>RAM 占用合计</td><td>约 47208 B，折合 46.1 KiB</td><td>约 56200 B，折合 54.9 KiB</td><td>128 KiB</td></tr><tr><td>Flash 占用合计</td><td>约 55040 B，折合 53.8 KiB</td><td>约 90068 B，折合 88.0 KiB</td><td>1024 KiB</td></tr><tr><td>CCMRAM 占用</td><td>0 B</td><td>0 B</td><td>64 KiB</td></tr></tbody></table>
+<p>Flash 合计的算法是加载地址终点减 <code>0x08000000</code> 再加 <code>.data</code> 的初值长度；底盘板的加载终点为 <code>0x0800d660</code>，云台板为 <code>0x08015e30</code>。RAM 合计的算法是 <code>_ebss</code> 减 <code>0x20000000</code> 再加 1536 B 检查区。两类数字都只反映这次构建的 Debug 配置。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mi>A</mi><msub><mi>M</mi><mtext>底盘</mtext></msub><mo>=</mo><mn>45512</mn><mo>+</mo><mn>160</mn><mo>+</mo><mn>1536</mn><mo>=</mo><mn>47208</mn><mtext> B</mtext><mo>≈</mo><mn>46.1</mn><mtext> KiB</mtext></mrow><annotation encoding="application/x-tex">RAM_{底盘} = 45512 + 160 + 1536 = 47208\ \text{B} \approx 46.1\ \text{KiB}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal">A</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord cjk_fallback mtight">底盘</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">45512</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">160</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1536</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">47208</span><span class="mspace"> </span><span class="mord text"><span class="mord">B</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">46.1</span><span class="mspace"> </span><span class="mord text"><span class="mord">KiB</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mi>A</mi><msub><mi>M</mi><mtext>云台</mtext></msub><mo>=</mo><mn>54244</mn><mo>+</mo><mn>420</mn><mo>+</mo><mn>1536</mn><mo>=</mo><mn>56200</mn><mtext> B</mtext><mo>≈</mo><mn>54.9</mn><mtext> KiB</mtext></mrow><annotation encoding="application/x-tex">RAM_{云台} = 54244 + 420 + 1536 = 56200\ \text{B} \approx 54.9\ \text{KiB}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal">A</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord cjk_fallback mtight">云台</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">54244</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">420</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1536</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">56200</span><span class="mspace"> </span><span class="mord text"><span class="mord">B</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">54.9</span><span class="mspace"> </span><span class="mord text"><span class="mord">KiB</span></span></span></span></span></p>
+<p>两式都只把 <code>.data</code>、<code>.bss</code> 与检查区相加，不含 FreeRTOS 任务栈的独立分配量（栈在堆里，已包含在 <code>ucHeap</code> 之内）。换算成百分比后，云台板的 RAM 占用约为 128 KiB 的 43%，底盘板约为 36%。</p>
+<h2 id="9-占用里最大的一块">9. 占用里最大的一块</h2>
+<p><code>.bss</code> 里最大的一块来自 FreeRTOS 堆：<code>Core/Inc/FreeRTOSConfig.h:67</code> 把 <code>configTOTAL_HEAP_SIZE</code> 定为 40960，<code>Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c:64</code> 用静态数组 <code>ucHeap[configTOTAL_HEAP_SIZE]</code> 承载它。40960 B 约占底盘板 <code>.bss</code> 的 90%、云台板的 76%（按 map 数值计算），因此链接脚本里的 0x200 堆检查区与实际堆是两回事。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mn>40960</mn><mn>45512</mn></mfrac><mo>≈</mo><mn>90</mn><mi mathvariant="normal">%</mi><mo separator="true">,</mo><mspace width="2em"></mspace><mfrac><mn>40960</mn><mn>54244</mn></mfrac><mo>≈</mo><mn>76</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">\frac{40960}{45512} \approx 90\%, \qquad \frac{40960}{54244} \approx 76\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">45512</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">40960</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord">90%</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">54244</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">40960</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">76%</span></span></span></span></p>
+<p>调整内核堆会直接影响 <code>.bss</code> 与整包 RAM 占用，而链接脚本里的检查区数值不变。核对 RAM 余量时以 <code>_ebss</code> 为准，不要用检查区推算。</p>
+<h2 id="10-链接脚本相关的易错点">10. 链接脚本相关的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把带初值变量定位到 <code>.ccmram</code></td><td>启动不搬运该段，变量初值丢失</td><td><code>STM32F407XX_FLASH.ld:153-168</code>、<code>startup_stm32f407xx.s:66-95</code></td></tr><tr><td>把 <code>_Min_Heap_Size</code> 当成可用堆</td><td>实际堆是 FreeRTOS 的 <code>ucHeap</code></td><td><code>:66</code>、<code>heap_4.c:64</code></td></tr><tr><td>认为栈顶可以改到 CCMRAM</td><td>向量表首项与 <code>_estack</code> 必须一致</td><td><code>:64</code>、<code>startup_stm32f407xx.s:37</code></td></tr><tr><td>手工改链接脚本后期望持久</td><td><code>.ld</code> 是 CubeMX 生成物，重生成会覆盖</td><td>两板根目录的 <code>.ioc</code></td></tr><tr><td>只加 <code>--gc-sections</code></td><td>未加 <code>-ffunction-sections</code> 时回收粒度到不了函数</td><td><code>gcc-arm-none-eabi.cmake:29</code>、<code>:41</code></td></tr><tr><td>两板 <code>.ld</code> 与 <code>.map</code> 同名</td><td>交叉核对构建目录时读错板</td><td>两板根目录</td></tr><tr><td>依赖 <code>/DISCARD/</code> 的副作用</td><td>标准库调试信息缺失（按 ST 模板注释）</td><td><code>:262-267</code></td></tr></tbody></table>
+<h2 id="11-小结">11. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>MEMORY</code> 把 F407 的 192 KiB SRAM 拆成主 SRAM 与 CCMRAM 两段，地址不连续。</li>
+<li><code>.data</code>、<code>.tdata</code> 与 <code>.ccmram</code> 使用 <code>AT> FLASH</code>，运行地址与加载地址分离，初值由启动代码搬运。</li>
+<li><code>.bss</code> 与 <code>.tbss</code> 使用 <code>NOLOAD</code>，只占 RAM 地址，启动期清零。</li>
+<li>堆栈检查区只用于链接期校验，FreeRTOS 的实际堆是 <code>.bss</code> 里的 <code>ucHeap</code> 数组。</li>
+<li>CCMRAM 段当前为空，启动文件也没有搬运该段的代码。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>栈的位置</td><td>主 SRAM 顶端 <code>0x20020000</code></td><td>地址连续、容量大</td><td>不能利用更快的 CCMRAM</td></tr><tr><td>是否使用 CCMRAM</td><td>未使用</td><td>避免启动代码改写与搬运遗漏</td><td>放弃 64 KiB 零等待内存</td></tr><tr><td>段回收</td><td><code>-ffunction-sections</code> 配合 <code>--gc-sections</code></td><td>未引用函数不进最终镜像</td><td>段数增多，map 可读性下降</td></tr><tr><td>标准库处理</td><td><code>/DISCARD/</code> 排除条目</td><td>镜像更小</td><td>调试信息可能缺失</td></tr></tbody></table>
+<h2 id="12-练习">12. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>打开 <code>STM32F407XX_FLASH.ld</code>，写出三段 <code>MEMORY</code> 的起始地址与长度，并计算 <code>_estack</code> 的数值。</li>
+<li>在启动文件里找出搬运 <code>.data</code> 与清零 <code>.bss</code> 的循环入口，写出它们使用的链接脚本符号与行号。</li>
+<li>说明 <code>.data</code> 与 <code>.bss</code> 在链接脚本属性上的区别，并指出 <code>NOLOAD</code> 出现在哪些段。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>把一个带初值的全局数组用段属性放进 <code>.ccmram</code>，重新构建后用 map 检查 <code>_sccmram</code> 与 <code>_eccmram</code>，说明初值是否被搬运（属未实测操作）。</li>
+<li>对照两板 map 的 <code>_ebss</code> 与 <code>_etext</code>，把 Flash 与 RAM 占用换算成百分比，指出哪一板的余量更紧，并说明 <code>configTOTAL_HEAP_SIZE</code> 调整后的影响（属按 map 推导）。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code></td><td>底盘板根目录</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code></td><td>云台板根目录</td></tr><tr><td><code>STM32F407XX_FLASH.ld</code></td><td>链接脚本，269 行，两板相同</td></tr><tr><td><code>startup_stm32f407xx.s</code></td><td>启动文件，搬运 <code>.data</code> 与清零 <code>.bss</code></td></tr><tr><td><code>cmake/gcc-arm-none-eabi.cmake</code></td><td><code>-T</code>、<code>--gc-sections</code> 与 map 选项</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td><code>configTOTAL_HEAP_SIZE</code> 等内核配置</td></tr><tr><td><code>Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c</code></td><td><code>ucHeap</code> 静态数组</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/03-%E4%B8%8A%E4%B8%8B%E6%9D%BF%E5%88%86%E5%B7%A5%E4%B8%8ECAN%E6%8B%93%E6%89%91/"><span class="k">← 上一篇</span><span class="t">上下板分工与CAN拓扑</span><span class="d">嵌入式软件架构 · 5 个文件</span></a><a class="next" href="/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/02-CubeMX%E9%9B%86%E6%88%90%E4%B8%8ECMakePresets/"><span class="k">下一篇 →</span><span class="t">CubeMX集成与CMakePresets</span><span class="d">嵌入式构建与调试 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

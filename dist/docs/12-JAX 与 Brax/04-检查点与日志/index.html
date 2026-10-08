@@ -1,0 +1,896 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>检查点与日志 · JAX 与 Brax · 王宇翔</title><meta name="description" content="逐项拆解 orbax 写出的检查点目录：两级结构、单个步数目录里的七个条目、网络配置文件的作用、提交标记的半成品保护，以及体积与读取路径。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/04-%E6%A3%80%E6%9F%A5%E7%82%B9%E4%B8%8E%E6%97%A5%E5%BF%97/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="检查点与日志 · JAX 与 Brax · 王宇翔"><meta property="og:description" content="逐项拆解 orbax 写出的检查点目录：两级结构、单个步数目录里的七个条目、网络配置文件的作用、提交标记的半成品保护，以及体积与读取路径。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/04-%E6%A3%80%E6%9F%A5%E7%82%B9%E4%B8%8E%E6%97%A5%E5%BF%97/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/">JAX 与 Brax</a><span class="sep" aria-hidden="true">/</span><span class="now">检查点与日志</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>检查点与日志</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>检查点目录的磁盘布局</span></a><ul class="toc__heads"><li><a href="#1-两级目录结构" data-depth="2" data-heading-j="0">1. 两级目录结构</a></li><li><a href="#2-单个步数目录里的条目" data-depth="2" data-heading-j="1">2. 单个步数目录里的条目</a></li><li><a href="#3-网络配置文件" data-depth="2" data-heading-j="2">3. 网络配置文件</a></li><li><a href="#4-提交标记与半成品保护" data-depth="2" data-heading-j="3">4. 提交标记与半成品保护</a></li><li><a href="#5-体积与归档" data-depth="2" data-heading-j="4">5. 体积与归档</a></li><li><a href="#6-绝对路径要求" data-depth="2" data-heading-j="5">6. 绝对路径要求</a></li><li><a href="#7-读取与移动检查点" data-depth="2" data-heading-j="6">7. 读取与移动检查点</a></li><li><a href="#8-日志目录与检查点目录的分工" data-depth="2" data-heading-j="7">8. 日志目录与检查点目录的分工</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>启动打印与启动脚本的配置指纹</span></a><ul class="toc__heads"><li><a href="#1-启动打印的三类行" data-depth="2" data-heading-j="0">1. 启动打印的三类行</a></li><li><a href="#2-每行自述的内容构成" data-depth="2" data-heading-j="1">2. 每行自述的内容构成</a></li><li><a href="#3-用打印行反查实际生效值" data-depth="2" data-heading-j="2">3. 用打印行反查实际生效值</a></li><li><a href="#4-维度与优化摘要" data-depth="2" data-heading-j="3">4. 维度与优化摘要</a></li><li><a href="#5-启动脚本的前置检查" data-depth="2" data-heading-j="4">5. 启动脚本的前置检查</a></li><li><a href="#6-启动后的关键行回看" data-depth="2" data-heading-j="5">6. 启动后的关键行回看</a></li><li><a href="#7-日志开头的噪声" data-depth="2" data-heading-j="6">7. 日志开头的噪声</a></li><li><a href="#8-三类日志文件的分工" data-depth="2" data-heading-j="7">8. 三类日志文件的分工</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>看护脚本与逐检查点评估</span></a><ul class="toc__heads"><li><a href="#1-为什么不用内置评估" data-depth="2" data-heading-j="0">1. 为什么不用内置评估</a></li><li><a href="#2-固定种子与批量规模" data-depth="2" data-heading-j="1">2. 固定种子与批量规模</a></li><li><a href="#3-看护脚本的等待逻辑" data-depth="2" data-heading-j="2">3. 看护脚本的等待逻辑</a></li><li><a href="#4-幂等与-done-标记" data-depth="2" data-heading-j="3">4. 幂等与 done 标记</a></li><li><a href="#5-摘要抽取与失败处理" data-depth="2" data-heading-j="4">5. 摘要抽取与失败处理</a></li><li><a href="#6-续训看护的步数记账" data-depth="2" data-heading-j="5">6. 续训看护的步数记账</a></li><li><a href="#7-默认不与训练并发" data-depth="2" data-heading-j="6">7. 默认不与训练并发</a></li><li><a href="#8-每个检查点检查什么" data-depth="2" data-heading-j="7">8. 每个检查点检查什么</a></li><li><a href="#9-逐检查点日志的复查流程" data-depth="2" data-heading-j="8">9. 逐检查点日志的复查流程</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>评估日志的字段与判据</span></a><ul class="toc__heads"><li><a href="#1-单页评估日志的结构" data-depth="2" data-heading-j="0">1. 单页评估日志的结构</a></li><li><a href="#2-指标清单与含义" data-depth="2" data-heading-j="1">2. 指标清单与含义</a></li><li><a href="#3-判据链与结论" data-depth="2" data-heading-j="2">3. 判据链与结论</a></li><li><a href="#4-单位约定" data-depth="2" data-heading-j="3">4. 单位约定</a></li><li><a href="#5-多段评估日志" data-depth="2" data-heading-j="4">5. 多段评估日志</a></li><li><a href="#6-从指标到结论" data-depth="2" data-heading-j="5">6. 从指标到结论</a></li><li><a href="#7-阅读顺序" data-depth="2" data-heading-j="6">7. 阅读顺序</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">JAX 与 Brax</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>orbax / 检查点 / brax / 日志 / 配置核对 / 复现 / 评估 / 看护</span></div><h1 class="docs__title">检查点与日志</h1><p class="docs__lead">逐项拆解 orbax 写出的检查点目录：两级结构、单个步数目录里的七个条目、网络配置文件的作用、提交标记的半成品保护，以及体积与读取路径。</p></header><section class="dfile" id="file-1" data-file="01-检查点目录的磁盘布局"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-检查点目录的磁盘布局</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/04-检查点与日志/01-检查点目录的磁盘布局.md</span></div><div class="dfile__body"><p>检查点以目录形式保存，而不是单个文件。brax 通过 orbax 保存时，每一步都会创建一个以步数命名的子目录，里面再分成元数据、分片与数据三部分。目录能被独立移动与备份，前提是整个目录一起动，只拷其中一部分会得到一个读不出来的检查点。</p>
+<p>这套工程的检查点目录里还额外放了一份网络配置，续训守卫与手工加载都依赖它。除此之外还有一个提交标记文件，用来表示这次写入是否完成——它的存在让“半个检查点”可以被识别出来。</p>
+<p>所有条目都来自仓库里现存的检查点目录，反映的是 orbax 0.12.4 的实际布局，升级该库时布局可能变化。</p>
+<h2 id="1-两级目录结构">1. 两级目录结构</h2>
+<p>顶层是 <code>checkpoints/</code>，下面按步数命名子目录，再加上一个 <code>best/</code>。以 v19 的训练日志目录为例，顶层内容是四个步数目录与一个 <code>best</code>（<code>models/go1_v19_logs/checkpoints/</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>checkpoints/</span></span>
+<span class="line"><span>  000005013504/</span></span>
+<span class="line"><span>  000010027008/</span></span>
+<span class="line"><span>  000015040512/</span></span>
+<span class="line"><span>  000020054016/</span></span>
+<span class="line"><span>  best/</span></span></code></pre>
+<p>步数目录名是十二位补零的步数，与入口脚本定位 best 时的格式一致（<code>train/train_go1.py:787</code>）。<code>best/</code> 是回调复制出来的，内容与某个步数目录相同（<code>:788-793</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["checkpoints/"] --> B["000005013504/"]
+  A --> C["000010027008/"]
+  A --> D["000020054016/"]
+  A --> E["best/ 复制自最优步数目录"]
+  B --> F["元数据与分片"]
+  B --> G["d/ 数据块"]
+  B --> H["ppo_network_config.json"]</pre></div>
+<h2 id="2-单个步数目录里的条目">2. 单个步数目录里的条目</h2>
+<p>一个步数目录里的内容固定为七个条目（<code>models/go1_v19_logs/checkpoints/000005013504/</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>条目</th><th>类型</th><th>作用</th></tr></thead><tbody><tr><td><code>_CHECKPOINT_METADATA</code></td><td>文件</td><td>orbax 的检查点级元数据</td></tr><tr><td><code>_METADATA</code></td><td>文件</td><td>参数树的元数据</td></tr><tr><td><code>_sharding</code></td><td>文件</td><td>分片信息</td></tr><tr><td><code>array_metadatas/</code></td><td>目录</td><td>每个数组的分片描述</td></tr><tr><td><code>manifest.ocdbt</code></td><td>文件</td><td>数据块的索引清单</td></tr><tr><td><code>d/</code></td><td>目录</td><td>实际数据块</td></tr><tr><td><code>commit_success.txt</code></td><td>文件</td><td>写入完成标记</td></tr><tr><td><code>ppo_network_config.json</code></td><td>文件</td><td>网络与观测配置</td></tr><tr><td><code>ocdbt.process_0/</code></td><td>目录</td><td>写入进程的清单副本</td></tr></tbody></table>
+<p>这些条目由 orbax 的版本决定，升级 orbax 时布局可能变化，因此不要按文件名写死读取逻辑，读取统一走 <code>checkpoint.load</code>（<code>brax/training/agents/ppo/train.py:725-726</code>）。</p>
+<h2 id="3-网络配置文件">3. 网络配置文件</h2>
+<p><code>ppo_network_config.json</code> 是唯一由 brax 之外的人也需要的文件：它记录了观测维度的形状字典、动作维度与网络工厂参数。入口脚本的续训守卫读这份文件比对维度，读不到就判定“不像一个 brax 检查点”并退出（<code>train/train_go1.py:70-84</code>）。</p>
+<p>v19 的这份文件大小是 859 字节，与配置的复杂度成正比。手工加载策略时也要读它，因为激活函数与分布类型不在参数树里，必须按配置显式传入（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:239-247</code>）。</p>
+<h2 id="4-提交标记与半成品保护">4. 提交标记与半成品保护</h2>
+<p><code>commit_success.txt</code> 是写入成功的标记。它的价值在中断场景：如果训练在写检查点期间被终止，目录里会出现一部分文件而没有提交标记，读取方据此可以判断这份检查点不完整，而不是等到加载时报出难懂的错。</p>
+<p>目录本身也是逐级写入的：先写数据块与清单，最后落元数据与提交标记。这个顺序意味着“看到步数目录”不等于“检查点可用”，需要确认提交标记存在。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant B as brax
+  participant O as orbax
+  participant D as 磁盘
+  B->>O: checkpoint.save(路径, 步数, 参数, 配置)
+  O->>D: 写数据块与清单
+  O->>D: 写元数据与网络配置
+  O->>D: 写 commit_success.txt
+  D->>B: 完成</pre></div>
+<h2 id="5-体积与归档">5. 体积与归档</h2>
+<p>v19 的整个 <code>checkpoints/</code> 目录体积是 1.6 MB，包含四个步数目录与一份 best。体量小是因为策略价值网络只有约两万参数，而检查点只存参数；相比之下，<code>data/</code> 下的评估日志与中间产物往往更大。</p>
+<p><code>best/</code> 是整目录复制，代价等于一份步数目录；在参数规模更大时，复制成本会随参数线性增长，这一点在选型频率高时需要评估。</p>
+<h2 id="6-绝对路径要求">6. 绝对路径要求</h2>
+<p>保存路径必须是绝对路径，否则 orbax 在首次保存时抛 <code>Checkpoint path should be absolute</code>。入口脚本先做 <code>os.path.abspath</code> 再建目录（<code>train/train_go1.py:693-697</code>），看护脚本在监视检查点目录前也把相对路径转成绝对路径，并在注释里写明原因（<code>RLcontroller_go1_moreinformation/sim/watch_v19_checks.sh:11-13</code>）。</p>
+<p><code>--restore</code> 的路径同样建议用绝对路径，守卫里也会先取绝对路径再判断是否存在（<code>train/train_go1.py:67-69</code>）。</p>
+<h2 id="7-读取与移动检查点">7. 读取与移动检查点</h2>
+<p>读取有三条路径：续训用 <code>--restore</code> 交给 brax；评估脚本用 <code>--ckpt</code> 指到某个步数目录；查看器用 <code>--pkl</code> 指到导出的策略文件。三条路径的共同前提是目标目录完整，移动或备份时整目录一起动。</p>
+<p>移动之后不需要改任何配置，因为配置文件在目录内部、路径不写进参数。这一点让检查点可以在机器之间搬运，只要运行时的依赖版本一致。</p>
+<h2 id="8-日志目录与检查点目录的分工">8. 日志目录与检查点目录的分工</h2>
+<p>训练入口把检查点写在 <code>&#x3C;logdir>/checkpoints</code> 下，<code>logdir</code> 默认是 <code>logs/walk</code>，实验中按版本改名成 <code>models/go1_v19_logs</code> 这类目录（<code>train/train_go1.py:693-697</code>）。也就是说检查点是日志目录的一部分，备份日志目录等于备份检查点。</p>
+<p>评估与看护产生的日志不放进 <code>logdir</code>，而是集中在 <code>data/</code> 下按版本分目录，例如 <code>data/v19_20M_checks/</code>。这样安排的好处是训练产物与评估产物不会互相覆盖，训练可以换目录重跑而评估记录留在原位。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>产物类型</th><th>位置</th><th>生产者</th></tr></thead><tbody><tr><td>检查点</td><td><code>&#x3C;logdir>/checkpoints/</code></td><td>brax 与 orbax</td></tr><tr><td>训练 stdout</td><td><code>data/&#x3C;版本>_watch_stdout.log</code></td><td>训练进程重定向</td></tr><tr><td>看护摘要</td><td><code>data/&#x3C;版本>_checks/watch.log</code></td><td>看护脚本</td></tr><tr><td>逐检查点评估</td><td><code>data/&#x3C;版本>_checks/check_&#x3C;步数>.log</code></td><td>评估脚本</td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>检查点是目录，不是文件；两级结构为步数目录加 best。</li>
+<li>步数目录名是十二位步数的补零格式。</li>
+<li>目录内包含元数据、分片、数据块、提交标记与网络配置。</li>
+<li>commit_success.txt 用来识别写入是否完成。</li>
+<li>ppo_network_config.json 是续训守卫与手工加载的入口。</li>
+<li>保存路径必须为绝对路径；移动检查点时整目录一起动。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>保存粒度</td><td>每评估周期一份</td><td>可回溯</td><td>目录数量随预算增长</td></tr><tr><td>best 管理</td><td>整目录复制</td><td>可独立归档</td><td>占用一份额外空间</td></tr><tr><td>配置存放</td><td>放进检查点目录</td><td>移动后无需改配置</td><td>加载方要解析它</td></tr><tr><td>读取方式</td><td>统一走 checkpoint.load</td><td>不依赖文件名</td><td>升级 orbax 需回归</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出一个步数目录里的条目并说明各自的角色。</li>
+<li>解释 commit_success.txt 的作用与它出现的时机。</li>
+<li>说明为什么保存路径必须是绝对路径。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一个检查点完整性校验脚本，在不加载参数的前提下判断目录是否可用。</li>
+<li>给定一次中断的训练，写出从目录内容判断最后一个可用检查点的步骤。</li>
+<li>论证把 best 改为软链接的取舍，并说明对归档流程的影响。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>train/train_go1.py</code></td><td>绝对路径处理、守卫读取配置与 best 复制</td></tr><tr><td><code>brax/training/agents/ppo/train.py</code></td><td>保存与加载调用（虚拟环境内）</td></tr><tr><td><code>models/go1_v19_logs/checkpoints/</code></td><td>现存的检查点目录与条目</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/watch_v19_checks.sh</code></td><td>绝对路径处理与看护逻辑</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>手工加载与配置要求</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-启动打印与配置指纹"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-启动打印与配置指纹</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/04-检查点与日志/02-启动打印与配置指纹.md</span></div><div class="dfile__body"><p>训练日志最有价值的部分是开头二十来行。它们记录的是配置自述，与进度无关：每一行对应一个开关，写清它开了什么、权重多少、影响的维度是哪几个。由于开关覆盖代码分散在几百行分支里，事后核对“这次到底跑的是什么配置”，靠的就是这些行。</p>
+<p>启动脚本把这件事做成了流程：先在启动前检查进程与恢复路径，再把日志重定向到文件，最后 grep 一组关键字把关键配置行打回终端。三步合起来，让一次训练的配置指纹在启动阶段就被固定下来。</p>
+<p>启动打印是事后核对本次配置的主要凭据，尤其当命令行覆盖了默认值时——那几行会把实际生效的数字写下来。</p>
+<h2 id="1-启动打印的三类行">1. 启动打印的三类行</h2>
+<p>第一类是后端确认行 <code>backend: gpu</code>；第二类是开关自述，每开启一个开关打印一行；第三类是维度与优化摘要，包括预期观测维度、学习率、熵、裁剪与网络层宽。</p>
+<p>以 v23 的冒烟日志为例，从第 3 行到第 25 行依次是后端、算法档、硬接触、指令条件化、机体坐标系、终止阈值、步态项、悬空惩罚、地形、高度扫描、推挤、观测噪声、爬升奖励、软着陆、相位奖励、爬升门控、对称正则、体接触、维度与优化（<code>RLcontroller_go1_moreinformation/data/smoke_v23.log:3-25</code>）。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>backend: gpu</span></span>
+<span class="line"><span>v9 sb3_full: num_envs=768, unroll=32, minibatch=2序列×32步=64条 ...</span></span>
+<span class="line"><span>v5 hard_contact: 足端硬接触 (XML 原样) + Newton 20 迭代 / ls 10</span></span>
+<span class="line"><span>v11 指令条件化: 每 episode 采样 cmd ~ U([0.0, 0.0, -1.0], [0.5, 0.0, 1.0])</span></span>
+<span class="line"><span>v19 terrain: 地形场景 + 随机出生 (xy±5.0m, yaw 随机, z=地面+0.35m ...)</span></span>
+<span class="line"><span>预期 obs 维度: state=91  privileged_state=162  (含相位 8 维)</span></span>
+<span class="line"><span>优化: lr=0.0001 entropy_cost=0.0 clip=0.2 grad_clip=0.5 layers=(128, 128)</span></span></code></pre>
+<h2 id="2-每行自述的内容构成">2. 每行自述的内容构成</h2>
+<p>自述行的格式不统一，但都包含三样东西：开关名或版本号、关键数值、以及它改动了什么。例如爬升奖励那行同时给出权重、参考量、目标站高、分段惩罚值与正常站立时的实测均值（<code>data/smoke_v23.log:15</code>）；相位奖励那行给出权重、相位向量、步频、摆腿高度与核宽度（<code>:19</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>行</th><th>记录的配置</th><th>排查用途</th></tr></thead><tbody><tr><td><code>v9 sb3_full</code></td><td>环境数、unroll、minibatch、更新密度</td><td>确认优化制度</td></tr><tr><td><code>v5 hard_contact</code></td><td>接触模型与求解器迭代</td><td>确认物理档</td></tr><tr><td><code>v11 指令条件化</code></td><td>指令采样范围与评估固定值</td><td>确认任务定义</td></tr><tr><td><code>v19 terrain</code></td><td>地形与随机出生参数</td><td>确认场景</td></tr><tr><td><code>v20 gait_phase</code></td><td>相位向量、步频、摆腿目标</td><td>确认步态引导</td></tr><tr><td><code>v22 ascent</code></td><td>爬升权重与上限</td><td>确认奖励项</td></tr><tr><td><code>v23 symmetry</code></td><td>对称权重、beta 与封顶</td><td>确认正则项</td></tr></tbody></table>
+<h2 id="3-用打印行反查实际生效值">3. 用打印行反查实际生效值</h2>
+<p>自述行是发现“命令行覆盖了默认值”的最快途径。v23 的冒烟日志里爬升奖励写的是 <code>ascent=4.0</code>（<code>data/smoke_v23.log:23</code>），而代码里 <code>--ascent</code> 默认给的是 2.0（<code>train/train_go1.py:588-589</code>），说明这次运行用了权重覆盖开关。查看 v23 的启动脚本，确实带了 <code>--ascent_w 4.0</code>（<code>RLcontroller_go1_moreinformation/sim/start_v23_train.sh:31</code>），并加了行进门控 <code>--ascent_gate 0.2</code>。</p>
+<p>这件事的记录价值来自一次反套利算术：权重 2 是安全档、4 偏险、8 以上会让“站台顶不动”超过“走路”（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4509-4513</code>）。门控加上之后权重才提到 4，启动打印把这两个数同时留在日志里。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["启动脚本带 --ascent_w 4.0"] --> B["train_go1 覆盖 scales.ascent"]
+  B --> C["打印 v22 ascent: ascent=4.0"]
+  C --> D["事后 grep 日志核对"]
+  D --> E{"与代码默认 2.0 一致?"}
+  E -->|"否"| F["说明命令行有覆盖, 查启动脚本"]
+  E -->|"是"| G["配置与默认一致"]</pre></div>
+<h2 id="4-维度与优化摘要">4. 维度与优化摘要</h2>
+<p>维度行把 actor 与 critic 的输入一起打出来，含相位时还会标注（<code>data/smoke_v23.log:24</code>）。这一行是环境改动后第一项要核对的输出，续训时还要与检查点里的维度比对。</p>
+<p>优化摘要行给出学习率、熵、PPO 裁剪、梯度裁剪与层宽，并附上恢复路径（<code>:25</code>）。层宽在这里是元组形式，因此 <code>--layers 128,128</code> 这类覆盖能被一眼看出：摘要会写 <code>layers=(128, 128)</code> 而不是分档默认的 (64, 64)。</p>
+<p>续训自检紧随其后，打印检查点路径、检查点记录的维度、本次维度以及“维度一致”的结论（<code>train/train_go1.py:80-95</code>）。这四行是续训成功与否的唯一证据，出错时守卫会直接退出。</p>
+<h2 id="5-启动脚本的前置检查">5. 启动脚本的前置检查</h2>
+<p>启动脚本 <code>start_v23_train.sh</code> 在拉起训练之前做三件事：确认没有同名训练进程在跑，确认续训起点目录存在，创建日志目录（<code>RLcontroller_go1_moreinformation/sim/start_v23_train.sh:11-18</code>）。进程检查用的是 <code>pgrep</code> 加方括号写法，避免匹配到自身（<code>:13-15</code>）。</p>
+<p>启动方式是用 <code>nohup</code> 把训练放到后台并把标准输出重定向到日志文件，随后打印进程号（<code>:24-40</code>）。这样训练与终端解耦，日志文件成为唯一的事实来源。</p>
+<h2 id="6-启动后的关键行回看">6. 启动后的关键行回看</h2>
+<p>脚本在启动 45 秒后用一组关键字回看日志：对称正则、爬升、续训自检、维度一致、预期维度、开始训练，以及 Error 与 Traceback（<code>RLcontroller_go1_moreinformation/sim/start_v23_train.sh:41-45</code>）。这组关键字同时覆盖“配置生效”与“启动失败”两类信号，等于一次自动化的启动验收。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant S as 启动脚本
+  participant P as 训练进程
+  participant L as 日志文件
+  S->>S: pgrep 检查同名进程
+  S->>S: 检查 restore 目录
+  S->>P: nohup 启动并重定向到日志
+  P->>L: 写入配置自述行
+  S->>L: 45 秒后 grep 关键行
+  L->>S: 返回配置与错误行</pre></div>
+<h2 id="7-日志开头的噪声">7. 日志开头的噪声</h2>
+<p>日志开头有两类与训练无关的输出：虚拟环境路径不一致的 <code>RuntimeWarning</code>，以及 warp 关于多接触 CCD 的 <code>UserWarning</code>（<code>data/smoke_v23.log:1-2</code>、<code>:28</code>）。它们不影响训练，但会干扰 grep，因此关键行回看要用能避开它们的模式。</p>
+<p><code>check_*.log</code> 里同样有这两类噪声，评估摘要脚本在解析时按标签匹配，不依赖行号，因此不受影响。</p>
+<h2 id="8-三类日志文件的分工">8. 三类日志文件的分工</h2>
+<p>一次完整实验会产生三类日志：训练进程的完整标准输出、看护进程的摘要与逐检查点评估、以及人工整理的实验记录。三者用途不同，不应互相替代。</p>
+<p>训练日志由启动脚本指定到 <code>models/train_v23_40M.log</code>（<code>RLcontroller_go1_moreinformation/sim/start_v23_train.sh:20</code>），保存全部进度行；看护摘要写在 <code>data/&#x3C;版本>_checks/watch.log</code>，只保留每个检查点的指标摘要；实验记录则把结论、根因与命令整理成可阅读的章节。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>日志</th><th>位置</th><th>内容</th><th>读者</th></tr></thead><tbody><tr><td>训练标准输出</td><td><code>models/train_&#x3C;版本>.log</code></td><td>全部进度与配置自述</td><td>排查训练过程</td></tr><tr><td>看护摘要</td><td><code>data/&#x3C;版本>_checks/watch.log</code></td><td>每个检查点的指标摘要</td><td>看趋势</td></tr><tr><td>逐检查点评估</td><td><code>data/&#x3C;版本>_checks/check_&#x3C;步数>.log</code></td><td>单次评估完整输出</td><td>复查细节</td></tr><tr><td>实验记录</td><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>结论与根因</td><td>复现与交接</td></tr></tbody></table>
+<p>三类日志的生成时机也不同：训练日志在启动时创建并持续追加；看护摘要在看护脚本启动时写入；实验记录在阶段结论确定后由人工补齐。</p>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>启动打印的前二十余行是配置自述，不是进度信息。</li>
+<li>每个开关一行，写清数值与作用，可用于事后核对。</li>
+<li>自述行与代码默认值不一致时，说明命令行有覆盖。</li>
+<li>维度行与优化摘要行是环境与网络改动后的第一道核对。</li>
+<li>启动脚本做进程、路径与日志目录三项前置检查。</li>
+<li>启动后用一组关键字回看日志，覆盖配置与错误两类信号。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>配置记录</td><td>启动时打印</td><td>事后可查</td><td>改动开关要记得加打印</td></tr><tr><td>启动方式</td><td>nohup 加重定向</td><td>与终端解耦</td><td>需靠 grep 回看</td></tr><tr><td>前置检查</td><td>进程与路径</td><td>避免误启动</td><td>脚本更长</td></tr><tr><td>关键行回看</td><td>固定关键字组</td><td>自动验收</td><td>关键字要随版本维护</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出启动打印的三类行，并说明各自的核对对象。</li>
+<li>解释如何从自述行判断命令行覆盖了默认权重。</li>
+<li>说明启动脚本的前置检查有哪三项。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一组关键字，使关键行回看能同时覆盖新增开关与启动错误。</li>
+<li>给定一份训练日志，写出恢复“本次实际配置”的完整步骤。</li>
+<li>论证把配置指纹写成独立文件（而非日志行）的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/data/smoke_v23.log</code></td><td>真实的启动打印与噪声行</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/start_v23_train.sh</code></td><td>前置检查、启动方式与关键行回看</td></tr><tr><td><code>train/train_go1.py</code></td><td>打印实现、维度行与续训自检</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>爬升权重反套利算术</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-看护脚本与逐检查点评估"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-看护脚本与逐检查点评估</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/04-检查点与日志/03-看护脚本与逐检查点评估.md</span></div><div class="dfile__body"><p>brax 自带的评估不适合做版本对比。它用的是训练同款环境，含随机出生、推挤与观测噪声，所以 <code>eval/episode_reward</code> 把“策略变好”和“出生点运气”混在一起；每个检查点又各用各的出生点，5M 与 10M 的数字不可直接比较。</p>
+<p>看护脚本解决的就是可比性：每当训练写出一个新检查点，就用固定种子与固定出生点集把它放进测试环境跑一遍，把结果写成一份日志。多个检查点的数字因此落在同一把尺子上。</p>
+<p>看护脚本解决的是可比性与幂等两件事：固定种子的测试环境让不同检查点的数字可比，done 标记让评估可以中断重跑。</p>
+<h2 id="1-为什么不用内置评估">1. 为什么不用内置评估</h2>
+<p>评估脚本的文档串写明了两个理由：内置评估的数字混了策略改进与出生点运气，且各检查点的出生点不同导致不可比（<code>RLcontroller_go1_moreinformation/sim/eval_v19_checkpoint.py:6-8</code>）。它的对策是固定种子与可复现的出生点集，让不同检查点面对完全相同的地形与初始状态（<code>:10-11</code>）。</p>
+<p>这套做法与单元 62 里的评估口径问题互补：那边说的是“回合长度指标不可信”，这边解决的是“奖励指标不可比”。两者共同指向同一个结论——评估要有自己的尺子。</p>
+<h2 id="2-固定种子与批量规模">2. 固定种子与批量规模</h2>
+<p>脚本把测试种子与并行环境数写成常量：种子 20260915、512 个环境（<code>RLcontroller_go1_moreinformation/sim/eval_v19_checkpoint.py:34-36</code>）。种子固定是可比性的前提，环境数决定统计噪声：数量越大，存活率这类比例的抖动越小。</p>
+<p>评估入口支持两种输入：检查点目录与策略文件，后者用于对照导出的 pkl 与目录是否一致（<code>:14-15</code>）。同一个策略用两条路径评估得到同样的数字，说明导出与保存两侧的参数顺序都对上了。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["训练写出新检查点"] --> B["看护脚本发现目录"]
+  B --> C["eval_v19_checkpoint.py 固定种子评估"]
+  C --> D["写 check_&#x3C;步数>.log"]
+  D --> E{"退出码为 0?"}
+  E -->|"是"| F["touch .done 并将摘要追加到 watch.log"]
+  E -->|"否"| G["在 watch.log 记录失败"]
+  F --> H["下一个目标步数"]
+  G --> H</pre></div>
+<h2 id="3-看护脚本的等待逻辑">3. 看护脚本的等待逻辑</h2>
+<p>看护脚本按目标步数依次等待，目标列表是 5M、10M、15M、20M（<code>RLcontroller_go1_moreinformation/sim/watch_v19_checks.sh:19-20</code>）。每次等待循环每十秒扫一遍检查点目录，筛出纯数字目录中步数不小于目标的第一个，再排序取最小（<code>:25-28</code>）。</p>
+<p>用“不小于目标的第一个”而不是“等于目标”，是因为检查点的实际步数由训练周期决定：brax 的一个周期是 204 个训练步乘 24,576 环境步，等于 5,013,504，因此“每 5M”实际落在 5.01M 这样的位置（<code>:3-6</code>）。脚本注释把这件事写成设计依据，说明为什么不能用定时任务替代看护。</p>
+<h2 id="4-幂等与-done-标记">4. 幂等与 done 标记</h2>
+<p>发现检查点后先检查是否已有对应的 <code>.done</code> 文件，有就跳过，没有才评估（<code>RLcontroller_go1_moreinformation/sim/watch_v19_checks.sh:30-32</code>）。评估成功（退出码为 0）后创建 <code>.done</code> 并把摘要行追加到 <code>watch.log</code>（<code>:38-43</code>）。</p>
+<p>这套标记让看护脚本可以中断重跑：已完成的检查点不会被重复评估，未完成的会继续。与检查点的 <code>commit_success.txt</code> 是同一类思路，只是粒度更粗。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>标记</th><th>粒度</th><th>生产者</th><th>作用</th></tr></thead><tbody><tr><td><code>commit_success.txt</code></td><td>单个检查点</td><td>orbax</td><td>表示写入完成</td></tr><tr><td><code>check_&#x3C;步数>.done</code></td><td>单次评估</td><td>看护脚本</td><td>表示评估已完成</td></tr></tbody></table>
+<h2 id="5-摘要抽取与失败处理">5. 摘要抽取与失败处理</h2>
+<p>摘要不靠解析结构化数据，而是用一组标签从评估日志里 grep 出来，追加到 <code>watch.log</code>（<code>:41-42</code>）。失败时在 <code>watch.log</code> 里记一行退出码并保留完整的 <code>check_*.log</code> 供复查（<code>:44-47</code>）。这种“摘要进总账、细节留单页”的分工，避免总账被长输出淹没。</p>
+<p>等待有上限：内层循环 1080 次乘 10 秒，等于最长 180 分钟（<code>:24-25</code>）。超时不会让脚本卡死，而是进入下一个目标。</p>
+<h2 id="6-续训看护的步数记账">6. 续训看护的步数记账</h2>
+<p>续训时 brax 的步数从 0 重新计数，检查点目录名仍是 5/10/15/20M，但实际代表累计 25/30/35/40M。v22 的看护脚本显式维护偏移量 <code>STEP_OFFSET=20054016</code>，并声明所有输出与对比都用累计步数（<code>RLcontroller_go1_moreinformation/sim/watch_v22_checks.sh:4-7</code>、<code>:28-34</code>）。这与训练脚本里的 <code>--step_offset</code> 是同一件事在两个工具里的体现。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant W as 看护脚本
+  participant C as 检查点目录
+  participant E as 评估脚本
+  W->>W: 记录 STEP_OFFSET
+  loop 每个目标步数
+    W->>C: 扫描纯数字目录
+    C->>W: 返回不小于目标的第一个
+    W->>W: 检查 .done 是否存在
+    W->>E: 评估并重定向到 check_&#x3C;步数>.log
+    E->>W: 退出码
+    W->>W: 写 .done 与摘要
+  end</pre></div>
+<h2 id="7-默认不与训练并发">7. 默认不与训练并发</h2>
+<p>v22 的看护脚本默认等训练进程退出后再跑检查，原因是并发会抢 GPU：8GB 卡上 v21 的看护与训练同时跑，导致 10M 的检查因为显存不足失败，训练速度也被拖到 1818 fps，而单独训练时是 2900 到 4024 fps（<code>RLcontroller_go1_moreinformation/sim/watch_v22_checks.sh:8-10</code>）。等待逻辑最多等 8 小时，每 10 秒用 <code>pgrep</code> 检查一次（<code>:37-45</code>）。</p>
+<p>需要边训边看时用环境变量 <code>WAIT_FOR_TRAIN=1</code> 打开并发（<code>:18-19</code>、<code>:30</code>），脚本注释同时标注了显存争用风险。</p>
+<h2 id="8-每个检查点检查什么">8. 每个检查点检查什么</h2>
+<p>v22 的看护对每个检查点跑三项：常规评估、步态诊断与非足端拖地检查（<code>RLcontroller_go1_moreinformation/sim/watch_v22_checks.sh:12-15</code>）。三项对应三个不同的问题：奖励与存活、步态是否为对角 trot、以及躯干或小腿是否拖地。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查</th><th>脚本</th><th>观察对象</th></tr></thead><tbody><tr><td>常规评估</td><td><code>eval_v19_checkpoint.py</code></td><td>奖励、回合长度、存活率、速度跟踪</td></tr><tr><td>步态诊断</td><td><code>diag_v19_gait_steady.py</code></td><td>对角同步与占空比</td></tr><tr><td>非足端拖地</td><td><code>check_body_contact.py</code></td><td>体接触次数</td></tr></tbody></table>
+<h2 id="9-逐检查点日志的复查流程">9. 逐检查点日志的复查流程</h2>
+<p>一次阶段的评估产物都在 <code>data/&#x3C;版本>_checks/</code> 下：总账是 <code>watch.log</code>，单页是 <code>check_&#x3C;步数>.log</code>，旁边是 <code>.done</code> 标记。复查的顺序是先看总账的摘要行找出趋势与异常步数，再打开对应的单页看分项输出（<code>RLcontroller_go1_moreinformation/data/v19_20M_checks/watch.log</code>）。</p>
+<p>把摘要行汇总成表格由专门的脚本完成，它用标签正则从每份单页里抽十一项指标（<code>RLcontroller_go1_moreinformation/sim/summarize_v19_checks.py:11-36</code>）。脚本注释提醒了一处单位约定：存活率与爬升占比在日志里已经乘过 100，汇总时不能再乘一次，汇总脚本与评估脚本的单位必须对齐（<code>:39-40</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>产物</th><th>用途</th><th>复查时的角色</th></tr></thead><tbody><tr><td><code>watch.log</code></td><td>摘要与时间戳</td><td>找趋势与异常</td></tr><tr><td><code>check_&#x3C;步数>.log</code></td><td>单次评估完整输出</td><td>看分项细节</td></tr><tr><td><code>.done</code></td><td>完成标记</td><td>判断哪些已评估</td></tr><tr><td>汇总脚本输出</td><td>跨检查点表格</td><td>出图与结论</td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>内置评估混了策略改进与出生点运气，检查点之间不可比。</li>
+<li>固定种子与固定出生点集是可比性的前提。</li>
+<li>看护按“不小于目标的第一个目录”等待，因为周期步数不是整数百万。</li>
+<li>.done 标记让看护可中断重跑且不重复评估。</li>
+<li>续训看护用步数偏移映射把目录名换算成累计步数。</li>
+<li>默认等训练结束再评估，避免 8GB 卡上的显存争用。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>评估来源</td><td>自建固定种子</td><td>数字可比</td><td>需要维护评估脚本</td></tr><tr><td>等待方式</td><td>轮询目录</td><td>不依赖定时</td><td>有最长等待上限</td></tr><tr><td>幂等机制</td><td>.done 标记</td><td>可中断重跑</td><td>需要清理标记</td></tr><tr><td>并发策略</td><td>默认串行</td><td>不抢显存</td><td>结果要等训练结束</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明为什么内置评估的数字不能用于检查点之间的比较。</li>
+<li>解释看护为什么用“不小于目标”而不是“等于目标”来匹配目录。</li>
+<li>写出 .done 标记的作用与它写入的时机。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一个看护脚本，支持任意步数列表与自定义检查项，并保持幂等。</li>
+<li>给定一次续训实验，写出把目录名正确换算成累计步数所需的信息。</li>
+<li>论证在 8GB 卡上并发看护的可行方案，并给出验证显存争用的判据。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/sim/watch_v19_checks.sh</code></td><td>等待逻辑、幂等与摘要抽取</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/watch_v22_checks.sh</code></td><td>步数偏移、并发取舍与检查项</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/eval_v19_checkpoint.py</code></td><td>固定种子评估与两种输入</td></tr><tr><td><code>RLcontroller_go1_moreinformation/data/v19_20M_checks/</code></td><td>现存的评估日志与标记</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-评估日志的字段与判据"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-评估日志的字段与判据</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/04-检查点与日志/04-评估日志的字段与判据.md</span></div><div class="dfile__body"><p>一份评估日志读起来像一份逐项检查报告：开头是环境说明，中间是初始化输出，最后是一组指标。指标的价值取决于它是否可比——固定种子让不同检查点的数字落在同一把尺子上，剩下的工作就是把指标与判据对应起来。</p>
+<p>这套工程的评估日志有单段与多段两种形态。单段的每次评估产出一份，对应一个检查点；多段的把若干专题评估拼在一个文件里，用分隔线分段。两种形态都需要一组共同的阅读规则：先看环境与维度，再看指标与判据。</p>
+<p>评估日志的可读性取决于读的顺序：先确认评估对象与环境，再确认观测维度与训练一致，然后才读指标并与判据对照。</p>
+<h2 id="1-单页评估日志的结构">1. 单页评估日志的结构</h2>
+<p>评估日志的开头三行说明这次评估的对象与环境：<code>测试 v19@000020054016</code>、策略的观测维度、以及测试环境的构成（地形加扫描、随机出生、无推挤无噪声、固定种子、256 环境）（<code>RLcontroller_go1_moreinformation/data/v19_20M_checks/check_000020054016.log</code>）。</p>
+<p>中段是 warp 初始化与 kernel 加载输出，含设备型号与显存。末段是十一个指标行。三段之间没有分隔符，靠内容区分，因此解析要用标签匹配而不是行号。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>=== 测试 v19@000020054016 ===</span></span>
+<span class="line"><span>  策略 obs: state=83 privileged=154</span></span>
+<span class="line"><span>  测试环境: terrain+scan, 随机出生, 无推挤/无观测噪声, 固定 seed=20260915, 256 环境</span></span>
+<span class="line"><span>...</span></span>
+<span class="line"><span>  每 episode 奖励                    1104.54</span></span>
+<span class="line"><span>  每步奖励                             1.7207</span></span>
+<span class="line"><span>  平均 episode 长度                     600.4 步 (12.0s / 15s)</span></span>
+<span class="line"><span>  存活率 (未终止)                         65.6%</span></span>
+<span class="line"><span>  速度跟踪误差 (越小越好)                     0.149 m/s</span></span>
+<span class="line"><span>  足下地面最大爬升 (均值)                    0.0215 m</span></span>
+<span class="line"><span>  足下地面最大爬升 (最好)                    0.2821 m</span></span>
+<span class="line"><span>  爬升 >2cm 的环境占比                     33.6%</span></span>
+<span class="line"><span>  爬升 >10cm 的环境占比                     1.6%</span></span></code></pre>
+<h2 id="2-指标清单与含义">2. 指标清单与含义</h2>
+<p>汇总脚本里的标签表给出了完整清单（<code>RLcontroller_go1_moreinformation/sim/summarize_v19_checks.py:11-23</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>指标</th><th>含义</th><th>判读方向</th></tr></thead><tbody><tr><td>每 episode 奖励</td><td>单回合累计回报</td><td>越大越好，但受存活影响</td></tr><tr><td>每步奖励</td><td>累计回报除以步数</td><td>排除回合长度影响</td></tr><tr><td>平均 episode 长度</td><td>终止前步数</td><td>越接近上限越好</td></tr><tr><td>存活率</td><td>未终止的环境占比</td><td>越大越好</td></tr><tr><td>平均前向速度</td><td>机体坐标系速度</td><td>与指令比较</td></tr><tr><td>平均水平速度模长</td><td>速度大小</td><td>检查是否原地打转</td></tr><tr><td>速度跟踪误差</td><td>与指令之差</td><td>越小越好</td></tr><tr><td>足下地面最大爬升均值</td><td>地形升高</td><td>越大越好</td></tr><tr><td>足下地面最大爬升最好值</td><td>单环境最优</td><td>观察上限</td></tr><tr><td>爬升 >2cm 占比</td><td>轻微爬升环境比例</td><td>分布左端</td></tr><tr><td>爬升 >10cm 占比</td><td>明显爬升环境比例</td><td>分布右端</td></tr></tbody></table>
+<p>前四项衡量“活得好不好”，中间三项衡量“走得准不准”，后四项衡量“爬得高不高”。一次评估同时看三类，才能判断改动是否只优化了其中一类。</p>
+<h2 id="3-判据链与结论">3. 判据链与结论</h2>
+<p>指标本身不是结论，组合成判据才有意义。爬升专题的判据是“地形高度变化不小于 0.24 米且从未终止”（<code>RLcontroller_go1_moreinformation/data/v23_final_eval.log:300</code>）；存活率与速度跟踪误差一起看，才能区分“站着不动”与“走得稳”（<code>data/v19_20M_checks/check_000020054016.log</code>）。</p>
+<p>这种组合判据在实验记录里被反复使用：加奖励项后要同时确认存活率不降、跟踪误差不涨、目标指标上升，否则改动可能只是把行为挤到了另一处。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["评估日志"] --> B["存活率与回合长度"]
+  A --> C["速度跟踪误差"]
+  A --> D["爬升与占比"]
+  B --> E{"存活率未降?"}
+  C --> F{"跟踪误差未涨?"}
+  D --> G{"目标指标上升?"}
+  E --> H["三项都满足才判定改善"]
+  F --> H
+  G --> H</pre></div>
+<h2 id="4-单位约定">4. 单位约定</h2>
+<p>日志里的比例已经乘过 100，直接带百分号；汇总脚本在解析后不再乘第二遍（<code>RLcontroller_go1_moreinformation/sim/summarize_v19_checks.py:39-40</code>）。速度与高度是米制单位，速度跟踪误差也以米每秒计。</p>
+<p>解析时用“标签加数值”的正则，浮点数按原样写入表格（<code>:33-36</code>）。这一约定要求评估脚本与汇总脚本的单位改动必须同步，否则表格会静默错一个数量级。</p>
+<h2 id="5-多段评估日志">5. 多段评估日志</h2>
+<p>专题评估把若干检查拼在一个文件里，用井号分隔线分段。v23 的最终评估有两个专题：镜像对称性与上下台阶成功率（<code>RLcontroller_go1_moreinformation/data/v23_final_eval.log:1</code>、<code>:297</code>）。每段独立初始化 warp，因此日志更长但每段自洽。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>形态</th><th>文件名</th><th>结构</th><th>适用</th></tr></thead><tbody><tr><td>单段</td><td><code>check_&#x3C;步数>.log</code></td><td>一次评估</td><td>逐检查点看护</td></tr><tr><td>多段</td><td><code>&#x3C;版本>_final_eval.log</code></td><td>分隔线分专题</td><td>阶段总结</td></tr><tr><td>冒烟</td><td><code>smoke_&#x3C;版本>.log</code></td><td>训练启动输出</td><td>通路验证</td></tr></tbody></table>
+<h2 id="6-从指标到结论">6. 从指标到结论</h2>
+<p>写结论时的顺序是：先记录判据，再给指标，最后给解释。例如“爬升激励改动后，爬升 >10cm 占比从某值升到某值，同时存活率不变”，三部分缺一不可。记录里还保留了对同一现象的多份日志引用，便于复查时回到原始输出。</p>
+<p>日志引用应当带文件路径与行号或标签名，而不是只写数字，否则无法回溯是哪一次评估。</p>
+<h2 id="7-阅读顺序">7. 阅读顺序</h2>
+<p>拿到一份评估日志按四步读：确认评估对象与环境；确认观测维度与训练一致；读三组指标；把指标与判据对照。四步中任何一步发现不一致，都要先解决不一致再解释指标，否则结论建立在错误的输入上。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant R as 复查者
+  participant L as 评估日志
+  participant W as watch.log 总账
+  R->>W: 看摘要找异常步数
+  R->>L: 打开对应单页
+  L->>R: 环境说明与维度
+  L->>R: 三组指标
+  R->>R: 与判据对照</pre></div>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>评估日志由环境说明、初始化输出与指标三段组成。</li>
+<li>指标分三组：存活、速度跟踪、爬升。</li>
+<li>判据是指标的组合，不是单个阈值。</li>
+<li>比例在日志里已乘 100，汇总时不能再乘。</li>
+<li>多段日志用分隔线分专题，每段独立初始化。</li>
+<li>结论必须同时给出判据、指标与解释。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>日志形态</td><td>单页加总账</td><td>细节与趋势兼顾</td><td>需要两处对齐</td></tr><tr><td>解析方式</td><td>标签正则</td><td>不受行号影响</td><td>标签改动要同步</td></tr><tr><td>判据设计</td><td>多指标组合</td><td>避免单一指标误导</td><td>需要更多评估项</td></tr><tr><td>专题组织</td><td>多段文件</td><td>阶段总结方便</td><td>单文件更长</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出评估日志的三段结构与各段作用。</li>
+<li>说明十一项指标如何分成三组，并各举一项。</li>
+<li>解释为什么比例不能在汇总时再乘 100。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一组判据，用于判断“新增奖励项有效且没有挤占原有行为”。</li>
+<li>给定一份多段评估日志，写出把一个专题的结论单独抽取出来的流程。</li>
+<li>论证把评估日志改成结构化格式（如 JSON）的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/data/v19_20M_checks/check_000020054016.log</code></td><td>单页评估日志样例</td></tr><tr><td><code>RLcontroller_go1_moreinformation/data/v23_final_eval.log</code></td><td>多段专题评估样例与判据</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/summarize_v19_checks.py</code></td><td>指标标签表与单位约定</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/03-BraxPPO%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF/"><span class="k">← 上一篇</span><span class="t">BraxPPO训练循环</span><span class="d">JAX 与 Brax · 5 个文件</span></a><a class="next" href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/05-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA%E4%B8%8E%E4%BE%9D%E8%B5%96%E9%94%81%E5%AE%9A/"><span class="k">下一篇 →</span><span class="t">环境搭建与依赖锁定</span><span class="d">JAX 与 Brax · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

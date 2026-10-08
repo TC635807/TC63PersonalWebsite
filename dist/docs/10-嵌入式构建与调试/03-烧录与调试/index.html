@@ -1,0 +1,1610 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>烧录与调试 · 嵌入式构建与调试 · 王宇翔</title><meta name="description" content="核对两块 F407 板的调试链路：探针与传输层、OpenOCD 的配置结构与监听端口，以及本工程已固定的 SWD 引脚与时钟前提"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/03-%E7%83%A7%E5%BD%95%E4%B8%8E%E8%B0%83%E8%AF%95/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="烧录与调试 · 嵌入式构建与调试 · 王宇翔"><meta property="og:description" content="核对两块 F407 板的调试链路：探针与传输层、OpenOCD 的配置结构与监听端口，以及本工程已固定的 SWD 引脚与时钟前提"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/03-%E7%83%A7%E5%BD%95%E4%B8%8E%E8%B0%83%E8%AF%95/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/">嵌入式构建与调试</a><span class="sep" aria-hidden="true">/</span><span class="now">烧录与调试</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>烧录与调试</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>OpenOCD与调试探针</span></a><ul class="toc__heads"><li><a href="#1-三段链路与各段的可用性" data-depth="2" data-heading-j="0">1. 三段链路与各段的可用性</a></li><li><a href="#2-swd-与-jtag-的取舍" data-depth="2" data-heading-j="1">2. SWD 与 JTAG 的取舍</a></li><li><a href="#3-openocd-的进程模型与监听端口" data-depth="2" data-heading-j="2">3. OpenOCD 的进程模型与监听端口</a></li><li><a href="#4-配置文件的加载与覆盖顺序" data-depth="2" data-heading-j="3">4. 配置文件的加载与覆盖顺序</a></li><li><a href="#5-复位来源srst-与-sysresetreq" data-depth="2" data-heading-j="4">5. 复位来源：srst 与 sysresetreq</a></li><li><a href="#6-swd-的电气与接线" data-depth="2" data-heading-j="5">6. SWD 的电气与接线</a></li><li><a href="#7-探针版本与传输能力" data-depth="2" data-heading-j="6">7. 探针版本与传输能力</a></li><li><a href="#8-两板的-swd-引脚与时钟前提" data-depth="2" data-heading-j="7">8. 两板的 SWD 引脚与时钟前提</a></li><li><a href="#9-易错点" data-depth="2" data-heading-j="8">9. 易错点</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>烧录流程与复位行为</span></a><ul class="toc__heads"><li><a href="#1-镜像格式与烧录入口" data-depth="2" data-heading-j="0">1. 镜像格式与烧录入口</a></li><li><a href="#2-擦除与写入的粒度" data-depth="2" data-heading-j="1">2. 擦除与写入的粒度</a></li><li><a href="#3-擦写校验与复位方式" data-depth="2" data-heading-j="2">3. 擦写校验与复位方式</a></li><li><a href="#4-复位取指的两个字" data-depth="2" data-heading-j="3">4. 复位取指的两个字</a></li><li><a href="#5-从-reset_handler-到调度器" data-depth="2" data-heading-j="4">5. 从 Reset_Handler 到调度器</a></li><li><a href="#6-本工程的启动顺序与行号依据" data-depth="2" data-heading-j="5">6. 本工程的启动顺序与行号依据</a></li><li><a href="#7-只产出-elf-与手动转换" data-depth="2" data-heading-j="6">7. 只产出 ELF 与手动转换</a></li><li><a href="#8-停机期间的时间会继续走" data-depth="2" data-heading-j="7">8. 停机期间的时间会继续走</a></li><li><a href="#9-两板同名产物的烧录风险" data-depth="2" data-heading-j="8">9. 两板同名产物的烧录风险</a></li><li><a href="#10-易错点" data-depth="2" data-heading-j="9">10. 易错点</a></li><li><a href="#11-小结" data-depth="2" data-heading-j="10">11. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#12-练习" data-depth="2" data-heading-j="13">12. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>断点与变量观测</span></a><ul class="toc__heads"><li><a href="#1-四类观测手段与资源上限" data-depth="2" data-heading-j="0">1. 四类观测手段与资源上限</a></li><li><a href="#2-停下还是只看值" data-depth="2" data-heading-j="1">2. 停下还是只看值</a></li><li><a href="#3-硬件断点与软件断点" data-depth="2" data-heading-j="2">3. 硬件断点与软件断点</a></li><li><a href="#4-数据观察点与写入点定位" data-depth="2" data-heading-j="3">4. 数据观察点与写入点定位</a></li><li><a href="#5-调试信息与优化是两条失效路径" data-depth="2" data-heading-j="4">5. 调试信息与优化是两条失效路径</a></li><li><a href="#6-一次典型的-gdb-会话" data-depth="2" data-heading-j="5">6. 一次典型的 GDB 会话</a></li><li><a href="#7-debug-构建与变量通道的现状" data-depth="2" data-heading-j="6">7. Debug 构建与变量通道的现状</a></li><li><a href="#8-任务上下文与断言" data-depth="2" data-heading-j="7">8. 任务上下文与断言</a></li><li><a href="#9-断点资源的分配建议" data-depth="2" data-heading-j="8">9. 断点资源的分配建议</a></li><li><a href="#10-易错点" data-depth="2" data-heading-j="9">10. 易错点</a></li><li><a href="#11-小结" data-depth="2" data-heading-j="10">11. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#12-练习" data-depth="2" data-heading-j="13">12. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>SWO与日志</span></a><ul class="toc__heads"><li><a href="#1-五条通道与各自代价" data-depth="2" data-heading-j="0">1. 五条通道与各自代价</a></li><li><a href="#2-选择通道的判据" data-depth="2" data-heading-j="1">2. 选择通道的判据</a></li><li><a href="#3-itm-与-swo-的分工" data-depth="2" data-heading-j="2">3. ITM 与 SWO 的分工</a></li><li><a href="#4-使能顺序" data-depth="2" data-heading-j="3">4. 使能顺序</a></li><li><a href="#5-printf-与半主机的两条重定向路径" data-depth="2" data-heading-j="4">5. printf 与半主机的两条重定向路径</a></li><li><a href="#6-swo-引脚与-spi1-的占用冲突" data-depth="2" data-heading-j="5">6. SWO 引脚与 SPI1 的占用冲突</a></li><li><a href="#7-串口通道与日志帧" data-depth="2" data-heading-j="6">7. 串口通道与日志帧</a></li><li><a href="#8-printf-在本工程不可用的两层原因" data-depth="2" data-heading-j="7">8. printf 在本工程不可用的两层原因</a></li><li><a href="#9-确认串口是否真的在发" data-depth="2" data-heading-j="8">9. 确认串口是否真的在发</a></li><li><a href="#10-易错点" data-depth="2" data-heading-j="9">10. 易错点</a></li><li><a href="#11-小结" data-depth="2" data-heading-j="10">11. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#12-练习" data-depth="2" data-heading-j="13">12. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-五层排查与每层的判据" data-depth="2" data-heading-j="0">1. 五层排查与每层的判据</a></li><li><a href="#2-逐层排查的流程" data-depth="2" data-heading-j="1">2. 逐层排查的流程</a></li><li><a href="#3-复位后行为的完整链条" data-depth="2" data-heading-j="2">3. 复位后行为的完整链条</a></li><li><a href="#4-四处死循环与现场特征" data-depth="2" data-heading-j="3">4. 四处死循环与现场特征</a></li><li><a href="#5-停机对时间的扭曲" data-depth="2" data-heading-j="4">5. 停机对时间的扭曲</a></li><li><a href="#6-复位路径与时钟前提的行号依据" data-depth="2" data-heading-j="5">6. 复位路径与时钟前提的行号依据</a></li><li><a href="#7-全局对象构造早于-main" data-depth="2" data-heading-j="6">7. 全局对象构造早于 main</a></li><li><a href="#8-运行期死循环与两板同名文件的混淆" data-depth="2" data-heading-j="7">8. 运行期死循环与两板同名文件的混淆</a></li><li><a href="#9-易错点与排查动作" data-depth="2" data-heading-j="8">9. 易错点与排查动作</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">嵌入式构建与调试</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>STM32 / OpenOCD / ST-Link / SWD / 调试 / 烧录 / 复位 / 启动流程</span></div><h1 class="docs__title">烧录与调试</h1><p class="docs__lead">核对两块 F407 板的调试链路：探针与传输层、OpenOCD 的配置结构与监听端口，以及本工程已固定的 SWD 引脚与时钟前提</p></header><section class="dfile" id="file-1" data-file="01-OpenOCD与调试探针"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-OpenOCD与调试探针</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/03-烧录与调试/01-OpenOCD与调试探针.md</span></div><div class="dfile__body"><h1 id="openocd与调试探针">OpenOCD与调试探针</h1>
+<blockquote>
+<p>对象是烧录与调试链路的 PC 侧：调试探针、传输协议与 OpenOCD 的进程模型。两板仓库里没有 <code>.openocd.cfg</code>、<code>openocd*</code> 脚本或 <code>.vscode/launch.json</code>（已核查），因此命令行与配置文件按 OpenOCD 通用做法给出，目标一侧的引脚与时钟以 <code>.ioc</code> 为准。</p>
+</blockquote>
+<p>一次调试访问由三段组成：PC 上的客户端（GDB、IDE 或 OpenOCD 自带 telnet）生成请求；探针固件把 USB 报文翻译成 SWD 时序；目标内核执行读内存、停机、单步这些动作。三段之间是标准接口，替换其中一段不影响另外两段。</p>
+<h2 id="1-三段链路与各段的可用性">1. 三段链路与各段的可用性</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>常见实现</th><th>本工程可用性</th></tr></thead><tbody><tr><td>客户端</td><td><code>arm-none-eabi-gdb</code>、IDE 调试器、telnet</td><td>取决于本机安装，未在仓库内固定</td></tr><tr><td>调试服务器</td><td>OpenOCD、pyOCD、探针厂商工具</td><td>仓库内无配置脚本</td></tr><tr><td>探针</td><td>ST-Link/V2、ST-Link/V3、CMSIS-DAP（DAPLink）</td><td>未在工程内声明型号</td></tr><tr><td>目标接口</td><td>SWD 两线、JTAG 四线</td><td>PA13/PA14 已配为 SWD</td></tr></tbody></table>
+<p>三段的分界决定了排查顺序：客户端连不上时先看 OpenOCD 日志里有没有识别到目标，识别到了再怀疑 GDB 参数。把客户端的报错当成链路故障，会漏掉卡在探针与目标之间的那一层。</p>
+<h2 id="2-swd-与-jtag-的取舍">2. SWD 与 JTAG 的取舍</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>对比项</th><th>SWD</th><th>JTAG</th></tr></thead><tbody><tr><td>信号线</td><td>SWCLK、SWDIO，另加 GND</td><td>TCK、TMS、TDI、TDO</td></tr><tr><td>引脚占用</td><td>PA13、PA14</td><td>PA13 至 PA15、PB3、PB4</td></tr><tr><td>本工程状态</td><td>已配置（<code>2026sentriomeni.ioc:259-262</code>）</td><td>未配置</td></tr><tr><td>典型用途</td><td>单芯片下载与调试</td><td>多器件菊花链、边界扫描</td></tr></tbody></table>
+<p>F407 上两种接口共用 PA13 到 PA15 与 PB3、PB4 这组引脚，同一时刻只能选一种。本工程只配了 SWD，因为目标是单芯片、不需要菊花链，而 JTAG 多占的三根线在板级布局里没有余量。</p>
+<p>SWD 的两根线里 SWDIO 双向，SWCLK 由探针单向驱动。协议层没有握手包，靠固定的请求与应答周期工作，因此对时序完整性的要求高于对速率的要求。</p>
+<h2 id="3-openocd-的进程模型与监听端口">3. OpenOCD 的进程模型与监听端口</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["GDB 或 IDE"] -->|"TCP 3333"| B["OpenOCD 进程"]
+  B -->|"加载 interface 与 target 配置"| C["探针 ST-Link 或 CMSIS-DAP"]
+  C -->|"SWCLK SWDIO"| D["STM32F407 内核"]
+  B -->|"telnet 4444"| E["交互命令行"]
+  B -->|"TCL RPC 6666"| F["脚本接口"]</pre></div>
+<p>OpenOCD 启动时按顺序解释若干配置文件，常用两类：<code>interface/*.cfg</code> 描述探针与传输层，<code>target/*.cfg</code> 描述芯片的 flash 算法与调试逻辑。当前目录下的 <code>openocd.cfg</code> 会被自动读取，命令行用 <code>-f</code> 显式追加。默认监听三个端口：3333 给 GDB，4444 给 telnet，6666 给 TCL。</p>
+<p>三个端口的分工不同：3333 走 GDB 远程协议，承载断点、内存访问与运行控制；4444 是 OpenOCD 自己的命令行，用于执行 <code>reset</code>、<code>flash</code> 这类不经过 GDB 的动作；6666 供脚本语言远程调用。排查时若 GDB 连得上但目标没反应，可以先在 4444 上直接发一条 <code>reset halt</code>，把问题限定在 OpenOCD 与目标之间。</p>
+<h2 id="4-配置文件的加载与覆盖顺序">4. 配置文件的加载与覆盖顺序</h2>
+<p>传输层由 <code>transport select</code> 决定。ST-Link 有两条驱动路径：旧的 HLA 用 <code>hla_swd</code>，新的 DAP 直连用 <code>dapdirect_swd</code>。前者兼容老固件，后者访问延时更低但要求探针固件足够新。选择哪条属通用做法，本工程未实测。</p>
+<p>配置的加载顺序决定了后一个文件能否覆盖前一个的变量。常见写法是让 <code>interface</code> 先加载，再用命令行 <code>-c</code> 覆盖 <code>adapter speed</code> 与 <code>transport select</code>，这样同一份文件可以服务多块探针。</p>
+<p>覆盖只能发生在变量层面，不能撤销已执行的命令。若某个配置文件在加载时就执行了 <code>init</code>，后续的 <code>-c "transport select ..."</code> 已经在错误传输层之上，这时要么换文件，要么把 <code>init</code> 延后到自己拼接的命令行里。</p>
+<h2 id="5-复位来源srst-与-sysresetreq">5. 复位来源：srst 与 sysresetreq</h2>
+<p>复位来源有两种。硬件复位线 NRST 由探针拉低，走 <code>srst</code>；内核的 <code>AirCR.SYSRESETREQ</code> 由软件写寄存器触发，走 <code>sysresetreq</code>。只接 SWCLK、SWDIO、GND 时，<code>reset</code> 仍可经 SYSRESETREQ 复位内核，但外设寄存器不一定回到上电值；接了 NRST 才能做上电级别的复位，以及连接时保持复位。</p>
+<p>OpenOCD 里用 <code>reset_config</code> 描述这两条线的组合。<code>connect_assert_srst</code> 让连接阶段先按住复位，适合目标程序一上电就跑飞、来不及连接的情况。这类配置属通用做法，未在本工程实测。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant G as GDB 客户端
+    participant O as OpenOCD
+    participant S as ST-Link 探针
+    participant T as F407 目标
+    G->>O: target extended-remote localhost:3333
+    O->>S: 打开 USB 端点并配置传输层
+    S->>T: 发 SWD 线复位序列 读 IDCODE
+    T-->>S: DP IDR
+    S-->>O: 目标已识别
+    O-->>G: 连接成功 返回寄存器组
+    G->>O: monitor reset halt
+    O->>S: 触发复位并停机
+    S->>T: 读 PC 与向量表
+    T-->>G: PC 指向 Reset_Handler</pre></div>
+<p>两种复位对调试的意义不同：<code>srst</code> 把整块板的相关复位域拉回上电状态，适合复现启动期问题；<code>sysresetreq</code> 只复位内核，适合保留外设寄存器现场。判断当前用的是哪一种，看 OpenOCD 的 <code>reset_config</code> 输出与接线里 NRST 是否连上。</p>
+<h2 id="6-swd-的电气与接线">6. SWD 的电气与接线</h2>
+<p>SWD 是同步串行总线，SWCLK 由探针驱动，SWDIO 双向。最低连接是 SWCLK、SWDIO、GND 三根：GND 必须共地，探针的参考电压取自目标板的 VTref。多数探针在 SWCLK、SWDIO 上内置上拉，目标板不需要额外电阻，但走线过长时上拉不足会出现偶发读失败。</p>
+<p>ST-Link 与目标之间通常只做电平转换，不供电。目标板单独供电是常规做法，用探针的 3.3 V 输出驱动整板会让电流不足。连接前先量目标板 3.3 V 与 GND 是否短路，属通用检查。</p>
+<p>VTref 的作用是给探针提供电平参考，不是给目标供电。VTref 缺失时探针可能识别不到目标，表现为 <code>init</code> 阶段报 DP IDR 读不到值，而目标板本身工作正常。</p>
+<h2 id="7-探针版本与传输能力">7. 探针版本与传输能力</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>探针</th><th>主机侧驱动</th><th>可用传输层</th><th>备注</th></tr></thead><tbody><tr><td>ST-Link/V2</td><td>ST-Link USB 驱动</td><td><code>hla_swd</code></td><td>老板常用，固件停更</td></tr><tr><td>ST-Link/V2-1</td><td>ST-Link USB 驱动</td><td><code>hla_swd</code></td><td>板载于 Nucleo，可导出</td></tr><tr><td>ST-Link/V3</td><td>ST-Link USB 驱动</td><td><code>hla_swd</code>、<code>dapdirect_swd</code></td><td>支持 SWO 与更高 SWD 时钟</td></tr><tr><td>CMSIS-DAP</td><td>免驱 HID</td><td><code>dapdirect_swd</code></td><td>与 ST 主机工具无关</td></tr></tbody></table>
+<p>探针固件版本决定 <code>dapdirect_swd</code> 是否可用。版本过低时 OpenOCD 会在 <code>init</code> 阶段报传输层不被支持，回退 <code>hla_swd</code> 即可连接，功能上没有差别，只是访问速度不同。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 未连接
+    未连接 --> 已识别: init 且读到 DP IDR
+    未连接 --> 报错: 传输层或电平不匹配
+    已识别 --> 已停机: reset halt
+    已停机 --> 运行中: resume
+    运行中 --> 已停机: 断点命中或 halt
+    已停机 --> 未连接: shutdown 或拔线
+    报错 --> 未连接: 修正配置后重试</pre></div>
+<p>状态图里“报错到未连接”是唯一的回退边：OpenOCD 的 <code>init</code> 失败后不会自动重试，要修正配置并重新启动进程。把失败状态当成可恢复状态，会误以为换一根线就能连上。</p>
+<p>探针侧的排查还可以用自检短路：把 SWCLK 与 SWDIO 之外全部断开，只留 GND 与 VTref，若 <code>init</code> 仍读不到 DP IDR，问题在探针或驱动。这一步不依赖目标板程序，属通用做法。</p>
+<h2 id="8-两板的-swd-引脚与时钟前提">8. 两板的 SWD 引脚与时钟前提</h2>
+<p>两板都是 STM32F407IGH6（<code>2026sentriomeni.ioc:159</code>，<code>Mcu.UserName</code> 在 <code>:216</code>），SWD 引脚已由 CubeMX 固定为 PA13/PA14（<code>:259-262</code>），没有 JTAG 走线。系统时钟是 12 MHz 外部晶振经 PLL 倍频到 168 MHz（<code>2026sentriomeni.ioc:374-375,383-390</code>；<code>Core/Src/main.c:165-172</code>）。</p>
+<p>一个最小的 ST-Link 命令行写法如下，未在本工程实测：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">openocd</span><span style="color:#005CC5"> -f</span><span style="color:#032F62"> interface/stlink.cfg</span><span style="color:#005CC5"> -f</span><span style="color:#032F62"> target/stm32f4x.cfg</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">  -c</span><span style="color:#032F62"> "transport select hla_swd"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">  -c</span><span style="color:#032F62"> "adapter speed 1000"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">  -c</span><span style="color:#032F62"> "init"</span><span style="color:#005CC5"> -c</span><span style="color:#032F62"> "reset halt"</span></span></code></pre>
+<p><code>adapter speed</code> 的单位是 kHz。探针与目标之间的 SWD 时钟与内核主频无关，但板级走线越长、干扰越大，越需要降低这个值换取稳定。先用 1 MHz 连接，失败再降到 500 kHz 复测，属通用做法。</p>
+<p>两板工程同名：<code>.ioc</code> 都叫 <code>2026sentriomeni.ioc</code>，链接脚本都叫 <code>STM32F407XX_FLASH.ld</code>，构建产物都叫 <code>sentriomeni2026.elf</code>。同一台 PC 上同时接两块板时，靠文件名区分不了目标，要靠探针序列号（<code>-c "adapter serial &#x3C;sn>"</code>）或只接一块板。这一条是两板工程同名带来的直接后果。</p>
+<p>两板工程都没有提交调试配置，因此探针型号、序列号与传输层都由使用者自行确定。把这些信息写进一份本地脚本，可以避免每次连接都重新试参数。</p>
+<h2 id="9-易错点">9. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>判据或位置</th></tr></thead><tbody><tr><td>只接 SWCLK、SWDIO，未共地</td><td>连接随机失败</td><td>必须连 GND，VTref 提供参考电平</td></tr><tr><td>用探针给整板供电</td><td>上电即复位或跑不起来</td><td>ST-Link 只做电平转换</td></tr><tr><td>传输层选错</td><td><code>init</code> 报传输层不支持</td><td>固件新用 <code>dapdirect_swd</code>，旧用 <code>hla_swd</code></td></tr><tr><td>SWD 时钟过高</td><td>偶发读失败</td><td><code>adapter speed</code> 从 1000 降到 500 kHz</td></tr><tr><td>认为 <code>reset</code> 等于断电复位</td><td>外设寄存器未回上电值</td><td>未接 NRST 时走的是 SYSRESETREQ</td></tr><tr><td>同时接两块同名板</td><td>连错目标，行为对不上源码</td><td>用探针序列号选择</td></tr><tr><td>期望仓库里有现成配置</td><td>找不到 <code>openocd.cfg</code></td><td>两板仓库均无（已核查）</td></tr></tbody></table>
+<p>探针与传输层的选择是链路侧唯一需要按硬件调整的部分，其余参数在同一台 PC 上可以固定下来。</p>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>调试链路分客户端、调试服务器、探针、目标接口四段，接口标准化，可分段替换。</li>
+<li>本工程只配 SWD（PA13/PA14），JTAG 未配置。</li>
+<li>OpenOCD 默认监听 3333 给 GDB、4444 给 telnet、6666 给 TCL RPC。</li>
+<li>传输层有 <code>hla_swd</code> 与 <code>dapdirect_swd</code> 两条路径，后者要求探针固件较新。</li>
+<li>复位来源分 <code>srst</code>（NRST 线）与 <code>sysresetreq</code>（AirCR 寄存器）。</li>
+<li>两板工程文件同名，多目标场景要靠探针序列号区分。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>调试接口</td><td>SWD 两线</td><td>占用引脚少，够单芯片使用</td><td>不支持菊花链与边界扫描</td></tr><tr><td>传输层</td><td>按探针固件选择</td><td>新旧探针都能连</td><td>需要按固件版本试选</td></tr><tr><td>复位方式</td><td>SWD 三线不接 NRST</td><td>接线最简</td><td>无法做上电级复位</td></tr><tr><td>配置来源</td><td>命令行自建</td><td>不依赖 IDE</td><td>每次输入参数，易写错</td></tr></tbody></table>
+<p>连接阶段的判据只有两条：<code>init</code> 日志里能否读到 DP IDR，以及 <code>reset halt</code> 后 PC 是否落在向量表入口。两条都满足时，链路侧已经排查完毕，问题在程序本身。</p>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 SWD 与 JTAG 各自占用的引脚，并说明本工程为什么只配 SWD。</li>
+<li>说明 OpenOCD 三个默认监听端口各自的用途与客户端类型。</li>
+<li>从 <code>.ioc</code> 找出 SWD 引脚与外设时钟的配置位置与行号。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>写出一份 <code>openocd.cfg</code>，要求同时支持 ST-Link/V2 与 CMSIS-DAP，并说明如何用命令行覆盖探针相关参数。</li>
+<li>设计一段排查流程，区分“探针未识别目标”与“目标被识别但复位异常”两种故障，给出每步的判据。</li>
+<li>两板同时接在一台 PC 上时，写出一套从探针序列号到 ELF 路径的对应方案，避免连错目标。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td>SWD 引脚、MCU 型号与时钟配置（:159、:216、:259-262、:374-390）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>时钟配置与 PLL 参数（:165-172）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/2026sentriomeni.ioc</code></td><td>底盘板同名配置源</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td>交叉工具链与调试信息选项</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf</code></td><td>调试构建产物</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-烧录流程与复位行为"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-烧录流程与复位行为</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/03-烧录与调试/02-烧录流程与复位行为.md</span></div><div class="dfile__body"><h1 id="烧录流程与复位行为">烧录流程与复位行为</h1>
+<blockquote>
+<p>对象是把镜像写进 flash 并让新程序跑起来：镜像格式、擦写校验的顺序、以及复位后 PC 的第一条指令到 <code>osKernelStart()</code> 之间的每一段。仓库内没有烧录脚本，OpenOCD 一侧按通用做法给出；复位路径全部有链接脚本与启动文件的行号依据。</p>
+</blockquote>
+<p>烧录是一次「擦除、写入、校验、复位」的序列。擦除以扇区为单位，写入以字或半字为单位，校验逐字节回读。四步里最容易被忽略的是校验与复位方式：校验决定镜像是否完整，复位方式决定新程序是否真的从入口开始执行。</p>
+<h2 id="1-镜像格式与烧录入口">1. 镜像格式与烧录入口</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>镜像格式</th><th>是否含地址</th><th>是否含符号</th><th>常见用途</th></tr></thead><tbody><tr><td>ELF</td><td>是，来自链接脚本</td><td>是，含 DWARF</td><td>OpenOCD 直接 <code>program</code>，也供 GDB 调试</td></tr><tr><td>Intel HEX</td><td>是，按记录给出</td><td>否</td><td>通用下载器、产线工具</td></tr><tr><td>纯二进制</td><td>否，需要给基地址</td><td>否</td><td>OTA、外部烧录器</td></tr></tbody></table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>烧录入口</th><th>驱动方式</th><th>典型命令</th><th>本工程状态</th></tr></thead><tbody><tr><td>OpenOCD</td><td>直接操作 flash 算法</td><td><code>program</code>、<code>flash write_image</code></td><td>无配置脚本，命令需自建</td></tr><tr><td>ST-Link 官方 CLI</td><td>调用 ST-Link 固件</td><td><code>STM32_Programmer_CLI -c port=SWD -w</code></td><td>未在仓库内出现</td></tr><tr><td>IDE 调试器</td><td>封装 OpenOCD 或厂商后端</td><td>图形界面按钮</td><td>无 <code>.vscode/launch.json</code></td></tr></tbody></table>
+<p>三种格式的差别集中在地址与符号：ELF 两者都有，HEX 只有地址，BIN 两者都没有。用 BIN 时必须显式给出基地址，否则烧录工具无法判断写到哪一段。三种入口的差别在驱动路径：OpenOCD 直接执行 flash 算法，厂商 CLI 把动作交给探针固件，IDE 再把两者包一层。</p>
+<p>本工程只提交源码与构建配置，没有任何烧录脚本，因此入口选择不影响仓库内容。团队内约定一种入口即可，混用不同工具时要注意它们的擦除粒度与校验策略可能不同。</p>
+<h2 id="2-擦除与写入的粒度">2. 擦除与写入的粒度</h2>
+<p>STM32F4 的 flash 按扇区擦除，扇区大小不均：小扇区 16 KB，大扇区 128 KB。按手册，一次全片擦除会把所有扇区清零，改写一小段却要擦掉整个扇区，所以频繁改一个常量会磨损该扇区。写入只能在已擦除的区域进行，写过的位只能由擦除恢复。</p>
+<p>1 MB 版本的扇区布局按手册如下，本工程链接脚本只声明了整片范围，没有细分：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>扇区</th><th>编号</th><th>大小</th><th>起始地址</th></tr></thead><tbody><tr><td>0 至 3</td><td>前四个</td><td>16 KB</td><td><code>0x08000000</code> 起</td></tr><tr><td>4</td><td>第五个</td><td>64 KB</td><td><code>0x08010000</code></td></tr><tr><td>5 至 11</td><td>后七个</td><td>128 KB</td><td><code>0x08020000</code> 起</td></tr></tbody></table>
+<p>粒度差异带来一个布局约束：需要频繁写入的常量不要放在与代码相同的扇区里，否则每次改常量都要擦掉包含代码的那一块再整体回写。把这类数据单独放到一个扇区，是产线工具的常规做法。</p>
+<p>本工程的链接脚本没有对扇区做细分，代码与只读数据统一放进 FLASH 段。这不会影响正常烧录，只在使用“擦一段写一段”的增量更新方式时才有区别，当前的整片烧录路径不受影响。</p>
+<h2 id="3-擦写校验与复位方式">3. 擦写校验与复位方式</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["构建产出 sentriomeni2026.elf"] --> B{"是否需要 HEX 或 BIN"}
+  B -->|"否 直接烧 ELF"| C["OpenOCD program"]
+  B -->|"是 用 objcopy 转换"| D["arm-none-eabi-objcopy -O ihex 或 -O binary"]
+  D --> C
+  C --> E["擦除目标扇区"]
+  E --> F["按字写入并回读校验"]
+  F --> G{"校验通过"}
+  G -->|"失败"| H["停在错误 检查镜像基地址与扇区"]
+  G -->|"通过"| I["reset run 跳到 Reset_Handler"]</pre></div>
+<p><code>program</code> 把四步合成一条命令，其中校验失败会直接返回错误。校验失败的原因集中在三类：镜像基地址与 flash 起始地址不一致、探针时钟过高导致写入时序不满足、扇区被写保护。三类都在 <code>program</code> 的日志里能看出区别，不要直接重烧第二遍。</p>
+<h2 id="4-复位取指的两个字">4. 复位取指的两个字</h2>
+<p>Cortex-M4 复位时由硬件做两件事：从向量表偏移 0 处取初始 MSP 写入 SP，从偏移 4 处取 Reset_Handler 地址写入 PC。向量表基址由 BOOT0 选择，从主 flash 启动时 <code>0x00000000</code> 映射到 <code>0x08000000</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>地址</th><th>内容</th><th>来源</th></tr></thead><tbody><tr><td><code>0x00000000</code></td><td>初始 MSP 值</td><td><code>_estack</code></td></tr><tr><td><code>0x00000004</code></td><td>Reset_Handler 地址</td><td>启动文件</td></tr><tr><td><code>0x00000008</code></td><td>NMI_Handler 地址</td><td>启动文件</td></tr><tr><td><code>0x0000000C</code></td><td>HardFault_Handler 地址</td><td>启动文件</td></tr></tbody></table>
+<p>内核的 <code>SCB->VTOR</code> 决定异常入口从哪张表取。上电默认是 0，若程序带 bootloader 或把向量表搬到 RAM，必须显式写 VTOR，否则中断会跳到旧表。<code>BOOT0</code> 是专用引脚，不出现在 <code>.ioc</code> 的 GPIO 配置里。</p>
+<p>前两个字是取指顺序的全部依据：SP 与 PC 都从这张表来，因此向量表内容与链接脚本里的段布局必须一致。若把向量表搬到别的地址而忘记写 VTOR，复位本身仍能成功，中断却会从旧地址取入口。</p>
+<h2 id="5-从-reset_handler-到调度器">5. 从 Reset_Handler 到调度器</h2>
+<p>入口之后的顺序是固定的：设置 SP、调用 <code>SystemInit</code>、把 <code>.data</code> 初值从 flash 搬到 RAM、把 <code>.bss</code> 清零、调用 C++ 静态构造、进入 <code>main</code>。<code>main</code> 里先初始化 HAL 与时钟，再逐个初始化外设，最后启动调度器。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 硬件复位
+    硬件复位 --> 取MSP与Reset_Handler: 读向量表前两个字
+    取MSP与Reset_Handler --> SystemInit: 设置FPU与时钟
+    SystemInit --> 搬运data与清零bss
+    搬运data与清零bss --> 静态构造: __libc_init_array
+    静态构造 --> main: HAL_Init 与 SystemClock_Config
+    main --> 外设初始化
+    外设初始化 --> 调度器: osKernelStart 不再返回</pre></div>
+<p>调度器启动之后不会返回，因此这条链上没有第二次经过 <code>main</code> 的机会。任务创建失败或断言触发都发生在调度器启动前后，两者的现场不同：前者停在创建处，后者停在 <code>configASSERT</code> 展开的循环里。</p>
+<h2 id="6-本工程的启动顺序与行号依据">6. 本工程的启动顺序与行号依据</h2>
+<p>链接脚本把向量表放在最前：<code>ENTRY(Reset_Handler)</code>（<code>STM32F407XX_FLASH.ld:53</code>），<code>MEMORY</code> 定义 <code>RAM</code> 128 KB、<code>CCMRAM</code> 64 KB、<code>FLASH</code> 1024 KB（<code>:56-61</code>），<code>_estack</code> 取 RAM 末端（<code>:64</code>），<code>.isr_vector</code> 第一个进 FLASH（<code>:73-78</code>）。</p>
+<p>启动文件的执行顺序与上面一致：<code>Reset_Handler</code> 在 <code>startup_stm32f407xx.s:60</code>，第一句 <code>ldr sp, =_estack</code>（<code>:61</code>），接着 <code>bl SystemInit</code>（<code>:64</code>），搬 <code>.data</code>（<code>:67-81</code>）、清 <code>.bss</code>（<code>:84-95</code>），<code>bl __libc_init_array</code>（<code>:98</code>），最后 <code>bl main</code>（<code>:100</code>）。向量表里 <code>.word _estack</code> 与 <code>.word Reset_Handler</code> 分别在 <code>:128</code>、<code>:129</code>。</p>
+<p><code>SystemInit</code> 的实际内容很少：在 <code>Core/Src/system_stm32f4xx.c:167</code>，只开 FPU（<code>:171</code>）并按需配置外部存储器。向量表重定位被条件编译关掉（<code>:179</code> 的 <code>USER_VECT_TAB_ADDRESS</code> 未定义，<code>:180</code> 的 <code>SCB->VTOR</code> 赋值不生效），因此 VTOR 保持复位默认值。</p>
+<p><code>main</code> 的顺序是 <code>HAL_Init()</code>（<code>Core/Src/main.c:94</code>）、<code>SystemClock_Config()</code>（<code>:101</code>）、外设初始化（<code>:109-119</code>）、<code>BSP_DWT_Init()</code>（<code>:123</code>）、<code>MX_FREERTOS_Init()</code>（<code>:130</code>）、<code>osKernelStart()</code>（<code>:133</code>）。注意 <code>ImuTask.cpp:19</code> 的 <code>FusionAHRS ahrs(1000.0f)</code> 是带初值的全局对象，它的构造在 <code>__libc_init_array</code> 阶段执行，早于 <code>main</code>。</p>
+<p>全局对象构造早于 <code>main</code> 这一点决定了启动期故障的表现：若构造里访问未初始化外设，PC 看起来已经走过 <code>Reset_Handler</code>，却始终到不了 <code>main</code> 首行。定位这类问题要把断点放在 <code>__libc_init_array</code> 前后各一处。</p>
+<h2 id="7-只产出-elf-与手动转换">7. 只产出 ELF 与手动转换</h2>
+<p>本工程只输出 ELF，没有自动生成 HEX 或 BIN（<code>cmake/gcc-arm-none-eabi.cmake:15</code> 只登记了 <code>objcopy</code> 变量，链接规则里没有 <code>POST_BUILD</code>）。需要转换时手动执行，命令未在本工程实测：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">arm-none-eabi-objcopy</span><span style="color:#005CC5"> -O</span><span style="color:#032F62"> ihex</span><span style="color:#032F62">   build/Debug/sentriomeni2026.elf</span><span style="color:#032F62"> sentriomeni2026.hex</span></span>
+<span class="line"><span style="color:#6F42C1">arm-none-eabi-objcopy</span><span style="color:#005CC5"> -O</span><span style="color:#032F62"> binary</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span><span style="color:#032F62"> sentriomeni2026.bin</span></span>
+<span class="line"><span style="color:#6F42C1">arm-none-eabi-size</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span></span></code></pre>
+<p>用 OpenOCD 写整片 ELF 的写法如下，未在本工程实测：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">openocd</span><span style="color:#005CC5"> -f</span><span style="color:#032F62"> interface/stlink.cfg</span><span style="color:#005CC5"> -f</span><span style="color:#032F62"> target/stm32f4x.cfg</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">  -c</span><span style="color:#032F62"> "program build/Debug/sentriomeni2026.elf verify reset exit"</span></span></code></pre>
+<p><code>program</code> 会自动执行擦除、写入、校验与复位。<code>reset run</code> 让目标直接跑，<code>reset halt</code> 停在 <code>Reset_Handler</code>，适合先确认入口。调试构建与发布构建的调试信息不同：<code>cmake/gcc-arm-none-eabi.cmake:31,33</code> 给 Debug 加 <code>-O0 -g3</code>，<code>:32,34</code> 给 Release 加 <code>-Os -g0</code>，烧 Release 镜像后没有符号可查。</p>
+<h2 id="8-停机期间的时间会继续走">8. 停机期间的时间会继续走</h2>
+<p>本工程没有配置 <code>DBGMCU</code> 的冻结位（全仓库搜索无 <code>DBGMCU</code> 写入）。按手册，内核停机时定时器与外设不冻结，HAL 的 1 ms 时基 TIM2（<code>Core/Src/stm32f4xx_hal_timebase_tim.c:41-101</code>）会在断点停留期间继续计数，恢复后 <code>HAL_GetTick()</code> 会跳变。这条属推断，现场用 <code>HAL_GetTick()</code> 观察即可确认。</p>
+<p>SysTick 的行为相反：它随内核停止，FreeRTOS 的 tick 计数在停机期间不增加。两个时基在停机后出现偏差，偏差量等于停机时长。涉及超时判断的调试场景要先把这层偏差排除，再怀疑逻辑。</p>
+<h2 id="9-两板同名产物的烧录风险">9. 两板同名产物的烧录风险</h2>
+<p>两板的构建产物同名，烧录前要确认读的是哪一份：云台板与底盘板的输出都叫 <code>build/Debug/sentriomeni2026.elf</code>，分别在各自仓库根目录下。先看镜像大小与 <code>.map</code> 里的差异文件，再用探针序列号选择目标，避免把云台固件写进底盘板。</p>
+<p>判断手上这份 ELF 属于哪块板，最快的办法是比较符号：底盘板有 <code>ChassisTask</code> 与裁判系统相关符号，云台板有 <code>GimbalTask</code> 与 <code>FireTask</code>。用 <code>arm-none-eabi-nm</code> 列符号并检索任务名，比看文件路径更可靠。</p>
+<h2 id="10-易错点">10. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置或判据</th></tr></thead><tbody><tr><td>只烧 BIN 却给了错误基地址</td><td>程序不跑或跑到随机地址</td><td>BIN 无地址信息，基地址必须是 <code>0x08000000</code></td></tr><tr><td>烧了 Release 镜像再下断点</td><td>断点打不上、变量显示为优化掉的寄存器</td><td><code>-Os -g0</code>，换 Debug 构建</td></tr><tr><td>改写常量后整个扇区被擦</td><td>同扇区其他数据丢失</td><td>F4 按扇区擦除，布局时把常改数据单独放一扇区</td></tr><tr><td>带 bootloader 时忘记写 VTOR</td><td>中断仍进旧向量表，跑飞</td><td><code>USER_VECT_TAB_ADDRESS</code> 当前是关的（<code>system_stm32f4xx.c:179</code>）</td></tr><tr><td>用 <code>reset run</code> 后立刻连 GDB</td><td>连接时程序已跑过入口</td><td>先 <code>reset halt</code>，再下断点</td></tr><tr><td>校验报错却直接重烧</td><td>重复失败，查不出原因</td><td>先比较 ELF 与 flash 回读，再查探针时钟</td></tr><tr><td>断电瞬间拔探针</td><td>写入中断，扇区处于未完成状态</td><td>擦写期间保持供电，必要时全片重烧</td></tr><tr><td>在 <code>__libc_init_array</code> 之前设断点</td><td>断点命中但外设与时钟都未初始化</td><td>断点放在 <code>main</code> 首行或 <code>SystemClock_Config</code> 之后</td></tr></tbody></table>
+<h2 id="11-小结">11. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>烧录四步</td><td>擦除、写入、校验、复位，缺一不可</td></tr><tr><td>镜像格式</td><td>ELF 自带地址与符号，HEX 自带地址无符号，BIN 两者都无</td></tr><tr><td>复位取指</td><td>MSP 取自向量表 0，PC 取自偏移 4</td></tr><tr><td>入口路径</td><td><code>Reset_Handler</code> 设 SP，<code>SystemInit</code> 开 FPU，搬 data、清 bss、跑静态构造，再进 <code>main</code></td></tr><tr><td>本工程输出</td><td>只有 <code>sentriomeni2026.elf</code>，需要时手动 <code>objcopy</code></td></tr><tr><td>停机影响</td><td>未配置 <code>DBGMCU</code> 冻结位，TIM2 时基在停机期间继续走（推断）</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>只产出 ELF</td><td>省去转换步骤，调试信息一体</td><td>产线与 OTA 需要另做 HEX 或 BIN</td></tr><tr><td>向量表固定在 flash 首地址</td><td>无需写 VTOR，启动最短</td><td>加 bootloader 时要改链接脚本并打开 VTOR 配置</td></tr><tr><td>用 TIM2 而非 SysTick 做 HAL 时基</td><td>与 FreeRTOS 的 SysTick 互不干扰</td><td>停机时 TIM2 继续走，<code>HAL_GetTick()</code> 会跳变</td></tr></tbody></table>
+<p>四步里的校验与复位最容易被省：校验省掉时坏镜像直接进 flash，复位方式选错时新程序不被执行。两者都不改变文件内容，只改变现场表现。</p>
+<h2 id="12-练习">12. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出三种镜像格式在“是否含地址”“是否含符号”上的区别，并说明 BIN 烧录必须补什么信息。</li>
+<li>复位后前两个字分别从哪里取，写入哪个寄存器。</li>
+<li>列出 <code>Reset_Handler</code> 到 <code>main</code> 之间的全部步骤及其源码位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给链接脚本加一个 <code>POST_BUILD</code> 步骤自动生成 HEX 与 BIN，写出要修改的文件与命令，并说明为什么当前工程没有自动生成。</li>
+<li>设计一个方案，让两板各自的构建产物带可区分的文件名，并说明这对烧录脚本的影响。</li>
+<li>若要在本工程引入 bootloader，列出需要改动的文件与配置项，并说明 VTOR 与向量表位置的对应关系。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/STM32F407XX_FLASH.ld</code></td><td>入口、存储器布局、向量表位置（:53、:56-61、:64、:73-78）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/startup_stm32f407xx.s</code></td><td>复位流程与向量表（:60-100、:128-129）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/system_stm32f4xx.c</code></td><td><code>SystemInit</code> 与 VTOR 条件编译（:167-180）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>启动顺序与时钟配置（:94、:101、:109-133、:165-187）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>HAL 时基 TIM2（:41-101）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td>Debug 与 Release 优化选项（:31-34）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/STM32F407XX_FLASH.ld</code></td><td>底盘板同名链接脚本</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-断点与变量观测"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-断点与变量观测</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/03-烧录与调试/03-断点与变量观测.md</span></div><div class="dfile__body"><h1 id="断点与变量观测">断点与变量观测</h1>
+<blockquote>
+<p>对象是程序运行期的停止与读取：断点靠什么硬件实现、能打几个、变量在什么条件下读得到。变量通道本身的现状已在 <code>docs/02-STM32 与 HAL/04-DWT计时与在线观测/03-在线变量观测.md</code> 逐条核对，只接结论，不重复推导。</p>
+</blockquote>
+<p>断点与观察点是两类资源。断点按地址拦截取指，程序停在断点处；观察点按地址或数据值拦截访问，程序停在访存处。两者都会让内核停机，之后由调试器读寄存器与内存。</p>
+<h2 id="1-四类观测手段与资源上限">1. 四类观测手段与资源上限</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型</th><th>拦截对象</th><th>实现单元</th><th>数量上限</th></tr></thead><tbody><tr><td>硬件断点</td><td>取指地址</td><td>FPB 指令比较器</td><td>按内核型号，F407 为 6 个</td></tr><tr><td>软件断点</td><td>取指内容</td><td>替换成 BKPT 指令</td><td>受可用 RAM 或 flash 补丁限制</td></tr><tr><td>数据观察点</td><td>数据访问地址</td><td>DWT 地址比较器</td><td>4 个</td></tr><tr><td>Watch 窗口</td><td>读变量值</td><td>不占用上述资源</td><td>每次刷新都停机</td></tr><tr><td>Live Watch</td><td>周期性读变量值</td><td>不占用上述资源</td><td>后台轮询，需调试器支持</td></tr></tbody></table>
+<p>资源上限是可以算出来的：FPB 的 6 个指令比较器加 2 个字面量比较器，DWT 的 4 个地址比较器。断点与观察点分别从这两个池子里取，用满之后新请求要么失败，要么被调试器悄悄降级。</p>
+<p>两类资源互不通用：断点用满时无法把观察点拿来顶替，反之也一样。规划一次调试时先把要停的位置与要监视的变量分别列出来，再对照两个上限分配。</p>
+<h2 id="2-停下还是只看值">2. 停下还是只看值</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["要在某个位置停下"] --> B{"停的是代码还是数据"}
+  B -->|"代码位置"| C{"地址在 flash 还是 RAM"}
+  C -->|"flash"| D["硬件断点 占 FPB 比较器"]
+  C -->|"RAM"| E["软件断点 BKPT 或硬件断点均可"]
+  B -->|"数据被读写时"| F["数据观察点 占 DWT 比较器"]
+  A --> G["只想看值 不想停"]
+  G --> H["Live Watch 周期性读内存"]</pre></div>
+<p>分叉的两个判据是“拦截什么”与“要不要停机”。断点与观察点都会停机，区别在触发条件是取指还是访存；Watch 与 Live Watch 不停机，区别在刷新方式。选择时先确定要不要停，再确定用哪种资源。</p>
+<h2 id="3-硬件断点与软件断点">3. 硬件断点与软件断点</h2>
+<p>Cortex-M4 的 FPB 单元含 6 个指令比较器与 2 个字面量比较器。指令比较器把取指地址与设定的地址比较，命中就产生调试事件。这是调试器在 flash 里下断点的首选，因为不需要改写 flash。</p>
+<p>软件断点把目标指令的第一个字节替换为 BKPT 操作码 <code>0xBE</code>。它适用于可写内存，在 flash 中改写需要先把整个扇区读出、擦除、再回写，代价高。OpenOCD 在 flash 上默认尽量用硬件断点，硬件资源用尽时才走 flash 断点路径。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>优先选择</th><th>原因</th></tr></thead><tbody><tr><td>flash 中的函数</td><td>硬件断点</td><td>不改写 flash，命中无副作用</td></tr><tr><td>RAM 中的函数</td><td>软件断点</td><td>写一个字节即可，省硬件比较器</td></tr><tr><td>断点数超过 6</td><td>分批下断点</td><td>FPB 只有 6 个指令比较器</td></tr><tr><td>需要统计命中次数</td><td>硬件断点加计数</td><td>软件断点反复擦写代价高</td></tr></tbody></table>
+<p>在 flash 上使用软件断点的副作用不止是慢：擦写期间若断电，被改写的那一扇区处于未完成状态，需要整片重烧。硬件断点没有这个风险，所以工程里默认把断点留给 flash。</p>
+<p>判断当前命中的是硬件还是软件断点，看 OpenOCD 日志里的断点设置行；若资源已满，日志会出现改写 flash 的提示，此时应删掉不用的断点再重设。</p>
+<h2 id="4-数据观察点与写入点定位">4. 数据观察点与写入点定位</h2>
+<p>DWT 含 4 个地址比较器，可配置为监视某个地址的读、写，或两者。命中时产生调试事件，内核停机。它适合抓「谁改了某个全局变量」这类问题：把变量地址写进比较器，命中后看调用栈，就能定位写入点。</p>
+<p>观察点的地址必须与比较器的对齐要求匹配，监视一个字节或一个 32 位字都可以，跨字访问则要按手册确认是否被拆成多次比较。资源上限同样是 4 个，超了要复用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant G as GDB 客户端
+    participant O as OpenOCD
+    participant F as FPB 或 DWT
+    participant C as Cortex-M4 内核
+    G->>O: 在目标地址设断点
+    O->>F: 写入地址比较器
+    C->>F: 取指或访存
+    F-->>C: 命中 触发调试事件
+    C->>C: 保存现场并停机
+    O-->>G: 上报停机原因与 PC
+    G->>O: 读寄存器与内存
+    G->>O: continue
+    O->>F: 清除或保持比较器
+    O->>C: 恢复运行</pre></div>
+<p>“清除或保持比较器”这一步由调试器的断点管理决定。保持比较器意味着下一次仍会命中，清除则只命中一次。<code>watch</code> 通常保持，<code>continue</code> 之后同一地址再次被写会再次停机，连续放行时要注意这一点。</p>
+<h2 id="5-调试信息与优化是两条失效路径">5. 调试信息与优化是两条失效路径</h2>
+<p>断点打在源码行上依赖 DWARF 行号表，变量名能解析依赖 DWARF 变量描述。两者都由 <code>-g</code> 生成。优化等级决定变量是否留在内存：<code>-O0</code> 下局部变量通常在栈上，<code>-Os</code> 下可能只存在于寄存器，Watch 窗口会显示「已被优化掉」。</p>
+<p>链接期的 <code>--gc-sections</code> 是另一条独立的失效路径：<code>-fdata-sections</code> 把每个变量放进独立段，没有被任何代码引用的段会被回收。<code>volatile</code> 只影响编译器优化，不影响链接期回收，两者的作用范围不同。</p>
+<p>两条路径的排查方法也不同：优化导致的失效换 Debug 构建即可解决，链接期回收导致的失效换构建类型没用，必须在代码里引用一次变量。把两者混为一谈，会反复在构建类型上打转。</p>
+<p>验证方法很直接：在 Debug 构建下用 <code>arm-none-eabi-nm</code> 查该变量符号是否存在。符号存在说明是优化问题，符号不存在说明被链接期回收，两步就能分开。</p>
+<h2 id="6-一次典型的-gdb-会话">6. 一次典型的 GDB 会话</h2>
+<p>下面这组命令给出断点与观察点的实际入口，未在本工程实测。<code>target extended-remote</code> 连的是 OpenOCD 而不是目标，<code>monitor</code> 前缀的命令被转发给 OpenOCD 执行。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">arm-none-eabi-gdb</span><span style="color:#032F62"> build/Debug/sentriomeni2026.elf</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">gdb</span><span style="color:#24292E">) </span><span style="color:#6F42C1">target</span><span style="color:#032F62"> extended-remote</span><span style="color:#032F62"> localhost:3333</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">gdb</span><span style="color:#24292E">) </span><span style="color:#6F42C1">monitor</span><span style="color:#032F62"> reset</span><span style="color:#032F62"> halt</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">gdb</span><span style="color:#24292E">) </span><span style="color:#D73A49">break</span><span style="color:#032F62"> StartImuTask::run</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">gdb</span><span style="color:#24292E">) </span><span style="color:#6F42C1">watch</span><span style="color:#032F62"> gimbal_yaw_total</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">gdb</span><span style="color:#24292E">) </span><span style="color:#6F42C1">info</span><span style="color:#032F62"> threads</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">gdb</span><span style="color:#24292E">) </span><span style="color:#D73A49">continue</span></span></code></pre>
+<p><code>watch</code> 会占用一个 DWT 比较器，<code>break</code> 占用一个 FPB 比较器。<code>info threads</code> 只有在调试器启用了 RTOS 感知时才会列出任务；没有启用时只会显示当前内核线程。用完的断点用 <code>delete</code> 删除，否则放行时会反复命中。</p>
+<p>连接顺序上 <code>monitor reset halt</code> 一定要在设置断点之前。若先 <code>continue</code> 再补断点，程序可能已经跑过目标位置，断点永远不命中，表现为“断点无效”。</p>
+<p>会话结束时用 <code>detach</code> 或 <code>monitor shutdown</code> 释放资源。直接拔线会让比较器配置留在调试器一侧，下一次连接可能读到上一次的断点列表。</p>
+<h2 id="7-debug-构建与变量通道的现状">7. Debug 构建与变量通道的现状</h2>
+<p>调试构建与发布构建的选项在 <code>cmake/gcc-arm-none-eabi.cmake</code> 里分叉：Debug 是 <code>-O0 -g3</code>（<code>:31,33</code>），Release 是 <code>-Os -g0</code>（<code>:32,34</code>）；<code>:29</code> 加 <code>-fdata-sections</code>，<code>:41</code> 加 <code>--gc-sections</code>。下断点与看变量都应在 Debug 构建下做，<code>build/Debug/sentriomeni2026.elf</code> 是唯一带完整 DWARF 的产物。</p>
+<p>变量通道的现状照搬已有结论：<code>Debug_vars/debug_vars.cpp:11-19</code> 定义的 9 个变量全部被 <code>--gc-sections</code> 回收，<code>Debug_vars/debug_vars.h</code> 的声明处于注释状态，Watch 窗口拿不到有效地址；<code>BSP/Src/debug.cpp</code> 的串口帧 <code>SendDebugData</code> 在两块板都没有调用点。修法与判据见引用文档的 3.1 至 3.4 节。</p>
+<p>在运行期下断点要注意任务上下文。云台板的采样循环在 <code>Task/Src/ImuTask.cpp:41</code> 的 <code>for (;;)</code> 里，循环体内有 <code>DWT_Delay_ms(1000)</code> 只在初始化阶段执行（<code>:37</code>），循环本身没有阻塞调用。断点落在循环体里会每 1 ms 命中一次，适合单次观察，不适合连续放行。</p>
+<p>把断点设在初始化完成之后的第一个调用点上，可以避免在时钟或外设未就绪时命中。观察循环行为时用条件断点，例如按计数值或某个变量取值命中，比每毫秒都停一次更可控。</p>
+<h2 id="8-任务上下文与断言">8. 任务上下文与断言</h2>
+<p>FreeRTOS 的 <code>configASSERT</code> 打开着：<code>Core/Inc/FreeRTOSConfig.h:122</code> 展开为 <code>if ((x) == 0) {taskDISABLE_INTERRUPTS(); for(;;);}</code>。断言失败时中断被关掉并死循环，调试器连上后会停在关闭中断的状态，这时看 PC 才能知道是哪个断言。</p>
+<p>停机期间的时基行为与上一页一致：没有 <code>DBGMCU</code> 冻结配置，TIM2 继续计数而 SysTick 随内核停止。连续放行多个断点后，<code>HAL_GetTick()</code> 的跳变量与停机时长相关，FreeRTOS 的 tick 计数则基本不变，两者会出现偏差。这条属推断，未实测。</p>
+<p>任务感知是另一层能力：OpenOCD 的 <code>rtos</code> 支持可枚举 FreeRTOS 任务并给每个任务一个线程视图。它需要目标符号可解析，是否还需要 <code>configUSE_TRACE_FACILITY</code> 取决于调试器实现，本工程该宏未定义（全仓库搜索无），这条标注为未实测。</p>
+<p>没有任务视图时，仍可以通过读 <code>pxCurrentTCB</code> 与任务控制块里的字段判断当前运行的是哪个任务。这属于手工读取，不依赖调试器的 RTOS 支持。</p>
+<h2 id="9-断点资源的分配建议">9. 断点资源的分配建议</h2>
+<p>一次调试会话开始前，按下面的顺序分配资源：</p>
+<ol>
+<li>先列出必须停下的位置，优先用硬件断点，flash 中的函数不占用软件断点。</li>
+<li>再列出需要监视写入的全局量，每个占一个 DWT 比较器，控制在 4 个以内。</li>
+<li>只想看值时改用 Live Watch，不占比较器。</li>
+<li>断点用满时删掉已不需要的，或改成条件断点减少命中次数。</li>
+</ol>
+<p>四步做完再连接目标。资源分配在连接前规划，比连接后发现断点失效再回头删要省时间。</p>
+<h2 id="10-易错点">10. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置或判据</th></tr></thead><tbody><tr><td>在 Release 构建下单步</td><td>行号跳跃、变量显示为已优化</td><td><code>-Os -g0</code>，换 Debug</td></tr><tr><td>断点打在头文件的行号上</td><td>命中在多个实例中的任意一个</td><td>头文件被多份 TU 包含，断点按地址生效</td></tr><tr><td>全局变量在 Watch 里显示无效地址</td><td>段被 <code>--gc-sections</code> 回收</td><td>在初始化代码里引用一次，依据见引用文档</td></tr><tr><td>认为 <code>volatile</code> 能保住变量</td><td>编译通过，链接后符号消失</td><td><code>volatile</code> 不管链接期回收</td></tr><tr><td>硬件断点用满还想再加</td><td>新断点被静默改成软件断点或失败</td><td>FPB 指令比较器只有 6 个</td></tr><tr><td>观察点超过 4 个</td><td>后设的无效或报错</td><td>DWT 地址比较器只有 4 个</td></tr><tr><td>断言失败后只看串口</td><td>无输出，不知道谁触发</td><td><code>configASSERT</code> 关中断死循环，看 PC 与调用栈</td></tr><tr><td>连续放行断点后比对 tick</td><td>HAL tick 跳变，FreeRTOS tick 不跳</td><td>TIM2 与 SysTick 的停机行为不同（推断）</td></tr></tbody></table>
+<h2 id="11-小结">11. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>断点资源</td><td>FPB 6 个指令比较器加 2 个字面量比较器</td></tr><tr><td>观察点资源</td><td>DWT 4 个地址比较器</td></tr><tr><td>软件断点</td><td>BKPT 改写指令首字节，flash 中代价高</td></tr><tr><td>调试信息</td><td>Debug 构建 <code>-O0 -g3</code>，Release 构建 <code>-Os -g0</code></td></tr><tr><td>变量失效</td><td>优化进寄存器与链接期回收是两条独立路径</td></tr><tr><td>本工程变量通道</td><td>9 个 <code>Debug_vars</code> 变量全被回收，串口帧无调用点</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>flash 上优先硬件断点</td><td>不改写 flash，命中快</td><td>占用有限的 FPB 比较器</td></tr><tr><td>用数据观察点抓写入</td><td>能定位到具体调用栈</td><td>只有 4 个，且停机频繁</td></tr><tr><td>Debug 构建带完整 DWARF</td><td>断点与变量可用</td><td>镜像大、<code>-O0</code> 执行慢，实时性不同于发布版</td></tr></tbody></table>
+<h2 id="12-练习">12. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 F407 上硬件断点与数据观察点各自的资源数量与实现单元。</li>
+<li>说明为什么在 flash 上改写指令做软件断点代价高。</li>
+<li>说明 <code>volatile</code> 与 <code>--gc-sections</code> 各自影响哪一步，为什么前者不能防止变量被回收。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用数据观察点定位一个全局量的写入点：写出要监视的地址来源、GDB 命令与命中后读调用栈的步骤。</li>
+<li>设计一个不依赖 Watch 窗口的变量观测方案，要求变量不被 <code>--gc-sections</code> 回收，并说明它与 <code>Debug_vars</code> 现状的差别。</li>
+<li>在同一处代码上分别用硬件断点与数据观察点观察，说明两者命中时刻的差别与适用场景。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake</code></td><td>调试与发布选项、段回收（:29、:31-34、:41）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td><code>configASSERT</code> 与 tick 配置（:64、:122）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Debug_vars/debug_vars.cpp</code></td><td>9 个观测变量定义（:11-19）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp</code></td><td><code>SendDebugData</code> 帧实现（:54-115）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>采样循环与初始化（:19、:34、:37、:41）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>HAL 时基 TIM2（:41-101）</td></tr><tr><td><code>docs/02-STM32 与 HAL/04-DWT计时与在线观测/03-在线变量观测.md</code></td><td>变量通道现状与最小改法</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-SWO与日志"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-SWO与日志</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/03-烧录与调试/04-SWO与日志.md</span></div><div class="dfile__body"><h1 id="swo与日志">SWO与日志</h1>
+<blockquote>
+<p>对象是不停机也能看到程序动静的输出通道：SWO/ITM 单线跟踪、UART 日志、RTT 与半主机。本工程没有启用 SWO，也没有可用的 <code>printf</code>；串口一侧有 <code>huart1</code> 与 <code>SendDebugData</code> 帧，帧格式已在 <code>docs/02-STM32 与 HAL/04-DWT计时与在线观测/03-在线变量观测.md</code> 核对。</p>
+</blockquote>
+<p>日志通道分成两类：借调试硬件输出的（SWO、RTT、半主机）和借普通外设输出的（UART、USB CDC）。前者不占用应用引脚，但依赖调试器在线；后者独立于调试器，代价是占用引脚与中断或 DMA 资源。</p>
+<h2 id="1-五条通道与各自代价">1. 五条通道与各自代价</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>通道</th><th>物理路径</th><th>需要调试器</th><th>占用应用资源</th><th>本工程状态</th></tr></thead><tbody><tr><td>SWO/ITM</td><td>SWD 的 SWO 单线</td><td>是</td><td>PB3</td><td>未配置，引脚被 SPI1 占用</td></tr><tr><td>UART</td><td>USART1 的 TX/RX</td><td>否</td><td>PA9、PB7</td><td><code>huart1</code> 已初始化</td></tr><tr><td>RTT</td><td>调试器读写 RAM 环</td><td>是</td><td>一段 RAM</td><td>未使用</td></tr><tr><td>半主机</td><td>调试器代理系统调用</td><td>是</td><td>无</td><td>未使用</td></tr><tr><td>USB CDC</td><td>USB 端点</td><td>否</td><td>USB 外设</td><td>已有 USB Device 栈</td></tr></tbody></table>
+<p>五条通道里只有 UART 与 USB CDC 能在没有调试器的现场使用。</p>
+<p>两类通道可以同时保留：调试阶段用 SWO 或 RTT 观察高频事件，现场用 UART 记录关键状态。两者的代码入口相同，只是底层重定向不同，切换时只改 <code>__io_putchar</code> 的实现。两者的差别在资源：UART 占两个引脚且发送是阻塞的，USB CDC 复用已有的 USB 栈但依赖主机侧驱动与协议实现。</p>
+<h2 id="2-选择通道的判据">2. 选择通道的判据</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["要输出日志"] --> B{"调试器是否在线"}
+  B -->|"在线 追求低开销"| C["SWO ITM 端口 0 至 31"]
+  B -->|"在线 且不想占引脚"| D["RTT RAM 环形缓冲"]
+  B -->|"不需要调试器"| E{"是否占用应用外设"}
+  E -->|"可以占用"| F["UART huart1 115200"]
+  E -->|"走已有 USB"| G["USB CDC 虚拟串口"]
+  C --> H["SWV 或 Trace 窗口"]
+  D --> H
+  F --> I["串口助手或上位机"]</pre></div>
+<p>分叉的两个判据是“调试器是否在线”与“是否愿意占用应用外设”。四个终点对应四种代价：SWO 占一根调试线，RTT 占一段 RAM，UART 占两个引脚，USB CDC 占主机侧驱动。按场景选，而不是按实现难度选。</p>
+<h2 id="3-itm-与-swo-的分工">3. ITM 与 SWO 的分工</h2>
+<p>Cortex-M4 内部有一组 ITM 端口，应用把 8 位数据写入某个端口，TPIU 再把端口数据打包成 SWO 串行流送出。ITM 端口号从 0 到 31，端口 0 通常作为文本通道。SWO 只需要一根线，方向单向，从目标到调试器。</p>
+<p>SWO 用异步模式时，目标按固定波特率发送，调试器按相同时钟采样。这个波特率由跟踪时钟分频得到，跟踪时钟通常取自 HCLK。主频改变而调试器端设置不变时，收到的字符会变成乱码。</p>
+<p>ITM 与 SWO 是两个层次：ITM 决定数据怎么分端口，SWO 决定数据怎么送到 PC。</p>
+<p>端口号的选择没有协议约束，只要求收发两侧一致。工程里常见的做法是端口 0 放文本、端口 1 放时间戳，接收工具按端口分开显示，避免两类数据混在一行里。端口 0 的文本通道之外，其余端口可以用来传时间戳或自定义事件，接收侧按端口号分开解析。</p>
+<h2 id="4-使能顺序">4. 使能顺序</h2>
+<p>按手册，异步 SWO 的使能分三步：先在 <code>DBGMCU_CR</code> 里置 <code>TRACE_IOEN</code> 并把 <code>TRACE_MODE</code> 设为异步；再把 SWO 引脚（F407 上是 PB3）配成 AF0 复用；最后解锁 ITM 并打开目标端口。CMSIS 的 <code>CoreDebug->DEMCR</code> 里的 <code>TRCENA</code> 也要置位，否则 ITM 寄存器不响应。</p>
+<p>下面是最小使能片段，属通用写法，本工程未启用：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* 通用写法，未在本工程启用 */</span></span>
+<span class="line"><span style="color:#24292E">GPIO_InitTypeDef g </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span><span style="color:#005CC5">0</span><span style="color:#24292E">};</span></span>
+<span class="line"><span style="color:#24292E">g.Pin </span><span style="color:#D73A49">=</span><span style="color:#24292E"> GPIO_PIN_3;</span></span>
+<span class="line"><span style="color:#24292E">g.Mode </span><span style="color:#D73A49">=</span><span style="color:#24292E"> GPIO_MODE_AF_PP;</span></span>
+<span class="line"><span style="color:#24292E">g.Alternate </span><span style="color:#D73A49">=</span><span style="color:#24292E"> GPIO_AF0_TRACE;</span></span>
+<span class="line"><span style="color:#6F42C1">HAL_GPIO_Init</span><span style="color:#24292E">(GPIOB, </span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">g</span><span style="color:#24292E">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">DBGMCU</span><span style="color:#D73A49">-></span><span style="color:#24292E">CR </span><span style="color:#D73A49">|=</span><span style="color:#24292E"> DBGMCU_CR_TRACE_IOEN;</span></span>
+<span class="line"><span style="color:#24292E">DBGMCU</span><span style="color:#D73A49">-></span><span style="color:#24292E">CR </span><span style="color:#D73A49">&#x26;=</span><span style="color:#D73A49"> ~</span><span style="color:#24292E">DBGMCU_CR_TRACE_MODE;</span><span style="color:#6A737D">   /* 异步模式 */</span></span>
+<span class="line"><span style="color:#24292E">CoreDebug</span><span style="color:#D73A49">-></span><span style="color:#24292E">DEMCR </span><span style="color:#D73A49">|=</span><span style="color:#24292E"> CoreDebug_DEMCR_TRCENA_Msk;</span></span>
+<span class="line"><span style="color:#24292E">ITM</span><span style="color:#D73A49">-></span><span style="color:#24292E">LAR </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">C5ACCE55</span><span style="color:#24292E">;</span><span style="color:#6A737D">                 /* 解锁 */</span></span>
+<span class="line"><span style="color:#24292E">ITM</span><span style="color:#D73A49">-></span><span style="color:#24292E">TER </span><span style="color:#D73A49">|=</span><span style="color:#24292E"> (</span><span style="color:#005CC5">1</span><span style="color:#D73A49">UL</span><span style="color:#D73A49"> &#x3C;&#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">);</span><span style="color:#6A737D">                /* 打开端口 0 */</span></span>
+<span class="line"><span style="color:#D73A49">int</span><span style="color:#6F42C1"> __io_putchar</span><span style="color:#24292E">(</span><span style="color:#D73A49">int</span><span style="color:#E36209"> ch</span><span style="color:#24292E">) { </span><span style="color:#6F42C1">ITM_SendChar</span><span style="color:#24292E">(ch); </span><span style="color:#D73A49">return</span><span style="color:#24292E"> ch; }</span></span></code></pre>
+<p><code>ITM_SendChar</code> 在端口满时返回忙，忙等会拖慢调用点。放在 1 kHz 控制循环里要限制输出频率，或只在事件发生时打印。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant C as 应用代码
+    participant I as ITM 端口 0
+    participant T as TPIU 与 SWO 引脚
+    participant V as 调试器的 SWV 窗口
+    C->>I: ITM_SendChar 写 32 位打包数据
+    I->>T: 按端口号与载荷打包
+    T->>V: 单线串行流
+    V->>V: 按端口拆分并显示文本</pre></div>
+<p>时序里没有任何握手：数据写入端口后由硬件异步送出，目标不等调试器确认。因此调试器没连上时数据直接丢弃，不会阻塞应用，这既是优点也是缺点——丢数据时应用侧没有感知。</p>
+<h2 id="5-printf-与半主机的两条重定向路径">5. printf 与半主机的两条重定向路径</h2>
+<p>在没有操作系统的固件里，<code>printf</code> 走两条重定向路径。newlib 的做法是实现 <code>_write</code>，最底层再调 <code>__io_putchar</code>；半主机则让 <code>_write</code> 触发 <code>BKPT</code>，由调试器代为输出。半主机慢且需要调试器在线，通常在发布镜像里禁用。</p>
+<p>不实现任何底层时，<code>printf</code> 要么链接失败，要么调用到空符号。判断方法很直接：看 <code>_write</code> 调用的 <code>__io_putchar</code> 有没有定义，看有没有代码真的调用 <code>printf</code>。</p>
+<p>输入方向同样缺底层。<code>Core/Src/syscalls.c</code> 的 <code>_read</code>（<code>:39-50</code>）调用弱符号 <code>__io_getchar</code>，仓库内也没有它的定义，<code>scanf</code> 与 <code>getchar</code> 同样不可用。</p>
+<p>两条路径的选择决定了发布镜像的行为：走 <code>__io_putchar</code> 时没有调试器也能输出，走半主机时没有调试器会卡在 <code>BKPT</code>。发布前要确认重定向落在哪一条上。</p>
+<p>检查方式是在没有调试器的环境下启动一次：卡住不动说明走了半主机，能正常跑说明走的是 <code>__io_putchar</code> 或根本没有输出调用。</p>
+<h2 id="6-swo-引脚与-spi1-的占用冲突">6. SWO 引脚与 SPI1 的占用冲突</h2>
+<p>SWO 在这两块板上用不了，原因是引脚冲突。SWO 固定用 PB3 的 AF0，而当前 PB3 被 SPI1 用作 SCK，PB4 用作 MISO，PA7 用作 MOSI（<code>Core/Src/spi.c:79-81</code>，<code>.ioc</code> 在 <code>2026sentriomeni.ioc:275-278</code>）。<code>.ioc</code> 里没有任何 <code>TRACE</code> 或 <code>DBGMCU</code> 配置项，仓库里也没有写 <code>DBGMCU</code> 的代码。</p>
+<p>PA5 与 PA6 在当前 <code>.ioc</code> 里没有分配（全文件搜索无 <code>PA5</code>、<code>PA6</code>）。按手册，SPI1 的 SCK 可复用映射到 PA5、MISO 可映射到 PA6，把这两根从 PB3、PB4 挪走后 PB3 即可作 SWO。这属于改动建议，未实测，改完要重新验证 BMI088 的 SPI 通信。</p>
+<p>改引脚要在 <code>.ioc</code> 里改，不要直接改生成物：SPI 的初始化代码由 CubeMX 生成，手工改 <code>spi.c</code> 会在下一次重生成时丢失。迁移之后再按上一节的顺序打开 SWO。</p>
+<h2 id="7-串口通道与日志帧">7. 串口通道与日志帧</h2>
+<p>串口通道是现成的：<code>huart1</code> 是 USART1，115200、8 位、1 停止位、无校验（<code>Core/Src/usart.c:46-53</code>），引脚 PB7 作 RX、PA9 作 TX，复用 AF7（<code>:137-151</code>）。云台板在 <code>Task/Src/ImuTask.cpp:34</code> 调 <code>DebugUART_Init(&#x26;huart1)</code>，底盘板在 <code>Task/Src/ImuTask.cpp:33</code> 调用同一句。</p>
+<p>日志帧由 <code>BSP/Src/debug.cpp</code> 的 <code>SendDebugData</code> 打包：固定头 <code>0xAA 0xBB</code>（<code>:63-64</code>），按格式字符顺序追加定长字段，最后一次 <code>HAL_UART_Transmit</code> 发出（<code>:113</code>）。超时 100 ms、缓冲区 128 字节在 <code>BSP/Inc/debug.h:19-20</code>。帧没有长度与校验，接收端必须与发送端共享同一个格式字符串，细节见引用文档。</p>
+<p>帧结构的代价很明确：没有长度字段时，接收端只能靠格式字符串判断每个字段的位置；丢一个字节后所有后续字段都会错位，而校验的缺失让接收端无法发现这种错位。</p>
+<h2 id="8-printf-在本工程不可用的两层原因">8. printf 在本工程不可用的两层原因</h2>
+<p><code>printf</code> 在本工程里不可用，原因有两层。<code>Core/Src/syscalls.c</code> 的 <code>_write</code>（<code>:81-92</code>）调用弱符号 <code>__io_putchar</code>（声明在 <code>:36</code>，调用在 <code>:88</code>），而全仓库没有任何 <code>__io_putchar</code> 定义，调用点会落到空地址。另一方面也没有调用者：USB Device 的日志宏由 <code>USBD_DEBUG_LEVEL</code> 控制，当前是 0（<code>USB_DEVICE/Target/usbd_conf.h:72</code>），三个打印宏全部展开为空。</p>
+<p>要用 <code>printf</code> 就得补一个 <code>__io_putchar</code>，把字符送到 <code>huart1</code> 或 ITM。送到串口时注意 <code>HAL_UART_Transmit</code> 是阻塞调用，不能放在高频任务里。RTT 是另一条路：它不占引脚、不依赖 SWO，靠调试器周期读 RAM 环形缓冲，本工程未使用，属通用备选。</p>
+<p>两层原因里先解决哪一层都可以，但两层都要解决才有输出：补上 <code>__io_putchar</code> 只是让符号有定义，还需要有代码实际调用 <code>printf</code> 或其上层日志宏。</p>
+<p>补 <code>__io_putchar</code> 时要注意它的调用上下文：中断里调用串口发送会阻塞，进而延长中断时间，建议只把它用于任务上下文或 SWO 通道。</p>
+<h2 id="9-确认串口是否真的在发">9. 确认串口是否真的在发</h2>
+<p>确认串口通道是否真在发，可以用逻辑分析仪或示波器抓 PA9；没有仪器时，把 USB 转 TTL 的 RX 接到 PA9、GND 共地，用 115200 的串口助手看是否出现帧头 <code>0xAA 0xBB</code>。</p>
+<p>先看帧头再解字段。帧头出现说明发送路径通了，之后按格式字符串逐字段解析；帧头不出现时按三层查：<code>DebugUART_Init</code> 有没有被调用、<code>SendDebugData</code> 有没有被调用、串口参数是否一致。三层里前两层是代码问题，第三层是配置问题。</p>
+<p>串口助手侧的参数只要与 <code>usart.c</code> 中的波特率、数据位与校验设置一致即可。本工程是 115200 加 8N1，两端不一致时看到的是乱码而不是没有数据，这一现象可以把配置问题与代码问题分开。</p>
+<h2 id="10-易错点">10. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置或判据</th></tr></thead><tbody><tr><td>直接调 <code>printf</code></td><td>链接通过但运行跑飞，或没有任何输出</td><td><code>__io_putchar</code> 无定义（<code>syscalls.c:36,88</code>）</td></tr><tr><td>打开 <code>USBD_DEBUG_LEVEL</code> 就以为有日志</td><td>编译进 <code>printf</code>，却仍无输出</td><td>该宏打开后反而暴露 <code>__io_putchar</code> 缺失（<code>usbd_conf.h:72</code>）</td></tr><tr><td>在 PB3 上直接使能 SWO</td><td>BMI088 的 SPI 时钟失效，姿态数据异常</td><td>PB3 是 SPI1_SCK（<code>spi.c:79-81</code>）</td></tr><tr><td>改主频后 SWO 变乱码</td><td>文本全是随机字符</td><td>SWO 波特率由跟踪时钟分频，需同步改调试器设置</td></tr><tr><td>忘记置 <code>TRCENA</code></td><td>ITM 寄存器写不进，无输出</td><td><code>CoreDebug->DEMCR</code> 的使能位</td></tr><tr><td>在高频循环里打印</td><td>控制周期被拖长，电机响应变差</td><td>阻塞发送，参考 <code>debug.h:19</code> 的 100 ms 超时</td></tr><tr><td>用无长度无校验的帧做长记录</td><td>丢一个字节后字段全部错位</td><td><code>SendDebugData</code> 帧结构</td></tr><tr><td>半主机留在发布镜像里</td><td>无调试器时卡在 BKPT</td><td>半主机需要调试器在线</td></tr></tbody></table>
+<h2 id="11-小结">11. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>SWO/ITM</td><td>单线异步跟踪，端口 0 至 31，依赖调试器在线</td></tr><tr><td>使能顺序</td><td><code>TRACE_IOEN</code>、引脚 AF0、<code>TRCENA</code>、ITM 解锁与开端口</td></tr><tr><td>本工程 SWO</td><td>不可用，PB3 被 SPI1_SCK 占用；PA5 未分配，可作迁移目标</td></tr><tr><td>串口日志</td><td><code>huart1</code> 115200，<code>DebugUART_Init</code> 在两板 ImuTask 中各调用一次</td></tr><tr><td><code>printf</code> 现状</td><td><code>__io_putchar</code> 无定义且无调用者，日志宏被 <code>USBD_DEBUG_LEVEL=0</code> 关闭</td></tr><tr><td>备选通道</td><td>RTT 与 USB CDC，前者不占引脚，后者已有协议栈</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>用 SWO 而非 UART</td><td>不占应用引脚，目标无需等待</td><td>依赖调试器与正确的时钟设置</td></tr><tr><td>用 UART 日志</td><td>独立于调试器，可事后抓取</td><td>占用两个引脚，阻塞发送会拖周期</td></tr><tr><td>用 RTT</td><td>不占引脚，读写可交互</td><td>需要调试器与额外 RAM 缓冲</td></tr><tr><td>保留空符号的 <code>printf</code> 路径</td><td>上层代码不用改</td><td>一旦实际调用就是空地址</td></tr></tbody></table>
+<h2 id="12-练习">12. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出五条日志通道各自是否需要调试器、占用什么资源，并说明本工程的可用性。</li>
+<li>列出异步 SWO 使能的四个寄存器或配置位及其顺序。</li>
+<li>说明 <code>printf</code> 在本工程无输出的两层原因，分别给出源码位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把 PB3、PB4 上的 SPI1 功能迁移到 PA5、PA6，写出要改的 <code>.ioc</code> 配置、要重新生成的目录与迁移后需要复测的功能。</li>
+<li>实现一个把日志写到 RAM 环形缓冲的方案，要求不占引脚、不依赖 SWO，并说明读取方式与缓冲区大小的取舍。</li>
+<li>给定一段串口抓包数据，设计一个解析流程，处理帧头出现但字段错位的情况，并说明为什么当前帧结构无法自校验。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c</code></td><td>SPI1 引脚与复用（:73-95）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td>SPI1 与 PA13/PA14 引脚配置（:259-262、:275-278）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c</code></td><td><code>huart1</code> 参数与 USART1 引脚（:46-53、:137-151）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/syscalls.c</code></td><td><code>_write</code> 与 <code>__io_putchar</code> 声明（:36、:81-92）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h</code></td><td><code>USBD_DEBUG_LEVEL</code> 与日志宏（:72、:110-132）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/debug.h</code></td><td>超时与缓冲区常量（:19-20）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp</code></td><td>帧打包与发送（:54-115）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ImuTask.cpp</code></td><td>底盘板 <code>DebugUART_Init</code> 调用点（:33）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/10-嵌入式构建与调试/03-烧录与调试/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<blockquote>
+<p>「10-嵌入式构建与调试/03-烧录与调试」前三篇的失败模式按分层顺序汇总成排查流程，并把复位后的实际行为接到本工程的异常处理代码上。命令与配置仍属通用做法，代码与符号依据全部来自两板源码。</p>
+</blockquote>
+<p>调试失败时最容易犯的错是跳到结论：看到没有输出就怀疑代码，看到连不上就怀疑探针。把链路分成五层逐层确认，能快速缩小范围。每一层都有独立的判据，前一层不通过时后一层的结果没有意义。</p>
+<h2 id="1-五层排查与每层的判据">1. 五层排查与每层的判据</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>要确认的事</th><th>判据或工具</th></tr></thead><tbody><tr><td>供电</td><td>目标板 3.3 V 正常、GND 共地</td><td>万用表量电压与通断</td></tr><tr><td>链路</td><td>探针识别目标、读到 DP IDR</td><td>OpenOCD <code>init</code> 日志</td></tr><tr><td>镜像</td><td>ELF 是本次构建、地址正确、校验通过</td><td>文件时间戳、<code>program verify</code></td></tr><tr><td>启动</td><td>复位后 PC 落在 <code>Reset_Handler</code></td><td><code>reset halt</code> 后读 PC</td></tr><tr><td>运行期</td><td>进入 <code>main</code>、进调度器、无死循环</td><td>断点与 Live Watch</td></tr></tbody></table>
+<p>每层的判据都必须是二值的，才能决定下一步往哪走。电压只有正常与不正常，<code>init</code> 日志只有读到 DP IDR 与读不到，PC 只有落在入口与不落在入口。用“看起来还行”这种判断会卡在同一层反复尝试。</p>
+<p>五层的顺序是固定的：后一层的现象可能由前一层引起，反过来不成立。把链路层的问题当成运行期问题查，会长时间停在断点无效这类现象上。</p>
+<h2 id="2-逐层排查的流程">2. 逐层排查的流程</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["现象：板子没动静"] --> B{"3.3 V 与 GND 正常"}
+  B -->|"否"| C["先查供电与共地"]
+  B -->|"是"| D{"OpenOCD 能读到目标"}
+  D -->|"否"| E["查探针、传输层、SWD 引脚、NRST"]
+  D -->|"是"| F{"reset halt 后 PC 在 Reset_Handler"}
+  F -->|"否"| G["查向量表、BOOT0、VTOR、烧录基地址"]
+  F -->|"是"| H{"能停在 main 或断点"}
+  H -->|"否"| I["查时钟、HSE、HAL 初始化是否卡住"]
+  H -->|"是"| J{"进入调度器"}
+  J -->|"否"| K["查 MX_FREERTOS_Init 与任务创建"]
+  J -->|"是"| L["查任务内死循环、断言、HardFault"]</pre></div>
+<p>流程的形状是单链带分叉，每一层只回答一个问题。走到最后一层仍无结论时，说明问题不在链路与启动，而在任务逻辑里，此时应该回到断点与变量观测的结论上，而不是重新从供电查起。</p>
+<h2 id="3-复位后行为的完整链条">3. 复位后行为的完整链条</h2>
+<p>复位把 PC 和 SP 重新装载，之后是一条固定链条：硬件从向量表取初始 MSP 与 <code>Reset_Handler</code>，<code>Reset_Handler</code> 调用 <code>SystemInit</code>，再把 <code>.data</code> 从 flash 搬到 RAM、把 <code>.bss</code> 清零、运行 C++ 静态构造，最后进入 <code>main</code>。<code>main</code> 依次初始化 HAL、时钟、外设，启动调度器后不再返回。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant HW as 复位逻辑
+    participant VT as 向量表 0x08000000
+    participant RH as Reset_Handler
+    participant SI as SystemInit
+    participant M as main 与调度器
+    HW->>VT: 读偏移 0 取 MSP
+    HW->>VT: 读偏移 4 取 Reset_Handler
+    VT-->>RH: PC 跳到入口
+    RH->>RH: 设置 SP 并搬运 data 清零 bss
+    RH->>SI: bl SystemInit
+    SI->>SI: 开 FPU 配置向量表条件
+    SI-->>RH: 返回
+    RH->>M: bl __libc_init_array 再 bl main
+    M->>M: HAL_Init 与 SystemClock_Config
+    M->>M: osKernelStart 再不返回</pre></div>
+<p>链条上每一段都能成为分界点：断点放在 <code>Reset_Handler</code> 第一句，能区分硬件复位是否正常；放在 <code>main</code> 首行，能区分静态构造是否跑完。两个断点配合使用，可以把启动期故障缩到一小段代码里。</p>
+<h2 id="4-四处死循环与现场特征">4. 四处死循环与现场特征</h2>
+<p>本工程有三处会让程序停住的死循环，表现相似但成因不同。分清它们才能选对下一步。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>触发条件</th><th>现场特征</th><th>依据</th></tr></thead><tbody><tr><td>DEFAULT 处理</td><td>未实现的中断向量</td><td>PC 落在同一地址反复，外设可能仍在跑</td><td><code>startup_stm32f407xx.s:112-114</code></td></tr><tr><td>硬件错误</td><td>HardFault 等内核异常</td><td>PC 在 <code>HardFault_Handler</code> 内</td><td><code>Core/Src/stm32f4xx_it.c:97,102</code></td></tr><tr><td>断言失败</td><td>FreeRTOS 的 <code>configASSERT</code></td><td>中断被关，PC 在断言展开处</td><td><code>Core/Inc/FreeRTOSConfig.h:122</code></td></tr><tr><td>HAL 错误</td><td>外设初始化返回非 <code>HAL_OK</code></td><td>PC 在 <code>Error_Handler</code>，中断已关</td><td><code>Core/Src/main.c:223-231</code></td></tr></tbody></table>
+<p><code>startup_stm32f407xx.s</code> 把没有实现的异常全部弱别名到 <code>Default_Handler</code>（<code>:241-508</code>），处理器停在 <code>Infinite_Loop</code>。硬件错误处理函数由 CubeMX 生成，循环体为空。<code>Error_Handler</code> 先调 <code>__disable_irq()</code> 再进入空循环。</p>
+<p>四处循环的区别在于是否关中断：DEFAULT 与硬件错误循环通常不关中断，外设与中断仍在工作；断言与 HAL 错误会关中断，串口输出可能随之停止。看到中断已经关闭，就可以把范围收窄到后两处。</p>
+<p>区分还要看进入循环之前的现场：<code>Error_Handler</code> 由外设初始化返回错误触发，调用栈里能看到具体的外设初始化函数；<code>configASSERT</code> 由内核或任务检查触发，调用栈里是 FreeRTOS 内部函数。</p>
+<h2 id="5-停机对时间的扭曲">5. 停机对时间的扭曲</h2>
+<p>调试会改变被观察对象，最直接的是时间。内核停机时 SysTick 不再计数，FreeRTOS 的 tick 暂停；TIM2 作为 HAL 时基不带冻结配置，仍按 168 MHz 时钟来源计数。两者的差值等于停机时长，恢复运行后一次 <code>HAL_GetTick()</code> 可能跳变几百毫秒。</p>
+<p>这类偏差属推断，依据是本工程没有任何写 <code>DBGMCU</code> 冻结位的代码。要确认，可在停机前后各打印一次 <code>HAL_GetTick()</code> 与 <code>xTaskGetTickCount()</code>，比较两者增量。</p>
+<p>排除这层偏差的办法是控制停机次数：把断点设在关键分支而不是循环体里，或用数据观察点只在特定写入时命中。观察时间相关逻辑时，先连续放行一次记录基线，再下断点比较。</p>
+<p>停机偏差对通信类问题的影响尤其明显：CAN 或串口在停机期间收不到中断，恢复后可能出现一次性积压的帧。判断通信是否正常，要在连续运行状态下观察，不能只看断点命中的那几次。</p>
+<h2 id="6-复位路径与时钟前提的行号依据">6. 复位路径与时钟前提的行号依据</h2>
+<p>本工程复位后的实际路径与前文一致：<code>ENTRY(Reset_Handler)</code> 在 <code>STM32F407XX_FLASH.ld:53</code>，向量表 <code>.isr_vector</code> 第一个进 FLASH（<code>:73-78</code>），<code>_estack</code> 取 RAM 末端（<code>:64</code>）；<code>startup_stm32f407xx.s:60-100</code> 完成设 SP、<code>SystemInit</code>、搬 data、清 bss、跑静态构造、进 <code>main</code>。</p>
+<p>向量表没有重定位：<code>Core/Src/system_stm32f4xx.c</code> 的 <code>USER_VECT_TAB_ADDRESS</code> 处于注释状态（<code>:94</code>），对应的 <code>SCB->VTOR</code> 赋值也随条件编译失效（<code>:179-180</code>）。从主 flash 启动时默认映射即可工作；引入 bootloader 后这里必须打开并改链接脚本。</p>
+<p><code>SystemCoreClock</code> 初值是 <code>16000000</code>（<code>system_stm32f4xx.c:137</code>），要等 <code>main</code> 里 <code>SystemClock_Config()</code>（<code>Core/Src/main.c:101,152</code>）把 PLL 打开后才变成 168 MHz。在 <code>SystemClock_Config</code> 之前用 <code>HAL_RCC_GetHCLKFreq()</code> 得到的还是 HSI 频率，基于 DWT 的延时也会随之不准。</p>
+<p>时钟链路的参数是 12 MHz 外部晶振、PLLM 6、PLLN 168、PLLP 2（<code>main.c:165-172</code>，<code>.ioc:374-390</code>）。HSE 不起振时 <code>HAL_RCC_OscConfig</code> 返回错误，<code>main.c:173-175</code> 直接进 <code>Error_Handler</code>，不会带着错误时钟继续跑。若某次改动让程序留在 HSI 上运行，频率从 168 MHz 降到 16 MHz，串口与 CAN 的波特率会整体偏移，属推断。</p>
+<h2 id="7-全局对象构造早于-main">7. 全局对象构造早于 main</h2>
+<p>启动顺序里有一处容易忽略：<code>Task/Src/ImuTask.cpp:19</code> 的 <code>FusionAHRS ahrs(1000.0f)</code> 是全局对象，构造函数在 <code>__libc_init_array</code> 阶段执行，早于 <code>main</code>。如果构造里访问了未初始化的外设，会在进入 <code>main</code> 之前跑飞，PC 看起来已经过了 <code>Reset_Handler</code>，却到不了 <code>main</code> 首行。</p>
+<p>这类故障的定位方式是把断点放在 <code>__libc_init_array</code> 调用处与 <code>main</code> 首行各一处。前者命中而后者不命中，且没有进异常处理，问题就在静态构造阶段。改动方式是让构造不访问外设，把初始化移到任务里。</p>
+<p>本工程的全局对象不止一个，排查时要逐个确认构造体内容。构造体内只做赋值与常量计算的可以保留，涉及 GPIO、串口或传感器的必须挪走。</p>
+<h2 id="8-运行期死循环与两板同名文件的混淆">8. 运行期死循环与两板同名文件的混淆</h2>
+<p>运行期的三处死循环都在源码里：<code>startup_stm32f407xx.s:112-114</code> 的 <code>Default_Handler</code>，<code>Core/Src/stm32f4xx_it.c:97,102</code> 的硬件错误循环，<code>Core/Inc/FreeRTOSConfig.h:122</code> 的断言循环，再加上 <code>Core/Src/main.c:223-231</code> 的 HAL 错误循环。连上调试器后先读 PC，再对照这张表定位。</p>
+<p>两板共享同名文件是调试期的主要混淆来源：<code>.ioc</code>、链接脚本、ELF 都同名，<code>CMakePresets.json</code> 里还有一个指向不存在配置预设的 <code>buildPresets.Debug-1</code>。烧录或下断点前先确认连的是哪块板、载入的是哪份 ELF，用探针序列号选择目标。</p>
+<p>仓库内没有任何 OpenOCD 配置或 IDE 调试配置，因此所有命令都要自建。把常用的 <code>openocd</code> 启动行、GDB 连接行与探针序列号写成本地脚本，是减少重复出错的做法。</p>
+<p>本地脚本不提交到仓库，因此不受两板同名文件的影响。脚本里写清楚目标板名与 ELF 路径的对应关系，可以在多人协作时避免把镜像写到另一块板上。</p>
+<h2 id="9-易错点与排查动作">9. 易错点与排查动作</h2>
+<p>表里的每一行都能对应到第 1 节的一层。排查时按层取行，不要按现象随机取：</p>
+<ul>
+<li>供电与链路层的行优先查，判据便宜且不需要接调试器。</li>
+<li>镜像与启动层的行需要用探针，但判据仍然是二值的。</li>
+<li>运行期的行需要断点与变量观测，代价最高，放在最后。</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>排查动作</th></tr></thead><tbody><tr><td>目标未供电或未共地</td><td>探针报无法连接</td><td>先量 3.3 V 与 GND，再接探针</td></tr><tr><td>连到另一块同名板</td><td>断点打不上，行为对不上源码</td><td>用探针序列号选择目标，核对 ELF 时间戳</td></tr><tr><td>载入 Release 镜像</td><td>行号错位，变量显示已优化</td><td>换 <code>build/Debug/sentriomeni2026.elf</code></td></tr><tr><td><code>reset run</code> 后连 GDB</td><td>断点命中在入口之后</td><td>先 <code>reset halt</code>，在 <code>main</code> 或初始化后下断点</td></tr><tr><td>未实现的中断被触发</td><td>PC 停在 <code>Infinite_Loop</code>，外设仍在动</td><td>看 PC 对应哪个向量，补上中断处理</td></tr><tr><td>HardFault 只看到循环</td><td>不知道异常来源</td><td>读 <code>CFSR</code>、<code>HFSR</code> 与入栈 PC（按 ARM 手册）</td></tr><tr><td>断言失败后没有输出</td><td>中断被关，串口可能已停</td><td>看 PC 与调用栈，回到断言点</td></tr><tr><td>全局对象构造访问外设</td><td>到不了 <code>main</code> 首行</td><td>把 <code>FusionAHRS</code> 的构造移到 <code>main</code> 内或延后</td></tr><tr><td>在 <code>SystemClock_Config</code> 前测频</td><td>DWT 延时与串口速率都不对</td><td>等时钟配置完成后再测量</td></tr><tr><td>高频循环里设断点</td><td>每毫秒命中，无法连续观察</td><td>改条件断点或数据观察点</td></tr><tr><td>观察全局变量显示无效地址</td><td>段被 <code>--gc-sections</code> 回收</td><td>引用一次变量，参考第 3 篇的结论</td></tr><tr><td>烧录中途断电</td><td>扇区写入不完整</td><td>保持供电，必要时整片重烧</td></tr></tbody></table>
+<p>定位顺序建议按第 1 节的分层表自上而下走。每一层用一个最小判据收口：供电看电压，链路看 <code>init</code> 日志，镜像看校验，启动看 PC，运行期看断点。跳层排查会把简单问题复杂化。</p>
+<p>五层排查做完仍无结论时，记录下每层的判据结果再从头看一遍，通常能发现某一层的判据被跳过或判断错误。</p>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>要点</th></tr></thead><tbody><tr><td>分层排查</td><td>供电、链路、镜像、启动、运行期，逐层收口</td></tr><tr><td>复位链条</td><td>向量表取 MSP 与入口，<code>Reset_Handler</code> 后进 <code>main</code></td></tr><tr><td>三条死循环</td><td><code>Default_Handler</code>、硬件错误、<code>configASSERT</code>，另加 <code>Error_Handler</code></td></tr><tr><td>向量表</td><td>未重定位，<code>USER_VECT_TAB_ADDRESS</code> 关闭（<code>system_stm32f4xx.c:94,179</code>）</td></tr><tr><td>时钟前提</td><td><code>SystemCoreClock</code> 初始 16 MHz，配置后才 168 MHz</td></tr><tr><td>停机影响</td><td>SysTick 停、TIM2 走，tick 与 <code>HAL_GetTick</code> 出现偏差（推断）</td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>异常处理保持空循环</td><td>实现简单，不引入额外依赖</td><td>现场信息全靠调试器读取</td></tr><tr><td>全局对象在静态构造阶段初始化</td><td>使用处无需判空</td><td>早于 <code>main</code>，访问外设会跑飞</td></tr><tr><td>两板共用同名工程文件</td><td>复制与同步方便</td><td>调试时容易连错、载错镜像</td></tr></tbody></table>
+<p>排查记录本身也要留档：记录每层判据的结果、探针序列号与载入的 ELF 路径，下次遇到同类现象可以直接对照。</p>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出从零开始连接云台板的最小命令序列，要求能停在 <code>Reset_Handler</code>。列出用到的探针配置文件、传输层选择与 GDB 命令。</li>
+<li><code>reset halt</code> 后 PC 正确，但继续运行到不了 <code>main</code> 首行。列出至少三条可能原因，并给出各自的判据。</li>
+<li>说明 <code>Debug_vars</code> 里的变量在 Watch 窗口显示无效地址的完整原因链，从 <code>volatile</code>、<code>-fdata-sections</code>、<code>--gc-sections</code> 一路讲到调试器取地址。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>设计一个不依赖调试器在线、也不占用 SWO 的现场排障方案：要求能在板子独立运行时记录至少三个控制周期的内部量，给出存储介质、触发条件、写入时机与读取方式，并说明它与本工程已有通道（<code>huart1</code>、USB CDC、DWT）的分工。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/startup_stm32f407xx.s</code></td><td>复位流程、<code>Default_Handler</code>、向量别名（:60-100、:112-114、:241-508）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td>硬件错误处理循环（:97、:102、:112-147）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td><code>Error_Handler</code> 与时钟配置（:101、:152-187、:223-231）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/system_stm32f4xx.c</code></td><td><code>SystemCoreClock</code> 与 VTOR 条件（:94、:137、:167-180）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td><code>configASSERT</code> 与 tick 配置（:64、:122）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/STM32F407XX_FLASH.ld</code></td><td>入口与向量表布局（:53、:64、:73-78）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>全局对象与采样循环（:19、:34、:41）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/CMakePresets.json</code></td><td>两板同名构建预设与 <code>Debug-1</code> 缺陷</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/02-CubeMX%E9%9B%86%E6%88%90%E4%B8%8ECMakePresets/"><span class="k">← 上一篇</span><span class="t">CubeMX集成与CMakePresets</span><span class="d">嵌入式构建与调试 · 3 个文件</span></a><a class="next" href="/tc63/docs/11-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/01-MDP%C2%B7%E8%A7%82%E6%B5%8B%C2%B7%E5%8A%A8%E4%BD%9C%E7%A9%BA%E9%97%B4/"><span class="k">下一篇 →</span><span class="t">MDP·观测·动作空间</span><span class="d">强化学习 · 6 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

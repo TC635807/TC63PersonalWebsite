@@ -1,0 +1,901 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>流水线Pipeline · RAG 与向量检索 · 王宇翔</title><meta name="description" content="一次主题查询进入系统后的完整路径：五个阶段接口如何串联、阶段之间传什么对象、进度事件怎么算、有效来源不足时如何重搜，以及递归探索如何并发展开。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/01-%E6%B5%81%E6%B0%B4%E7%BA%BFPipeline/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="流水线Pipeline · RAG 与向量检索 · 王宇翔"><meta property="og:description" content="一次主题查询进入系统后的完整路径：五个阶段接口如何串联、阶段之间传什么对象、进度事件怎么算、有效来源不足时如何重搜，以及递归探索如何并发展开。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/01-%E6%B5%81%E6%B0%B4%E7%BA%BFPipeline/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/">RAG 与向量检索</a><span class="sep" aria-hidden="true">/</span><span class="now">流水线Pipeline</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>流水线Pipeline</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>五个阶段与流水线骨架</span></a><ul class="toc__heads"><li><a href="#一次查询的五个阶段" data-depth="2" data-heading-j="0">一次查询的五个阶段</a></li><li><a href="#阶段之间用什么对象交接" data-depth="2" data-heading-j="1">阶段之间用什么对象交接</a></li><li><a href="#依赖注入与两种流水线" data-depth="2" data-heading-j="2">依赖注入与两种流水线</a></li><li><a href="#单次查询的推进顺序" data-depth="2" data-heading-j="3">单次查询的推进顺序</a></li><li><a href="#有效来源不足时的重搜" data-depth="2" data-heading-j="4">有效来源不足时的重搜</a></li><li><a href="#递归探索与并发" data-depth="2" data-heading-j="5">递归探索与并发</a></li><li><a href="#资源释放" data-depth="2" data-heading-j="6">资源释放</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>质量门与抓取成本控制</span></a><ul class="toc__heads"><li><a href="#质量门的位置" data-depth="2" data-heading-j="0">质量门的位置</a></li><li><a href="#三道启发式门" data-depth="2" data-heading-j="1">三道启发式门</a></li><li><a href="#一票否决与可审计" data-depth="2" data-heading-j="2">一票否决与可审计</a></li><li><a href="#自检函数" data-depth="2" data-heading-j="3">自检函数</a></li><li><a href="#处理器里的调用点" data-depth="2" data-heading-j="4">处理器里的调用点</a></li><li><a href="#提前终止够用就停" data-depth="2" data-heading-j="5">提前终止：够用就停</a></li><li><a href="#抓取层自己的两层过滤" data-depth="2" data-heading-j="6">抓取层自己的两层过滤</a></li><li><a href="#域名质量记账" data-depth="2" data-heading-j="7">域名质量记账</a></li><li><a href="#阈值是怎么定的" data-depth="2" data-heading-j="8">阈值是怎么定的</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>去重、锚定与向量合并</span></a><ul class="toc__heads"><li><a href="#三层去重的分工" data-depth="2" data-heading-j="0">三层去重的分工</a></li><li><a href="#标题预检为什么能提前" data-depth="2" data-heading-j="1">标题预检为什么能提前</a></li><li><a href="#向量合并的判据" data-depth="2" data-heading-j="2">向量合并的判据</a></li><li><a href="#合并与建链必须分开" data-depth="2" data-heading-j="3">合并与建链必须分开</a></li><li><a href="#软锚定短词才拼标题" data-depth="2" data-heading-j="4">软锚定：短词才拼标题</a></li><li><a href="#领域锚从哪来" data-depth="2" data-heading-j="5">领域锚从哪来</a></li><li><a href="#向量索引与批内信号" data-depth="2" data-heading-j="6">向量索引与批内信号</a></li><li><a href="#归一化标题怎么比" data-depth="2" data-heading-j="7">归一化标题怎么比</a></li><li><a href="#阈值和编码模型的绑定关系" data-depth="2" data-heading-j="8">阈值和编码模型的绑定关系</a></li><li><a href="#三层各自的失效场景" data-depth="2" data-heading-j="9">三层各自的失效场景</a></li><li><a href="#小结" data-depth="2" data-heading-j="10">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="13">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>递归探索与子流水线</span></a><ul class="toc__heads"><li><a href="#探索任务的来源" data-depth="2" data-heading-j="0">探索任务的来源</a></li><li><a href="#主题抽取的约束" data-depth="2" data-heading-j="1">主题抽取的约束</a></li><li><a href="#深度如何限制递归" data-depth="2" data-heading-j="2">深度如何限制递归</a></li><li><a href="#并发子流水线的构造" data-depth="2" data-heading-j="3">并发子流水线的构造</a></li><li><a href="#事件队列与进度聚合" data-depth="2" data-heading-j="4">事件队列与进度聚合</a></li><li><a href="#树方向链接与父指针" data-depth="2" data-heading-j="5">树方向：链接与父指针</a></li><li><a href="#延申搜索入口" data-depth="2" data-heading-j="6">延申搜索入口</a></li><li><a href="#递归展开到第几层" data-depth="2" data-heading-j="7">递归展开到第几层</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">RAG 与向量检索</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>RAG / 流水线 / 阶段接口 / 编排 / 质量门 / 抓取 / 成本控制 / 去重</span></div><h1 class="docs__title">流水线Pipeline</h1><p class="docs__lead">一次主题查询进入系统后的完整路径：五个阶段接口如何串联、阶段之间传什么对象、进度事件怎么算、有效来源不足时如何重搜，以及递归探索如何并发展开。</p></header><section class="dfile" id="file-1" data-file="01-五个阶段与流水线骨架"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-五个阶段与流水线骨架</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/01-流水线Pipeline/01-五个阶段与流水线骨架.md</span></div><div class="dfile__body"><p>输入一个主题词，系统最终给出若干张知识卡片。中间发生的事情由搜索、抓取、生成、入库、再探索五个环节依次推进，其中好几个环节会调用模型，但整条路径远不止一次模型调用。每个环节都可能失败、跳过或提前结束。</p>
+<p>这一页跟着一次查询走完整条路径，说明每个阶段做什么、阶段之间用什么对象交接、失败时怎么回退。理解这条骨架是后续讨论质量门、去重和递归探索的前提。</p>
+<h2 id="一次查询的五个阶段">一次查询的五个阶段</h2>
+<p>流水线的阶段划分写在接口模块的文档注释里（<code>backend/pipeline/stages.py:1-13</code>）：搜索把主题词变成候选来源列表，处理把来源变成正文，构建把正文变成卡片，持久化把卡片写入存储，探索从卡片里抽出相关主题再回到第一步。</p>
+<p>五个阶段各有抽象基类，每个基类只声明自己需要的方法（<code>backend/pipeline/stages.py:85-139</code>）。搜索提供者要实现搜索与关闭；处理器要实现处理与关闭；构建器要实现构建与关闭；持久化只要求同步保存；探索者要实现探索、抽取主题与关闭。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>输入</th><th>输出</th></tr></thead><tbody><tr><td>搜索</td><td>查询词、最大来源数</td><td>来源列表</td></tr><tr><td>处理</td><td>来源列表</td><td>正文列表</td></tr><tr><td>构建</td><td>正文列表、上下文</td><td>卡片</td></tr><tr><td>持久化</td><td>卡片列表</td><td>落库卡片</td></tr><tr><td>探索</td><td>卡片列表</td><td>待探索主题</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["查询词"] --> B["搜索"]
+  B --> C["处理"]
+  C --> D["构建"]
+  D --> E["持久化"]
+  E --> F["探索"]
+  F -->|"新主题"| B
+  E --> G["卡片入库"]</pre></div>
+<h2 id="阶段之间用什么对象交接">阶段之间用什么对象交接</h2>
+<p>阶段之间不传字典，而是传四个数据类（<code>backend/pipeline/stages.py:33-60</code>）：来源结果带网址、标题与摘要；处理结果带来源对象、正文与元数据，并单独保留抓取原文；抓取结果带正文与来源信息；探索任务带查询词、深度与父卡编号。</p>
+<p>处理结果里同时保留正文与抓取原文，是因为下游的卡片生成直接吃原文：注释写明“卡片生成直接基于原文，避免摘要的摘要二次压缩”（<code>backend/pipeline/stages.py:44-45</code>）。这条约定在构建器里被落实为优先取原文、摘要只作兜底（<code>backend/pipeline/defaults.py:287-296</code>）。</p>
+<p>进度也用对象表达。进度模型带阶段名、提示语、百分比、时间戳、当前条目与模型输出，其中模型输出字段让流式生成的中间结果可以直接推到前端（<code>backend/pipeline/stages.py:24-29</code>）。</p>
+<h2 id="依赖注入与两种流水线">依赖注入与两种流水线</h2>
+<p>流水线本身只认识五个阶段接口，具体实现由工厂函数组装（<code>backend/pipeline/factory.py:30-75</code>）。主题查询的流水线按搜索提供者三选一：默认走外部搜索客户端，百度与博查各有自己的来源提供者，处理器统一是抓取加质量门的组合，抓取来源的提前终止数传 2。</p>
+<p>文档查询的流水线换掉的只有两处：来源固定为博查并带百度兜底，处理器换成文档分块抓取（<code>backend/pipeline/factory.py:78-102</code>）。其余三段实现完全相同，这就是阶段接口的价值——替换一段不需要改其他四段。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>组件</th><th>主题查询</th><th>文档查询</th></tr></thead><tbody><tr><td>来源</td><td>三选一</td><td>博查带兜底</td></tr><tr><td>处理器</td><td>网页抓取加质量门</td><td>文档分块</td></tr><tr><td>构建器</td><td>相同</td><td>相同</td></tr><tr><td>持久化</td><td>相同</td><td>相同</td></tr><tr><td>探索者</td><td>相同</td><td>相同</td></tr></tbody></table>
+<h2 id="单次查询的推进顺序">单次查询的推进顺序</h2>
+<p>单次查询在内部函数里按固定顺序推进（<code>backend/pipeline/pipeline.py:551-676</code>）：先做标题预检，再做领域锚定并改写查询词，然后搜索、按域名质量排序、抓取与质量门、必要时重搜、生成卡片。</p>
+<p>每一步都会把进度推进一个固定分值：搜索完成加 0.15，排序加 0.05，处理完成加 0.25，生成完成加 0.35，保存加 0.05（<code>backend/pipeline/pipeline.py:592-608</code>、<code>:676-686</code>）。分值不精确反映耗时，只保证前端进度条单调向前。</p>
+<p>标题预检命中同名卡片时直接返回，连搜索都不发生（<code>:563-575</code>）。这是三层去重里的第一层，后面两层的机制单独成页讨论。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["进入单次查询"] --> B["标题预检"]
+  B -->|"命中"| C["跳过并返回"]
+  B -->|"未命中"| D["短词领域锚定"]
+  D --> E["搜索并排序来源"]
+  E --> F["抓取与质量门"]
+  F --> G{"有效来源够吗?"}
+  G -->|"不够"| H["重搜最多两次"]
+  H --> F
+  G -->|"够"| I["生成卡片"]
+  I --> J["保存并索引向量"]</pre></div>
+<h2 id="有效来源不足时的重搜">有效来源不足时的重搜</h2>
+<p>重搜的目标数按实际请求数自适应，不写死成三：三个来源需要两个合格，五个来源需要三个，一个来源只需要一个，允许一个失败（<code>backend/pipeline/pipeline.py:612-622</code>）。</p>
+<p>目标还要与处理器的提前终止数一致，否则会出现在提前终止于两个合格来源后仍然触发无谓重搜的情况——注释把这条写成了必须对齐的约束（<code>:615-617</code>）。重搜最多两次，新结果要跨尝试去重并过滤已被封禁的域名（<code>:624-652</code>）。</p>
+<h2 id="递归探索与并发">递归探索与并发</h2>
+<p>卡片保存之后，如果当前深度还没到上限，探索者会从卡片内容里抽相关主题（<code>backend/pipeline/pipeline.py:723-742</code>）。每个主题被包装成一个探索任务，深度加一，然后并发执行。</p>
+<p>并发的方式是为每个任务新建一个子流水线，共享同一批阶段实例与存储，各自设置自己的深度（<code>:750-786</code>）。子流水线的事件通过一个有界队列汇总回父流水线，父流水线按完成数推进进度（<code>:787-821</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>默认</th><th>作用</th></tr></thead><tbody><tr><td>最大探索深度</td><td>1</td><td>控制递归层数</td></tr><tr><td>探索并发</td><td>7</td><td>同时展开的子流水线数</td></tr><tr><td>队列容量</td><td>200</td><td>子流水线事件缓冲</td></tr></tbody></table>
+<p>队列容量与超时是配套的：取事件时带超时，超时后继续循环而不是退出，避免某个子流水线卡死导致整体停摆（<code>backend/pipeline/pipeline.py:788-792</code>）。</p>
+<h2 id="资源释放">资源释放</h2>
+<p>流水线提供了统一的关闭方法，按来源、处理器、构建器、探索者的顺序逐个关闭，任一关闭抛错只记日志不中断（<code>backend/pipeline/pipeline.py:883-888</code>）。子流水线在自身任务结束时也调用关闭（<code>:780-781</code>）。</p>
+<p>顺序与构造顺序一致，意味着先释放外部资源再释放内部缓存；单项失败不阻断其余项，是因为关闭阶段的异常不应该影响已经写入存储的卡片。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>流水线由搜索、处理、构建、持久化、探索五个阶段串联。</li>
+<li>阶段之间用数据类交接，处理结果同时保留正文与原文。</li>
+<li>卡片生成吃抓取原文，摘要只作兜底。</li>
+<li>具体实现由工厂注入，主题查询与文档查询只换两段。</li>
+<li>单次查询按标题预检、锚定、搜索、抓取、生成推进并累计进度。</li>
+<li>重搜目标数随实际来源数自适应，且必须与提前终止对齐。</li>
+<li>递归探索用子流水线并发，事件经有界队列汇总。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>阶段拆分</td><td>五个接口</td><td>可单独替换</td><td>需要工厂组装</td></tr><tr><td>正文传递</td><td>原文加摘要双份</td><td>避免二次压缩</td><td>内存占用上升</td></tr><tr><td>重搜目标</td><td>自适应取值</td><td>小请求也能补齐</td><td>逻辑分支变多</td></tr><tr><td>探索并发</td><td>子流水线</td><td>展开快</td><td>需要队列与超时控制</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出五个阶段各自的输入与输出。</li>
+<li>说明处理结果为什么同时保留正文与原文。</li>
+<li>解释重搜目标数为什么不能硬编码成三。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一次“有效来源只有两个、卡片生成质量偏低”的现象，说明可从哪几个参数入手。</li>
+<li>设计一个替换阶段实现的实验，要求不改动其他四段代码。</li>
+<li>论证探索并发从 7 提到 20 时需要同时调整哪些配套参数。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>KnowledgeDiver/</td><td>素材根，正文相对路径均相对它</td></tr><tr><td><code>backend/pipeline/stages.py</code></td><td>阶段接口、数据对象与进度模型</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td>查询推进、重搜、递归探索与释放</td></tr><tr><td><code>backend/pipeline/factory.py</code></td><td>两种流水线的组装</td></tr><tr><td><code>backend/pipeline/defaults.py</code></td><td>各阶段默认实现</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-质量门与抓取成本控制"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-质量门与抓取成本控制</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/01-流水线Pipeline/02-质量门与抓取成本控制.md</span></div><div class="dfile__body"><p>抓取失败有两种形态：一种是拿不到内容，另一种是拿到了内容但没有价值——验证码页、地区限制提示、只剩导航链接的列表页。后一种更麻烦，因为它在链路上看起来是成功的，成本却照样花出去，还会把垃圾文本喂给模型。</p>
+<p>质量门就是为第二种形态准备的。它放在抓取之后、模型之前，用纯字符串启发式先过一遍，把明显没有价值的页面挡在模型调用之外。这一页讲清它的判据与调用位置，以及围绕它的两套成本控制机制。</p>
+<h2 id="质量门的位置">质量门的位置</h2>
+<p>模块注释把位置写得很明确：三道启发式门全部使用标准库、零模型调用，在抓取之后、摘要之前执行，目的是避免为垃圾内容支付模型成本（<code>backend/pipeline/quality_gate.py:1-9</code>）。</p>
+<p>这句话给出了一个设计原则：能用手写规则判定的问题，不要交给模型。判据本身不追求覆盖全部情况，只追求便宜且可解释。</p>
+<h2 id="三道启发式门">三道启发式门</h2>
+<p>门函数接收正文，返回是否通过与未通过原因两个值（<code>backend/pipeline/quality_gate.py:26-38</code>）。三道门依次是：最小长度两百字符；阻断或错误页特征命中两个及以上；链接数超过三十而正文不足两千字符。</p>
+<p>阻断特征表是中英混合的二十个短语，覆盖访问被拒、要求开启脚本、人机验证、频率限制、地区限制、订阅墙、403 与 404 等（<code>:13-20</code>）。第三条门针对导航页：短文本里塞满链接，说明这是一张目录而不是正文。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>门</th><th>判据</th><th>典型拦下的页面</th></tr></thead><tbody><tr><td>最小长度</td><td>少于 200 字符</td><td>占位页、空壳页</td></tr><tr><td>阻断特征</td><td>命中 2 个及以上</td><td>验证码、403、订阅墙</td></tr><tr><td>链接密度</td><td>链接多于 30 且正文少于 2000 字符</td><td>导航与列表页</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["抓取返回正文"] --> B{"长度 >= 200?"}
+  B -->|"否"| R["拒绝: 内容过短"]
+  B -->|"是"| C{"阻断特征命中 >= 2?"}
+  C -->|"是"| R2["拒绝: 疑似阻断页"]
+  C -->|"否"| D{"链接多且文本短?"}
+  D -->|"是"| R3["拒绝: 疑似导航页"]
+  D -->|"否"| E["通过, 进入下一步"]</pre></div>
+<h2 id="一票否决与可审计">一票否决与可审计</h2>
+<p>原实现使用三项加权的复合分，这里简化成任一门槛不满足即拒绝，原因是复合分会把“内容太短”和“疑似阻断”混成一个分数，出问题时说不清到底哪一条不满足（<code>backend/pipeline/quality_gate.py:7-8</code>）。</p>
+<p>一票否决的收益是可解释：拒绝原因字符串直接带上门名与实测数值，比如内容过短会把实际字符数写进去，链接密度会写出链接数与字符数（<code>:30</code>、<code>:37</code>）。日志里出现这条原因时，不需要再去复算分数。</p>
+<h2 id="自检函数">自检函数</h2>
+<p>模块自带一个自检：构造五百字符正常长文应当通过，四字符短文应当被拒且原因包含“过短”，混合阻断特征的文本应当被拒且原因包含“阻断”，五十个链接加短文本应当被拒且原因包含“导航”（<code>backend/pipeline/quality_gate.py:41-54</code>）。</p>
+<p>自检覆盖的是四类边界，其中“通过”与三种“拒绝”各一例。把自检写在模块里，好处是改判据时能立刻发现把正常页面误伤成垃圾的情况。</p>
+<h2 id="处理器里的调用点">处理器里的调用点</h2>
+<p>质量门在处理器的一次抓取流程里位于抓取成功之后（<code>backend/pipeline/defaults.py:218-246</code>）：先取内容，取不到就记一次域名失败并返回空；取到了就调用门函数，不通过同样记一次域名失败并返回空；通过才组装处理结果并计入合格来源数。</p>
+<p>处理结果里正文与原文都指向抓取文本，注释写明摘要层已经不再被消费，卡片生成直接用原文（<code>:237-241</code>）。这一步省掉了一次模型调用，也避免了摘要再摘要造成的二次压缩。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结果</th><th>处理器的动作</th><th>是否计入合格来源</th></tr></thead><tbody><tr><td>抓取失败</td><td>记域名失败，返回空</td><td>否</td></tr><tr><td>质量门拒绝</td><td>记域名失败，返回空</td><td>否</td></tr><tr><td>通过</td><td>组装处理结果</td><td>是</td></tr></tbody></table>
+<h2 id="提前终止够用就停">提前终止：够用就停</h2>
+<p>处理器构造时可以指定一个提前终止数：合格来源达到这个数就停止剩余抓取（<code>backend/pipeline/defaults.py:199-210</code>）。实现方式是每成功一个就检查计数并置位事件，同时并发抓取的任务会监听这个事件，置位后取消排在后面的抓取任务（<code>:234-266</code>）。</p>
+<p>搜索场景的工厂把这个数传成 2，理由写在参数注释里：候选池扩大之后低质站点居多，抓到两个合格来源就够生成卡片，不必逐个抓完（<code>:204-206</code>）。代价是当两个合格来源恰好都偏弱时，卡片输入会比较单薄。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant P as 处理器
+  participant T1 as 抓取任务1
+  participant T2 as 抓取任务2
+  participant T3 as 抓取任务3
+  P->>T1: 并发启动
+  P->>T2: 并发启动
+  P->>T3: 并发启动
+  T1->>P: 质量门通过, 计数1
+  T2->>P: 质量门通过, 计数2
+  P->>P: 置位提前终止事件
+  P->>T3: 取消剩余抓取</pre></div>
+<h2 id="抓取层自己的两层过滤">抓取层自己的两层过滤</h2>
+<p>抓取器还有两道与质量门互补的检查。第一道是短时间窗去重：同一地址十分钟内抓过就跳过，避免并发探索分支重复抓同一页（<code>backend/pipeline/defaults.py:130-143</code>）。第二道是正文长度下限一千字符，低于这个值直接记域名失败（<code>:151-155</code>）。</p>
+<p>注意这个一千字符下限与质量门的两百字符阈值不同，而且位置在质量门之前。前者拦的是“几乎没抓到东西”，后者拦的是“抓到了但没价值”；把两个阈值混用会让质量门的阻断特征失去意义。</p>
+<h2 id="域名质量记账">域名质量记账</h2>
+<p>抓取失败、正文过短、质量门拒绝三种情况都会调用域名质量缓存的失败记录，成功时记录内容长度（<code>backend/pipeline/defaults.py:144-158</code>）。流水线里对这批记录的说明是：连续三次失败会自动封禁域名三十天（<code>backend/pipeline/pipeline.py:610</code>）。</p>
+<p>重搜挑选新结果时也会过滤掉已被封禁的地址（<code>backend/pipeline/pipeline.py:636-640</code>）。这条机制的收益是坏域名会随着失败次数自动淡出候选池，不需要人工维护黑名单。</p>
+<h2 id="阈值是怎么定的">阈值是怎么定的</h2>
+<p>四个阈值都是具体数字：两百字符、两个特征命中、三十个链接、两千字符、一千字符下限（<code>backend/pipeline/quality_gate.py:11-23</code>、<code>backend/pipeline/defaults.py:151</code>）。源码里没有记录这些取值的推导过程，因此按通用做法理解：它们来自对抓取样本的观察，量级正确即可，不必精确。</p>
+<p>调整阈值的正确方式是抽样复核，而不是凭感觉加减。取一批被门拒掉的页面人工判断是否真的没价值，再取一批通过的页面看有没有漏进来的垃圾，两边都统计比例，才能判断该放宽还是收紧。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阈值</th><th>偏严的后果</th><th>偏松的后果</th></tr></thead><tbody><tr><td>两百字符</td><td>短而精的页面被拒</td><td>空壳页进入模型</td></tr><tr><td>两个特征命中</td><td>正常页面被误伤</td><td>阻断页漏过</td></tr><tr><td>三十链接加两千字符</td><td>目录页漏过</td><td>正文页被误伤</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>质量门位于抓取之后、模型之前，零模型调用。</li>
+<li>三道门分别是长度、阻断特征与链接密度。</li>
+<li>一票否决替代复合分，换取可审计的拒绝原因。</li>
+<li>模块自带自检覆盖一例通过与三例拒绝。</li>
+<li>处理器用提前终止数控制只抓够用的合格来源。</li>
+<li>抓取层另有十分钟去重与一千字符下限两道过滤。</li>
+<li>域名连续失败三次自动封禁三十天。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>判据形式</td><td>启发式规则</td><td>便宜且可解释</td><td>覆盖有限</td></tr><tr><td>组合方式</td><td>一票否决</td><td>原因清晰</td><td>不能按分值排序</td></tr><tr><td>抓取数量</td><td>提前终止于 2 个</td><td>省时间</td><td>输入可能偏薄</td></tr><tr><td>域名管理</td><td>失败自动封禁</td><td>免人工维护</td><td>需要缓存与阈值</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出三道质量门各自的判据与典型拦截对象。</li>
+<li>说明一票否决相比复合分的收益。</li>
+<li>解释一千字符下限与两百字符阈值为什么不能合并。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给出一组新的阻断特征词，并说明如何验证它不会误伤正常页面。</li>
+<li>设计一个实验，比较提前终止数取 2 与取 3 时卡片输入长度与生成质量的差别。</li>
+<li>论证域名自动封禁阈值从三次改到五次的影响，并给出需要的监控项。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>KnowledgeDiver/</td><td>素材根，正文相对路径均相对它</td></tr><tr><td><code>backend/pipeline/quality_gate.py</code></td><td>三道门、拒绝原因与自检</td></tr><tr><td><code>backend/pipeline/defaults.py</code></td><td>处理器调用点、抓取过滤与提前终止</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td>域名封禁说明与重搜过滤</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-去重锚定与向量合并"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-去重锚定与向量合并</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/01-流水线Pipeline/03-去重锚定与向量合并.md</span></div><div class="dfile__body"><p>知识库最怕的是同一件事写成好几张卡：标题略不同，内容高度重叠，链接图里还互相指来指去。去重因此被拆到三个不同阶段各设一道闸，判据与代价都不同。</p>
+<p>它们的分工可以用一条原则概括：能用精确匹配解决的不做语义比较，能做语义比较的不等落库。</p>
+<h2 id="三层去重的分工">三层去重的分工</h2>
+<p>第一层在搜索之前：按归一化标题精确查重，命中就连搜索都不发起。第二层在探索主题进入子流水线之前：用向量搜索判断主题是否已被已有卡片覆盖。第三层在落库时：按标题精确查重，跳过后统计跳过数量（<code>backend/pipeline/defaults.py:441-462</code>）。</p>
+<p>三层的代价依次上升：精确查重是纯内存比对，向量合并要编码加检索，落库查重已经太晚——搜索、抓取、生成的钱都花完了。所以设计的取向是把拦截点尽量前移。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>位置</th><th>判据</th><th>代价</th></tr></thead><tbody><tr><td>一</td><td>搜索前</td><td>归一化标题精确匹配</td><td>最低</td></tr><tr><td>二</td><td>探索前</td><td>向量距离小于阈值</td><td>中</td></tr><tr><td>三</td><td>落库时</td><td>标题精确匹配</td><td>最高（已花完）</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["新主题词"] --> B{"标题预检命中?"}
+  B -->|"是"| S1["跳过, 不搜索"]
+  B -->|"否"| C{"向量合并命中?"}
+  C -->|"是"| S2["跳过建卡"]
+  C -->|"否"| D["搜索与生成"]
+  D --> E{"落库查重命中?"}
+  E -->|"是"| S3["跳过并计数"]
+  E -->|"否"| F["写入卡片"]</pre></div>
+<h2 id="标题预检为什么能提前">标题预检为什么能提前</h2>
+<p>单次查询里，预检发生在搜索之前：用归一化标题查已有卡片列表，命中就直接返回并给出一条进度提示（<code>backend/pipeline/pipeline.py:563-575</code>）。这里有一个显式豁免：重新收集同名主题的场景传入不持久化标志，预检放行。</p>
+<p>探索路径里的预检更晚一点出现，但同样在搜索之前（<code>backend/pipeline/pipeline.py:436-447</code>）。同一段注释记录了它的由来：锚定之后查询词变长，稀释了向量相似度，导致距离阈值漏过十三个重复主题，白做约三百秒的搜索与生成，最后才被落库查重拦下；把精确预检提前到搜索前，成本降到零。</p>
+<h2 id="向量合并的判据">向量合并的判据</h2>
+<p>合并阈值是一个模块级常量，语义距离小于 0.40 即认为已被覆盖（<code>backend/pipeline/pipeline.py:34-35</code>）。判定过程是：对主题词编码，在卡片库里取最近的三条，逐一排除源卡自身，若有命中则记录距离并返回命中（<code>:416-434</code>）。</p>
+<p>这个阈值是唯一一个语义层面的判据，因此也最依赖编码质量。注释提到锚定长词会让相似度被稀释，正是阈值漏判的原因（<code>:438-441</code>）。阈值调大能减少重复，但会误合并本来不同但相邻的主题。</p>
+<h2 id="合并与建链必须分开">合并与建链必须分开</h2>
+<p>命中已有卡片时，代码只做跳过，不建链接。注释解释了原因：旧实现会把匹配到的已有卡片当成当前卡片的子卡，而匹配到的往往是上位概念或根卡，于是产生反向边，污染链接与反向链接，导致根卡查询返回空、整棵树构建失败（<code>backend/pipeline/pipeline.py:406-414</code>）。</p>
+<p>注释里给了实测规模：延申搜索“免疫器官”时，“中枢免疫器官”与“免疫系统”的距离是 0.352，建链之后二十七张卡片全部带上反向链接，根卡消失（<code>:411-413</code>）。这一条把“去重”和“建边”两件事的边界划清楚了：重复意味着不建卡，不意味着要建立关系。</p>
+<h2 id="软锚定短词才拼标题">软锚定：短词才拼标题</h2>
+<p>锚定规则只有两行判断：主题词去掉空白后长度不超过四、并且不含中文或英文括号，才需要锚定（<code>backend/pipeline/pipeline.py:37-52</code>）。长度上限与括号判断各挡一类情况——长词自包含，带括号的限定词已经自带领域。</p>
+<p>需要锚定的理由是实测的漂移：建库过程中十三张卡里有六张漂移，例如“Zero”被理解成区块链项目、“毒蛇”被理解成某款游戏、“F-35”被理解成作战识别系统；延申搜索时“瀑布模型”被理解成粒子系统模拟（<code>:43-47</code>）。这些词都短、都没有限定词，正是规则的命中区。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["探索或搜索的主题词"] --> B{"长度 &#x3C;= 4?"}
+  B -->|"否"| C["按原词搜索"]
+  B -->|"是"| D{"含括号限定?"}
+  D -->|"是"| C
+  D -->|"否"| E["拼接领域锚"]
+  E --> F["按带锚词搜索"]</pre></div>
+<h2 id="领域锚从哪来">领域锚从哪来</h2>
+<p>锚的取用有优先级：源卡标题最精确，其次是会话的根卡标题，都没有就返回空（<code>backend/pipeline/pipeline.py:534-549</code>）。第二档针对的是没有源卡、只剩一个短词的搜索场景，注释举的例子是某游戏库里的“Zero”应当锚定到根卡标题。</p>
+<p>拼接前还有一次检查：锚已经在查询词里出现就不重复拼（<code>:584-590</code>）。不持久化的场景同样豁免，因为那类请求搜的正是原卡标题本身，拼上锚反而搜偏（<code>:583</code>）。</p>
+<h2 id="向量索引与批内信号">向量索引与批内信号</h2>
+<p>卡片保存成功之后会统一做一次向量索引：把标题与正文拼成文本编码，写入卡片存储，然后对这批新卡算一个临时信号（<code>backend/pipeline/pipeline.py:697-707</code>）。</p>
+<p>这个信号只用于日志诊断，不是正式质量分。注释写得很清楚：正式评分统一走质量模块的四维评分，而新卡此刻还没挂载链接，拿不到图论信号，所以这里只记录结构与语义的批内成分，权重是结构 0.55 加语义 0.45（<code>:834-864</code>）。另有一个方法专门用来加载已有卡片的向量，供需要全局相似度的场景使用（<code>:866-881</code>）。</p>
+<h2 id="归一化标题怎么比">归一化标题怎么比</h2>
+<p>预检与落库查重都叫“标题查重”，两处用的判据并不相同：预检调用的是归一化精确匹配，落库用的是存储层的标题查询（<code>backend/pipeline/pipeline.py:566-568</code>、<code>backend/pipeline/defaults.py:450</code>）。</p>
+<p>归一化的规则是去空白（含全角）、把中文括号统一成半角、转小写，然后要求两串完全相等（<code>backend/utils/titles.py:14-17</code>）。工具模块的注释给了三组对照：「PID控制」与「PID 控制」判为同一张，「梯度（深度学习）」与「梯度」判为不同，「二阶振荡环节」与「二阶过阻尼系统」判为不同（<code>:5-8</code>）。</p>
+<p>第三组对照说明了这条判据的边界：语义相近但字面不同的标题交给向量层处理，精确层只负责字面完全一致的变体。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>对照</th><th>判据结果</th><th>由谁决定</th></tr></thead><tbody><tr><td>PID控制 与 PID 控制</td><td>同一张</td><td>精确层</td></tr><tr><td>梯度（深度学习） 与 梯度</td><td>不同张</td><td>向量层</td></tr><tr><td>二阶振荡环节 与 二阶过阻尼系统</td><td>不同张</td><td>向量层</td></tr></tbody></table>
+<h2 id="阈值和编码模型的绑定关系">阈值和编码模型的绑定关系</h2>
+<p>0.40 这个距离阈值只在特定的编码模型下成立。换成另一个模型，同一对文本的距离会整体平移，阈值必须重新标定；源码里没有记录这个数字的推导过程，因此按通用做法理解：它来自对一批已知重复与已知不同主题的距离分布观察。</p>
+<p>标定的做法是取两组样本：一组确认应当合并的重复主题，一组确认不应当合并的相邻主题，分别统计距离分布，把分界点放在两组的间隔里。两组靠得太近时，说明当前编码模型分辨不出这类差别，调阈值解决不了问题。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>可能原因</th><th>处理方向</th></tr></thead><tbody><tr><td>重复主题漏合并</td><td>阈值偏小，或锚定稀释了相似度</td><td>重标阈值，先查锚定</td></tr><tr><td>不同主题被合并</td><td>阈值偏大</td><td>收紧阈值，让精确层兜底</td></tr></tbody></table>
+<h2 id="三层各自的失效场景">三层各自的失效场景</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>失效表现</th><th>原因</th></tr></thead><tbody><tr><td>精确预检</td><td>字面不同的同一主题漏过</td><td>判据只看字面</td></tr><tr><td>向量合并</td><td>相邻但不同的主题被误判</td><td>阈值与编码质量</td></tr><tr><td>落库查重</td><td>拦住时成本已经花完</td><td>位置太靠后</td></tr></tbody></table>
+<p>三层都不能单独保证不重复，组合起来的效果是把多数重复挡在花钱之前，把拿不准的留给后面的层处理（<code>backend/pipeline/pipeline.py:436-447</code>）。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>去重分三层：搜索前精确预检、探索前向量合并、落库时标题查重。</li>
+<li>拦截点越靠前，节省的成本越多。</li>
+<li>预检提前的动因是锚定稀释相似度导致向量合并漏判。</li>
+<li>向量合并阈值是 0.40，语义相邻的主题可能被误合并。</li>
+<li>合并命中只跳过建卡，不建链接，因为反向边会污染整棵树。</li>
+<li>软锚定只对四字以内的无括号短词生效。</li>
+<li>领域锚优先取源卡标题，其次是会话根卡标题。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>去重层次</td><td>三层</td><td>兼顾成本与召回</td><td>判据需分别维护</td></tr><tr><td>预检时机</td><td>搜索前</td><td>零成本拦截</td><td>只覆盖精确同名</td></tr><tr><td>合并动作</td><td>跳过不建链</td><td>图结构干净</td><td>重复主题之间无关联</td></tr><tr><td>锚定范围</td><td>仅短词</td><td>减少漂移</td><td>长词漂移无兜底</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出三层去重各自的位置与判据。</li>
+<li>说明合并命中时为什么不建链接。</li>
+<li>列出需要软锚定的两个条件。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一次“重复主题白做三百秒搜索”的现象，说明修复点与验证方式。</li>
+<li>设计一套评估方案，判断向量合并阈值从 0.40 调到 0.35 是否划算。</li>
+<li>论证把锚定规则从长度判断改成词性判断的收益与风险。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>KnowledgeDiver/</td><td>素材根，正文相对路径均相对它</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td>预检、合并、锚定与向量索引</td></tr><tr><td><code>backend/pipeline/defaults.py</code></td><td>落库查重的实现</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-递归探索与子流水线"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-递归探索与子流水线</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/22-RAG 与向量检索/01-流水线Pipeline/04-递归探索与子流水线.md</span></div><div class="dfile__body"><p>主题词只决定第一层卡片，知识库的规模靠第二层撑起来：每张卡里提到的、可以单独成卡的概念再各搜一轮，如此递归。这个机制让一次查询能衍生出几十张卡，也让并发、去重、树结构三件事同时变得复杂。</p>
+<p>这一页讲递归是怎么落地的：主题从哪来、深度怎么限制、并发怎么组织、事件怎么汇总，以及父子关系为什么必须显式维护。</p>
+<h2 id="探索任务的来源">探索任务的来源</h2>
+<p>探索者接口声明了三个方法：流式产出探索任务、按卡片内容抽取主题、关闭（<code>backend/pipeline/stages.py:123-139</code>）。默认实现遍历这批卡片，跳过内容为空的，对每张卡调一次主题抽取，再把每个主题包成带父卡编号的探索任务（<code>backend/pipeline/defaults.py:471-483</code>）。</p>
+<p>探索任务本身是三个字段：查询词、深度、父卡编号（<code>backend/pipeline/stages.py:47-51</code>）。父卡编号让下游能建立父子关系，深度让子流水线知道自己还能不能继续递归。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>作用</th><th>由谁赋值</th></tr></thead><tbody><tr><td>查询词</td><td>子流水线的搜索输入</td><td>主题抽取结果</td></tr><tr><td>深度</td><td>递归层数控制</td><td>父流水线加一</td></tr><tr><td>父卡编号</td><td>建立父子关系</td><td>产出主题的那张卡</td></tr></tbody></table>
+<h2 id="主题抽取的约束">主题抽取的约束</h2>
+<p>抽取主题的提示词给了四条规则：主题要是独立的概念或实体而不是关键词；要具体到可用，例如某款具体车型而不是泛称；要与当前内容的主旨不同；只返回一个主题名列表，条数上限由参数给出（<code>backend/pipeline/prompts.py:31-43</code>）。</p>
+<p>调用时还会传入排除标题与来源标题，默认实现把卡自己的标题作为排除项（<code>backend/pipeline/defaults.py:476-479</code>）。抽取失败被吞掉并跳过这张卡，不让一张卡的问题中断整轮探索（<code>:482-483</code>）。这个选择是合理的：探索是增益环节，任何单点失败都不该影响已经入库的卡片。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["新建卡片"] --> B{"内容非空?"}
+  B -->|"否"| C["跳过"]
+  B -->|"是"| D["抽取相关主题"]
+  D -->|"异常"| C
+  D --> E["逐个包成探索任务"]
+  E --> F["深度 = 当前深度 + 1"]</pre></div>
+<h2 id="深度如何限制递归">深度如何限制递归</h2>
+<p>父流水线在保存卡片之后检查自己的深度：已经等于上限就直接收尾，不再产出探索任务（<code>backend/pipeline/pipeline.py:723-729</code>）。如果探索者一个主题都没抽出来，同样收尾（<code>:736-742</code>）。</p>
+<p>子流水线继承父流水线的最大深度，但把自己的当前深度设成任务带来的深度（<code>:760-771</code>）。深度因此由每个分支各记一份，同一层的多个分支互不影响，没有一条全局计数。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>含义</th><th>默认</th></tr></thead><tbody><tr><td>最大探索深度</td><td>允许的递归层数</td><td>1</td></tr><tr><td>任务深度</td><td>该分支当前层数</td><td>父深度加一</td></tr></tbody></table>
+<h2 id="并发子流水线的构造">并发子流水线的构造</h2>
+<p>并发靠为每个任务新建一个流水线实例实现，各实例共享同一批阶段对象与存储（<code>backend/pipeline/pipeline.py:750-786</code>）。共享是刻意的：搜索客户端、卡片存储都持有连接或缓存，各建一份会浪费资源，也会让去重看不见彼此的新卡。</p>
+<p>每个子流水线跑完或抛错后都会关闭自己，并向队列投一个结束标记（<code>:778-782</code>）。错误只记日志，不向上抛，因为一个分支失败不该让整轮探索失败。</p>
+<p>并发数由信号量限制，默认取七（<code>:750</code>、<code>:77-78</code>）。这个值与主题上限、搜索来源数一起出现在工厂签名的默认参数里（<code>backend/pipeline/factory.py:30-37</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant P as 父流水线
+  participant S as 信号量
+  participant C1 as 子流水线1
+  participant C2 as 子流水线2
+  participant Q as 事件队列
+  P->>S: 提交任务1
+  S->>C1: 获得许可后启动
+  P->>S: 提交任务2
+  S->>C2: 获得许可后启动
+  C1->>Q: 进度与卡片事件
+  C2->>Q: 进度与卡片事件
+  C1->>Q: 结束标记
+  C2->>Q: 结束标记
+  Q->>P: 按完成数聚合进度</pre></div>
+<h2 id="事件队列与进度聚合">事件队列与进度聚合</h2>
+<p>子流水线的事件通过一个有界队列回传，容量二百（<code>backend/pipeline/pipeline.py:751</code>）。父流水线循环取事件，取事件时带超时，超时后继续循环而不退出，避免某个分支静默卡死导致整轮停摆（<code>:788-792</code>）。</p>
+<p>结束标记只做计数，累计到任务总数就结束循环；进度按完成比例推进，并把子流水线的百分比压到 0.99 以内，保证最后一条完成消息能占住 1.0（<code>:794-804</code>）。子流水线的事件被原样转发，卡片与带编号的对象直接向上抛出（<code>:806-815</code>）。</p>
+<p>顺序是不保证的。队列里的事件按到达顺序取出，因此前端看到的卡片顺序与探索任务的顺序无关。</p>
+<h2 id="树方向链接与父指针">树方向：链接与父指针</h2>
+<p>子流水线创建卡片后，父流水线会为每张新卡建一条延申链接，并显式写入父卡编号（<code>backend/pipeline/pipeline.py:709-721</code>）。注释记录了一个失败案例：不能用持久化器的保存方法来更新父指针，因为它的标题查重会把已经入库的卡自己判成重复并跳过，父指针更新被吞掉；实测表现是链接对称正常但新卡的父指针全空（<code>:715-719</code>）。</p>
+<p>这个例子说明去重与结构更新必须用不同入口：去重入口只负责写入新卡，结构变更走存储层的直接更新。两者混用会让副作用互相抵消。</p>
+<h2 id="延申搜索入口">延申搜索入口</h2>
+<p>除了递归路径，还有一条手动延申入口，接收卡片内容与源卡编号（<code>backend/pipeline/pipeline.py:365-372</code>）。它先抽取主题，抽取时要排除源卡标题（<code>:376-389</code>），再对每个主题依次过两道闸：标题预检命中就跳过搜索，向量合并命中就跳过建卡，剩下的进入待探索列表（<code>:436-451</code>）。</p>
+<p>两道闸的命中数会合成一条进度消息告诉用户，去掉了多少、还剩多少（<code>:453-459</code>）。全部被拦下时直接返回完成，一个子流水线都不开（<code>:465-471</code>）。</p>
+<h2 id="递归展开到第几层">递归展开到第几层</h2>
+<p>递归的收益随深度递减：第一层覆盖主题本身，第二层覆盖直接相关的概念，第三层之后多数主题与原点隔了两跳，重复率上升而去重会拦掉大半。深度上限默认取一，意味着只展开一层，正是这个成本的折中（<code>backend/pipeline/pipeline.py:77</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>深度</th><th>典型收益</th><th>主要成本</th></tr></thead><tbody><tr><td>一</td><td>覆盖直接相关概念</td><td>搜索与生成开销</td></tr><tr><td>二</td><td>少量跨域关联</td><td>去重压力上升</td></tr><tr><td>三及以上</td><td>新增少于重复</td><td>时间与接口配额</td></tr></tbody></table>
+<p>不同深度各自的实测收益，本仓库未见对照记录，这里的判断按通用做法给出。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>探索任务由查询词、深度与父卡编号三个字段组成。</li>
+<li>主题抽取要求返回具体概念而非关键词，并排除源卡标题。</li>
+<li>单张卡抽取失败只跳过该卡，不中断整轮。</li>
+<li>深度按分支各记一份，子流水线的上限继承父流水线。</li>
+<li>并发通过为每个任务新建子流水线实现，阶段对象共享。</li>
+<li>事件经有界队列汇总，进度按完成数推进并压在 0.99 以内。</li>
+<li>父指针要用存储层直接更新，不能走标题查重的保存入口。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>并发方式</td><td>每任务一个子流水线</td><td>隔离失败</td><td>实例开销</td></tr><tr><td>阶段对象</td><td>共享</td><td>资源与去重一致</td><td>需保证线程安全</td></tr><tr><td>错误处理</td><td>只记日志</td><td>单点失败不扩散</td><td>问题易被忽略</td></tr><tr><td>顺序</td><td>不保证</td><td>实现简单</td><td>前端需自行排序</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出探索任务的三个字段与各自来源。</li>
+<li>说明深度为什么按分支各记一份而不是全局计数。</li>
+<li>解释父指针为什么不能走保存入口更新。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定“探索轮次结束后卡片顺序混乱”的反馈，说明需要改动的是哪一层。</li>
+<li>设计一个实验，比较并发数 7 与 15 时单位时间新增卡片数与失败率。</li>
+<li>论证把主题上限从 7 提到 20 时，去重与队列容量需要如何配套调整。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>KnowledgeDiver/</td><td>素材根，正文相对路径均相对它</td></tr><tr><td><code>backend/pipeline/pipeline.py</code></td><td>深度控制、子流水线、队列与父指针</td></tr><tr><td><code>backend/pipeline/stages.py</code></td><td>探索者接口与探索任务定义</td></tr><tr><td><code>backend/pipeline/defaults.py</code></td><td>默认探索实现与主题抽取调用</td></tr><tr><td><code>backend/pipeline/prompts.py</code></td><td>主题抽取提示词</td></tr><tr><td><code>backend/pipeline/factory.py</code></td><td>深度与并发默认值</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/21-Agent%20%E4%B8%8E%20LLM/04-%E6%8F%90%E7%A4%BA%E6%B3%A8%E5%85%A5%E9%98%B2%E6%8A%A4/"><span class="k">← 上一篇</span><span class="t">提示注入防护</span><span class="d">Agent 与 LLM · 5 个文件</span></a><a class="next" href="/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/02-%E5%B5%8C%E5%85%A5%E6%A8%A1%E5%9E%8B/"><span class="k">下一篇 →</span><span class="t">嵌入模型</span><span class="d">RAG 与向量检索 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

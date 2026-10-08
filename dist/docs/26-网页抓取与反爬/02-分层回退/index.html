@@ -1,0 +1,632 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>分层回退 · 网页抓取与反爬 · 王宇翔</title><meta name="description" content="Fetcher 按浏览器、trafilatura、指纹 HTTP 三档依次尝试，每档都要过一遍统一验收——长度门槛、错误页识别与状态码核对；验收失败的档位按确定性判据决定要不要重试，最终结果里保留分层尝试记录。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/02-%E5%88%86%E5%B1%82%E5%9B%9E%E9%80%80/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="分层回退 · 网页抓取与反爬 · 王宇翔"><meta property="og:description" content="Fetcher 按浏览器、trafilatura、指纹 HTTP 三档依次尝试，每档都要过一遍统一验收——长度门槛、错误页识别与状态码核对；验收失败的档位按确定性判据决定要不要重试，最终结果里保留分层尝试记录。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/02-%E5%88%86%E5%B1%82%E5%9B%9E%E9%80%80/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/">网页抓取与反爬</a><span class="sep" aria-hidden="true">/</span><span class="now">分层回退</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>分层回退</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>三档抓取路径与结果验收</span></a><ul class="toc__heads"><li><a href="#1-三档的顺序与理由" data-depth="2" data-heading-j="0">1. 三档的顺序与理由</a></li><li><a href="#2-结果结构的字段取舍" data-depth="2" data-heading-j="1">2. 结果结构的字段取舍</a></li><li><a href="#3-入口先做三件事" data-depth="2" data-heading-j="2">3. 入口先做三件事</a></li><li><a href="#4-统一的验收规则" data-depth="2" data-heading-j="3">4. 统一的验收规则</a></li><li><a href="#5-重试的判据与反例" data-depth="2" data-heading-j="4">5. 重试的判据与反例</a></li><li><a href="#6-并发抓取与最终汇总" data-depth="2" data-heading-j="5">6. 并发抓取与最终汇总</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="11">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>浏览器档的重试与最完整结果兜底</span></a><ul class="toc__heads"><li><a href="#1-默认重试两次的依据" data-depth="2" data-heading-j="0">1. 默认重试两次的依据</a></li><li><a href="#2-循环里的三件状态" data-depth="2" data-heading-j="1">2. 循环里的三件状态</a></li><li><a href="#3-未渲染的判据" data-depth="2" data-heading-j="2">3. 未渲染的判据</a></li><li><a href="#4-每轮失败前清空什么" data-depth="2" data-heading-j="3">4. 每轮失败前清空什么</a></li><li><a href="#5-最完整的一次如何兜底" data-depth="2" data-heading-j="4">5. 最完整的一次如何兜底</a></li><li><a href="#6-两处提前收工" data-depth="2" data-heading-j="5">6. 两处提前收工</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="11">本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>静态档与指纹档的降级条件</span></a><ul class="toc__heads"><li><a href="#1-trafilatura-档与域名冷却" data-depth="2" data-heading-j="0">1. trafilatura 档与域名冷却</a></li><li><a href="#2-静态档的超时上限" data-depth="2" data-heading-j="1">2. 静态档的超时上限</a></li><li><a href="#3-指纹-http-档的请求头" data-depth="2" data-heading-j="2">3. 指纹 HTTP 档的请求头</a></li><li><a href="#4-非-200-与异常的处理" data-depth="2" data-heading-j="3">4. 非 200 与异常的处理</a></li><li><a href="#5-档间状态码与错误的保留规则" data-depth="2" data-heading-j="4">5. 档间状态码与错误的保留规则</a></li><li><a href="#6-三档都失败之后" data-depth="2" data-heading-j="5">6. 三档都失败之后</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#本页引用的路径" data-depth="3" data-heading-j="11">本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">网页抓取与反爬</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>分层回退 / 抓取编排 / 结果验收 / 错误页识别 / 浏览器档 / 重试策略 / 结果兜底 / trafilatura</span></div><h1 class="docs__title">分层回退</h1><p class="docs__lead">Fetcher 按浏览器、trafilatura、指纹 HTTP 三档依次尝试，每档都要过一遍统一验收——长度门槛、错误页识别与状态码核对；验收失败的档位按确定性判据决定要不要重试，最终结果里保留分层尝试记录。</p></header><section class="dfile" id="file-1" data-file="01-三档抓取路径与结果验收"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-三档抓取路径与结果验收</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/02-分层回退/01-三档抓取路径与结果验收.md</span></div><div class="dfile__body"><h1 id="三档抓取路径与结果验收">三档抓取路径与结果验收</h1>
+<p>抓一个网页有几条路可走：真浏览器渲染、静态抓取库直取、带完整浏览器指纹的 HTTP 客户端。三条路的能力与成本呈阶梯分布，单靠一条都不够——浏览器最稳但最慢，静态库最快但拿不到 JS 渲染的页面，指纹 HTTP 介于两者之间。</p>
+<p><code>src/better_crawler/fetcher.py</code> 把它们串成一个固定顺序，任何一档拿到合格正文就收工。难点不在”按顺序试”，而在”怎么算拿到了”。一条 200 响应可能是一页错误提示，一段够长的文本可能只是导航加站点说明。</p>
+<p>验收规则因此独立成函数：三档共用一套验收，判定标准决定要不要重试。</p>
+<h2 id="1-三档的顺序与理由">1. 三档的顺序与理由</h2>
+<p>模块注释把分层策略按实测收益排好：浏览器渲染是主路径，因为知乎、CSDN、掘金这类站点只有真浏览器能拿到正文；trafilatura 直取是静态站快路径，约 1 秒，也是浏览器不可用时唯一的依赖；HTTP 加浏览器指纹是二级兜底，补齐 <code>Sec-Ch-Ua</code> 与 <code>Sec-Fetch-*</code> 全套请求头（<code>src/better_crawler/fetcher.py:3</code>）。</p>
+<p>每一档都记录耗时与命中层级，返回给调用方判断，而不是只给一个成功或失败（<code>src/better_crawler/fetcher.py:9</code>）。这条设计决定了结果结构里必须有 <code>tier</code> 与 <code>attempts</code> 两个字段。</p>
+<h2 id="2-结果结构的字段取舍">2. 结果结构的字段取舍</h2>
+<p><code>FetchResult</code>（<code>src/better_crawler/fetcher.py:35</code>）有十一个字段：地址、成功标志、正文、标题、命中档位、状态码、正文字符数、耗时、错误、警告与尝试记录（<code>src/better_crawler/fetcher.py:49</code>）。</p>
+<p>其中 <code>warning</code> 专门留给”拿到了内容但可能不完整”的情形，<code>attempts</code> 是逐档、逐次尝试的流水。对外输出由 <code>to_dict()</code>（<code>src/better_crawler/fetcher.py:51</code>）负责：传入 <code>max_chars</code> 时截断正文（<code>src/better_crawler/fetcher.py:53</code>），并把截断标记合并进 <code>truncated</code> 字段——原本因重试兜底标记的截断与本次按上限截断都算（<code>src/better_crawler/fetcher.py:66</code>）。耗时统一保留两位小数，避免把浮点噪声写进响应。</p>
+<p><code>validate_url()</code> 同时承担规范化职责：它返回的是校验后的地址，后续所有请求都使用这个返回值，而不是调用方传入的原始字符串。</p>
+<h2 id="3-入口先做三件事">3. 入口先做三件事</h2>
+<p><code>fetch()</code>（<code>src/better_crawler/fetcher.py:129</code>）的契约是”始终返回 FetchResult，不抛异常”。开头三步：记录起始时间（<code>src/better_crawler/fetcher.py:131</code>）、调用 <code>validate_url()</code> 做安全检查（<code>src/better_crawler/fetcher.py:135</code>）、取域名用于后续的档位冷却判断（<code>src/better_crawler/fetcher.py:142</code>）。</p>
+<p>安全检查失败时填好错误与耗时直接返回，不进入任何抓取档（<code>src/better_crawler/fetcher.py:137</code>）。安全检查的实现与规则在 26-网页抓取与反爬/04-安全 里展开。域名在这里只做一件事：作为 trafilatura 档冷却表的键（<code>src/better_crawler/fetcher.py:117</code>）。同一域名下的第一个失败会记住时间，之后的请求在冷却期内跳过这一档。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["fetch(url)"] --> B["validate_url 安全检查"]
+  B -->|"不安全"| Z["返回 error"]
+  B -->|"通过"| C["Tier1 浏览器档"]
+  C -->|"验收通过"| Z2["返回 ok"]
+  C -->|"验收失败"| D{"还有尝试次数?"}
+  D -->|"有"| C
+  D -->|"无"| E{"有最完整结果?"}
+  E -->|"有"| F["返回 ok 带 warning"]
+  E -->|"无"| G{"确定性失败?"}
+  G -->|"是"| Z
+  G -->|"否"| H["Tier2 trafilatura"]
+  H -->|"失败"| I["Tier3 httpx 加指纹"]
+  I --> J["汇总错误或返回 ok"]</pre></div>
+<h2 id="4-统一的验收规则">4. 统一的验收规则</h2>
+<p>三档都通过 <code>_consume_html()</code>（<code>src/better_crawler/fetcher.py:281</code>）写结果。它先用 <code>asyncio.to_thread()</code> 调 <code>extract_static()</code> 做提取（<code>src/better_crawler/fetcher.py:297</code>），然后按四条规则验收：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>判据</th><th>处理</th></tr></thead><tbody><tr><td>1</td><td>提取为空或短于 <code>MIN_CONTENT_LENGTH</code></td><td>先识别错误页，再报长度不足</td></tr><tr><td>2</td><td>长度够但命中错误页特征且短于 500 字符</td><td>报错误页原因</td></tr><tr><td>3</td><td>状态码不小于 400</td><td>报状态码说明，附注疑似错误页内容</td></tr><tr><td>4</td><td>以上都不命中</td><td>写入正文、标题、档位并标成功</td></tr></tbody></table>
+<p>长度门槛来自 <code>MIN_CONTENT_LENGTH = 200</code>（<code>src/better_crawler/extract.py:26</code>）。错误页识别走 <code>detect_error_page()</code>（<code>src/better_crawler/extract.py:243</code>）：短文本分支先查它，因为反爬站常返回 200 却在页面里写”页面不存在”，只报”无有效正文”会掩盖真实原因（<code>src/better_crawler/fetcher.py:299</code>）。</p>
+<p>长度够时再查一次，只在文本短于 500 字符时才判定为错误页（<code>src/better_crawler/fetcher.py:323</code>），避免把正文里出现的”404”误判。状态码的归属有一条容易忽略的规则：成功时把状态码写成”拿到正文那一层的值”（<code>src/better_crawler/fetcher.py:346</code>）。</p>
+<p>原因是浏览器层可能先碰到 502，而正文最终来自 trafilatura 层，沿用旧的 502 会误导调用方；该层没提供状态码时就置空表示未知（<code>src/better_crawler/fetcher.py:344</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["_consume_html(html, tier, status)"] --> B["extract_static 提取"]
+  B --> C{"为空或 &#x3C; 200 字符?"}
+  C -->|"是"| D{"命中错误页特征?"}
+  D -->|"是"| E["返回错误页原因"]
+  D -->|"否"| F["状态码说明 或 200 无正文"]
+  C -->|"否"| G{"错误页 且 &#x3C; 500 字符?"}
+  G -->|"是"| H["返回错误页原因"]
+  G -->|"否"| I{"status >= 400?"}
+  I -->|"是"| J["返回状态码说明"]
+  I -->|"否"| K["写入正文 标题 档位 标成功"]</pre></div>
+<h2 id="5-重试的判据与反例">5. 重试的判据与反例</h2>
+<p><code>_worth_retrying()</code>（<code>src/better_crawler/fetcher.py:81</code>）把失败分成两类。应当重试的是临时性问题：状态码 5xx 或 429（<code>src/better_crawler/fetcher.py:90</code>），以及说明文本里带”无有效正文""过短""未渲染”的骨架页（<code>src/better_crawler/fetcher.py:94</code>）。</p>
+<p>不必重试的是确定性失败：4xx 中的 400、403、404 等（<code>src/better_crawler/fetcher.py:92</code>），重试只会浪费一次加载。判据只看状态码与说明文本两类输入，不做网络探测，因此它是纯函数、可单独测试。</p>
+<p>这条判据同时被两处使用：浏览器档循环里决定是否继续（<code>src/better_crawler/fetcher.py:190</code>），以及确定失败时是否直接返回、不再降级（<code>src/better_crawler/fetcher.py:221</code>）。后者尤其重要——一个 404 页面交给后续档位同样拿不到内容。</p>
+<h2 id="6-并发抓取与最终汇总">6. 并发抓取与最终汇总</h2>
+<p><code>fetch_many()</code>（<code>src/better_crawler/fetcher.py:267</code>）用一个信号量限制并发（<code>src/better_crawler/fetcher.py:271</code>），内部逐条调用 <code>fetch()</code> 后用 <code>gather</code> 汇总（<code>src/better_crawler/fetcher.py:277</code>）。<code>gather</code> 保持输入顺序，因此返回值与传入的 URL 列表一一对应，调用方不需要额外记录映射关系。</p>
+<p>单条失败不会影响其他条目，每条结果都带自己的错误原因。所有档位都失败时，错误字段按情况生成：完全没有任何原因时写”所有抓取方式均未取到有效正文”并补一条 <code>none</code> 记录（<code>src/better_crawler/fetcher.py:257</code>）；已有明确原因但正文为空时只补一条汇总记录，保留原始原因（<code>src/better_crawler/fetcher.py:260</code>）。</p>
+<p>验收函数的返回约定是：成功返回 <code>None</code>，失败返回原因字符串。调用方用 <code>if note is None</code> 判断，失败原因不需要额外变量承载。</p>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>只看 <code>ok</code> 不看 <code>warning</code>。兜底返回的成功结果可能不完整。</li>
+<li>用状态码判断正文归属。状态码以拿到正文的那一层为准。</li>
+<li>认为 4xx 重试有意义。除 429 外的 4xx 属于确定性失败。</li>
+<li>忽略错误页识别。200 响应同样可能是一页错误提示。</li>
+<li>把 <code>attempts</code> 当成日志。它是返回给调用方的结构化诊断记录。</li>
+<li>认为 <code>fetch_many()</code> 会按完成顺序返回。结果顺序与输入顺序一致。</li>
+<li>忽略域名冷却表的作用范围。它只影响 trafilatura 档，不影响浏览器档。</li>
+<li>以为重试判据会自己发探测请求。它只读状态码与失败说明。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>档位顺序</td><td>浏览器、trafilatura、指纹 HTTP</td></tr><tr><td>命中标记</td><td><code>tier</code> 字段，取值为三档之一或 <code>none</code></td></tr><tr><td>验收门槛</td><td><code>MIN_CONTENT_LENGTH = 200</code></td></tr><tr><td>错误页识别</td><td>短文本先查，长文本仅在短于 500 字符时判定</td></tr><tr><td>状态码归属</td><td>以拿到正文的那一层为准</td></tr><tr><td>重试判据</td><td>5xx 与 429 应重试，其余 4xx 不该重试</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>失败表达</td><td>始终返回结果对象</td><td>调用方不处理异常</td><td>失败原因要自己读字段</td></tr><tr><td>验收共用</td><td>三档走同一个函数</td><td>规则一致</td><td>档位特有信息要单独传</td></tr><tr><td>错误页识别</td><td>分长度两段判定</td><td>降低误判</td><td>阈值附近的页面可能漏判</td></tr><tr><td>状态码</td><td>跟随命中档位</td><td>不误导调用方</td><td>档位没状态码时丢失信息</td></tr><tr><td>并发抓取</td><td>单条独立返回</td><td>一条失败不影响其他</td><td>没有整体预算控制</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>提取结果 150 字符且状态码为 200 时，<code>_consume_html()</code> 会走哪条分支？</li>
+<li>状态码 403 的页面会触发浏览器档重试吗？说明判据。</li>
+<li>三档都失败且没有任何错误原因时，错误字段写什么？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>验收规则里的 500 字符错误页阈值是硬编码的。设计一个可配置方案，并说明它对不同站点的影响。</li>
+<li><code>fetch_many()</code> 只限制并发数，没有整体超时。给出一个带总预算的改造方案。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/fetcher.py</code></td><td>分档编排、结果结构与验收规则</td></tr><tr><td><code>src/better_crawler/extract.py</code></td><td>长度门槛、错误页识别与正文提取</td></tr><tr><td><code>src/better_crawler/safety.py</code></td><td>入口的 URL 安全检查</td></tr><tr><td><code>src/better_crawler/browser.py</code></td><td>浏览器档的调用对象</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-浏览器档的重试与最完整结果兜底"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-浏览器档的重试与最完整结果兜底</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/02-分层回退/02-浏览器档的重试与最完整结果兜底.md</span></div><div class="dfile__body"><h1 id="浏览器档的重试与最完整结果兜底">浏览器档的重试与最完整结果兜底</h1>
+<p>浏览器渲染”成功”不等于内容正确。有些站点的正文靠接口异步填充，而接口会概率性失败，页面停在只有导航与页脚的骨架状态：HTTP 状态正常、HTML 也拿回来了，提取出来的正文却短得不像文章。</p>
+<p><code>src/better_crawler/fetcher.py</code> 的浏览器档专门处理这种情形——重试，但重试的方式有讲究。降级到后两档的条件在 03-静态档与指纹档的降级条件，验收规则本身在 01-三档抓取路径与结果验收。重试循环有三个设计点：什么时候判定”没渲染出来”、每次重试前清空什么、以及为什么最终要返回”最完整的一次”。</p>
+<h2 id="1-默认重试两次的依据">1. 默认重试两次的依据</h2>
+<p><code>browser_retries</code> 默认值为 2（<code>src/better_crawler/fetcher.py:107</code>），构造时再夹一次非负（<code>src/better_crawler/fetcher.py:116</code>），循环因此最多跑三次（<code>src/better_crawler/fetcher.py:151</code>）。</p>
+<p>注释给出了这个数值的来源：实测万方这类站点单次成功率约一半，两次重试后成功率明显提升，而耗时可控（<code>src/better_crawler/fetcher.py:114</code>）。</p>
+<p>重试只针对一类失败，而不是所有失败。注释把目标写清楚：内容疑似没渲染出来时重试，因为接口概率性失败，重试通常能拿到（<code>src/better_crawler/fetcher.py:144</code>）。</p>
+<p>这一条把重试与”页面本身不存在”区分开——后者在第一次就会短路。循环是串行的：上一轮结束后才发起下一轮，因此同一 URL 的重试不会并发占用两个页面槽位。</p>
+<h2 id="2-循环里的三件状态">2. 循环里的三件状态</h2>
+<p>循环体只维护三样东西：最完整结果 <code>best</code>（<code>src/better_crawler/fetcher.py:149</code>）、上一轮失败说明 <code>last_note</code>（<code>src/better_crawler/fetcher.py:150</code>）、以及每轮新建的 <code>PageFetch</code> 结果容器（<code>src/better_crawler/fetcher.py:153</code>）。</p>
+<p>状态码在每轮取回后写入总结果，只保留最后一次的值（<code>src/better_crawler/fetcher.py:157</code>）。每轮先判断有没有 HTML：拿不到时写说明、补一条失败记录并直接跳出循环（<code>src/better_crawler/fetcher.py:159</code>）。浏览器不可用、整体超时、页面加载失败都属于这一类，重试没有意义，因为原因不在页面内容上。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["进入浏览器档"] --> B["attempt = 0"]
+  B --> C["PageFetch + fetch_html_guarded"]
+  C --> D{"拿到 HTML?"}
+  D -->|"否"| E["记录原因 跳出循环"]
+  D -->|"是"| F["_consume_html 验收"]
+  F --> G{"验收通过?"}
+  G -->|"是"| H{"looks_unrendered?"}
+  H -->|"否"| I["记成功并返回"]
+  H -->|"是"| J["更新 best 继续重试"]
+  G -->|"否"| K{"最后一轮或重试无意义?"}
+  K -->|"是"| L["跳出循环"]
+  K -->|"否"| M["_clear_extracted 后重来"]
+  J --> M</pre></div>
+<p>判据的输入同时包含 HTML 与正文，是因为有些骨架页的 HTML 里能看出端倪，而有些只能靠正文字符数判断。</p>
+<h2 id="3-未渲染的判据">3. 未渲染的判据</h2>
+<p>验收通过之后还有一道检查：<code>looks_unrendered()</code>（<code>src/better_crawler/extract.py:276</code>）同时看 HTML 与提取出的正文（<code>src/better_crawler/fetcher.py:172</code>）。</p>
+<p>它返回假时才算这次尝试成功，补一条成功记录并立刻返回（<code>src/better_crawler/fetcher.py:174</code>）。判定为未渲染时，说明文本写成”正文仅 N 字符，疑似未渲染出内容”（<code>src/better_crawler/fetcher.py:180</code>）。</p>
+<p>这条文本不只是给人看的：后面的重试判据会读它，因为文本里带”未渲染”（<code>src/better_crawler/fetcher.py:94</code>）。判据与说明文本耦合在一起，改动措辞会影响重试行为，这是当前实现里需要留意的一处隐性依赖。清理与验收函数之间存在分工：验收负责写结果，清理负责把结果恢复到未成功的初始态，两者都不负责保存历史。</p>
+<h2 id="4-每轮失败前清空什么">4. 每轮失败前清空什么</h2>
+<p>重试前调用 <code>_clear_extracted()</code>（<code>src/better_crawler/fetcher.py:71</code>），它把成功标志、正文、标题、字符数、档位与错误全部复位（<code>src/better_crawler/fetcher.py:73</code>），但保留 <code>attempts</code> 记录（<code>src/better_crawler/fetcher.py:72</code>）。</p>
+<p>清空的目的是让下一轮从干净状态验收，避免把上一轮的残留正文字符数带进这一轮的判据。这条清理与 <code>best</code> 的保留是两套逻辑：<code>best</code> 在外层单独保存最完整的一次（<code>src/better_crawler/fetcher.py:170</code>），清理不碰它。也就是说”清空”针对当前轮次的验收状态，“保留”针对跨轮次的最优结果。</p>
+<p><code>best</code> 只保存正文与标题两个字段，状态码与错误原因不进它，因此兜底结果的状态码来自最后一次尝试。</p>
+<h2 id="5-最完整的一次如何兜底">5. 最完整的一次如何兜底</h2>
+<p>循环结束时若 <code>best</code> 里有内容，就把结果标成功、写回正文与标题、档位记为 <code>browser</code>，并清掉错误字段（<code>src/better_crawler/fetcher.py:196</code>）。</p>
+<p>同时写入一条警告，内容是最后一轮的说明加上”已返回最完整的一次结果”与该次字符数与总尝试次数（<code>src/better_crawler/fetcher.py:203</code>）。</p>
+<p><code>best</code> 只在比当前内容更长时才更新（<code>src/better_crawler/fetcher.py:170</code>）。兜底之后直接返回，不再尝试后面的档位。注释给出的理由是：后续档拿到的是同一份 HTML 的更差提取结果，降级只会把内容换得更少（<code>src/better_crawler/fetcher.py:211</code>）。这条判断把”内容不完整”与”内容不存在”分开处理，前者宁可少也不要空。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant F as Fetcher
+  participant E as BrowserEngine
+  participant X as extract
+  F->>E: 第 1 次 fetch_html_guarded
+  E-->>F: HTML 骨架
+  F->>X: 提取 得 120 字符
+  F->>F: best 更新为 120 字符
+  F->>F: _clear_extracted
+  F->>E: 第 2 次 fetch_html_guarded
+  E-->>F: HTML 完整
+  F->>X: 提取 得 1800 字符
+  F->>F: looks_unrendered 为假
+  F-->>F: 标成功并返回</pre></div>
+<p>两处短路都在循环内部判断，外层只负责在循环结束后决定是否降级。</p>
+<h2 id="6-两处提前收工">6. 两处提前收工</h2>
+<p>第一处是验收通过且未判定未渲染（<code>src/better_crawler/fetcher.py:172</code>），立即返回，不做多余尝试。第二处是验收失败但失败确定性明显：<code>_worth_retrying()</code> 返回假或已是最后一轮时跳出循环（<code>src/better_crawler/fetcher.py:190</code>），随后由外层判断是否直接返回而不降级（<code>src/better_crawler/fetcher.py:221</code>）。</p>
+<p>两处短路共同控制最坏耗时：正常页面一次命中，骨架页最多三次尝试，404 这类页面只试一次。剩下的情况才继续向下走。重试的代价是时间：三轮浏览器抓取的最坏耗时接近三轮整体超时。抓取层因此把它当成同一档内的行为，而不是跨档重试的替代。</p>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>以为每轮失败都会丢弃内容。最完整的一次保存在 <code>best</code> 里。</li>
+<li>改动未渲染说明的措辞。它同时被重试判据用作关键词。</li>
+<li>认为拿到 HTML 就算成功。还要过验收与未渲染两道检查。</li>
+<li>忽略兜底结果的 <code>warning</code>。它提示内容可能不完整。</li>
+<li>以为兜底之后还会继续降级。拿到内容即返回，不再向下走。</li>
+<li>认为重试是并发发起的。循环串行执行，一轮结束才发下一轮。</li>
+<li>忽略 <code>best</code> 的更新条件。只有更长时才覆盖。</li>
+<li>把 <code>_clear_extracted()</code> 当成清空 <code>attempts</code>。尝试记录会被保留。</li>
+<li>认为兜底结果的状态码来自最完整的那次。它来自最后一次尝试。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>重试次数</td><td>默认 2 次，最多三轮</td></tr><tr><td>触发条件</td><td>正文疑似未渲染</td></tr><tr><td>跨轮保留</td><td><code>best</code> 保存最完整的一次</td></tr><tr><td>轮内清理</td><td><code>_clear_extracted()</code> 复位成功状态，保留 <code>attempts</code></td></tr><tr><td>兜底结果</td><td>标成功并写 <code>warning</code>，不再降级</td></tr><tr><td>短路条件</td><td>验收通过，或失败确定性明显</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>重试目标</td><td>只针对未渲染</td><td>不浪费确定失败的加载</td><td>其他临时故障不重试</td></tr><tr><td>结果保留</td><td>取最长的一次</td><td>内容不丢</td><td>可能保留不完整内容</td></tr><tr><td>兜底后停止</td><td>不再降级</td><td>避免拿到更差的提取</td><td>放弃其他档位可能更完整的正文</td></tr><tr><td>说明文本</td><td>兼作判据关键词</td><td>少一个字段</td><td>措辞与逻辑耦合</td></tr><tr><td>循环方式</td><td>串行重试</td><td>不占用额外页面槽位</td><td>最坏耗时线性增长</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li><code>browser_retries = 2</code> 时循环最多执行几次？写出取值范围。</li>
+<li>第 2 轮提取 120 字符、第 3 轮提取 900 字符但都被判未渲染时，<code>best</code> 里是哪一次？</li>
+<li>兜底返回的结果里 <code>error</code> 与 <code>warning</code> 分别是什么？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>说明文本兼作重试判据是一处隐性耦合。给出一个用结构化字段替代关键词匹配的改造方案。</li>
+<li>当前取”最长的一次”作为兜底。设计一个按内容质量而非长度挑选的方案，并说明判据来源。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/fetcher.py</code></td><td>重试循环、清理与兜底</td></tr><tr><td><code>src/better_crawler/extract.py</code></td><td>未渲染判据与正文提取</td></tr><tr><td><code>src/better_crawler/browser.py</code></td><td>每次尝试的抓取实现</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-静态档与指纹档的降级条件"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-静态档与指纹档的降级条件</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/02-分层回退/03-静态档与指纹档的降级条件.md</span></div><div class="dfile__body"><h1 id="静态档与指纹档的降级条件">静态档与指纹档的降级条件</h1>
+<p>浏览器档之后的两个档位承担”轻量”职责：trafilatura 直接取 HTML 并就地提取，通常一秒内返回；httpx 档补齐一整套浏览器请求头发请求，用来对付那些只靠请求头就能通过的站点。两档都不启动 Chromium，因此它们也是浏览器不可用时的全部退路。</p>
+<p>这两档的进入条件不同：trafilatura 档会被域名冷却表拦下，httpx 档只要开关打开就会尝试。它们的失败处理也不同：trafilatura 失败即标记域名冷却，httpx 失败则把状态码翻译成说明写进结果。两档的开关、超时、请求头与状态码处理各不相同。</p>
+<h2 id="1-trafilatura-档与域名冷却">1. trafilatura 档与域名冷却</h2>
+<p>进入这一档需要两个条件同时成立：<code>use_static</code> 为真，且该域名不在冷却期内（<code>src/better_crawler/fetcher.py:226</code>）。冷却表是一个域名到时间戳的字典（<code>src/better_crawler/fetcher.py:117</code>），判定函数比较当前时间与记录时间的差值是否小于 600 秒（<code>src/better_crawler/fetcher.py:413</code>），这个常量定义在模块顶部（<code>src/better_crawler/fetcher.py:32</code>）。</p>
+<p>注释解释了冷却的用途：反爬站的 trafilatura 必失败，TTL 内跳过可以省掉每次几秒的试错（<code>src/better_crawler/fetcher.py:31</code>）。标记动作在两个失败点各调用一次——trafilatura 档验收失败后（<code>src/better_crawler/fetcher.py:233</code>），以及 httpx 档验收失败后（<code>src/better_crawler/fetcher.py:243</code>）。第二处用同一个冷却表，说明”该域名静态抓取不管用”这个结论对两档共享。</p>
+<h2 id="2-静态档的超时上限">2. 静态档的超时上限</h2>
+<p><code>_fetch_static()</code>（<code>src/better_crawler/fetcher.py:353</code>）把超时夹到 5 到 15 秒之间：<code>fast = min(max(self.timeout, 5), 15)</code>（<code>src/better_crawler/fetcher.py:357</code>）。</p>
+<p>抓取层默认超时 25 秒（<code>src/better_crawler/fetcher.py:103</code>），如果不夹，静态档会占掉比浏览器档还长的时间，失去”快路径”的意义。调用方式是把同步函数丢进线程池再套超时：<code>asyncio.wait_for(asyncio.to_thread(trafilatura.fetch_url, url), timeout=fast)</code>（<code>src/better_crawler/fetcher.py:358</code>）。</p>
+<p>超时与一般异常分开处理，两者都只记 debug 日志并返回 <code>None</code>（<code>src/better_crawler/fetcher.py:362</code>、<code>:365</code>），因此这一档失败从不抛出。</p>
+<h2 id="3-指纹-http-档的请求头">3. 指纹 HTTP 档的请求头</h2>
+<p><code>_fetch_httpx()</code>（<code>src/better_crawler/fetcher.py:369</code>）的文档字符串写着这套头的来历：缺 <code>Sec-Ch-Ua</code>、<code>Sec-Fetch-*</code> 或 HTTP/2 时，CSDN 这类站会概率性返回 521，这套头是实测补出来的（<code>src/better_crawler/fetcher.py:372</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>头字段</th><th>取值要点</th><th>作用</th></tr></thead><tbody><tr><td><code>User-Agent</code></td><td>Chrome 126 桌面版</td><td>与客户端提示头版本一致</td></tr><tr><td><code>Accept</code></td><td>含 html、xml 与通配</td><td>模拟文档导航</td></tr><tr><td><code>Accept-Language</code></td><td>中文优先</td><td>与语言偏好一致</td></tr><tr><td><code>Referer</code></td><td>目标站根地址</td><td>模拟站内跳转</td></tr><tr><td><code>Sec-Ch-Ua</code></td><td>Chromium 126</td><td>客户端提示，反爬识别重点</td></tr><tr><td><code>Sec-Ch-Ua-Mobile</code></td><td><code>?0</code></td><td>声明非移动设备</td></tr><tr><td><code>Sec-Ch-Ua-Platform</code></td><td><code>"Windows"</code></td><td>与 UA 平台一致</td></tr><tr><td><code>Sec-Fetch-Dest</code></td><td><code>document</code></td><td>声明导航请求</td></tr><tr><td><code>Sec-Fetch-Mode</code></td><td><code>navigate</code></td><td>声明顶层导航</td></tr><tr><td><code>Sec-Fetch-Site</code></td><td><code>same-site</code></td><td>声明站内来源</td></tr><tr><td><code>Upgrade-Insecure-Requests</code></td><td><code>1</code></td><td>允许升级到 HTTPS</td></tr></tbody></table>
+<p>客户端参数三项：超时同样夹到 15 秒以内、跟随重定向、启用 HTTP/2（<code>src/better_crawler/fetcher.py:401</code>）。HTTP/2 是这套头能否生效的前提之一，文档字符串把它与请求头并列提出。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["浏览器档失败"] --> B{"use_static 且域名未冷却?"}
+  B -->|"是"| C["_fetch_static 超时 5-15s"]
+  C --> D{"拿到 HTML?"}
+  D -->|"是"| E["验收"]
+  E -->|"通过"| Z["返回 ok"]
+  E -->|"失败"| F["标记域名冷却"]
+  D -->|"否"| F
+  B -->|"否"| F
+  F --> G{"use_httpx?"}
+  G -->|"是"| H["_fetch_httpx 带完整指纹"]
+  H --> I{"状态码 200?"}
+  I -->|"是"| J["验收"]
+  J -->|"通过"| Z
+  J -->|"失败"| K["标记冷却并补说明"]
+  I -->|"否"| L["状态码转说明"]
+  G -->|"否"| M["汇总失败原因"]
+  K --> M
+  L --> M</pre></div>
+<h2 id="4-非-200-与异常的处理">4. 非 200 与异常的处理</h2>
+<p>httpx 档只在状态码为 200 时返回正文，其余状态码连同状态码本身一起返回给上层（<code>src/better_crawler/fetcher.py:405</code>）。抓取入口对这一分支单独处理：状态码不小于 400 时调用 <code>describe_status()</code> 生成说明、补一条失败记录、在没有错误时写入该说明，并在状态码为空时写入状态码（<code>src/better_crawler/fetcher.py:248</code> 至 <code>:253</code>）。</p>
+<p>网络异常在 httpx 档内部被吞掉并返回 <code>(None, None)</code>（<code>src/better_crawler/fetcher.py:407</code>）。也就是说连接失败、DNS 失败这类问题不会带状态码上来，结果的错误原因只能来自其他档位或最终汇总。</p>
+<p>这是当前实现的一个信息缺口：httpx 档的网络错误没有经过 <code>describe_browser_error()</code> 那条翻译路径。</p>
+<h2 id="5-档间状态码与错误的保留规则">5. 档间状态码与错误的保留规则</h2>
+<p>结果对象的状态码在每个档位取回后都会更新：浏览器档每轮写入（<code>src/better_crawler/fetcher.py:157</code>），httpx 档在拿到响应时写入（<code>src/better_crawler/fetcher.py:253</code>）。</p>
+<p>正文验收成功时，<code>_consume_html()</code> 会把状态码改写成命中档位的值（<code>src/better_crawler/fetcher.py:346</code>），因此最终状态码总是指向”正文来自哪一档”。错误字段的规则是”先到先留”：httpx 档只在结果还没有错误时才写入自己的说明（<code>src/better_crawler/fetcher.py:244</code>）。这让浏览器档的具体失败原因不会被后一档的笼统说明覆盖。</p>
+<h2 id="6-三档都失败之后">6. 三档都失败之后</h2>
+<p>函数末尾统一收尾：记录总耗时（<code>src/better_crawler/fetcher.py:256</code>）。没有任何错误原因时写”所有抓取方式均未取到有效正文”，并补一条 <code>none</code> 档记录（<code>src/better_crawler/fetcher.py:257</code>）；已有原因但正文为空时只补一条汇总记录，不改写原因（<code>src/better_crawler/fetcher.py:260</code>）。两种情形的差别在于前者是”无信息失败”，后者是”有明确原因但内容为空”。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant F as Fetcher
+  participant T as trafilatura
+  participant H as httpx
+  F->>T: fetch_url 超时 5-15s
+  T-->>F: HTML 或无
+  alt 提取失败
+    F->>F: 标记域名冷却 600s
+    F->>H: 带指纹 GET
+    H-->>F: 200 与 HTML
+    F->>F: 验收与汇总
+  end</pre></div>
+<p>两档都没有重试：静态档失败即写冷却，指纹档失败即汇总，重试只存在于浏览器档。</p>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>以为冷却表只影响一次请求。它按域名记录，600 秒内同域名都跳过静态档。</li>
+<li>把静态档的超时当成抓取层超时。它会夹到 5 至 15 秒。</li>
+<li>删掉请求头里的 <code>Sec-Fetch-*</code>。注释明确写了这套头是实测补出来的。</li>
+<li>期待 httpx 档带回网络错误原因。异常路径返回空元组，没有说明。</li>
+<li>认为后一档会覆盖前一档的错误。错误字段遵循先到先留。</li>
+</ul>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>静态档开关</td><td><code>use_static</code> 且域名未冷却</td></tr><tr><td>冷却窗口</td><td>600 秒，键为域名</td></tr><tr><td>静态档超时</td><td>夹在 5 到 15 秒之间</td></tr><tr><td>指纹档开关</td><td><code>use_httpx</code></td></tr><tr><td>指纹要点</td><td>客户端提示头、<code>Sec-Fetch-*</code> 与 HTTP/2 三者配套</td></tr><tr><td>非 200 处理</td><td>返回状态码，由入口翻译成说明</td></tr><tr><td>收尾</td><td>无原因时写统一失败文本并补 <code>none</code> 记录</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>域名冷却</td><td>失败后记 600 秒</td><td>省掉反复试错</td><td>站点恢复后仍被跳过</td></tr><tr><td>静态档超时</td><td>独立夹取到 15 秒</td><td>保住快路径定位</td><td>慢站点直接放弃</td></tr><tr><td>请求头</td><td>完整指纹加 HTTP/2</td><td>通过部分反爬站</td><td>头字段需要与 UA 版本同步维护</td></tr><tr><td>错误保留</td><td>先到先留</td><td>保留最有信息量的原因</td><td>后续档位的原因可能被吞</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>静态档在抓取层超时为 25 秒时实际使用多少秒？写出计算式。</li>
+<li>同一域名第一次静态抓取失败后，下一次请求会跳过这一档多久？</li>
+<li>httpx 档返回状态码 404 时，结果里的错误文本来自哪里？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>httpx 档的网络异常没有翻译路径。给出一个把异常文本接入 <code>describe_browser_error()</code> 的改造方案。</li>
+<li>冷却表是进程内字典，重启即失效。分析多进程部署下的影响并给出一个共享冷却状态的方案。</li>
+</ol>
+<h3 id="本页引用的路径">本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>src/better_crawler/fetcher.py</code></td><td>两档的开关、超时、请求头与汇总</td></tr><tr><td><code>src/better_crawler/errors.py</code></td><td>状态码说明的翻译</td></tr><tr><td><code>src/better_crawler/browser.py</code></td><td>前序档位的实现</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/01-Playwright%E6%B5%8F%E8%A7%88%E5%99%A8%E6%B8%B2%E6%9F%93/"><span class="k">← 上一篇</span><span class="t">Playwright浏览器渲染</span><span class="d">网页抓取与反爬 · 4 个文件</span></a><a class="next" href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/03-%E5%8F%8D%E7%88%AC%E4%B8%8E%E6%B5%8F%E8%A7%88%E5%99%A8%E6%8C%87%E7%BA%B9/"><span class="k">下一篇 →</span><span class="t">反爬与浏览器指纹</span><span class="d">网页抓取与反爬 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

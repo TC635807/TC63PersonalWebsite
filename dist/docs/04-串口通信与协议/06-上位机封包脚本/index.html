@@ -1,0 +1,1735 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>上位机封包脚本 · 串口通信与协议 · 王宇翔</title><meta name="description" content="视觉小电脑与云台板之间走 USB CDC 的 29 字节与 43 字节两帧，逐字段给出偏移、取值与固件的收发点"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/06-%E4%B8%8A%E4%BD%8D%E6%9C%BA%E5%B0%81%E5%8C%85%E8%84%9A%E6%9C%AC/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="上位机封包脚本 · 串口通信与协议 · 王宇翔"><meta property="og:description" content="视觉小电脑与云台板之间走 USB CDC 的 29 字节与 43 字节两帧，逐字段给出偏移、取值与固件的收发点"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/06-%E4%B8%8A%E4%BD%8D%E6%9C%BA%E5%B0%81%E5%8C%85%E8%84%9A%E6%9C%AC/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/">串口通信与协议</a><span class="sep" aria-hidden="true">/</span><span class="now">上位机封包脚本</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>上位机封包脚本</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>视觉链路协议回顾</span></a><ul class="toc__heads"><li><a href="#1-sp-协议与它的物理载体" data-depth="2" data-heading-j="0">1. SP 协议与它的物理载体</a></li><li><a href="#2-视觉下行帧29-字节逐字段" data-depth="2" data-heading-j="1">2. 视觉下行帧：29 字节逐字段</a></li><li><a href="#3-云台上行帧43-字节逐字段" data-depth="2" data-heading-j="2">3. 云台上行帧：43 字节逐字段</a></li><li><a href="#4-两个方向的-mode-字段各有一套枚举" data-depth="2" data-heading-j="3">4. 两个方向的 mode 字段各有一套枚举</a></li><li><a href="#5-常量packed-与-static_assert" data-depth="2" data-heading-j="4">5. 常量、packed 与 static_assert</a></li><li><a href="#6-从-cdc-中断到-vision_data-的接收链路" data-depth="2" data-heading-j="5">6. 从 CDC 中断到 vision_data 的接收链路</a></li><li><a href="#7-每-10-ms-一帧的发送链路" data-depth="2" data-heading-j="6">7. 每 10 ms 一帧的发送链路</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="9">10. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="10">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>封包脚本与 CRC16</span></a><ul class="toc__heads"><li><a href="#1-封包脚本是协议的第二份规格" data-depth="2" data-heading-j="0">1. 封包脚本是协议的第二份规格</a></li><li><a href="#2-152-行脚本的五个部分" data-depth="2" data-heading-j="1">2. 152 行脚本的五个部分</a></li><li><a href="#3-struct-格式串-3b6f-的逐字符拆解" data-depth="2" data-heading-j="2">3. struct 格式串 &lt;3B6f 的逐字符拆解</a></li><li><a href="#4-查表-crc16-与-init0xffff" data-depth="2" data-heading-j="3">4. 查表 CRC16 与 init=0xFFFF</a></li><li><a href="#5-默认参数下的-29-字节实跑输出" data-depth="2" data-heading-j="4">5. 默认参数下的 29 字节实跑输出</a></li><li><a href="#6-封包脚本与固件-crc16-的逐行对照" data-depth="2" data-heading-j="5">6. 封包脚本与固件 CRC16 的逐行对照</a></li><li><a href="#7-易错点" data-depth="2" data-heading-j="6">7. 易错点</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="8">9. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="9">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>解码脚本与校验</span></a><ul class="toc__heads"><li><a href="#1-解码脚本面向整帧" data-depth="2" data-heading-j="0">1. 解码脚本面向整帧</a></li><li><a href="#2-158-行脚本的六个部分" data-depth="2" data-heading-j="1">2. 158 行脚本的六个部分</a></li><li><a href="#3-十六进制输入的宽容提取" data-depth="2" data-heading-j="2">3. 十六进制输入的宽容提取</a></li><li><a href="#4-长度帧头crc-三道检查" data-depth="2" data-heading-j="3">4. 长度、帧头、CRC 三道检查</a></li><li><a href="#5-3b9fh-与-3b4f5fh-的等价性" data-depth="2" data-heading-j="4">5. &lt;3B9fH 与 &lt;3B4f5fH 的等价性</a></li><li><a href="#6-43-字节样例的实跑输出" data-depth="2" data-heading-j="5">6. 43 字节样例的实跑输出</a></li><li><a href="#7-模式名映射与固件枚举的冲突" data-depth="2" data-heading-j="6">7. 模式名映射与固件枚举的冲突</a></li><li><a href="#8-固件里没有-43-字节解码器" data-depth="2" data-heading-j="7">8. 固件里没有 43 字节解码器</a></li><li><a href="#9-易错点" data-depth="2" data-heading-j="8">9. 易错点</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="10">11. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="11">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>与固件结构体一致性</span></a><ul class="toc__heads"><li><a href="#1-内存布局的两种描述" data-depth="2" data-heading-j="0">1. 内存布局的两种描述</a></li><li><a href="#2-c-默认对齐插入的填充字节" data-depth="2" data-heading-j="1">2. C 默认对齐插入的填充字节</a></li><li><a href="#3-python-前缀--与--的差别" data-depth="2" data-heading-j="2">3. Python 前缀 @ 与 &lt; 的差别</a></li><li><a href="#4-ieee754-小端与-uint16-小端" data-depth="2" data-heading-j="3">4. IEEE754 小端与 uint16 小端</a></li><li><a href="#5-两个包的字段偏移对照" data-depth="2" data-heading-j="4">5. 两个包的字段偏移对照</a></li><li><a href="#51-视觉云台29-字节" data-depth="3" data-heading-j="5">5.1 视觉→云台，29 字节</a></li><li><a href="#52-云台视觉43-字节" data-depth="3" data-heading-j="6">5.2 云台→视觉，43 字节</a></li><li><a href="#6-落地两份结构体与-static_assert" data-depth="2" data-heading-j="7">6. 落地：两份结构体与 static_assert</a></li><li><a href="#7-死代码里的大端读法" data-depth="2" data-heading-j="8">7. 死代码里的大端读法</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="9">8. 易错点</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="10">9. 小结</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="12">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-上位机与固件之间的四层排查思路" data-depth="2" data-heading-j="0">1. 上位机与固件之间的四层排查思路</a></li><li><a href="#2-十二项已知问题清单" data-depth="2" data-heading-j="1">2. 十二项已知问题清单</a></li><li><a href="#3-crc-注释冲突与清零语句的作用" data-depth="2" data-heading-j="2">3. CRC 注释冲突与清零语句的作用</a></li><li><a href="#4-对齐浮点与长度写死的三处差异" data-depth="2" data-heading-j="3">4. 对齐、浮点与长度写死的三处差异</a></li><li><a href="#5-死代码与空操作" data-depth="2" data-heading-j="4">5. 死代码与空操作</a></li><li><a href="#6-队列容量与重同步弱点" data-depth="2" data-heading-j="5">6. 队列容量与重同步弱点</a></li><li><a href="#7-调试手段crc-自检与基准帧" data-depth="2" data-heading-j="6">7. 调试手段：CRC 自检与基准帧</a></li><li><a href="#8-crc-失败路径的两种结果" data-depth="2" data-heading-j="7">8. CRC 失败路径的两种结果</a></li><li><a href="#9-易错点速查" data-depth="2" data-heading-j="8">9. 易错点速查</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="10">11. 练习</a></li><li><a href="#附本页引用的固件路径" data-depth="3" data-heading-j="11">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">串口通信与协议</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>串口通信 / USB CDC / 视觉链路 / SP协议 / 帧格式 / Python / struct / CRC16</span></div><h1 class="docs__title">上位机封包脚本</h1><p class="docs__lead">视觉小电脑与云台板之间走 USB CDC 的 29 字节与 43 字节两帧，逐字段给出偏移、取值与固件的收发点</p></header><section class="dfile" id="file-1" data-file="01-视觉链路协议回顾"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-视觉链路协议回顾</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/06-上位机封包脚本/01-视觉链路协议回顾.md</span></div><div class="dfile__body"><h1 id="视觉链路协议回顾">视觉链路协议回顾</h1>
+<p>云台板固件根目录是 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>。视觉链路的协议常量与两个数据包结构在 <code>Communication/Inc/usb_protocol.h</code>，接收状态机在 <code>Communication/Src/usb_decode.cpp</code>，收发任务在 <code>Task/Src/UsbConnectTask.cpp</code>，仓库根目录另有一份协议文本 <code>云台串口协议.md</code>。</p>
+<p>封包脚本在 <code>02-封包脚本与CRC16</code>，解码脚本在 <code>03-解码脚本与校验</code>，结构体对照在 <code>04-与固件结构体一致性</code>，问题清单在 <code>05-易错点与调试</code>。协议本身是这四篇的共同底稿，先把帧布局与字段讲清楚。</p>
+<h2 id="1-sp-协议与它的物理载体">1. SP 协议与它的物理载体</h2>
+<p>视觉链路是云台板与视觉计算单元之间的全双工数据通道。视觉侧下发期望瞄准角，云台侧回传姿态与弹道状态。两帧的帧头固定为字符 <code>S</code> 与 <code>P</code>，这套协议在代码里因此被叫作 SP 协议。</p>
+<p>物理层是 STM32F407 的 USB OTG FS 外设，枚举成 CDC 类虚拟串口。固件不调用 USART 外设完成这条链路的收发，两端看到的是一个字节流。链路的方向与规模：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方向</th><th>总长</th><th>主要内容</th><th>发送方</th><th>接收方</th></tr></thead><tbody><tr><td>视觉→云台</td><td>29 字节</td><td>控制模式与 6 个期望量</td><td>视觉小电脑</td><td>云台板</td></tr><tr><td>云台→视觉</td><td>43 字节</td><td>云台模式、四元数、角度、弹道</td><td>云台板</td><td>视觉小电脑</td></tr></tbody></table>
+<p>两帧的共同结构是：两字节帧头，一字节模式，中间若干小端字段，尾部两字节 CRC16。帧头之后所有多字节字段都是小端。USB 本身有包边界，但 CDC 在主机侧只暴露字节流，所以协议层仍然自己划帧，这一点与 USART 链路相同。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    V["视觉小电脑"] -->|"USB CDC 批量端点"| U["STM32 USB OTG FS"]
+    U --> R["CDC_Receive_FS"]
+    R --> Q["usbRxQueue 字节队列"]
+    Q --> T["UsbConnectTask::run"]
+    T --> D["USBDecode::feed"]
+    D --> P["VisionToGimbal 结构体"]
+    P --> VD["vision_data"]
+    VD --> C["ControlCenterTask 与 GimbalTask"]
+    T --> BB["USBProtocol::buildFrame"]
+    BB --> TX["CDC_Transmit_FS"]
+    TX -->|"43 字节"| V</pre></div>
+<h2 id="2-视觉下行帧29-字节逐字段">2. 视觉下行帧：29 字节逐字段</h2>
+<p>固定 29 字节，结构名为 <code>VisionToGimbal</code>。字段与偏移：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>长度</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0</td><td>1</td><td><code>uint8_t</code></td><td><code>head[0]</code></td><td>帧头 <code>'S'</code>，即 0x53</td></tr><tr><td>1</td><td>1</td><td><code>uint8_t</code></td><td><code>head[1]</code></td><td>帧头 <code>'P'</code>，即 0x50</td></tr><tr><td>2</td><td>1</td><td><code>uint8_t</code></td><td><code>mode</code></td><td>控制模式，取值见下表</td></tr><tr><td>3~6</td><td>4</td><td><code>float</code></td><td><code>yaw</code></td><td>期望 yaw 角，弧度</td></tr><tr><td>7~10</td><td>4</td><td><code>float</code></td><td><code>yaw_vel</code></td><td>期望 yaw 角速度，弧度每秒</td></tr><tr><td>11~14</td><td>4</td><td><code>float</code></td><td><code>yaw_acc</code></td><td>期望 yaw 角加速度，弧度每二次方秒</td></tr><tr><td>15~18</td><td>4</td><td><code>float</code></td><td><code>pitch</code></td><td>期望 pitch 角，弧度</td></tr><tr><td>19~22</td><td>4</td><td><code>float</code></td><td><code>pitch_vel</code></td><td>期望 pitch 角速度</td></tr><tr><td>23~26</td><td>4</td><td><code>float</code></td><td><code>pitch_acc</code></td><td>期望 pitch 角加速度</td></tr><tr><td>27~28</td><td>2</td><td><code>uint16_t</code></td><td><code>crc16</code></td><td>CRC16，覆盖偏移 0 到 26</td></tr></tbody></table>
+<p><code>mode</code> 使用 <code>ControlMode</code> 枚举（<code>Communication/Inc/usb_protocol.h:24-28</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取值</th><th>枚举名</th><th>含义</th><th>固件消费点</th></tr></thead><tbody><tr><td>0</td><td><code>NONE</code></td><td>不控制</td><td><code>ControlCenterTask.cpp:68</code> 的条件不成立</td></tr><tr><td>1</td><td><code>CONTROL</code></td><td>控制但不开火</td><td>写角度目标</td></tr><tr><td>2</td><td><code>CONTROL_FIRE</code></td><td>控制且开火</td><td>写角度目标并触发摩擦轮与拨弹</td></tr></tbody></table>
+<p>视觉数据落到全局 <code>vision_data</code>（<code>Task/Src/UsbConnectTask.cpp:61</code>），<code>ControlCenterTask</code> 在每周期读它（<code>Task/Src/ControlCenterTask.cpp:68-79</code>）：<code>mode</code> 为 1 或 2 时把 <code>vision_data.yaw</code> 与 <code>vision_data.pitch</code> 乘 <code>RAD_TO_DEG</code> 写入 <code>control_target</code>，<code>mode</code> 为 2 时额外开火。</p>
+<h2 id="3-云台上行帧43-字节逐字段">3. 云台上行帧：43 字节逐字段</h2>
+<p>固定 43 字节，结构名为 <code>GimbalToVision</code>。字段与偏移：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>长度</th><th>类型</th><th>字段</th><th>说明</th></tr></thead><tbody><tr><td>0</td><td>1</td><td><code>uint8_t</code></td><td><code>head[0]</code></td><td>帧头 0x53</td></tr><tr><td>1</td><td>1</td><td><code>uint8_t</code></td><td><code>head[1]</code></td><td>帧头 0x50</td></tr><tr><td>2</td><td>1</td><td><code>uint8_t</code></td><td><code>mode</code></td><td>云台模式，取值见下表</td></tr><tr><td>3~6</td><td>4</td><td><code>float</code></td><td><code>q[0]</code></td><td>四元数 w</td></tr><tr><td>7~10</td><td>4</td><td><code>float</code></td><td><code>q[1]</code></td><td>四元数 x</td></tr><tr><td>11~14</td><td>4</td><td><code>float</code></td><td><code>q[2]</code></td><td>四元数 y</td></tr><tr><td>15~18</td><td>4</td><td><code>float</code></td><td><code>q[3]</code></td><td>四元数 z</td></tr><tr><td>19~22</td><td>4</td><td><code>float</code></td><td><code>yaw</code></td><td>云台 yaw 角，弧度</td></tr><tr><td>23~26</td><td>4</td><td><code>float</code></td><td><code>yaw_vel</code></td><td>云台 yaw 角速度</td></tr><tr><td>27~30</td><td>4</td><td><code>float</code></td><td><code>pitch</code></td><td>云台 pitch 角，弧度</td></tr><tr><td>31~34</td><td>4</td><td><code>float</code></td><td><code>pitch_vel</code></td><td>云台 pitch 角速度</td></tr><tr><td>35~38</td><td>4</td><td><code>float</code></td><td><code>bullet_speed</code></td><td>当前弹速，米每秒</td></tr><tr><td>39~40</td><td>2</td><td><code>uint16_t</code></td><td><code>bullet_count</code></td><td>累计发射弹数</td></tr><tr><td>41~42</td><td>2</td><td><code>uint16_t</code></td><td><code>crc16</code></td><td>CRC16，覆盖偏移 0 到 40</td></tr></tbody></table>
+<p>四元数按 w、x、y、z 的顺序连续排布，共 16 字节，紧接模式字节。这个顺序在结构体注释与 <code>云台串口协议.md</code> 里一致，视觉侧按同序解读。</p>
+<h2 id="4-两个方向的-mode-字段各有一套枚举">4. 两个方向的 mode 字段各有一套枚举</h2>
+<p>43 字节帧的 <code>mode</code> 使用 <code>GimbalMode</code> 枚举（<code>Communication/Inc/usb_protocol.h:31-36</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取值</th><th>枚举名</th><th>含义</th></tr></thead><tbody><tr><td>0</td><td><code>FREE</code></td><td>空闲</td></tr><tr><td>1</td><td><code>AIM</code></td><td>自瞄</td></tr><tr><td>2</td><td><code>SMALL</code></td><td>小符</td></tr><tr><td>3</td><td><code>BIG</code></td><td>大符</td></tr></tbody></table>
+<p>云台板当前只在自瞄与否之间切换：<code>Task/Src/UsbConnectTask.cpp:119-122</code> 在 <code>control_target.friction_ready</code> 为真时填 1，否则填 0。2 与 3 在本工程没有写入点，属未启用取值。两个方向的 <code>mode</code> 都在偏移 2，长度都是一字节，但语义完全不同，解析时不能共用一张表。</p>
+<h2 id="5-常量packed-与-static_assert">5. 常量、packed 与 static_assert</h2>
+<p>两个长度常量与帧头写在 <code>Communication/Inc/usb_protocol.h:18-21</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> constexpr </span><span style="color:#D73A49">uint8_t</span><span style="color:#24292E"> FRAME_HEAD_0 </span><span style="color:#D73A49">=</span><span style="color:#032F62"> 'S'</span><span style="color:#24292E">;</span><span style="color:#6A737D"> // 0x53</span></span>
+<span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> constexpr </span><span style="color:#D73A49">uint8_t</span><span style="color:#24292E"> FRAME_HEAD_1 </span><span style="color:#D73A49">=</span><span style="color:#032F62"> 'P'</span><span style="color:#24292E">;</span><span style="color:#6A737D"> // 0x50</span></span>
+<span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> constexpr </span><span style="color:#D73A49">size_t</span><span style="color:#24292E">  VISION_TO_GIMBAL_LEN </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 29</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> constexpr </span><span style="color:#D73A49">size_t</span><span style="color:#24292E">  GIMBAL_TO_VISION_LEN </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 43</span><span style="color:#24292E">;</span></span></code></pre>
+<p>两个结构体都带 <code>__attribute__((packed))</code>（<code>usb_protocol.h:39-52</code> 与 <code>55-70</code>）。文件末尾用 <code>static_assert</code> 把编译期尺寸钉死（<code>usb_protocol.h:73-77</code>），结构体字段一旦错位就无法通过编译：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6F42C1">static_assert</span><span style="color:#24292E">(</span><span style="color:#D73A49">sizeof</span><span style="color:#24292E">(VisionToGimbal) </span><span style="color:#D73A49">==</span><span style="color:#24292E"> VISION_TO_GIMBAL_LEN,</span></span>
+<span class="line"><span style="color:#032F62">              "VisionToGimbal packet size mismatch"</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#6F42C1">static_assert</span><span style="color:#24292E">(</span><span style="color:#D73A49">sizeof</span><span style="color:#24292E">(GimbalToVision) </span><span style="color:#D73A49">==</span><span style="color:#24292E"> GIMBAL_TO_VISION_LEN,</span></span>
+<span class="line"><span style="color:#032F62">              "GimbalToVision size mismatch"</span><span style="color:#24292E">);</span></span></code></pre>
+<p>断言只能保证总长，字段同长度换序不会触发。改动线格式时，除了这两个结构体，还要同步 <code>Task/Inc/UsbConnectTask.h</code> 里的第二份定义与两个 Python 脚本。</p>
+<h2 id="6-从-cdc-中断到-vision_data-的接收链路">6. 从 CDC 中断到 vision_data 的接收链路</h2>
+<p>USB 接收中断 <code>CDC_Receive_FS</code>（<code>USB_DEVICE/App/usbd_cdc_if.c:261-283</code>）把收到的每个字节用 <code>xQueueSendFromISR</code> 投进 <code>usbRxQueue</code>（<code>usbd_cdc_if.c:270-274</code>）。队列在 <code>Core/Src/freertos.c:114</code> 创建，深度 128、元素 1 字节。</p>
+<p><code>UsbConnectTask::run</code> 从队列取字节喂给 <code>usb_decoder</code>（<code>Task/Src/UsbConnectTask.cpp:82-100</code>），解析成功后把字段搬进 <code>vision_data</code>。整条接收路径：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant PC as 视觉小电脑
+    participant CDC as CDC_Receive_FS
+    participant Q as usbRxQueue
+    participant T as UsbConnectTask
+    participant D as USBDecode
+    PC->>CDC: 一帧 29 字节
+    CDC->>Q: 逐字节 xQueueSendFromISR
+    Q->>T: xQueueReceive
+    T->>D: feed(byte)
+    D-->>T: 收满 29 字节且 CRC 通过时返回真
+    T->>T: 写入 vision_data
+    Note over T: 每 10 ms 组一帧 43 字节
+    T->>CDC: CDC_Transmit_FS 发送
+    CDC->>PC: 43 字节云台帧</pre></div>
+<h2 id="7-每-10-ms-一帧的发送链路">7. 每 10 ms 一帧的发送链路</h2>
+<p>云台侧每 10 ms 组一帧（<code>UsbConnectTask.cpp:105-150</code>）。模式按 <code>friction_ready</code> 决定（<code>UsbConnectTask.cpp:119-122</code>），姿态用 <code>eulerToQuaternion</code>（<code>UsbConnectTask.cpp:19-41</code>）从欧拉角转换，弹速与弹数取全局 <code>AmmoSpeed</code>、<code>TotalAmmoShooted</code>（<code>UsbConnectTask.cpp:130-140</code>）。组帧由 <code>USBProtocol::buildFrame</code> 完成（<code>Communication/Src/usb_protocol.cpp:11-49</code>）：填字段、把 <code>pkt.crc16</code> 清零、对前 41 字节算 CRC16、把结果写回 <code>pkt.crc16</code>，返回 43。发送用 <code>CDC_Transmit_FS</code>，遇 <code>USBD_BUSY</code> 时 <code>osDelay(5)</code> 重试（<code>UsbConnectTask.cpp:143-149</code>）。</p>
+<p>同一份协议在 <code>Task/Inc/UsbConnectTask.h</code> 里还有一份 <code>#pragma pack(push, 1)</code> 的 C 结构体副本（<code>UsbConnectTask.h:41-79</code>）和三个长度宏（<code>UsbConnectTask.h:18-23</code>）。宏与 typedef 定义了但没有其它调用点，实际参与编译的尺寸约束来自 <code>usb_protocol.h</code> 的 <code>static_assert</code>。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<ul>
+<li>把 43 字节帧按 29 字节解析。<code>USBDecode</code> 的缓冲区与收满判据都写死 29（<code>Communication/Inc/usb_decode.h:36</code>、<code>Communication/Src/usb_decode.cpp:69</code>），只服务视觉→云台方向；43 字节帧由固件组好直接送出，PC 侧另有解码脚本。</li>
+<li>混淆两个方向的 <code>mode</code> 语义。29 字节帧的 <code>mode</code> 是 <code>ControlMode</code>，43 字节帧的 <code>mode</code> 是 <code>GimbalMode</code>，两者在取值 1、2 上含义完全不同。</li>
+<li>改动结构体字段顺序或类型后忘记重新对齐。<code>static_assert</code> 会拦下长度变化，但对同长度换序不会报错。</li>
+<li>忽略 <code>GIMBAL_TO_VISION_SIZE</code> 宏未被使用这一事实，改宏而不改 <code>usb_protocol.h</code> 的常量。长度约束以 <code>usb_protocol.h</code> 为准。</li>
+</ul>
+<h2 id="9-小结">9. 小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>物理链路</td><td>USB CDC 虚拟串口，不走 USART</td></tr><tr><td>帧头</td><td><code>'S'</code> 加 <code>'P'</code>，即 0x53 0x50</td></tr><tr><td>视觉→云台</td><td>29 字节，CRC 覆盖 27 字节</td></tr><tr><td>云台→视觉</td><td>43 字节，CRC 覆盖 41 字节</td></tr><tr><td>字节序</td><td>全部小端，浮点为 IEEE754 单精度</td></tr><tr><td>模式字段</td><td>两个方向各有一套枚举</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>双向都用固定长度</td><td>接收端不需要长度字段，状态机简单</td><td>增删字段必须两端同时改</td></tr><tr><td>尾部 CRC16 只覆盖数据区</td><td>校验计算不依赖自己的输出</td><td>长度常量写错时校验不会报错，只会整帧失败</td></tr><tr><td>结构体 <code>packed</code> 加 <code>static_assert</code></td><td>编译期挡住错位</td><td>每次改字段都要重新核对两侧长度</td></tr><tr><td>帧头用可打印字符</td><td>抓包时肉眼可辨</td><td>载荷中出现同字节能造成假同步，靠 CRC 兜底</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题：</p>
+<ol>
+<li>29 字节帧的 <code>yaw</code> 字段落在哪几个偏移；若把 <code>mode</code> 改成 <code>uint16_t</code> 而不改 CRC 覆盖长度，会先在哪一层出错。</li>
+<li>写出 <code>ControlMode</code> 与 <code>GimbalMode</code> 在取值 2 上各自的含义，并指出固件里哪个文件写、哪个文件读 <code>vision_data.mode</code>。</li>
+<li>43 字节帧中 <code>q[4]</code> 占多少字节，从哪一偏移开始。</li>
+</ol>
+<p>挑战题：</p>
+<ol>
+<li>依据 <code>Communication/Src/usb_protocol.cpp:41-45</code> 计算 CRC 的输入范围，说明为什么把 <code>pkt.crc16</code> 清零不影响 CRC 结果。</li>
+<li>若要新增一个 40 字节的云台→视觉帧版本并把 <code>GimbalMode</code> 扩到 4 个以上取值，列出需要同时改动的常量、结构体与 <code>static_assert</code> 位置。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+<ul>
+<li><code>Communication/Inc/usb_protocol.h:18-77</code></li>
+<li><code>Communication/Src/usb_protocol.cpp:11-49</code></li>
+<li><code>Communication/Inc/usb_decode.h:36</code></li>
+<li><code>Communication/Src/usb_decode.cpp:69</code></li>
+<li><code>Task/Src/UsbConnectTask.cpp:19-41</code>、<code>61</code>、<code>82-100</code>、<code>105-150</code></li>
+<li><code>Task/Inc/UsbConnectTask.h:18-23</code>、<code>41-79</code></li>
+<li><code>Task/Src/ControlCenterTask.cpp:68-79</code></li>
+<li><code>USB_DEVICE/App/usbd_cdc_if.c:261-283</code></li>
+<li><code>Core/Src/freertos.c:114</code></li>
+<li><code>云台串口协议.md</code></li>
+</ul></div></section><section class="dfile" id="file-2" data-file="02-封包脚本与CRC16"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-封包脚本与CRC16</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/06-上位机封包脚本/02-封包脚本与CRC16.md</span></div><div class="dfile__body"><h1 id="封包脚本与-crc16">封包脚本与 CRC16</h1>
+<p>脚本位于云台板固件仓库根目录：<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/generate_gimbal_packet.py</code>，共 152 行。它按 <code>云台串口协议.md</code> 与 <code>Communication/Inc/usb_protocol.h</code> 生成视觉→云台方向的 29 字节帧。</p>
+<p>反向的 43 字节解析在 <code>03-解码脚本与校验</code>，两侧结构体与 C 对齐的对照在 <code>04-与固件结构体一致性</code>。脚本自身的结构、格式串与 CRC 实现在这里拆开，末尾附一次实跑输出并核对到固件。</p>
+<h2 id="1-封包脚本是协议的第二份规格">1. 封包脚本是协议的第二份规格</h2>
+<p>封包脚本的作用是把一组人给的物理量变成一段可以直接写进串口或 USB 的字节。它同时充当协议的第二份规格：当固件结构体改动而脚本没跟上时，脚本会先发出错误的帧，固件只能靠 CRC 拒收。</p>
+<p>脚本只生成视觉→云台方向。它的输入是控制模式与 6 个期望量，输出是 29 字节，其中最后两字节是 CRC16。脚本不带命令行参数，<code>main()</code> 里写死一组演示值，改参数要动源码。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["入参 mode, yaw, yaw_vel, yaw_acc, pitch, pitch_vel, pitch_acc"] --> B["struct.pack('&#x3C;3B6f', ...)"]
+    B --> C["27 字节 data_without_crc"]
+    C --> D["crc16_calc(data_without_crc)"]
+    D --> E["默认 init=0xFFFF"]
+    E --> F["struct.pack('&#x3C;H', crc)"]
+    C --> G["拼接"]
+    F --> G
+    G --> H["29 字节 packet"]</pre></div>
+<h2 id="2-152-行脚本的五个部分">2. 152 行脚本的五个部分</h2>
+<p><code>generate_gimbal_packet.py</code> 从顶到底由五部分组成：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>行号</th><th>内容</th><th>作用</th></tr></thead><tbody><tr><td>10</td><td>一行注释</td><td>声称多项式 0x8005、初始 0x0000，与代码不符</td></tr><tr><td>11-34</td><td><code>CRC16_TABLE</code></td><td>256 项查表，反射式生成</td></tr><tr><td>36-47</td><td><code>crc16_calc(data, init=0xFFFF)</code></td><td>查表算 CRC，默认初始值 0xFFFF</td></tr><tr><td>49-57</td><td><code>build_crc_packet(data)</code></td><td>追加两字节小端 CRC，脚本内未调用</td></tr><tr><td>59-98</td><td><code>generate_vision_to_gimbal_packet(...)</code></td><td>打包 27 字节、算 CRC、拼成 29 字节</td></tr><tr><td>100-149</td><td><code>main()</code></td><td>用 <code>mode=1, yaw=pi/2, pitch=0</code> 演示并回读校验</td></tr></tbody></table>
+<p>第 93 行调用 <code>crc16_calc</code> 时没有传 <code>init</code>，取默认值 <code>0xFFFF</code>。第 96 行用 <code>struct.pack('&#x3C;H', crc)</code> 把 CRC 写成小端两字节。</p>
+<p><code>build_crc_packet</code> 定义了但没有任何调用点，主流程在 <code>generate_vision_to_gimbal_packet</code> 内部把算 CRC 与追加分开写（<code>93</code> 与 <code>96</code>）。若要复用它，把 <code>93-96</code> 三行换成 <code>crc = crc16_calc(data_without_crc)</code> 再 <code>packet = build_crc_packet(data_without_crc)</code> 即可，语义等价。</p>
+<h2 id="3-struct-格式串-3b6f-的逐字符拆解">3. struct 格式串 &#x3C;3B6f 的逐字符拆解</h2>
+<p>核心一行是 <code>82-90</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">data_without_crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> struct.pack(</span><span style="color:#032F62">'&#x3C;3B6f'</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#D73A49">                               0x</span><span style="color:#005CC5">53</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">50</span><span style="color:#24292E">,    </span><span style="color:#6A737D"># head[0], head[1]</span></span>
+<span class="line"><span style="color:#24292E">                               mode,           </span><span style="color:#6A737D"># mode</span></span>
+<span class="line"><span style="color:#24292E">                               yaw,            </span><span style="color:#6A737D"># yaw</span></span>
+<span class="line"><span style="color:#24292E">                               yaw_vel,        </span><span style="color:#6A737D"># yaw_vel</span></span>
+<span class="line"><span style="color:#24292E">                               yaw_acc,        </span><span style="color:#6A737D"># yaw_acc</span></span>
+<span class="line"><span style="color:#24292E">                               pitch,          </span><span style="color:#6A737D"># pitch</span></span>
+<span class="line"><span style="color:#24292E">                               pitch_vel,      </span><span style="color:#6A737D"># pitch_vel</span></span>
+<span class="line"><span style="color:#24292E">                               pitch_acc)      </span><span style="color:#6A737D"># pitch_acc</span></span></code></pre>
+<p><code>&#x3C;3B6f</code> 逐字符展开：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字符</th><th>含义</th><th>字节数</th></tr></thead><tbody><tr><td><code>&#x3C;</code></td><td>小端，且不使用本机对齐填充</td><td>0</td></tr><tr><td><code>3</code></td><td>后面一个字符重复 3 次</td><td>0</td></tr><tr><td><code>B</code></td><td><code>unsigned char</code></td><td>3</td></tr><tr><td><code>6</code></td><td>后面一个字符重复 6 次</td><td>0</td></tr><tr><td><code>f</code></td><td>IEEE754 单精度 float</td><td>24</td></tr></tbody></table>
+<p>合计 3 加 24 等于 27，与 <code>VISION_TO_GIMBAL_LEN - 2</code> 一致。字符顺序与结构体字段顺序一一对应：<code>head[2]</code>、<code>mode</code>、6 个 float。前缀写 <code>&#x3C;</code> 时 Python 不插入任何填充；写成默认的 <code>@</code> 会按本机对齐补齐，长度就不再是 27。重复计数写在类型字符之前，是 <code>struct</code> 的固定语法，不能写成 <code>B3</code>。</p>
+<p>CRC 的两字节用同样的方式拼：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> crc16_calc(data_without_crc)</span></span>
+<span class="line"><span style="color:#24292E">full_packet </span><span style="color:#D73A49">=</span><span style="color:#24292E"> data_without_crc </span><span style="color:#D73A49">+</span><span style="color:#24292E"> struct.pack(</span><span style="color:#032F62">'&#x3C;H'</span><span style="color:#24292E">, crc)</span></span></code></pre>
+<p><code>&#x3C;H</code> 表示 2 字节无符号整数、小端，低字节在前。<code>main()</code> 第 138 行用 <code>struct.unpack('&#x3C;3B6fH', packet)</code> 把整帧读回，字段顺序与打包时相同。</p>
+<h2 id="4-查表-crc16-与-init0xffff">4. 查表 CRC16 与 init=0xFFFF</h2>
+<p>算法在 <code>36-47</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> crc16_calc</span><span style="color:#24292E">(data, init</span><span style="color:#D73A49">=0x</span><span style="color:#005CC5">FFFF</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> init</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> byte </span><span style="color:#D73A49">in</span><span style="color:#24292E"> data:</span></span>
+<span class="line"><span style="color:#24292E">        idx </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (crc </span><span style="color:#D73A49">^</span><span style="color:#24292E"> byte) </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FF</span></span>
+<span class="line"><span style="color:#24292E">        crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (crc </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">^</span><span style="color:#005CC5"> CRC16_TABLE</span><span style="color:#24292E">[idx]</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> crc </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FFFF</span></span></code></pre>
+<p>每次取当前 CRC 的低字节与输入字节异或得到表索引，右移 8 位后与表项异或。这是反射式（LSB first）的查表写法，初始值由参数给定。返回前的 <code>&#x26; 0xFFFF</code> 在 Python 里没有实际作用，整数不会溢出，但把“结果只有 16 位”写在了代码上。</p>
+<p>第 10 行注释写多项式 0x8005、初始 0x0000 的表格，与代码有两处冲突。用本机对脚本里的 256 项表做了逐项比对：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>比对项</th><th>结果</th></tr></thead><tbody><tr><td>与反射形式 0x8408 生成的表</td><td>完全一致（256 项全等）</td></tr><tr><td>与反射形式 0x8005（即 0xA001）生成的表</td><td>不一致</td></tr><tr><td><code>crc16_calc(b"123456789", 0xFFFF)</code></td><td>0x6F91</td></tr><tr><td><code>crc16_calc(b"123456789", 0x0000)</code></td><td>0x2189</td></tr></tbody></table>
+<p>0x6F91 是标准参数 CRC-16/MCRF4XX 的 check 值：多项式 0x1021，初始值 0xFFFF，输入输出都反射，异或输出为 0。结论以代码为准：多项式是 0x1021（反射形式 0x8408），实际初始值是 <code>0xFFFF</code>。注释里的 0x8005 与 0x0000 都不成立，属文档与代码冲突，标为待现场确认。上面四个数字是本机实跑结果。</p>
+<p>算法逐字节的执行顺序也可以用一张时序表示：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant S as generate_gimbal_packet.py
+    participant F as 固件 USBDecode
+    S->>S: struct.pack('&#x3C;3B6f', ...) 得前 27 字节
+    S->>S: crc16_calc 查表，init=0xFFFF
+    S->>S: 追加 struct.pack('&#x3C;H', crc)
+    Note over S: 得到 29 字节整帧
+    S->>F: 经 USB CDC 下发
+    F->>F: 收满 29 字节
+    F->>F: crc16_calc(buffer, 27, 0xFFFF)
+    F->>F: 与结构体里的 crc16 比较
+    F-->>S: 一致则写入 vision_data</pre></div>
+<h2 id="5-默认参数下的-29-字节实跑输出">5. 默认参数下的 29 字节实跑输出</h2>
+<p>在云台板固件仓库根目录执行 <code>python3 generate_gimbal_packet.py</code>，本机输出如下（默认 <code>mode=1</code>、<code>yaw=math.pi/2</code>、<code>pitch=0.0</code>，其余浮点为 0）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>总长度：29 字节</span></span>
+<span class="line"><span>53 50 01 db 0f c9 3f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0e fc</span></span>
+<span class="line"><span>CRC：包中 0xFC0E，计算 0xFC0E，校验通过</span></span></code></pre>
+<p>逐段对应：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字节</th><th>值</th><th>含义</th></tr></thead><tbody><tr><td>0-1</td><td><code>53 50</code></td><td>帧头 <code>'S' 'P'</code></td></tr><tr><td>2</td><td><code>01</code></td><td><code>mode=1</code>，控制但不开火</td></tr><tr><td>3-6</td><td><code>db 0f c9 3f</code></td><td>π/2 的 float32 位模式 0x3FC90FDB，小端存放</td></tr><tr><td>7-26</td><td>24 个 <code>00</code></td><td>6 个 float 里除 yaw 外全为 0</td></tr><tr><td>27-28</td><td><code>0e fc</code></td><td>CRC 0xFC0E 的小端形式</td></tr></tbody></table>
+<p>第 3-6 个字节可以反过来验证字节序：0x3FC90FDB 的高字节 0x3F 排在偏移 6，低字节 0xDB 排在偏移 3。若按大端解释会得到完全不同的数。</p>
+<h2 id="6-封包脚本与固件-crc16-的逐行对照">6. 封包脚本与固件 CRC16 的逐行对照</h2>
+<p>固件侧的 CRC 函数与脚本逐行一致。<code>Algorithm/Src/CRC16.cpp:31-41</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">uint16_t</span><span style="color:#6F42C1"> crc16_calc</span><span style="color:#24292E">(</span><span style="color:#D73A49">const</span><span style="color:#D73A49"> uint8_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209">data</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint32_t</span><span style="color:#E36209"> len</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint16_t</span><span style="color:#E36209"> init</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    uint16_t</span><span style="color:#24292E"> crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> init;</span></span>
+<span class="line"><span style="color:#D73A49">    while</span><span style="color:#24292E"> (len</span><span style="color:#D73A49">--</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">        uint8_t</span><span style="color:#24292E"> index </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (crc </span><span style="color:#D73A49">^</span><span style="color:#D73A49"> *</span><span style="color:#24292E">data</span><span style="color:#D73A49">++</span><span style="color:#24292E">) </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FF</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">        crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (crc </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">^</span><span style="color:#E36209"> CRC16_TABLE</span><span style="color:#24292E">[index];</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> crc;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>表在 <code>Algorithm/Src/CRC16.cpp:7-29</code>，与脚本里的 <code>CRC16_TABLE</code> 逐项相同（本机比对确认）。云台→视觉帧的发送端调用它（<code>Communication/Src/usb_protocol.cpp:41-45</code>），传入初始值 <code>0xFFFF</code>、长度 <code>GIMBAL_TO_VISION_LEN - 2</code>。视觉→云台的接收端同样传 <code>0xFFFF</code>（<code>Communication/Src/usb_decode.cpp:79-83</code>）。两端初始值统一为 <code>0xFFFF</code>，脚本不能改成别的值。</p>
+<h2 id="7-易错点">7. 易错点</h2>
+<ul>
+<li>把第 10 行注释当成规格，在其它工具里选 0x8005 或 0x0000 初始值。以 <code>36</code> 与 <code>93</code> 的行为为准，初始值是 <code>0xFFFF</code>，表对应反射 0x1021。</li>
+<li>用默认格式串 <code>@</code> 打包。需要显式写 <code>&#x3C;</code>，否则本机对齐会插入填充字节。</li>
+<li>用 <code>struct.pack('&#x3C;f', ...)</code> 之外的方式写入浮点，例如把角度当整数乘 100 再打包。协议定义的是 IEEE754 单精度，接收端按 float 解读。</li>
+<li>CRC 高低字节写反。<code>build_crc_packet</code> 与 <code>96</code> 都按低字节在前追加，固件也按小端读取字段（<code>usb_protocol.h:51</code> 的 <code>uint16_t</code> 直接处于 packed 结构里）。</li>
+<li>只改 <code>CRC16_TABLE</code> 而不同步改固件表。两处必须逐项相同，任何一项不同都会让所有帧校验失败。</li>
+</ul>
+<h2 id="8-小结">8. 小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>帧长</td><td>29 字节，前 27 字节参与 CRC</td></tr><tr><td>格式串</td><td><code>&#x3C;3B6f</code> 加 <code>&#x3C;H</code>，小端无填充</td></tr><tr><td>CRC 参数</td><td>查表、反射式，init <code>0xFFFF</code>，实测等同 CRC-16/MCRF4XX</td></tr><tr><td>字节序</td><td>全部小端，低字节在前</td></tr><tr><td>脚本职责</td><td>生成视觉→云台帧，不含解析</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>用查表而非逐位</td><td>每字节一次异或与查表，脚本与 MCU 都够快</td><td>需要维护 256 项表，两端一致性靠人工</td></tr><tr><td>初始值做成参数</td><td>固件可复用到不同协议</td><td>默认值与注释容易脱节</td></tr><tr><td>只封视觉→云台方向</td><td>脚本职责单一</td><td>43 字节方向的构造没有对等脚本</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<p>基础题：</p>
+<ol>
+<li>写出 <code>&#x3C;3B6fH</code> 打包一条 29 字节帧时各字段的字节数，并说明 <code>3</code> 与 <code>6</code> 这类重复计数的含义。</li>
+<li>用脚本算出 <code>yaw=0.0, pitch=0.0, mode=0</code> 时的整帧十六进制，指出哪些字节与默认输出不同。</li>
+<li><code>0x3FC90FDB</code> 按小端写入时偏移 3 到 6 各是什么值。</li>
+</ol>
+<p>挑战题：</p>
+<ol>
+<li>不查表，用位运算实现同一套 CRC（反射形式、poly 0x8408、init 0xFFFF），并验证 <code>b"123456789"</code> 得到 0x6F91。</li>
+<li>给脚本加一个 <code>--mode</code> 参数，在不改 CRC 与 <code>struct</code> 语句的前提下让 <code>main()</code> 接受命令行模式值。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+<ul>
+<li><code>generate_gimbal_packet.py:10-149</code></li>
+<li><code>Algorithm/Src/CRC16.cpp:7-41</code></li>
+<li><code>Algorithm/Inc/CRC16.h:15</code></li>
+<li><code>Communication/Src/usb_protocol.cpp:41-45</code></li>
+<li><code>Communication/Src/usb_decode.cpp:79-83</code></li>
+<li><code>Communication/Inc/usb_protocol.h:20</code>、<code>51</code></li>
+<li><code>云台串口协议.md</code></li>
+</ul></div></section><section class="dfile" id="file-3" data-file="03-解码脚本与校验"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-解码脚本与校验</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/06-上位机封包脚本/03-解码脚本与校验.md</span></div><div class="dfile__body"><h1 id="解码脚本与校验">解码脚本与校验</h1>
+<p>解码脚本位于云台板固件仓库根目录：<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/generate_gimbal_packet_decode.py</code>，共 158 行。它解析云台→视觉方向的 43 字节帧。</p>
+<p>该帧由固件 <code>USBProtocol::buildFrame</code> 生成（<code>Communication/Src/usb_protocol.cpp:11-49</code>），字段定义在 <code>Communication/Inc/usb_protocol.h:55-70</code>。封包方向见 <code>02-封包脚本与CRC16</code>，两侧结构体与 C 对齐的对照在 <code>04-与固件结构体一致性</code>。</p>
+<h2 id="1-解码脚本面向整帧">1. 解码脚本面向整帧</h2>
+<p>解码脚本接收一段十六进制文本，还原成姿态与弹道字段。它服务于两类场景：抓包后离线复算，以及在联调时把视觉小电脑收到的原始字节贴进终端逐字段核对。</p>
+<p>与固件里的接收状态机相比，脚本面向整帧而不是字节流。它先要求输入长度正好 43，再校验帧头与 CRC，最后才解字段。任一步失败就抛出 <code>ValueError</code>，不做半帧输出。这个取舍让脚本写起来短，代价是粘包、半帧与帧头出现在载荷中的情况都要由调用方先切分，脚本本身不处理。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["命令行或标准输入"] --> B["parse_hex_input 正则提取字节"]
+    B --> C{"长度等于 43"}
+    C -->|否| X1["抛出长度错误"]
+    C -->|是| D{"帧头为 0x53 0x50"}
+    D -->|否| X2["抛出帧头错误"]
+    D -->|是| E["取前 41 字节与末 2 字节 CRC"]
+    E --> F{"重算 CRC 与包中 CRC 相等"}
+    F -->|否| X3["抛出校验失败"]
+    F -->|是| G["struct.unpack('&#x3C;3B9fH', 前 41 字节)"]
+    G --> H["按偏移拆分 q, yaw, pitch, bullet_speed, bullet_count"]
+    H --> I["print_result 打印"]</pre></div>
+<h2 id="2-158-行脚本的六个部分">2. 158 行脚本的六个部分</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>行号</th><th>内容</th><th>作用</th></tr></thead><tbody><tr><td>18-41</td><td><code>CRC16_TABLE</code></td><td>与封包脚本逐项相同的 256 项表</td></tr><tr><td>43-49</td><td><code>crc16_calc(data, init=0xFFFF)</code></td><td>与封包脚本同一份算法</td></tr><tr><td>51-69</td><td><code>parse_hex_input(hex_str)</code></td><td>正则提取十六进制字节</td></tr><tr><td>71-112</td><td><code>decode_gimbal_to_vision(...)</code></td><td>长度、帧头、CRC 与字段解析</td></tr><tr><td>114-136</td><td><code>print_result(decoded)</code></td><td>格式化打印，含一处模式名映射</td></tr><tr><td>138-155</td><td><code>main()</code></td><td>读命令行参数或交互输入</td></tr></tbody></table>
+<p>CRC 表与函数在脚本里是复制粘贴的第二份。它与 <code>generate_gimbal_packet.py</code> 的表逐项相同，改动其中一份而漏掉另一份会造成校验行为不一致。脚本里没有 <code>import</code> 封包脚本，两份实现各自独立，靠人工保持同步。</p>
+<h2 id="3-十六进制输入的宽容提取">3. 十六进制输入的宽容提取</h2>
+<p><code>parse_hex_input</code>（<code>51-69</code>）用一条正则把所有形如两个十六进制字符的片段抓出来：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">pattern </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> r</span><span style="color:#032F62">'</span><span style="color:#005CC5">(?:</span><span style="color:#032F62">0x</span><span style="color:#005CC5">)</span><span style="color:#D73A49">?</span><span style="color:#005CC5">([0-9A-Fa-f]</span><span style="color:#D73A49">{2}</span><span style="color:#005CC5">)</span><span style="color:#032F62">'</span></span>
+<span class="line"><span style="color:#24292E">matches </span><span style="color:#D73A49">=</span><span style="color:#24292E"> re.findall(pattern, hex_str)</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#005CC5"> bytes</span><span style="color:#24292E">(</span><span style="color:#005CC5">int</span><span style="color:#24292E">(byte, </span><span style="color:#005CC5">16</span><span style="color:#24292E">) </span><span style="color:#D73A49">for</span><span style="color:#24292E"> byte </span><span style="color:#D73A49">in</span><span style="color:#24292E"> matches)</span></span></code></pre>
+<p><code>0x</code> 前缀可选，分隔符不限。空格、逗号、连续字符串都能被同一条正则切分，<code>0x53,0x50,01</code> 也会得到三个字节。这套提取方式对分隔符宽容，但也带来一个后果：输入里任何两字符的十六进制片段都会被收进结果，多写一段说明文字就可能多出字节。长度检查（<code>76-77</code>）因此成为第一道闸门。</p>
+<h2 id="4-长度帧头crc-三道检查">4. 长度、帧头、CRC 三道检查</h2>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> len</span><span style="color:#24292E">(packet_bytes) </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> 43</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#005CC5"> ValueError</span><span style="color:#24292E">(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> verify_header:</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> packet_bytes[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">!=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">53</span><span style="color:#D73A49"> or</span><span style="color:#24292E"> packet_bytes[</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">!=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">50</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        raise</span><span style="color:#005CC5"> ValueError</span><span style="color:#24292E">(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">data_without_crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> packet_bytes[:</span><span style="color:#005CC5">41</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#24292E">packet_crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> struct.unpack(</span><span style="color:#032F62">'&#x3C;H'</span><span style="color:#24292E">, packet_bytes[</span><span style="color:#005CC5">41</span><span style="color:#24292E">:</span><span style="color:#005CC5">43</span><span style="color:#24292E">])[</span><span style="color:#005CC5">0</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> verify_crc:</span></span>
+<span class="line"><span style="color:#24292E">    calc_crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> crc16_calc(data_without_crc)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> packet_crc </span><span style="color:#D73A49">!=</span><span style="color:#24292E"> calc_crc:</span></span>
+<span class="line"><span style="color:#D73A49">        raise</span><span style="color:#005CC5"> ValueError</span><span style="color:#24292E">(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span></code></pre>
+<p>CRC 覆盖偏移 0 到 40 共 41 字节，末两字节是小端存放的校验值。<code>packet_bytes[41:43]</code> 用 <code>&#x3C;H</code> 读出，等价于低字节加高字节左移 8 位。校验值与协议文本 <code>云台串口协议.md</code> 第 16 行的记录一致。</p>
+<p>三道检查的顺序是先长度、再帧头、最后 CRC。长度放在最前，因为 CRC 需要一个确定的 41 字节窗口；帧头放在 CRC 之前，坏帧头可以省掉一次 41 字节的查表循环。</p>
+<h2 id="5-3b9fh-与-3b4f5fh-的等价性">5. &#x3C;3B9fH 与 &#x3C;3B4f5fH 的等价性</h2>
+<p>字段解包是一行：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">unpacked </span><span style="color:#D73A49">=</span><span style="color:#24292E"> struct.unpack(</span><span style="color:#032F62">'&#x3C;3B9fH'</span><span style="color:#24292E">, data_without_crc)</span></span>
+<span class="line"><span style="color:#24292E">head0, head1, mode </span><span style="color:#D73A49">=</span><span style="color:#24292E"> unpacked[</span><span style="color:#005CC5">0</span><span style="color:#24292E">:</span><span style="color:#005CC5">3</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#24292E">q </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> list</span><span style="color:#24292E">(unpacked[</span><span style="color:#005CC5">3</span><span style="color:#24292E">:</span><span style="color:#005CC5">7</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#24292E">yaw, yaw_vel, pitch, pitch_vel, bullet_speed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> unpacked[</span><span style="color:#005CC5">7</span><span style="color:#24292E">:</span><span style="color:#005CC5">12</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#24292E">bullet_count </span><span style="color:#D73A49">=</span><span style="color:#24292E"> unpacked[</span><span style="color:#005CC5">12</span><span style="color:#24292E">]</span></span></code></pre>
+<p><code>&#x3C;3B9fH</code> 作用于 41 字节：3 字节帧头与模式，9 个 float 共 36 字节，1 个 <code>uint16_t</code> 共 2 字节，合计 41。9 个 float 依次是 <code>q[0]</code> 到 <code>q[3]</code>、<code>yaw</code>、<code>yaw_vel</code>、<code>pitch</code>、<code>pitch_vel</code>、<code>bullet_speed</code>。</p>
+<p>把格式串按语义拆开写，长度不变：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>展开</th><th>字节数</th><th>用途</th></tr></thead><tbody><tr><td><code>&#x3C;3B9fH</code></td><td>3 个 B、9 个 f、1 个 H</td><td>41</td><td>脚本当前写法，连续 9 个 float</td></tr><tr><td><code>&#x3C;3B4f5fH</code></td><td>3 个 B、4 个 f、5 个 f、1 个 H</td><td>41</td><td>把四元数与 5 个标量分开，字段边界更清楚</td></tr><tr><td><code>&#x3C;3B6fH</code></td><td>3 个 B、6 个 f、1 个 H</td><td>29</td><td>视觉→云台方向的格式串，不能用于本帧</td></tr></tbody></table>
+<p><code>&#x3C;3B4f5fH</code> 与 <code>&#x3C;3B9fH</code> 对同一段字节给出的数值完全相同，区别只在书写方式。<code>&#x3C;3B6fH</code> 只适用于 29 字节帧，若误用于 43 字节帧会因长度不符触发 <code>struct.error</code>。</p>
+<p>脚本在解包后只做三件事：拆分字段、组成字典、打印。浮点量的合理性没有检查。按协议语义可以补上几项，这些属建议而非当前实现：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>校验项</th><th>依据</th><th>说明</th></tr></thead><tbody><tr><td><code>mode</code> 在 0 到 3</td><td><code>GimbalMode</code> 只有四个取值</td><td>固件当前只写 0 与 1</td></tr><tr><td><code>q</code> 的模接近 1</td><td>四元数的定义</td><td>归一化四元数平方和为 1，容差可设 1e-3</td></tr><tr><td><code>bullet_speed</code> 为正且在合理区间</td><td>弹速的物理范围</td><td>具体上下限按实际弹丸待实测</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant U as 用户
+    participant P as parse_hex_input
+    participant D as decode_gimbal_to_vision
+    U->>P: 43 字节十六进制文本
+    P->>D: bytes
+    D->>D: 检查 len == 43
+    D->>D: 检查 head[0]==0x53 且 head[1]==0x50
+    D->>D: 取 packet[41:43] 为小端 CRC
+    D->>D: crc16_calc(packet[:41], 0xFFFF)
+    D->>D: 比较两个 CRC
+    D->>D: struct.unpack('&#x3C;3B9fH', packet[:41])
+    D-->>U: 字段字典或 ValueError</pre></div>
+<h2 id="6-43-字节样例的实跑输出">6. 43 字节样例的实跑输出</h2>
+<p>用本机合成的一条 43 字节样例（<code>q=(1,0,0,0)</code>、<code>yaw=0.5</code>、<code>yaw_vel=1.0</code>、<code>pitch=0.1</code>、<code>pitch_vel=0.2</code>、<code>bullet_speed=15.0</code>、<code>bullet_count=7</code>、<code>mode=1</code>）跑解码脚本，输入与输出如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>输入：</span></span>
+<span class="line"><span>53 50 01 00 00 80 3f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 3f 00 00 80 3f</span></span>
+<span class="line"><span>cd cc cc 3d cd cc 4c 3e 00 00 70 41 07 00 58 c8</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>输出：</span></span>
+<span class="line"><span>帧头: 0x53 0x50</span></span>
+<span class="line"><span>模式: 1 (跟随)</span></span>
+<span class="line"><span>w: 1.000000  x: 0.000000  y: 0.000000  z: 0.000000</span></span>
+<span class="line"><span>Yaw 角度: 0.500000 rad = 28.648°</span></span>
+<span class="line"><span>Yaw 角速度: 1.000000 rad/s</span></span>
+<span class="line"><span>Pitch 角度: 0.100000 rad = 5.730°</span></span>
+<span class="line"><span>Pitch 角速度: 0.200000 rad/s</span></span>
+<span class="line"><span>弹速: 15.000 m/s</span></span>
+<span class="line"><span>子弹计数: 7</span></span>
+<span class="line"><span>CRC16: 0xC858</span></span></code></pre>
+<p>样例是本机按协议合成的，不是从实车抓到的原始帧；解析结果是脚本的真实运行输出。合成时 CRC 用与固件相同的函数计算，所以校验通过。输入里 <code>0x3F800000</code> 是 1.0、<code>0x3F000000</code> 是 0.5、<code>0x3DCCCCCD</code> 是 0.1，都按小端分四字节写在对应偏移上。</p>
+<h2 id="7-模式名映射与固件枚举的冲突">7. 模式名映射与固件枚举的冲突</h2>
+<p><code>print_result</code> 里有一张硬编码的模式名表（<code>116</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">mode_desc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span><span style="color:#005CC5">0</span><span style="color:#24292E">: </span><span style="color:#032F62">"待机"</span><span style="color:#24292E">, </span><span style="color:#005CC5">1</span><span style="color:#24292E">: </span><span style="color:#032F62">"跟随"</span><span style="color:#24292E">, </span><span style="color:#005CC5">2</span><span style="color:#24292E">: </span><span style="color:#032F62">"自瞄"</span><span style="color:#24292E">, </span><span style="color:#005CC5">3</span><span style="color:#24292E">: </span><span style="color:#032F62">"小陀螺"</span><span style="color:#24292E">}  </span><span style="color:#6A737D"># 根据实际定义修改</span></span></code></pre>
+<p>它与固件 <code>GimbalMode</code>（<code>Communication/Inc/usb_protocol.h:31-36</code>）的取值对不上：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取值</th><th>脚本映射</th><th>固件枚举</th><th>是否一致</th></tr></thead><tbody><tr><td>0</td><td>待机</td><td><code>FREE</code> 空闲</td><td>含义接近</td></tr><tr><td>1</td><td>跟随</td><td><code>AIM</code> 自瞄</td><td>不一致</td></tr><tr><td>2</td><td>自瞄</td><td><code>SMALL</code> 小符</td><td>不一致</td></tr><tr><td>3</td><td>小陀螺</td><td><code>BIG</code> 大符</td><td>不一致</td></tr></tbody></table>
+<p>注释「根据实际定义修改」说明这张表是占位值。脚本打印的模式名不能作为判据，实际取值以 <code>usb_protocol.h</code> 的枚举为准。这条冲突标为待现场确认。</p>
+<h2 id="8-固件里没有-43-字节解码器">8. 固件里没有 43 字节解码器</h2>
+<p>固件发送端先清零 <code>pkt.crc16</code>、再对前 41 字节算 CRC（<code>Communication/Src/usb_protocol.cpp:38-45</code>），与解码脚本的覆盖范围 <code>packet[:41]</code> 逐字节对齐。两侧初始值都为 <code>0xFFFF</code>。</p>
+<p>固件接收端 <code>USBDecode</code> 只处理 29 字节的视觉→云台帧（<code>Communication/Src/usb_decode.cpp:66-104</code>），其缓冲区大小写死 <code>VISION_TO_GIMBAL_LEN</code>（<code>Communication/Inc/usb_decode.h:36</code>）。43 字节方向的解析目前只有这个脚本，固件内没有对应的 43 字节解码器。</p>
+<p><code>USBDecode</code> 里还留着一段被注释掉的手动解析函数 <code>parse_vision_to_gimbal_manual</code>（<code>usb_decode.cpp:13-34</code>），它对 CRC 字段的读法写成大端（<code>usb_decode.cpp:31</code>），与协议小端不符；因为该函数没有调用点，实际路径不受影响。这条差异在 <code>05-易错点与调试</code> 展开。</p>
+<h2 id="9-易错点">9. 易错点</h2>
+<ul>
+<li>把 <code>packet_bytes[41:43]</code> 写成 <code>packet_bytes[39:41]</code>。43 字节帧的 <code>bullet_count</code> 在偏移 39 到 40，把这两字节当 CRC 会永远校验失败。</li>
+<li>用 <code>>H</code> 读 CRC。协议是小端，用 <code>&#x3C;H</code>；用大端读会把 0xC858 读成 0x58C8。</li>
+<li>把 <code>&#x3C;3B9fH</code> 的长度 41 记成 43。<code>struct.unpack</code> 的格式串长度必须等于传入字节数，多传两字节会直接抛 <code>struct.error</code>。</li>
+<li>把脚本打印的模式名当作协议取值。模式名映射表与固件枚举不一致，取值本身才有效。</li>
+<li>只依赖 CRC 判定帧有效。CRC 通过只说明字节没被破坏，不说明 <code>q</code> 已归一化或 <code>bullet_speed</code> 已更新。</li>
+<li>用正则提取时输入了说明文字。两字符的十六进制片段会被当成字节，长度检查会先拦下，但报错信息指向长度而不是内容。</li>
+</ul>
+<h2 id="10-小结">10. 小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>方向</td><td>云台→视觉，43 字节</td></tr><tr><td>CRC 覆盖</td><td>偏移 0 到 40，共 41 字节</td></tr><tr><td>CRC 存放</td><td>偏移 41 到 42，小端</td></tr><tr><td>解包格式</td><td><code>&#x3C;3B9fH</code> 作用在前 41 字节</td></tr><tr><td>等价写法</td><td><code>&#x3C;3B4f5fH</code> 与 <code>&#x3C;3B9fH</code> 数值相同</td></tr><tr><td>校验粒度</td><td>只做长度、帧头、CRC 三项</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>面向整帧而非字节流</td><td>离线复算简单，失败即报错</td><td>无法处理粘包与半帧，需要调用方先切分</td></tr><tr><td>正则宽容提取</td><td>多种分隔符都能读</td><td>多余文本可能被当成字节，靠长度检查兜底</td></tr><tr><td>格式串连续 9 个 float</td><td>与内存布局一一对应</td><td>读代码时数不出四元数边界，可用 <code>&#x3C;3B4f5fH</code> 改善</td></tr><tr><td>模式名映射硬编码</td><td>打印直观</td><td>与固件枚举脱节，是错误信息的来源</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<p>基础题：</p>
+<ol>
+<li>写出 43 字节帧里 <code>q[0]</code> 与 <code>bullet_count</code> 的偏移，并说明为什么 CRC 从偏移 41 开始读。</li>
+<li>对第 6 节的十六进制输入，把偏移 39 到 40 的两字节解释成 <code>uint16_t</code>，给出十进制值。</li>
+<li><code>&#x3C;3B9fH</code> 与 <code>&#x3C;3B4f5fH</code> 的长度各是多少，为什么可以互换。</li>
+</ol>
+<p>挑战题：</p>
+<ol>
+<li>在 <code>decode_gimbal_to_vision</code> 里补一段四元数模校验，要求模与 1 的偏差超过 <code>1e-3</code> 时给出警告而不抛异常，并说明为什么用警告而非异常。</li>
+<li>写一个切分函数，把一段连续字节流按帧头 <code>0x53 0x50</code> 与固定长度 43 切成整帧，处理帧头出现在载荷中的情况。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+<ul>
+<li><code>generate_gimbal_packet_decode.py:18-155</code></li>
+<li><code>Communication/Inc/usb_protocol.h:31-36</code>、<code>55-70</code></li>
+<li><code>Communication/Src/usb_protocol.cpp:11-49</code></li>
+<li><code>Communication/Inc/usb_decode.h:36</code></li>
+<li><code>Communication/Src/usb_decode.cpp:13-34</code>、<code>66-104</code></li>
+<li><code>云台串口协议.md</code></li>
+</ul></div></section><section class="dfile" id="file-4" data-file="04-与固件结构体一致性"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-与固件结构体一致性</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/06-上位机封包脚本/04-与固件结构体一致性.md</span></div><div class="dfile__body"><h1 id="与固件结构体一致性">与固件结构体一致性</h1>
+<p>线格式由固件 <code>Communication/Inc/usb_protocol.h:39-70</code> 的两个 packed 结构体定义，Python 侧由 <code>generate_gimbal_packet.py</code> 与 <code>generate_gimbal_packet_decode.py</code> 的 <code>struct</code> 格式串描述。两侧要对齐到字节，才谈得上 CRC 通过。</p>
+<p>上位机脚本的总体说明在 <code>02-封包脚本与CRC16</code> 与 <code>03-解码脚本与校验</code>。两侧逐字节对齐要看四件事：C 的填充规则、Python 的前缀语义、浮点与整数的位模式，以及同长度换序这类断言拦不住的情况。</p>
+<h2 id="1-内存布局的两种描述">1. 内存布局的两种描述</h2>
+<p>同一段内存布局有两种描述方式：C 用结构体，Python 用格式串。两者必须表达同一件事：每个字段从第几字节开始、占几字节、按什么字节序解释。</p>
+<p>C 结构体的默认行为是在字段之间插入填充字节以满足各自的对齐要求。float 的对齐要求是 4 字节，<code>head[2]</code> 加 <code>mode</code> 占 3 字节后，编译器会在偏移 3 插入 1 个填充字节，让 float 落在偏移 4。这样结构体的内存形状与线格式就不一致了。<code>__attribute__((packed))</code> 关掉填充，成员逐个紧挨着排。</p>
+<p>Python 的 <code>struct</code> 也有两种模式：格式串以 <code>@</code> 开头或省略顺序符时按本机对齐填充；以 <code>&#x3C;</code>、<code>></code>、<code>=</code>、<code>!</code> 开头时不做对齐填充。脚本用的是 <code>&#x3C;</code>，因此与 packed 结构体一致。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    subgraph CK["packed：29 字节"]
+        A0["偏移 0-1 head"]
+        A1["偏移 2 mode"]
+        A2["偏移 3-6 yaw"]
+        A3["偏移 7-26 其余 5 个 float"]
+        A4["偏移 27-28 crc16"]
+        A0 --> A1 --> A2 --> A3 --> A4
+    end
+    subgraph PL["去掉 packed：32 字节"]
+        B0["偏移 0-1 head"]
+        B1["偏移 2 mode"]
+        B2["偏移 3 填充 1 字节"]
+        B3["偏移 4-7 yaw"]
+        B4["偏移 8-27 其余 5 个 float"]
+        B5["偏移 28-29 crc16"]
+        B6["偏移 30-31 尾部补齐"]
+        B0 --> B1 --> B2 --> B3 --> B4 --> B5 --> B6
+    end</pre></div>
+<h2 id="2-c-默认对齐插入的填充字节">2. C 默认对齐插入的填充字节</h2>
+<p>Cortex-M4 的 ABI 对这几个类型的要求：<code>uint8_t</code> 对齐 1，<code>uint16_t</code> 对齐 2，<code>float</code> 对齐 4。结构体自身的对齐取成员要求的最大值，所以两个包结构体的自然对齐都是 4。</p>
+<p>填充出现在两处：字段前的空隙，以及结构体末尾为满足自身对齐而补的字节。用本机 gcc 对同一组字段做了实测（x86_64 上 <code>float</code> 与 <code>uint16_t</code> 的对齐要求与 Cortex-M4 的 AAPCS 相同，按 ABI 推断数值一致）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>结构体</th><th>字段</th><th>packed 尺寸</th><th>去掉 packed 尺寸</th><th>填充来源</th></tr></thead><tbody><tr><td>29 字节包</td><td>head[2] mode + 6 float + crc16</td><td>29</td><td>32</td><td>mode 后 1 字节，尾部 2 字节</td></tr><tr><td>43 字节包</td><td>head[2] mode + 4 float + 5 float + 2 个 uint16</td><td>43</td><td>44</td><td>mode 后 1 字节</td></tr></tbody></table>
+<p>去掉 packed 后 29 字节包变成 32 字节，多出的 3 字节就是 1 字节字段内填充加 2 字节尾部补齐。43 字节包只多 1 字节，因为它以两个 <code>uint16_t</code> 结尾，末尾不需要额外补齐。</p>
+<h2 id="3-python-前缀--与--的差别">3. Python 前缀 @ 与 &#x3C; 的差别</h2>
+<p><code>struct</code> 的前缀决定两件事：字节序与是否按本机对齐。这两个维度是绑在一起的，不能只选一个：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>前缀</th><th>字节序</th><th>对齐填充</th><th>与本工程的关系</th></tr></thead><tbody><tr><td>省略或 <code>@</code></td><td>本机</td><td>按本机 ABI 填充</td><td>与 packed 结构体不符</td></tr><tr><td><code>=</code></td><td>本机</td><td>不填充</td><td>在 x86 与 STM32 上都是小端，可用但不表达意图</td></tr><tr><td><code>&#x3C;</code></td><td>小端</td><td>不填充</td><td>脚本使用</td></tr><tr><td><code>></code></td><td>大端</td><td>不填充</td><td>与协议相反</td></tr><tr><td><code>!</code></td><td>大端（网络序）</td><td>不填充</td><td>与协议相反</td></tr></tbody></table>
+<p>脚本一律写 <code>&#x3C;</code>，既锁字节序也锁填充。若省略前缀，在 x86_64 上 <code>struct.calcsize('3B6f')</code> 是 28 而不是 27，因为 <code>mode</code> 之后会插入 1 个填充字节让 float 落在 4 字节边界上。</p>
+<h2 id="4-ieee754-小端与-uint16-小端">4. IEEE754 小端与 uint16 小端</h2>
+<p>协议里的 <code>float</code> 是 IEEE754 单精度，占 4 字节：1 位符号、8 位指数、23 位尾数。STM32F407 的字节序是小端，Python 用 <code>&#x3C;f</code> 表达同样的顺序。</p>
+<p>以 <code>02-封包脚本与CRC16</code> 的实测帧为例，π/2 的位模式是 <code>0x3FC90FDB</code>，小端写入后偏移 3 到 6 依次是 <code>DB 0F C9 3F</code>。按大端写入会得到 <code>3F C9 0F DB</code>，接收端解出的数完全不同。<code>struct</code> 里表示大端的是 <code>>f</code>。</p>
+<p><code>bullet_count</code> 与 <code>crc16</code> 都是 <code>uint16_t</code>。协议按小端传输，Python 侧对应 <code>&#x3C;H</code>，C 侧直接读写 packed 结构体成员即可，因为 MCU 本身是小端。</p>
+<p><code>USBDecode</code> 里另有一段被注释掉的手动解析（<code>Communication/Src/usb_decode.cpp:13-34</code>）：它在 <code>31</code> 行把 CRC 读成 <code>(data[27] &#x3C;&#x3C; 8) | data[28]</code>，即大端，注释紧接着写出了正确写法 <code>data[27] | (data[28] &#x3C;&#x3C; 8)</code>。该函数没有调用点，实际生效的是 <code>76-77</code> 行对 packed 结构体的 <code>reinterpret_cast</code>，按小端读取。这条差异属代码内部的不一致，标为待现场确认。</p>
+<h2 id="5-两个包的字段偏移对照">5. 两个包的字段偏移对照</h2>
+<h3 id="51-视觉云台29-字节">5.1 视觉→云台，29 字节</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>偏移</th><th>Python 格式</th><th>C 类型</th></tr></thead><tbody><tr><td><code>head[0]</code></td><td>0</td><td><code>B</code></td><td><code>uint8_t</code></td></tr><tr><td><code>head[1]</code></td><td>1</td><td><code>B</code></td><td><code>uint8_t</code></td></tr><tr><td><code>mode</code></td><td>2</td><td><code>B</code></td><td><code>uint8_t</code></td></tr><tr><td><code>yaw</code></td><td>3</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>yaw_vel</code></td><td>7</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>yaw_acc</code></td><td>11</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>pitch</code></td><td>15</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>pitch_vel</code></td><td>19</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>pitch_acc</code></td><td>23</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>crc16</code></td><td>27</td><td><code>H</code></td><td><code>uint16_t</code></td></tr></tbody></table>
+<p>打包格式串 <code>&#x3C;3B6f</code> 覆盖偏移 0 到 26，追加 <code>&#x3C;H</code> 得到完整的 29 字节。</p>
+<h3 id="52-云台视觉43-字节">5.2 云台→视觉，43 字节</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>偏移</th><th>Python 格式</th><th>C 类型</th></tr></thead><tbody><tr><td><code>head[0]</code></td><td>0</td><td><code>B</code></td><td><code>uint8_t</code></td></tr><tr><td><code>head[1]</code></td><td>1</td><td><code>B</code></td><td><code>uint8_t</code></td></tr><tr><td><code>mode</code></td><td>2</td><td><code>B</code></td><td><code>uint8_t</code></td></tr><tr><td><code>q[0]</code> 到 <code>q[3]</code></td><td>3</td><td><code>4f</code></td><td><code>float[4]</code></td></tr><tr><td><code>yaw</code></td><td>19</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>yaw_vel</code></td><td>23</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>pitch</code></td><td>27</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>pitch_vel</code></td><td>31</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>bullet_speed</code></td><td>35</td><td><code>f</code></td><td><code>float</code></td></tr><tr><td><code>bullet_count</code></td><td>39</td><td><code>H</code></td><td><code>uint16_t</code></td></tr><tr><td><code>crc16</code></td><td>41</td><td><code>H</code></td><td><code>uint16_t</code></td></tr></tbody></table>
+<p>解码脚本的 <code>&#x3C;3B9fH</code> 与这张表一一对应；把它按语义写成 <code>&#x3C;3B4f5fH</code> 时，<code>4f</code> 与 <code>5f</code> 的分界恰好落在偏移 19。</p>
+<h2 id="6-落地两份结构体与-static_assert">6. 落地：两份结构体与 static_assert</h2>
+<p>C 侧两个结构体的声明（<code>Communication/Inc/usb_protocol.h:39-52</code> 与 <code>55-70</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">struct</span><span style="color:#6F42C1">  __attribute__</span><span style="color:#24292E">((packed)) VisionToGimbal {</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#E36209"> head</span><span style="color:#24292E">[</span><span style="color:#005CC5">2</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#24292E"> mode;</span></span>
+<span class="line"><span style="color:#D73A49">    float</span><span style="color:#24292E"> yaw, yaw_vel, yaw_acc;</span></span>
+<span class="line"><span style="color:#D73A49">    float</span><span style="color:#24292E"> pitch, pitch_vel, pitch_acc;</span></span>
+<span class="line"><span style="color:#D73A49">    uint16_t</span><span style="color:#24292E"> crc16;</span></span>
+<span class="line"><span style="color:#24292E">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">struct</span><span style="color:#6F42C1">  __attribute__</span><span style="color:#24292E">((packed)) GimbalToVision {</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#E36209"> head</span><span style="color:#24292E">[</span><span style="color:#005CC5">2</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#D73A49">    uint8_t</span><span style="color:#24292E"> mode;</span></span>
+<span class="line"><span style="color:#D73A49">    float</span><span style="color:#E36209"> q</span><span style="color:#24292E">[</span><span style="color:#005CC5">4</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#D73A49">    float</span><span style="color:#24292E"> yaw, yaw_vel, pitch, pitch_vel;</span></span>
+<span class="line"><span style="color:#D73A49">    float</span><span style="color:#24292E"> bullet_speed;</span></span>
+<span class="line"><span style="color:#D73A49">    uint16_t</span><span style="color:#24292E"> bullet_count;</span></span>
+<span class="line"><span style="color:#D73A49">    uint16_t</span><span style="color:#24292E"> crc16;</span></span>
+<span class="line"><span style="color:#24292E">};</span></span></code></pre>
+<p>尺寸在编译期被 <code>static_assert</code> 钉住（<code>usb_protocol.h:73-77</code>）。<code>sizeof</code> 与两个长度常量相等时才通过，填充导致的偏差无法进入固件。</p>
+<p>项目里还有三处需要一起维护：</p>
+<ul>
+<li>线格式的唯一权威是 <code>Communication/Inc/usb_protocol.h</code> 的两个 packed 结构体与 <code>static_assert</code>。</li>
+<li><code>Task/Inc/UsbConnectTask.h:41-79</code> 用 <code>#pragma pack(push, 1)</code> 又写了一份 <code>vision_to_gimbal_t</code> 与 <code>gimbal_to_vision_t</code>。两份定义内容一致，但 typedef 与宏 <code>VISION_TO_GIMBAL_SIZE</code>、<code>GIMBAL_TO_VISION_SIZE</code>（<code>UsbConnectTask.h:22-23</code>）没有其它调用点。改动线格式时两份都要同步，漏掉一份编译器不会报错。</li>
+<li>固件接收端直接用 packed 结构体覆盖缓冲区（<code>Communication/Src/usb_decode.cpp:76-77</code>）。packed 结构体的对齐要求是 1，缓冲区是对齐无要求的 <code>uint8_t[29]</code>，这种转型不会因对齐触发异常。</li>
+</ul>
+<p>CRC 计算把结构体指针转成 <code>const uint8_t*</code> 并按长度遍历（<code>Communication/Src/usb_protocol.cpp:41-45</code>、<code>usb_decode.cpp:79-83</code>）。长度用的是常量而不是 <code>sizeof</code>，两处都在编译期由 <code>static_assert</code> 保证相等。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant C as C packed 结构体
+    participant M as 内存字节
+    participant P as Python struct
+    C->>M: float 按 IEEE754 小端写入
+    C->>M: uint16 按小端写入
+    M->>P: 43 字节字节串
+    P->>P: struct.unpack('&#x3C;3B9fH', packet[:41])
+    P-->>C: 字段值一致
+    Note over C,P: 前提是 Python 用 &#x3C; 前缀且 C 用 packed</pre></div>
+<h2 id="7-死代码里的大端读法">7. 死代码里的大端读法</h2>
+<p><code>usb_decode.cpp:13-34</code> 的 <code>parse_vision_to_gimbal_manual</code> 是整条链路上唯一按大端读 CRC 的地方。它的存在说明协议早期可能有过另一种字节序约定，但当前生效路径已经统一到小端。判断一段代码是否在运行，看它的调用点；这份函数在 <code>70-75</code> 的调用被注释掉，生效的是 <code>76-77</code> 的 <code>reinterpret_cast</code>。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+<ul>
+<li>Python 格式串漏写 <code>&#x3C;</code>。默认按本机对齐，<code>3B6f</code> 会多出填充，长度不再是 27。</li>
+<li>C 结构体漏写 <code>__attribute__((packed))</code> 或 <code>#pragma pack</code>。尺寸变成 32 或 44，<code>static_assert</code> 会拦下，但手写 <code>sizeof</code> 的发送路径会多发字节。</li>
+<li>认为 <code>reinterpret_cast</code> 到 packed 结构体需要额外对齐处理。packed 的对齐是 1，直接转型成立；反而是非 packed 结构体才会有对齐风险。</li>
+<li>把 <code>float</code> 当整数或定点数收发。协议定义的是 IEEE754，位模式不一致时 CRC 可能通过而数值错误。</li>
+<li>只用 <code>static_assert</code> 保证长度，忽略同长度换序。字段顺序与类型同时改、总长不变时编译期不会报错。</li>
+<li>改动 <code>usb_protocol.h</code> 后忘记 <code>Task/Inc/UsbConnectTask.h</code> 的第二份定义。</li>
+</ul>
+<h2 id="9-小结">9. 小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>C 默认对齐</td><td>float 要求 4 字节，会插入填充</td></tr><tr><td>packed</td><td>关闭填充，成员紧排，对齐为 1</td></tr><tr><td>Python <code>&#x3C;</code></td><td>小端且不填充，与 packed 对应</td></tr><tr><td>float</td><td>IEEE754 单精度 4 字节，小端</td></tr><tr><td>uint16</td><td>2 字节小端</td></tr><tr><td>尺寸保障</td><td><code>static_assert</code> 在编译期比对 <code>sizeof</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>用 packed 结构体描述线格式</td><td>字段与字节一一对应，可整体转型</td><td>成员访问可能生成非对齐读写，性能略降</td></tr><tr><td>用 <code>static_assert</code> 校验尺寸</td><td>错位在编译期暴露</td><td>不校验字段顺序，换序仍可编译</td></tr><tr><td>两份结构体定义</td><td>任务层可独立引用</td><td>同步成本，容易只改一处</td></tr><tr><td>CRC 长度用常量</td><td>与协议文本直接对照</td><td>常量写错时 CRC 覆盖范围随之出错</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<p>基础题：</p>
+<ol>
+<li>按 C 对齐规则手工推出 29 字节包去掉 packed 后的总长，并指出填充字节的位置。</li>
+<li>写出 <code>0x3FC90FDB</code> 在小端与大端两种顺序下，偏移 3 到 6 各自的字节。</li>
+<li><code>bullet_count</code> 在 43 字节帧里的偏移是多少，<code>&#x3C;H</code> 从该偏移读取时得到的字节顺序是什么。</li>
+</ol>
+<p>挑战题：</p>
+<ol>
+<li>用 C 写一份与 <code>usb_protocol.h</code> 等价的 packed 结构体，加 <code>static_assert</code> 检查尺寸，并说明为什么 <code>_Static_assert</code> 在 C 里也能起到同样作用。</li>
+<li>若要给 43 字节帧新增一个 <code>float</code> 字段，列出 <code>usb_protocol.h</code>、两个 Python 脚本、<code>usb_protocol.cpp</code> 与 <code>云台串口协议.md</code> 中需要改动的位置。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+<ul>
+<li><code>Communication/Inc/usb_protocol.h:39-77</code></li>
+<li><code>Communication/Src/usb_protocol.cpp:41-45</code></li>
+<li><code>Communication/Src/usb_decode.cpp:13-34</code>、<code>76-83</code></li>
+<li><code>Task/Inc/UsbConnectTask.h:22-23</code>、<code>41-79</code></li>
+<li><code>generate_gimbal_packet.py:82-96</code></li>
+<li><code>generate_gimbal_packet_decode.py:94</code></li>
+<li><code>云台串口协议.md</code></li>
+</ul></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/06-上位机封包脚本/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="封包链路的易错点与调试">封包链路的易错点与调试</h1>
+<p>涉及的文件：云台板固件根目录的 <code>generate_gimbal_packet.py</code>、<code>generate_gimbal_packet_decode.py</code>、<code>云台串口协议.md</code>，固件侧 <code>Communication/Inc/usb_protocol.h</code>、<code>Communication/Src/usb_protocol.cpp</code>、<code>Communication/Src/usb_decode.cpp</code>、<code>Task/Src/UsbConnectTask.cpp</code>、<code>USB_DEVICE/App/usbd_cdc_if.c</code>。</p>
+<p>协议布局见 <code>01-视觉链路协议回顾</code>，脚本结构见 <code>02-封包脚本与CRC16</code> 与 <code>03-解码脚本与校验</code>，结构体对照见 <code>04-与固件结构体一致性</code>。冲突与未使用代码汇总成清单，末尾是分层排查流程与自检命令。</p>
+<h2 id="1-上位机与固件之间的四层排查思路">1. 上位机与固件之间的四层排查思路</h2>
+<p>上位机脚本与固件之间只有一段字节作为契约。链路出问题时，可能的原因集中在四层：脚本打包、链路传输、固件收包状态机、字段消费。分层排查先确定字节在哪一层开始偏离协议，再进到具体字段。</p>
+<p>排查的共同手段是比对字节：把脚本实跑的十六进制与固件断点处缓冲区的十六进制并排看，差异位置直接指向出错字段。CRC 只能说明整帧是否被破坏，定位到字段仍要靠偏移。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["视觉链路无控制效果"] --> B{"固件收到整帧了吗"}
+    B -->|否| C["检查帧头、长度与队列"]
+    B -->|是| D{"CRC 通过了吗"}
+    D -->|否| E["比对 CRC 覆盖范围、初始值与字节序"]
+    D -->|是| F{"字段数值对吗"}
+    F -->|否| G["比对 struct 格式串与 C 类型"]
+    F -->|是| H{"vision_data 被消费了吗"}
+    H -->|否| I["检查 ControlCenterTask 的 mode 判断"]
+    H -->|是| J["问题在控制环而非链路"]</pre></div>
+<h2 id="2-十二项已知问题清单">2. 十二项已知问题清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>编号</th><th>位置</th><th>现象</th><th>性质</th></tr></thead><tbody><tr><td>1</td><td><code>generate_gimbal_packet.py:10</code></td><td>注释称多项式 0x8005、初始 0x0000</td><td>文档与代码冲突，实测为 0x1021 与 0xFFFF</td></tr><tr><td>2</td><td><code>Communication/Src/usb_protocol.cpp:38</code></td><td><code>pkt.crc16</code> 清零</td><td>防御性写法，本实现非必要</td></tr><tr><td>3</td><td>Python 格式串</td><td>漏写 <code>&#x3C;</code> 时插入填充</td><td>与 C packed 不一致</td></tr><tr><td>4</td><td><code>&#x3C;f</code> 与 <code>>f</code></td><td>浮点字节序写反</td><td>数值错但长度对</td></tr><tr><td>5</td><td>长度常量</td><td>43 字节帧按 29 字节处理</td><td>状态机长度写死</td></tr><tr><td>6</td><td><code>generate_gimbal_packet_decode.py:116</code></td><td>模式名映射与枚举不符</td><td>打印信息误导</td></tr><tr><td>7</td><td><code>Communication/Src/usb_decode.cpp:31</code></td><td>手动解析按大端读 CRC</td><td>死代码，无调用点</td></tr><tr><td>8</td><td><code>Communication/Src/usb_decode.cpp:90</code></td><td><code>memcpy</code> 自我复制</td><td>空操作</td></tr><tr><td>9</td><td><code>generate_gimbal_packet.py:49-57</code></td><td><code>build_crc_packet</code> 未调用</td><td>冗余函数</td></tr><tr><td>10</td><td><code>Task/Src/UsbConnectTask.cpp:165-174</code></td><td><code>USB_Data_Received</code> 空实现</td><td>与真实接收路径重复</td></tr><tr><td>11</td><td><code>Communication/Src/usb_decode.cpp:115-123</code></td><td><code>errorCount</code> 无调用</td><td>统计量只写不读</td></tr><tr><td>12</td><td><code>Core/Src/freertos.c:114</code></td><td>队列容量 128 字节</td><td>满时丢字节</td></tr></tbody></table>
+<h2 id="3-crc-注释冲突与清零语句的作用">3. CRC 注释冲突与清零语句的作用</h2>
+<p>脚本第 10 行写「多项式 0x8005，初始 0x0000 的表格」，代码里 <code>crc16_calc</code> 的默认初始值是 <code>0xFFFF</code>（<code>36</code> 行），调用处没有覆盖它（<code>93</code> 行）。对 256 项表做逐项比对的结果：表与反射形式 0x8408（标准形式 0x1021）生成的表一致，与反射 0x8005 的表不一致；<code>crc16_calc(b"123456789")</code> 得到 0x6F91，即 CRC-16/MCRF4XX 的 check 值。以代码为准，注释两处都不成立，标为待现场确认。固件 <code>Algorithm/Src/CRC16.cpp:7-41</code> 的表与算法和脚本相同。</p>
+<p><code>usb_protocol.cpp:38</code> 在算 CRC 前执行 <code>pkt.crc16 = 0</code>。CRC 的输入长度是 <code>GIMBAL_TO_VISION_LEN - 2</code> 即 41 字节（<code>41-45</code>），正好不含最后 2 字节的 <code>crc16</code>，所以清零不改变计算结果，<code>47</code> 行随即把真值写回。</p>
+<p>清零的价值在于防御：一旦有人把长度改成 <code>sizeof(pkt)</code>，CRC 输入就会包含 <code>crc16</code> 字段。不清零时，<code>tx_pkt</code> 作为全局变量会带着上一帧的残值参与计算，接收端拿到的校验值与按全零重算的值不一致，表现为随机校验失败。改动长度常量时不能同时删掉这一行。</p>
+<h2 id="4-对齐浮点与长度写死的三处差异">4. 对齐、浮点与长度写死的三处差异</h2>
+<p>Python 的默认字节序符号是 <code>@</code>，按本机对齐插入填充。脚本用 <code>&#x3C;</code> 关闭填充，与 <code>__attribute__((packed))</code> 一致。把 <code>&#x3C;3B6f</code> 写成 <code>3B6f</code> 或 <code>@3B6f</code>，前 27 字节会变成 32 字节。C 侧去掉 packed 的尺寸是 32（29 字节包）与 44（43 字节包），由本机 gcc 实测。</p>
+<p><code>&#x3C;f</code> 是小端 IEEE754，<code>>f</code> 是大端。STM32F407 是小端，协议也按小端定义。写反时长度与 CRC 都可能正常，只有数值错。用 π/2 的位模式 <code>0x3FC90FDB</code> 可以快速判断：小端写入是 <code>DB 0F C9 3F</code>。</p>
+<p>固件 <code>USBDecode</code> 的缓冲区大小与收满判据都固定为 <code>VISION_TO_GIMBAL_LEN</code>（<code>Communication/Inc/usb_decode.h:36</code>、<code>Communication/Src/usb_decode.cpp:69</code>），它只处理视觉→云台方向。把 43 字节帧喂给它，状态机会在收满 29 字节时就尝试校验，CRC 覆盖范围随之错位，全部失败。43 字节帧的解析在 PC 侧的 <code>generate_gimbal_packet_decode.py</code>，不在固件里。</p>
+<p>模式名映射是同一类的误导来源：<code>generate_gimbal_packet_decode.py:116</code> 的 <code>mode_desc</code> 为 <code>{0: "待机", 1: "跟随", 2: "自瞄", 3: "小陀螺"}</code>，与固件 <code>GimbalMode</code> 的 <code>FREE/AIM/SMALL/BIG</code> 对不上。脚本注释也写了「根据实际定义修改」。模式取值以 <code>Communication/Inc/usb_protocol.h:31-36</code> 为准。</p>
+<h2 id="5-死代码与空操作">5. 死代码与空操作</h2>
+<p><code>usb_decode.cpp:13-34</code> 的 <code>parse_vision_to_gimbal_manual</code> 在 <code>31</code> 行把 CRC 读成 <code>(data[27] &#x3C;&#x3C; 8) | data[28]</code>，即大端，与协议和注释里的正确写法相反。该函数在 <code>73-75</code> 行被注释掉，实际执行的是 <code>76-77</code> 行的 packed 结构体转型，按小端读取。修改这段代码时不要照着死代码的读法改。</p>
+<p>其余三处冗余或空操作：</p>
+<ul>
+<li><code>usb_decode.cpp:90</code> 的 <code>memcpy(buffer_, &#x26;pkt, sizeof(pkt))</code> 源和目标都指向 <code>buffer_</code>，是自我复制，不改变任何字节。</li>
+<li><code>generate_gimbal_packet.py:49-57</code> 的 <code>build_crc_packet</code> 没有调用点。</li>
+<li><code>Task/Src/UsbConnectTask.cpp:165-174</code> 的 <code>USB_Data_Received</code> 只做了一次字节循环，未把字节投进队列，注释写明队列发送未实现。真实路径是 <code>usbd_cdc_if.c:270-274</code> 的 <code>xQueueSendFromISR</code>。</li>
+<li><code>usb_decode.cpp:115-123</code> 的 <code>errorCount</code> 与 <code>resetErrorCount</code> 没有调用点；<code>error_count_</code> 在解析成功时被清零（<code>91</code>），只在连续出错时累加。</li>
+</ul>
+<h2 id="6-队列容量与重同步弱点">6. 队列容量与重同步弱点</h2>
+<p><code>usbRxQueue</code> 用 <code>xQueueCreate(128, sizeof(uint8_t))</code> 创建（<code>Core/Src/freertos.c:114</code>），即 128 字节的字节队列。<code>UsbConnectTask::run</code> 每轮把队列读空后 <code>osDelay(10)</code>（<code>Task/Src/UsbConnectTask.cpp:154</code>），发送侧又占用了同一轮的时间。队列满时 <code>CDC_Receive_FS</code> 按注释丢弃该字节（<code>usbd_cdc_if.c:273</code>），被丢的字节落在帧中间会让这一帧整体作废。29 字节约能缓冲 4 帧，帧率或发送间隔变化时需要重新评估容量。</p>
+<p><code>USBDecode::feed</code> 在 <code>WAIT_HEAD_1</code> 阶段遇到非 <code>FRAME_HEAD_1</code> 的字节时直接回到 <code>WAIT_HEAD_0</code>（<code>usb_decode.cpp:60-63</code>），不把该字节当作新的头字节重新判断。字节流中在帧头前多出一个 <code>0x53</code> 时，本该接收的帧会被整帧跳过。这是状态机的重同步策略，属代码可观察的行为。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    state "等待帧头 S" as H0
+    state "等待帧头 P" as H1
+    state "收集中" as COL
+    [*] --> H0
+    H0 --> H1: 收到 0x53
+    H1 --> COL: 收到 0x50，index 置 2
+    H1 --> H0: 其它字节，错误计数加一
+    COL --> H0: 收满 29 字节后判定
+    note right of COL
+        收满后比较 CRC 与 mode
+        通过则返回真并清零错误计数
+    end note</pre></div>
+<h2 id="7-调试手段crc-自检与基准帧">7. 调试手段：CRC 自检与基准帧</h2>
+<p>对任何一侧的 CRC16 表，先用标准 check 串自检，结果应为 0x6F91：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">crc16_calc(</span><span style="color:#D73A49">b</span><span style="color:#032F62">"123456789"</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">FFFF</span><span style="color:#24292E">) </span><span style="color:#D73A49">==</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">6F91</span></span></code></pre>
+<p>不相等说明表或初始值被改过，先解决这一层，再看帧。</p>
+<p>用脚本实跑生成基准字节，在固件仓库根目录执行 <code>python3 generate_gimbal_packet.py</code>。默认参数下应输出 <code>53 50 01 db 0f c9 3f</code> 开头、<code>0e fc</code> 结尾的 29 字节。把这段字节发给固件，在 <code>usb_decode.cpp:85</code> 的 <code>calc == pkt.crc16</code> 处下断点，比较 <code>calc</code> 与 <code>pkt.crc16</code>。两者不等时，检查 CRC 覆盖长度是否仍是 27。</p>
+<p>反向解码把固件实际发出的 43 字节贴给解码脚本：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">python3</span><span style="color:#032F62"> generate_gimbal_packet_decode.py</span><span style="color:#032F62"> "53 50 01 ... 58 c8"</span></span></code></pre>
+<p>输出里的 <code>Yaw 角度</code>、<code>Pitch 角度</code> 与固件断点处的 <code>tx_pkt</code> 成员比对。CRC 报错时先看长度是否为 43，再确认 CRC 是否从偏移 41 读取。</p>
+<h2 id="8-crc-失败路径的两种结果">8. CRC 失败路径的两种结果</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    participant PC as 视觉小电脑
+    participant D as USBDecode
+    participant T as UsbConnectTask
+    PC->>D: 29 字节帧
+    D->>D: 收满 29 字节
+    D->>D: crc16_calc(buffer, 27, 0xFFFF)
+    alt 与 pkt.crc16 相等且 mode 不超过 2
+        D-->>T: feed 返回真
+        T->>T: 更新 vision_data
+    else 校验或模式判定失败
+        D->>D: error_count_ 加一
+        D-->>T: feed 返回假
+        T->>T: vision_data 保持不变
+    end</pre></div>
+<p>失败路径有两种：字节被破坏与模式值非法。两者都会让 <code>feed</code> 返回假并自增 <code>error_count_</code>，区分它们需要在比较处临时打印，或者先看 <code>mode</code> 字节是否超过 2。<code>error_count_</code> 在成功时清零（<code>91</code>），因此它只反映连续失败次数。</p>
+<h2 id="9-易错点速查">9. 易错点速查</h2>
+<ul>
+<li>改 CRC 初始值或表时只改一侧。</li>
+<li>改结构体字段后只改了 C 或只改了 Python。</li>
+<li>把脚本打印的模式名当成协议取值。</li>
+<li>用死代码 <code>parse_vision_to_gimbal_manual</code> 的读法作为参考。</li>
+<li>把 <code>pkt.crc16 = 0</code> 当成多余语句删掉后，又改了 CRC 覆盖长度。</li>
+<li>依赖 <code>USB_Data_Received</code> 收数据，而真实路径在 <code>CDC_Receive_FS</code>。</li>
+<li>队列容量与帧率不匹配时出现偶发丢帧，误判为 CRC 算法问题。</li>
+<li>只靠 CRC 判定帧有效，忽略 <code>mode</code> 与字段数值的合理性。</li>
+</ul>
+<h2 id="10-小结">10. 小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>排查顺序</td><td>长度、帧头、CRC、字段、消费点</td></tr><tr><td>CRC 自检</td><td><code>crc16_calc(b"123456789", 0xFFFF)</code> 应为 0x6F91</td></tr><tr><td>基准帧</td><td>脚本默认输出以 <code>0e fc</code> 结尾</td></tr><tr><td>唯一权威</td><td>协议取 <code>usb_protocol.h</code> 与代码，注释与打印仅供参考</td></tr><tr><td>死代码</td><td>手动解析、<code>build_crc_packet</code>、<code>USB_Data_Received</code>、<code>errorCount</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>协议在结构与脚本中各有一份</td><td>两侧独立实现便于交叉验证</td><td>表与字段要人工保持同步</td></tr><tr><td>状态机不做回溯重同步</td><td>实现简单，不会误吞载荷</td><td>帧头前多一字节时跳过整帧</td></tr><tr><td>队列按字节存放</td><td>与 CDC 回调的粒度一致</td><td>容量按字节计，帧率上升时容易满</td></tr><tr><td>错误计数只在成功时清零</td><td>反映连续出错情况</td><td>历史累计错误会被抹掉</td></tr></tbody></table>
+<h2 id="11-练习">11. 练习</h2>
+<p>基础题：</p>
+<ol>
+<li>写出 <code>crc16_calc</code> 自检用的输入与期望输出，并说明为什么这个值能判断表的正确性。</li>
+<li>脚本默认输出中 CRC 是 <code>0e fc</code>，写出它按 <code>&#x3C;H</code> 读出的数值。</li>
+<li>指出 <code>USB_Data_Received</code> 与 <code>CDC_Receive_FS</code> 各自的职责，说明哪一个在当前固件里实际被调用。</li>
+</ol>
+<p>挑战题：</p>
+<ol>
+<li>给 <code>USBDecode::feed</code> 增加在 <code>WAIT_HEAD_1</code> 失败时把当前字节当作 <code>FRAME_HEAD_0</code> 重试的逻辑，说明修改后错误计数与重同步行为的变化。</li>
+<li>用一段抓包字节复现「帧头前多一个 0x53」导致的整帧跳过，给出原始字节与修改前后的解析结果。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
+<ul>
+<li><code>generate_gimbal_packet.py:10</code>、<code>36-57</code>、<code>93</code></li>
+<li><code>generate_gimbal_packet_decode.py:116</code></li>
+<li><code>Communication/Inc/usb_protocol.h:31-36</code></li>
+<li><code>Communication/Src/usb_protocol.cpp:38-45</code></li>
+<li><code>Communication/Inc/usb_decode.h:36</code></li>
+<li><code>Communication/Src/usb_decode.cpp:13-34</code>、<code>60-104</code>、<code>115-123</code></li>
+<li><code>Task/Src/UsbConnectTask.cpp:154</code>、<code>165-174</code></li>
+<li><code>USB_DEVICE/App/usbd_cdc_if.c:270-274</code></li>
+<li><code>Core/Src/freertos.c:114</code></li>
+<li><code>Algorithm/Src/CRC16.cpp:7-41</code></li>
+<li><code>云台串口协议.md</code></li>
+</ul></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/05-%E8%A3%81%E5%88%A4%E7%B3%BB%E7%BB%9F%E5%8D%8F%E8%AE%AE/"><span class="k">← 上一篇</span><span class="t">裁判系统协议</span><span class="d">串口通信与协议 · 5 个文件</span></a><a class="next" href="/tc63/docs/05-USB%20Device/01-CDC%E8%99%9A%E6%8B%9F%E4%B8%B2%E5%8F%A3/"><span class="k">下一篇 →</span><span class="t">CDC虚拟串口</span><span class="d">USB Device · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -1,0 +1,1120 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>静态托管与子路径 · nginx 配置 · 王宇翔</title><meta name="description" content="从 URI 到磁盘路径的拼接过程、location 命中后的 index 与 try_files 判断、目录形式与尾斜杠的关系、root 与 alias 在子路径下的差别，以及站点根是软链接带来的额外一级检查。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/02-%E9%9D%99%E6%80%81%E6%89%98%E7%AE%A1%E4%B8%8E%E5%AD%90%E8%B7%AF%E5%BE%84/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="静态托管与子路径 · nginx 配置 · 王宇翔"><meta property="og:description" content="从 URI 到磁盘路径的拼接过程、location 命中后的 index 与 try_files 判断、目录形式与尾斜杠的关系、root 与 alias 在子路径下的差别，以及站点根是软链接带来的额外一级检查。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/02-%E9%9D%99%E6%80%81%E6%89%98%E7%AE%A1%E4%B8%8E%E5%AD%90%E8%B7%AF%E5%BE%84/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/">nginx 配置</a><span class="sep" aria-hidden="true">/</span><span class="now">静态托管与子路径</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>静态托管与子路径</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>静态请求的处理顺序</span></a><ul class="toc__heads"><li><a href="#uri-先被拼成磁盘路径" data-depth="2" data-heading-j="0">URI 先被拼成磁盘路径</a></li><li><a href="#location-命中之后的三个判断" data-depth="2" data-heading-j="1">location 命中之后的三个判断</a></li><li><a href="#目录形式与尾斜杠" data-depth="2" data-heading-j="2">目录形式与尾斜杠</a></li><li><a href="#root-与-alias-在子路径下的差别" data-depth="2" data-heading-j="3">root 与 alias 在子路径下的差别</a></li><li><a href="#站点根是一条软链接" data-depth="2" data-heading-j="4">站点根是一条软链接</a></li><li><a href="#默认关闭的目录列举" data-depth="2" data-heading-j="5">默认关闭的目录列举</a></li><li><a href="#请求路径与文件系统的对齐检查" data-depth="2" data-heading-j="6">请求路径与文件系统的对齐检查</a></li><li><a href="#易错点" data-depth="2" data-heading-j="7">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>子路径下的三条 location</span></a><ul class="toc__heads"><li><a href="#三条-location-各自的职责" data-depth="2" data-heading-j="0">三条 location 各自的职责</a></li><li><a href="#精确匹配只处理入口" data-depth="2" data-heading-j="1">精确匹配只处理入口</a></li><li><a href="#-让静态前缀跳过正则" data-depth="2" data-heading-j="2">^~ 让静态前缀跳过正则</a></li><li><a href="#静态资源的独立前缀与缓存头" data-depth="2" data-heading-j="3">静态资源的独立前缀与缓存头</a></li><li><a href="#自定义-404-的接入方式" data-depth="2" data-heading-j="4">自定义 404 的接入方式</a></li><li><a href="#与域名根配置共存的插入方式" data-depth="2" data-heading-j="5">与域名根配置共存的插入方式</a></li><li><a href="#验证三条规则是否都在生效" data-depth="2" data-heading-j="6">验证三条规则是否都在生效</a></li><li><a href="#易错点" data-depth="2" data-heading-j="7">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>base 前缀与资源路径</span></a><ul class="toc__heads"><li><a href="#base-决定三类引用" data-depth="2" data-heading-j="0">base 决定三类引用</a></li><li><a href="#url-为什么要剥掉尾斜杠" data-depth="2" data-heading-j="1">url() 为什么要剥掉尾斜杠</a></li><li><a href="#构建产物的目录形式与资源命名" data-depth="2" data-heading-j="2">构建产物的目录形式与资源命名</a></li><li><a href="#同一份源码的两套前缀" data-depth="2" data-heading-j="3">同一份源码的两套前缀</a></li><li><a href="#推送之前的本地先验" data-depth="2" data-heading-j="4">推送之前的本地先验</a></li><li><a href="#子路径改动的影响面" data-depth="2" data-heading-j="5">子路径改动的影响面</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>缓存与 404 的边界</span></a><ul class="toc__heads"><li><a href="#内容哈希让长缓存成立" data-depth="2" data-heading-j="0">内容哈希让长缓存成立</a></li><li><a href="#哪些路径没有显式缓存头" data-depth="2" data-heading-j="1">哪些路径没有显式缓存头</a></li><li><a href="#静态站与-spa-的-404-差别" data-depth="2" data-heading-j="2">静态站与 SPA 的 404 差别</a></li><li><a href="#自定义-404-页的触发链" data-depth="2" data-heading-j="3">自定义 404 页的触发链</a></li><li><a href="#目录列举与点文件" data-depth="2" data-heading-j="4">目录列举与点文件</a></li><li><a href="#产物整体替换带来的旧资源失效" data-depth="2" data-heading-j="5">产物整体替换带来的旧资源失效</a></li><li><a href="#部署后的核对项" data-depth="2" data-heading-j="6">部署后的核对项</a></li><li><a href="#易错点" data-depth="2" data-heading-j="7">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="14">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">nginx 配置</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>nginx / 静态托管 / try_files / root / 子路径 / location / 缓存 / 404</span></div><h1 class="docs__title">静态托管与子路径</h1><p class="docs__lead">从 URI 到磁盘路径的拼接过程、location 命中后的 index 与 try_files 判断、目录形式与尾斜杠的关系、root 与 alias 在子路径下的差别，以及站点根是软链接带来的额外一级检查。</p></header><section class="dfile" id="file-1" data-file="01-静态请求的处理顺序"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-静态请求的处理顺序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/02-静态托管与子路径/01-静态请求的处理顺序.md</span></div><div class="dfile__body"><h1 id="静态请求的处理顺序">静态请求的处理顺序</h1>
+<p>静态托管做的事情是把 URL 映射到磁盘上的文件并读出来。个人主页没有应用进程，<code>/tc63/</code> 下的每个请求都由 nginx 打开一个文件返回，因此这条链路上的每一步都能在配置里找到对应的指令。</p>
+<p>nginx 处理一个请求的顺序是：先选 location，再把 URI 拼成磁盘路径，然后判断目标是文件还是目录，最后决定返回内容、404 页还是重定向。对象是服务器上 <code>/etc/nginx/sites-available/knowledgediver</code> 里为 <code>/tc63/</code> 插入的三条 location（<code>personal-homepage-research/15-deploy-tc63.md:63-77</code>）。location 的匹配优先级与修饰符规则在 <code>01-反向代理/01-反向代理与location匹配</code> 里讲，这里不重复。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>请求</th><th>命中 location</th><th>磁盘目标</th><th>响应</th></tr></thead><tbody><tr><td><code>/tc63</code></td><td><code>location = /tc63</code></td><td>不读文件</td><td>301 到 <code>/tc63/</code></td></tr><tr><td><code>/tc63/</code></td><td><code>location ^~ /tc63/</code></td><td><code>.../tc63/index.html</code></td><td>200</td></tr><tr><td><code>/tc63/about/</code></td><td><code>location ^~ /tc63/</code></td><td><code>.../tc63/about/index.html</code></td><td>200</td></tr><tr><td><code>/tc63/_astro/*.css</code></td><td><code>location ^~ /tc63/_astro/</code></td><td><code>.../tc63/_astro/*.css</code></td><td>200，带长缓存头</td></tr><tr><td><code>/tc63/nope/</code></td><td><code>location ^~ /tc63/</code></td><td>不存在</td><td>404，内容取自 <code>404.html</code></td></tr></tbody></table>
+<h2 id="uri-先被拼成磁盘路径">URI 先被拼成磁盘路径</h2>
+<p><code>root</code> 指令给出一个目录前缀，nginx 把完整的 URI 接在它后面。配置是 <code>root /home/tc63/www</code>，因此 <code>/tc63/about/index.html</code> 对应 <code>/home/tc63/www/tc63/about/index.html</code>。这一层拼接不做任何重写或截断，<code>/tc63</code> 这一级也原样保留在路径里。</p>
+<p>文件放在 <code>/home/tc63/www/tc63/</code> 下，而 <code>tc63</code> 是一条指向 <code>/home/tc63/site/dist</code> 的软链接（<code>personal-homepage-research/15-deploy-tc63.md:129</code>、<code>README.md:163</code>），所以读到的实际是仓库里的构建产物。用 <code>root</code> 而不是 <code>alias</code> 的理由在 <code>## root 与 alias 在子路径下的差别</code> 里说明。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    R["请求 /tc63/about/"] --> L["location ^~ /tc63/"]
+    L --> ROOT["root /home/tc63/www"]
+    ROOT --> P["拼成 /home/tc63/www/tc63/about/"]
+    P --> SYM["tc63 为软链，实际落在 /home/tc63/site/dist/about/"]
+    SYM --> IDX["index index.html 命中目录内的 index.html"]
+    IDX --> OK["返回文件内容与 200"]</pre></div>
+<h2 id="location-命中之后的三个判断">location 命中之后的三个判断</h2>
+<p>进到 <code>location ^~ /tc63/</code> 之后，配置里还有三条语句参与决定返回什么：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> ^~</span><span style="color:#032F62"> /tc63/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    root </span><span style="color:#24292E">/home/tc63/www;</span></span>
+<span class="line"><span style="color:#D73A49">    index </span><span style="color:#24292E">index.html;</span></span>
+<span class="line"><span style="color:#D73A49">    try_files </span><span style="color:#24292E">$uri $uri/ </span><span style="color:#005CC5">=404</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    error_page </span><span style="color:#005CC5">404</span><span style="color:#24292E"> /tc63/404.html;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>（<code>personal-homepage-research/15-deploy-tc63.md:71-76</code>）</p>
+<p><code>try_files $uri $uri/ =404</code> 依次尝试三个候选：把 URI 当文件、把 URI 当目录、都不成立就返回 404。第二步命中目录时，nginx 会对该目录做一次内部重定向，接着由 <code>index index.html</code> 决定读哪个文件。<code>error_page 404</code> 把默认的 404 响应体换成站点自己的页面。这条指令不带 <code>=200</code> 一类的状态改写，响应码仍是 404，只有响应体被替换，因此状态码与自定义页两件事同时成立。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant C as 客户端
+    participant N as nginx
+    participant F as 站点文件
+    C->>N: GET /tc63/about/
+    N->>F: 检查 .../about/ 是否为文件
+    N->>F: 检查 .../about/ 是否为目录
+    F-->>N: 是目录
+    N->>F: 按 index 读 .../about/index.html
+    F-->>N: 文件内容
+    N-->>C: 200
+    C->>N: GET /tc63/nope/
+    N->>F: 文件与目录都不成立
+    N->>F: 读取 /tc63/404.html
+    F-->>N: 404 页内容
+    N-->>C: 404</pre></div>
+<h2 id="目录形式与尾斜杠">目录形式与尾斜杠</h2>
+<p>Astro 默认按目录形式输出页面：<code>/about/</code> 对应 <code>dist/about/index.html</code>，<code>/projects/&#x3C;slug>/</code> 对应 <code>dist/projects/&#x3C;slug>/index.html</code>。当前构建产出一共 27 个 HTML 文件，分布在 <code>dist/about/</code>、<code>dist/projects/*/</code> 与 <code>dist/docs/</code> 下面。nginx 侧不需要为每种页面写规则，目录加 <code>index</code> 就能覆盖。</p>
+<p>尾斜杠由两处规则处理。入口 <code>/tc63</code> 不带斜杠时命中的是精确匹配 <code>location = /tc63</code>，它返回一条 301 补上斜杠（<code>personal-homepage-research/15-deploy-tc63.md:66</code>）。子路径 <code>/tc63/about</code> 没有专门规则，<code>try_files</code> 的第二步把目录作为候选，内部重定向后由 <code>index</code> 接住，行为与带斜杠的写法一致。构建产物的 <code>canonical</code> 统一写成带斜杠的形式，例如 <code>https://knowledgediver.cloud/tc63/about/</code>（<code>dist/about/index.html</code> 内的 <code>link rel="canonical"</code>）。</p>
+<h2 id="root-与-alias-在子路径下的差别">root 与 alias 在子路径下的差别</h2>
+<p><code>root</code> 是拼接，<code>alias</code> 是替换。同样是把 <code>/tc63/</code> 指向站点目录，两种写法的结果如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th><code>/tc63/about/</code> 映射到</th><th>需要对齐的细节</th></tr></thead><tbody><tr><td><code>root /home/tc63/www</code></td><td><code>/home/tc63/www/tc63/about/</code></td><td>目录名要恰好与 URI 前缀同名</td></tr><tr><td><code>alias /home/tc63/www/tc63/;</code></td><td><code>/home/tc63/www/tc63/about/</code></td><td><code>location</code> 与 <code>alias</code> 的结尾斜杠必须同时有或同时无</td></tr></tbody></table>
+<p>两种写法在路径正确时指向同一个文件，差别在出错时的表现。<code>alias</code> 与 <code>try_files</code> 组合时，如果 <code>location</code> 带尾斜杠而 <code>alias</code> 不带，拼接出的路径会缺少一级；<code>root</code> 没有这个问题，因为前缀与 URI 各管一段，拼接关系固定。服务器上的配置用了 <code>root</code>（<code>personal-homepage-research/15-deploy-tc63.md:79-80</code>），文件名与目录名本来就一致，拼接天然对上。</p>
+<h2 id="站点根是一条软链接">站点根是一条软链接</h2>
+<p><code>/home/tc63/www/tc63</code> 是软链接，nginx 默认会跟随它（<code>disable_symlinks</code> 未开启）。这带来一个好处和一个代价：<code>git pull</code> 更新 <code>~/site/dist</code> 后站点立即生效，配置不用改；同时打开文件要经过符号链接解析，路径上多出 <code>/home/tc63/site</code> 与 <code>dist</code> 两级，这两级目录也需要对 worker 进程可进入。权限的具体要求见 <code>04-HTTPS与权限/03-文件权限与nginx读取路径</code>。</p>
+<h2 id="默认关闭的目录列举">默认关闭的目录列举</h2>
+<p>请求一个没有 <code>index.html</code> 的目录时，nginx 不会列出目录内容：<code>autoindex</code> 默认为 <code>off</code>，此时返回 403 或 404。本工程的站点树里没有点文件（构建产物 <code>dist/</code> 下检查结果为空），因此也不存在通过 <code>/tc63/.env</code> 一类路径读到内部文件的情形。若以后产物里出现点文件，需要在 location 里另加拒绝规则，现有配置没有这一条。</p>
+<h2 id="请求路径与文件系统的对齐检查">请求路径与文件系统的对齐检查</h2>
+<p>目录形式产物意味着每个页面只对应一个 <code>index.html</code>，没有同名的 <code>.html</code> 文件。请求 <code>/tc63/about</code> 与 <code>/tc63/about/</code> 都能返回页面，请求 <code>/tc63/about.html</code> 则会落到 <code>try_files</code> 的第三段。这类路径上的差别在排查时经常被忽略。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>请求</th><th>磁盘候选</th><th>结果</th></tr></thead><tbody><tr><td><code>/tc63/about/</code></td><td><code>dist/about/index.html</code></td><td>200</td></tr><tr><td><code>/tc63/about</code></td><td>目录候选命中，内部重定向后取 <code>index.html</code></td><td>200，地址栏不变</td></tr><tr><td><code>/tc63/about.html</code></td><td><code>dist/about.html</code> 不存在</td><td>404，返回自定义页</td></tr><tr><td><code>/tc63/about/index.html</code></td><td>直接命中文件</td><td>200，canonical 仍指向 <code>/tc63/about/</code></td></tr></tbody></table>
+<p>最后一行是常见现象：直接写完整文件名也能拿到内容，但页面里的 <code>canonical</code> 与站内链接指向的是目录形式，因此不应把带 <code>index.html</code> 的 URL 当成正式入口。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>判据</th></tr></thead><tbody><tr><td><code>/tc63</code> 返回 301 而不是页面</td><td>入口精确匹配只做补斜杠</td><td>请求 <code>/tc63/</code> 应返回 200</td></tr><tr><td>子页面返回 404，文件确实存在</td><td>目录下缺少 <code>index.html</code>，或路径拼错一级</td><td>对照 <code>dist/</code> 下的实际目录结构</td></tr><tr><td>改了 <code>alias</code> 后 <code>try_files</code> 找不到文件</td><td><code>location</code> 与 <code>alias</code> 的尾斜杠不配对</td><td>用 <code>nginx -T</code> 看展开后的配置</td></tr><tr><td>软链目标更新后仍返回旧内容</td><td>请求命中的是缓存或另一份产物</td><td>比较响应体与 <code>~/site/dist</code> 下文件</td></tr><tr><td>请求目录得到 403</td><td><code>autoindex off</code> 且无 <code>index.html</code></td><td>状态码 403 与 error.log 的记录</td></tr><tr><td>站点根写成 <code>root /home/tc63/www/tc63</code></td><td>把 <code>root</code> 当成了 <code>alias</code></td><td>正确写法只到 <code>www</code> 一级</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>root</code> 把 URI 接在前缀后面，子路径部署时目录结构要与 URI 对应。</li>
+<li><code>try_files</code> 的两级候选加 <code>index</code> 覆盖了文件与目录两种请求。</li>
+<li>目录形式输出下，每个页面是一个目录加一个 <code>index.html</code>。</li>
+<li>站点根是软链接，解析路径上多两级目录，权限要一起放开。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>路径指令</td><td><code>root</code></td><td>拼接关系固定，不易出错</td><td>目录名必须与 URI 前缀同名</td></tr><tr><td>入口斜杠</td><td>精确匹配加 301</td><td>两种入口最终落到同一路径</td><td>多一次往返</td></tr><tr><td>目录页</td><td><code>index index.html</code></td><td>不用为每页写规则</td><td>目录必须按约定命名</td></tr><tr><td>站点接入</td><td>软链接到产物目录</td><td>更新即生效</td><td>路径解析多两级，权限要求变长</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出请求 <code>/tc63/docs/index.html</code> 在 <code>root /home/tc63/www</code> 下对应的磁盘路径。</li>
+<li><code>try_files $uri $uri/ =404</code> 的三段各自在什么条件下命中？</li>
+<li>说明 <code>/tc63</code> 与 <code>/tc63/</code> 的响应差别，以及产生差别的那条配置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>把 <code>root</code> 换成 <code>alias</code>，写出完整指令并说明尾斜杠写错时 <code>/tc63/about/</code> 会映射到哪个路径。</p>
+</li>
+<li>
+<p>站点从软链接接入改成直接放在 <code>www/tc63/</code>，列出需要改动的配置与权限项，并说明哪一项最容易漏。</p>
+</li>
+<li>
+<p>请求一个只含图片、没有 <code>index.html</code> 的目录，预测状态码并说明依据。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>三条 location 的内容、root 与 alias 取舍、软链接（<code>:63-80</code>、<code>:129</code>、<code>:155-161</code>）</td></tr><tr><td><code>README.md</code></td><td>nginx root 与软链接的分工（<code>:162-164</code>）</td></tr><tr><td><code>astro.config.mjs</code></td><td><code>site</code> 与 <code>base</code>（<code>:16-17</code>）</td></tr><tr><td><code>dist/index.html</code>、<code>dist/about/index.html</code>、<code>dist/404.html</code></td><td>构建产物的目录形式与 canonical</td></tr><tr><td><code>docs/32-nginx 配置/01-反向代理/01-反向代理与location匹配.md</code></td><td>location 优先级与 try_files 的一般规则（<code>:37-98</code>）</td></tr><tr><td><code>/etc/nginx/sites-available/knowledgediver</code></td><td>线上生效配置（服务器文件，未在本机核对）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-子路径下的三条location"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-子路径下的三条location</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/02-静态托管与子路径/02-子路径下的三条location.md</span></div><div class="dfile__body"><h1 id="子路径下的三条-location">子路径下的三条 location</h1>
+<p>个人主页的 nginx 配置只有三条 location，全部挂在 <code>/tc63</code> 前缀上。它们分别负责入口补斜杠、静态资源长缓存与页面内容，覆盖了站点运行需要的全部请求类型。</p>
+<p>三段配置各有其选择理由，重点在两处容易被当成「写法习惯」的地方：<code>^~</code> 修饰符的作用范围，以及 <code>_astro</code> 为什么要单独占一条前缀。配置原文来自服务器启用脚本插入的内容（<code>personal-homepage-research/15-deploy-tc63.md:63-77</code>）。</p>
+<h2 id="三条-location-各自的职责">三条 location 各自的职责</h2>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> /tc63 </span><span style="color:#24292E">{ </span><span style="color:#D73A49">return</span><span style="color:#005CC5"> 301</span><span style="color:#24292E"> /tc63/; }</span></span>
+<span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> ^~</span><span style="color:#032F62"> /tc63/_astro/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    root </span><span style="color:#24292E">/home/tc63/www;</span></span>
+<span class="line"><span style="color:#D73A49">    add_header </span><span style="color:#24292E">Cache-Control </span><span style="color:#032F62">"public, max-age=2592000, immutable"</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> ^~</span><span style="color:#032F62"> /tc63/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    root </span><span style="color:#24292E">/home/tc63/www;</span></span>
+<span class="line"><span style="color:#D73A49">    index </span><span style="color:#24292E">index.html;</span></span>
+<span class="line"><span style="color:#D73A49">    try_files </span><span style="color:#24292E">$uri $uri/ </span><span style="color:#005CC5">=404</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    error_page </span><span style="color:#005CC5">404</span><span style="color:#24292E"> /tc63/404.html;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>location</th><th>匹配范围</th><th>主要动作</th><th>典型请求</th></tr></thead><tbody><tr><td><code>= /tc63</code></td><td>只有不带斜杠的入口</td><td>301 到 <code>/tc63/</code></td><td><code>GET /tc63</code></td></tr><tr><td><code>^~ /tc63/_astro/</code></td><td>构建产物里的资源目录</td><td>加长缓存头后返回文件</td><td><code>GET /tc63/_astro/BaseLayout.Bw8pNA6E.css</code></td></tr><tr><td><code>^~ /tc63/</code></td><td>其余全部</td><td>目录页、404 页</td><td><code>GET /tc63/about/</code></td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    Q["请求 /tc63 前缀下的路径"] --> E{"是否恰好是 /tc63"}
+    E -->|"是"| R301["301 到 /tc63/"]
+    E -->|"否"| A{"是否以 /tc63/_astro/ 开头"}
+    A -->|"是"| CACHE["命中资源 location&#x3C;br/>加 Cache-Control 后返回"]
+    A -->|"否"| PAGE["命中页面 location&#x3C;br/>try_files 与 index"]
+    PAGE --> OK["返回文件或自定义 404"]</pre></div>
+<h2 id="精确匹配只处理入口">精确匹配只处理入口</h2>
+<p><code>location = /tc63</code> 用等号限定为完整匹配，只有 URI 恰好是 <code>/tc63</code> 时才命中。它的作用是把不带尾斜杠的入口收敛到带斜杠的形式，返回 301 而不是直接返回页面内容。带查询串的 <code>/tc63?x=1</code> 同样命中这一条，因为匹配不看查询串。</p>
+<p>用精确匹配而不是普通前缀，是为了不影响 <code>/tc63/</code> 下的其他路径。普通前缀 <code>location /tc63</code> 会让所有 <code>/tc63...</code> 开头的请求都进入这条规则，包括资源与子页面，那样就得在块里再写一层判断。等号写法只覆盖一个 URI，职责最小。</p>
+<h2 id="-让静态前缀跳过正则">^~ 让静态前缀跳过正则</h2>
+<p>两条内容 location 都带 <code>^~</code> 修饰符。前缀匹配命中 <code>^~</code> 之后，nginx 不再继续检查正则 location，直接采用这一条。作用范围仅限「是否继续匹配正则」，不影响普通前缀之间的最长优先规则。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    S["按前缀找出最长的一条"] --> T{"该条是否带 ^~ 且命中"}
+    T -->|"是"| USE["直接采用，跳过正则"]
+    T -->|"否"| RE{"存在匹配的正则 location？"}
+    RE -->|"是"| USEREG["采用正则那条"]
+    RE -->|"否"| USEP["采用前缀那条"]</pre></div>
+<p>加这个修饰符的用意是防御：站点配置之外的配置里可能存在正则 location（例如拦截隐藏文件的规则），带 <code>^~</code> 的前缀能保证站点自己的规则优先。本仓库里的样例配置没有正则 location（KD 仓库 <code>deploy/nginx.conf:4-26</code>），服务器上完整生效的配置未在本机核对。</p>
+<p>两条前缀中，<code>/tc63/_astro/</code> 比 <code>/tc63/</code> 长，按最长优先命中资源那条，与书写顺序无关。把资源规则写在前面只是让阅读顺序与匹配结果一致。</p>
+<h2 id="静态资源的独立前缀与缓存头">静态资源的独立前缀与缓存头</h2>
+<p><code>_astro/</code> 下是构建器生成的资源，文件名带内容哈希，例如 <code>BaseLayout.Bw8pNA6E.css</code>、<code>FluidBackground.astro_astro_type_script_index_0_lang.D0mjmIVk.js</code>。内容改变时文件名随之改变，因此可以放心让浏览器长期缓存。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">add_header </span><span style="color:#24292E">Cache-Control </span><span style="color:#032F62">"public, max-age=2592000, immutable"</span><span style="color:#24292E">;</span></span></code></pre>
+<p><code>max-age=2592000</code> 是 30 天，<code>immutable</code> 表示在有效期内不必再发校验请求。这条设置只作用于 <code>/tc63/_astro/</code> 前缀，不会影响 HTML 与 <code>search-index.json</code>。页面 HTML 的引用总是指向带哈希的文件名，所以资源更新时页面里换的是 URL，不会出现旧缓存覆盖新内容的情况。</p>
+<p>资源单独占一条前缀还有一个副作用：这条 location 里没有 <code>try_files</code>，请求一个不存在的资源会直接由 nginx 返回 404，不会被页面的回退规则接住。对静态资源来说这是期望行为。</p>
+<h2 id="自定义-404-的接入方式">自定义 404 的接入方式</h2>
+<p>页面 location 的最后一行是 <code>error_page 404 /tc63/404.html;</code>。<code>try_files</code> 的第三段判定失败后，nginx 把响应体替换成这条指令指向的文件，同时保留 404 状态码。</p>
+<p>被指向的 <code>/tc63/404.html</code> 又会重新进入同一条页面 location：它不以 <code>/tc63/_astro/</code> 开头，因此命中 <code>^~ /tc63/</code>，<code>try_files</code> 找到 <code>dist/404.html</code> 后正常返回内容。这个过程是内部重定向，客户端只看到一次响应。构建产物里确实存在 <code>dist/404.html</code>，大小约 3.9 KB。</p>
+<h2 id="与域名根配置共存的插入方式">与域名根配置共存的插入方式</h2>
+<p>启用脚本的做法是在每个已有 server 块的 <code>location /api/</code> 之前插入这三条，没有新建 server 块（<code>personal-homepage-research/15-deploy-tc63.md:63</code>）。域名根的 <code>location /</code> 与 <code>/api/</code> 保持原样，因此 KnowledgeDiver 不受影响。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>已有配置</th><th>插入后的关系</th></tr></thead><tbody><tr><td><code>location /</code>（域名根前端）</td><td>保留，只处理不以 <code>/tc63</code> 开头的请求</td></tr><tr><td><code>location /api/</code>（后端代理）</td><td>保留，插入位置在其之前，但前缀不同，互不遮挡</td></tr><tr><td>80 与 443 两个 server 块</td><td>各自插入一份，HTTPS 与 HTTP 行为一致</td></tr></tbody></table>
+<p>插入位置在 <code>/api/</code> 之前，是因为脚本按这个锚点做插入（<code>personal-homepage-research/15-deploy-tc63.md:63</code>）。两条前缀没有重叠，先后顺序不影响匹配结果。</p>
+<h2 id="验证三条规则是否都在生效">验证三条规则是否都在生效</h2>
+<p>配置写完之后的核对可以只靠状态码与响应头，不需要通读配置。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>请求</th><th>期望</th><th>检查点</th></tr></thead><tbody><tr><td>请求不带斜杠的入口 <code>/tc63</code></td><td><code>301</code>，<code>Location</code> 指向 <code>/tc63/</code></td><td>精确匹配生效</td></tr><tr><td>请求 <code>/tc63/</code></td><td><code>200</code></td><td>页面 location 生效</td></tr><tr><td>请求 <code>/tc63/_astro/&#x3C;带哈希文件名></code></td><td><code>200</code>，<code>Cache-Control</code> 含 <code>max-age=2592000</code></td><td>资源 location 生效</td></tr><tr><td>请求 <code>/tc63/nope/</code></td><td><code>404</code></td><td><code>error_page</code> 生效且状态码未被改写</td></tr></tbody></table>
+<p>服务器上没有 <code>curl</code>，本机侧的核对照旧，服务器侧可以用 <code>nc</code> 发一次 <code>HTTP/1.0</code> 请求看响应行（<code>04-HTTPS与权限/04-验证与故障分层</code> 有现成写法）。四条请求的期望值互相独立，任何一条不符都能定位到具体是哪段规则没有生效。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>判据</th></tr></thead><tbody><tr><td>资源命中了页面规则</td><td>前缀写成 <code>/tc63/</code> 一条</td><td>用 <code>nginx -T</code> 检查是否真有 <code>_astro</code> 那条</td></tr><tr><td><code>^~</code> 写成了普通前缀</td><td>正则 location 抢先匹配</td><td>对照 <code>nginx -T</code> 展开后的顺序与修饰符</td></tr><tr><td>资源更新后浏览器仍用旧文件</td><td>缓存头加在了错误前缀上，或文件名没有哈希</td><td>核对响应头与 <code>dist/_astro/</code> 下的文件名</td></tr><tr><td>404 状态码变成 200</td><td><code>error_page</code> 被写了 <code>=200</code></td><td>直接请求一个不存在的路径看状态码</td></tr><tr><td>HTTP 下行为与 HTTPS 不同</td><td>只在一个 server 块里插入了 location</td><td>两个 server 块都要有这三条</td></tr><tr><td>误以为书写顺序决定优先级</td><td>前缀匹配按最长优先</td><td>见 <code>01-反向代理/01-反向代理与location匹配</code> 的选择顺序一节</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>三条 location 覆盖入口、资源与页面三类请求。</li>
+<li>精确匹配把入口收敛到带斜杠形式，不参与前缀竞争。</li>
+<li><code>^~</code> 只影响是否继续匹配正则，前缀之间仍按最长优先。</li>
+<li>资源前缀带内容哈希，长缓存与 URL 变化配合成立。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>入口处理</td><td>精确匹配加 301</td><td>不影响子路径匹配</td><td>客户端多一次请求</td></tr><tr><td>修饰符</td><td>前缀加 <code>^~</code></td><td>不受正则 location 干扰</td><td>需要理解它对正则的跳过语义</td></tr><tr><td>资源缓存</td><td>30 天 immutable</td><td>回访不再请求资源</td><td>文件名不哈希时无法安全使用</td></tr><tr><td>404 处理</td><td>自定义页保留 404 状态</td><td>用户看到站点页面，状态码仍正确</td><td>需要在产物里保留 <code>404.html</code></td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>请求 <code>/tc63/_astro/foo.css</code> 会命中哪一条 location？说明理由。</li>
+<li><code>location = /tc63</code> 与 <code>location /tc63</code> 在匹配范围上有什么差别？</li>
+<li><code>add_header Cache-Control</code> 写在资源 location 里，是否会影响 <code>/tc63/index.html</code>？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>如果把 <code>^~</code> 全部去掉，举出一个会改变行为的场景，并说明如何用 <code>nginx -T</code> 验证。</p>
+</li>
+<li>
+<p>设计一条规则让 HTML 也不被浏览器强缓存，写出指令位置与它和资源规则的分工。</p>
+</li>
+<li>
+<p>说明自定义 404 页为什么能返回内容而不是再次 404，写出这个过程中的两次路径判断。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>三条 location 原文与插入方式（<code>:63-77</code>、<code>:155-161</code>）</td></tr><tr><td><code>dist/_astro/</code>、<code>dist/404.html</code></td><td>带哈希的资源文件名与 404 页（构建产物）</td></tr><tr><td><code>docs/32-nginx 配置/01-反向代理/01-反向代理与location匹配.md</code></td><td>location 选择顺序与修饰符表（<code>:37-56</code>）</td></tr><tr><td>KD 仓库 <code>deploy/nginx.conf</code></td><td>域名根的静态规则对照（<code>:9-12</code>）</td></tr><tr><td><code>/etc/nginx/sites-available/knowledgediver</code></td><td>线上生效配置（服务器文件，未在本机核对）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-base前缀与资源路径"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-base前缀与资源路径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/02-静态托管与子路径/03-base前缀与资源路径.md</span></div><div class="dfile__body"><h1 id="base-前缀与资源路径">base 前缀与资源路径</h1>
+<p>子路径部署里，nginx 只负责把 <code>/tc63/</code> 开头的请求映射到文件，决定页面里每个链接写成什么样的，是构建时的 <code>base</code> 配置。同一个 <code>/about/</code> 页面，根部署下链接是 <code>/about/</code>，子路径部署下必须是 <code>/tc63/about/</code>，写错就会打到域名根上的另一个应用。</p>
+<p><code>base</code> 覆盖哪些引用、手写链接为什么要经过统一出口、构建产物在文件名上留下什么特征，以及仓库里为什么同时存在两套前缀——这四点合起来决定资源路径对不对得上。对象是 <code>astro.config.mjs</code>、<code>src/lib/url.ts</code> 与 <code>dist/</code> 下的产物。</p>
+<h2 id="base-决定三类引用">base 决定三类引用</h2>
+<p>配置里 <code>site</code> 与 <code>base</code> 各管一半（<code>astro.config.mjs:16-17</code>）：<code>site</code> 给出域名，<code>base</code> 给出路径前缀。前者影响 <code>canonical</code>、<code>og:url</code> 一类绝对地址，后者影响所有静态资源的相对前缀。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>引用类型</th><th>由谁加前缀</th><th>产物中的例子</th></tr></thead><tbody><tr><td>构建器生成的资源</td><td><code>base</code></td><td><code>href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"</code></td></tr><tr><td>页面元信息</td><td><code>site</code> 加 <code>base</code></td><td><code>link rel="canonical"</code> 为 <code>https://knowledgediver.cloud/tc63/</code></td></tr><tr><td>手写的站内链接</td><td>需要显式调用 <code>url()</code></td><td><code>href="/tc63/projects/"</code></td></tr></tbody></table>
+<p>前两类由构建器自动处理，第三类不会。仓库在文档里明确记了这一点：<code>base</code> 会自动处理 JS/CSS 资源前缀、<code>canonical</code>、<code>og:url</code>、<code>og:image</code> 与 <code>_astro/</code> 引用，但不会改手写的链接（<code>personal-homepage-research/15-deploy-tc63.md:32</code>）。因此站内链接统一走 <code>src/lib/url.ts</code> 的 <code>url()</code>。实测的 <code>dist/index.html</code> 里没有出现任何不带 <code>/tc63</code> 前缀的根绝对引用。</p>
+<h2 id="url-为什么要剥掉尾斜杠">url() 为什么要剥掉尾斜杠</h2>
+<p><code>url()</code> 的实现只有几行（<code>src/lib/url.ts:11-16</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="ts"><code><span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> const</span><span style="color:#005CC5"> BASE</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> import</span><span style="color:#24292E">.</span><span style="color:#005CC5">meta</span><span style="color:#24292E">.env.</span><span style="color:#005CC5">BASE_URL</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">NaN</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> function</span><span style="color:#6F42C1"> url</span><span style="color:#24292E">(</span><span style="color:#E36209">path</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> '/'</span><span style="color:#24292E">)</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> string</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> p</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> path.</span><span style="color:#6F42C1">startsWith</span><span style="color:#24292E">(</span><span style="color:#032F62">'/'</span><span style="color:#24292E">) </span><span style="color:#D73A49">?</span><span style="color:#24292E"> path </span><span style="color:#D73A49">:</span><span style="color:#032F62"> '/'</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> path;</span></span>
+<span class="line"><span style="color:#D73A49">  return</span><span style="color:#005CC5"> ROOT</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> p;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>Astro 把 <code>BASE_URL</code> 设成配置里的原样值 <code>'/tc63'</code>，末尾没有斜杠，与 Vite 常见的 <code>'/tc63/'</code> 不同。如果直接做字符串拼接，<code>BASE_URL + 'fluid/xxx.png'</code> 会得到 <code>/tc63fluid/xxx.png</code>，资源与搜索索引同时 404（<code>personal-homepage-research/15-deploy-tc63.md:50-54</code>）。<code>url()</code> 先把 <code>BASE</code> 归一化成不带尾斜杠的 <code>ROOT</code>，再补一个开头的斜杠，因此传入 <code>'/projects/'</code> 或 <code>'projects/'</code> 都得到同一个结果。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+    A["手写链接 url('/projects/')"] --> B["BASE = '/tc63'"]
+    B --> C["ROOT 去掉尾斜杠，仍是 '/tc63'"]
+    C --> D["path 补前导斜杠，得到 '/projects/'"]
+    D --> E["拼接：'/tc63/projects/'"]
+    F["直接拼接 BASE_URL"] --> G["'/tc63' + 'fluid/x.png'"]
+    G --> H["'/tc63fluid/x.png'，404"]</pre></div>
+<p><code>url()</code> 的注释把使用范围写得很清楚：html 里所有以 <code>/</code> 开头的绝对链接都必须带上 base（<code>src/lib/url.ts:1-9</code>）。相对链接不受影响，但站内统一用绝对链接加 <code>url()</code> 更可控。</p>
+<h2 id="构建产物的目录形式与资源命名">构建产物的目录形式与资源命名</h2>
+<p>构建产物的形态决定了 nginx 侧能用最简单的规则覆盖全部请求。当前产物有两类命名约定：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>产物</th><th>命名特征</th><th>对应 nginx 行为</th></tr></thead><tbody><tr><td>页面</td><td>目录加 <code>index.html</code>，共 27 个 HTML 文件</td><td>由 <code>index index.html</code> 接住</td></tr><tr><td>资源</td><td>文件名带内容哈希，如 <code>BaseLayout.Bw8pNA6E.css</code></td><td>命中 <code>_astro/</code> 前缀，长缓存</td></tr><tr><td>数据</td><td>固定名 <code>docs/search-index.json</code>，体积约 480 KB</td><td>走页面规则，跟随 HTML 的缓存策略</td></tr></tbody></table>
+<p>页面用目录形式，所以 URL 以斜杠结尾，<code>canonical</code> 也是这个形式（<code>dist/about/index.html</code> 里的 <code>link rel="canonical"</code> 指向 <code>/tc63/about/</code>）。资源带哈希，所以可以设置 30 天不可变缓存；数据文件名字固定，更新后 URL 不变，因此不能套用同一套缓存策略。</p>
+<h2 id="同一份源码的两套前缀">同一份源码的两套前缀</h2>
+<p>同一个仓库同时发布到两个位置：腾讯云服务器上的 <code>/tc63</code> 与 GitHub 项目站点 <code>/TC63PersonalWebsite</code>。区别只在构建时传入的环境变量（<code>astro.config.mjs:17</code>、<code>.github/workflows/deploy.yml:29-31</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    S["同一份源码"] --> D{"构建时的 SITE_BASE"}
+    D -->|"未设置"| A["base = '/tc63'&#x3C;br/>产物发服务器"]
+    D -->|"=/TC63PersonalWebsite"| B["base = '/TC63PersonalWebsite'&#x3C;br/>产物发 GitHub Pages"]
+    A --> A2["dist/index.html 的链接带 /tc63/ 前缀"]
+    B --> B2["dist/index.html 的链接带 /TC63PersonalWebsite/ 前缀"]</pre></div>
+<p>两套前缀不能混用：拿 Pages 产物去核对服务器路径会全部对不上，反之亦然。服务器侧的产物由本地 <code>./deploy.sh</code> 构建（默认不带 <code>SITE_BASE</code>），Pages 侧的产物由 workflow 构建，两边互不覆盖（<code>deploy.sh:9-13</code>、<code>.github/workflows/deploy.yml:27-31</code>）。</p>
+<h2 id="推送之前的本地先验">推送之前的本地先验</h2>
+<p>前缀问题在本地就能发现，<code>deploy.sh</code> 里有两条检查：构建后确认 <code>dist/index.html</code> 存在，再用 <code>grep</code> 验证链接带有 <code>/tc63/</code> 前缀，不满足就退出（<code>deploy.sh:25-29</code>）。第二条检查针对的正是「用 Pages 参数构建过又直接部署」的情形。</p>
+<p>更完整的核对方式是逐条请求构建产物里的路径：<code>dist/index.html</code> 中的样式、脚本、站内链接与图片，以及搜索索引。实测记录里这些路径在服务器上全部返回 200，<code>/</code> 返回 404（<code>personal-homepage-research/15-deploy-tc63.md:156-157</code>）。</p>
+<h2 id="子路径改动的影响面">子路径改动的影响面</h2>
+<p>改动 <code>base</code> 会影响三类东西，改动前先按这张表过一遍。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>改动点</th><th>需要同步</th><th>不需要动</th></tr></thead><tbody><tr><td>更换部署路径前缀</td><td><code>BASE_URL</code> 派生出的所有链接、<code>canonical</code></td><td>页面内容与样式</td></tr><tr><td>手写链接改成相对路径</td><td>改回 <code>url()</code> 调用</td><td>构建器生成的资源</td></tr><tr><td>迁到域名根部署</td><td><code>base</code> 设为 <code>'/'</code></td><td>nginx 的 <code>root</code> 与 location</td></tr></tbody></table>
+<p>迁移时要一起检查 <code>isActive()</code> 一类用 <code>href === '/'</code> 判断的代码：子路径下首页 URL 变成 <code>/tc63/</code>，判据要跟着换成 <code>url('/')</code>，否则导航会在每个页面都点亮首页项（<code>personal-homepage-research/15-deploy-tc63.md:47-48</code>）。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>判据</th></tr></thead><tbody><tr><td>资源与搜索索引同时 404</td><td>直接把 <code>BASE_URL</code> 当带尾斜杠的字符串拼接</td><td>产物里搜 <code>/tc63fluid</code> 一类拼接痕迹</td></tr><tr><td>页面能打开但样式丢失</td><td>样式链接没走 <code>url()</code></td><td>检查 <code>dist/index.html</code> 里的 <code>href</code> 前缀</td></tr><tr><td>导航高亮错位</td><td>首页判据用 <code>href === '/'</code></td><td>看子路径下首页 URL 是 <code>/tc63/</code></td></tr><tr><td>拿 Pages 产物核对服务器</td><td>两套前缀不同</td><td>产物里搜 <code>/TC63PersonalWebsite</code></td></tr><tr><td><code>canonical</code> 指向域名根</td><td><code>site</code> 或 <code>base</code> 配置不对</td><td>看 <code>dist/index.html</code> 的 <code>link rel="canonical"</code></td></tr><tr><td>部署脚本前缀检查失败</td><td>用 <code>SITE_BASE</code> 构建过</td><td>重新执行不带该变量的构建（<code>deploy.sh:26-29</code>）</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>site</code> 管绝对地址，<code>base</code> 管资源前缀，手写链接要显式加前缀。</li>
+<li><code>url()</code> 先把 <code>BASE_URL</code> 归一化再拼接，避免缺斜杠的拼接错误。</li>
+<li>页面是目录加 <code>index.html</code>，资源文件名带内容哈希。</li>
+<li>同一份源码靠构建变量产出两套前缀的产物。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>前缀来源</td><td>构建时 <code>base</code></td><td>一套源码适配两个部署位置</td><td>产物不通用，构建参数不能混</td></tr><tr><td>站内链接</td><td>统一走 <code>url()</code></td><td>改动前缀时只改一处</td><td>新增链接要记得调用</td></tr><tr><td>资源命名</td><td>内容哈希</td><td>长缓存安全</td><td>文件名难读，需要按页面引用查找</td></tr><tr><td>本地先验</td><td>构建后检查前缀</td><td>上线前拦住一类错误</td><td>多一步检查逻辑</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li><code>base</code> 会自动处理哪些引用？哪一类引用需要手写 <code>url()</code>？</li>
+<li><code>import.meta.env.BASE_URL</code> 的值带不带尾斜杠？直接拼接会得到什么？</li>
+<li>打开 <code>dist/index.html</code>，找出至少三条带 <code>/tc63</code> 前缀的引用。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>把部署位置改成域名根，列出需要修改的配置项与需要复查的代码点各两处。</p>
+</li>
+<li>
+<p>设计一条命令，在本地判断一份 <code>dist/</code> 是为服务器构建还是为 GitHub Pages 构建。</p>
+</li>
+<li>
+<p>说明为什么固定名文件（如 <code>search-index.json</code>）不能套用资源的长缓存策略。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>astro.config.mjs</code></td><td><code>site</code> 与 <code>base</code> 的定义（<code>:8-17</code>）</td></tr><tr><td><code>src/lib/url.ts</code></td><td><code>BASE</code> 归一化与 <code>url()</code> 实现（<code>:1-17</code>）</td></tr><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>前缀改动的影响面与尾斜杠问题（<code>:32-54</code>）</td></tr><tr><td><code>deploy.sh</code></td><td>构建后的前缀检查（<code>:25-29</code>）</td></tr><tr><td><code>.github/workflows/deploy.yml</code></td><td>Pages 构建的 <code>SITE_BASE</code>（<code>:29-31</code>）</td></tr><tr><td><code>README.md</code></td><td>改路径前缀的说明（<code>:171-183</code>）</td></tr><tr><td><code>dist/index.html</code>、<code>dist/about/index.html</code></td><td>产物中的 canonical 与资源前缀</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-缓存与404的边界"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-缓存与404的边界</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/02-静态托管与子路径/04-缓存与404的边界.md</span></div><div class="dfile__body"><h1 id="缓存与-404-的边界">缓存与 404 的边界</h1>
+<p>静态托管把缓存策略与缺失处理都推给了文件和配置。资源带哈希就有条件长期缓存，页面名固定就不能照搬同一策略；路径不存在时返回什么，取决于 <code>try_files</code> 的最后一段与 <code>error_page</code> 的配合。</p>
+<p>缓存与 404 放在一起看，是因为它们在部署时同时变化：一次 <code>git pull</code> 会整体替换产物目录，缓存中的旧页面与新文件集之间可能出现对不上的请求。对象是 <code>/tc63/</code> 的两条内容 location 与构建产物的命名方式。</p>
+<h2 id="内容哈希让长缓存成立">内容哈希让长缓存成立</h2>
+<p><code>/tc63/_astro/</code> 下的文件名形如 <code>BaseLayout.Bw8pNA6E.css</code>，中间那段是内容哈希。文件内容一变，哈希变，文件名跟着变，所以同一个 URL 永远指向同一份内容。长缓存的前提正是这一点。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+    [*] --> 首次请求
+    首次请求 --> 返回文件与缓存头: 命中 _astro 前缀
+    返回文件与缓存头 --> 浏览器持有副本
+    浏览器持有副本 --> 有效期内直接使用: max-age 2592000
+    有效期内直接使用 --> [*]: 不再发请求
+    浏览器持有副本 --> 内容变更后重新请求: 页面里换成了新的哈希文件名
+    内容变更后重新请求 --> [*]</pre></div>
+<p>配置里对应的只有一行（<code>personal-homepage-research/15-deploy-tc63.md:69</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">add_header </span><span style="color:#24292E">Cache-Control </span><span style="color:#032F62">"public, max-age=2592000, immutable"</span><span style="color:#24292E">;</span></span></code></pre>
+<p><code>max-age=2592000</code> 换算成 30 天，<code>immutable</code> 告诉浏览器在有效期内不必发校验请求。这条设置写在资源 location 内部，作用范围仅限该前缀。</p>
+<h2 id="哪些路径没有显式缓存头">哪些路径没有显式缓存头</h2>
+<p>页面与搜索索引都没有收到 <code>Cache-Control</code>。没有显式头时，浏览器可以按启发式规则自行决定缓存时长，不同浏览器策略不一致。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>显式缓存头</th><th>名称是否随内容变化</th><th>风险</th></tr></thead><tbody><tr><td><code>/tc63/_astro/*</code></td><td>有，30 天 immutable</td><td>是，带内容哈希</td><td>低</td></tr><tr><td><code>/tc63/</code> 与各页面 HTML</td><td>无</td><td>否</td><td>浏览器可能用旧页面引用已删除的资源</td></tr><tr><td><code>/tc63/docs/search-index.json</code></td><td>无</td><td>否</td><td>搜索索引可能滞后一个版本</td></tr><tr><td><code>/tc63/favicon.svg</code>、<code>/tc63/og.png</code></td><td>无</td><td>否</td><td>换图标后短期可能仍是旧图</td></tr></tbody></table>
+<p>如果要让页面固定走校验，可以在页面 location 里加一条作用范围可控的缓存头，例如对 HTML 设置 <code>no-cache</code>。当前配置没有这一条，属于可选改进。</p>
+<h2 id="静态站与-spa-的-404-差别">静态站与 SPA 的 404 差别</h2>
+<p>同一条域名下，KnowledgeDiver 前端是单页应用，个人主页是多页静态站，两者的缺失路径处理不能共用一套规则。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>个人主页 <code>/tc63/</code></th><th>域名根（SPA）</th></tr></thead><tbody><tr><td>缺失路径</td><td><code>try_files $uri $uri/ =404</code> 后接自定义 404 页</td><td><code>try_files $uri $uri/ /index.html</code></td></tr><tr><td>状态码</td><td>404</td><td>200</td></tr><tr><td>路由归属</td><td>每个页面一个目录</td><td>由前端路由在浏览器里决定</td></tr></tbody></table>
+<p>SPA 必须把未知路径交给 <code>index.html</code>，由前端路由接管，代价是真实缺失的路径也返回 200。多页静态站没有前端路由，未知路径就是缺失，保留 404 状态码更准确，搜索与监控看到的结果也对得上。域名根的样例配置见 KD 仓库 <code>deploy/nginx.conf:9-12</code>，生成逻辑见 <code>deploy/deploy.sh:47-50</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    Q["请求一个不存在的路径"] --> W{"命中哪套规则"}
+    W -->|"/tc63/ 下的静态站"| S1["try_files 第三段 =404"]
+    S1 --> S2["error_page 读取 404.html"]
+    S2 --> S3["返回 404 与自定义页"]
+    W -->|"域名根 SPA"| P1["回退到 /index.html"]
+    P1 --> P2["返回 200，前端路由渲染"]</pre></div>
+<h2 id="自定义-404-页的触发链">自定义 404 页的触发链</h2>
+<p><code>error_page 404 /tc63/404.html;</code> 的执行分两步：先由 <code>try_files</code> 判定原请求不存在，再把内部请求改写成 <code>/tc63/404.html</code>。改写后的请求重新走一遍 location 选择，命中 <code>^~ /tc63/</code>，由 <code>try_files</code> 找到 <code>dist/404.html</code> 后返回。</p>
+<p>响应状态码由 <code>error_page</code> 保持为 404，只有响应体被替换。构建产物里的 <code>404.html</code> 约 3.9 KB，页面内的 <code>canonical</code> 是 <code>https://knowledgediver.cloud/tc63/404/</code>，这一点与入口页不同，核对时不要拿它判断站点根地址。</p>
+<h2 id="目录列举与点文件">目录列举与点文件</h2>
+<p>两个容易越界的点当前都是关闭状态：<code>autoindex</code> 默认 <code>off</code>，请求没有 <code>index.html</code> 的目录不会列出内容；构建产物 <code>dist/</code> 下没有点文件，检查结果为空。</p>
+<p>这两项都由默认行为保证，配置里没有显式关闭它们。若以后产物里出现 <code>.well-known</code> 一类需要公开的目录，或出现不该公开的点文件，都要在 location 里显式写规则，现有配置不覆盖这些情形。</p>
+<h2 id="产物整体替换带来的旧资源失效">产物整体替换带来的旧资源失效</h2>
+<p>服务器侧每次更新执行 <code>git pull</code>，产物目录被替换成新版本。带哈希的旧资源不再存在，而浏览器里可能有 30 天内缓存过的旧 HTML，它引用的正是那些被删掉的文件名。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>客户端状态</th><th>请求</th><th>结果</th></tr></thead><tbody><tr><td>缓存的旧 HTML</td><td>旧哈希资源，文件已被替换</td><td>404</td></tr><tr><td>缓存的旧 HTML</td><td>站内链接跳转</td><td>正常，页面重新获取</td></tr><tr><td>刷新后的页面</td><td>新哈希资源</td><td>200</td></tr></tbody></table>
+<p>这个组合属于推论（按产物整体替换与长缓存两个已知事实推导，未在线上实测）。缓解方式有两条：给 HTML 加 <code>no-cache</code> 让页面每次都校验，或保留上一版资源一段时间。当前配置两条都没有采用。</p>
+<h2 id="部署后的核对项">部署后的核对项</h2>
+<p>四类请求覆盖了上面讨论的全部行为，部署后逐条核对即可确认策略与预期一致。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>请求</th><th>期望</th><th>观察点</th></tr></thead><tbody><tr><td><code>/tc63/_astro/&#x3C;带哈希文件名></code></td><td>200</td><td>响应头里有 <code>Cache-Control: public, max-age=2592000, immutable</code></td></tr><tr><td><code>/tc63/</code></td><td>200</td><td>响应头里没有 <code>Cache-Control</code>，说明页面走浏览器默认策略</td></tr><tr><td><code>/tc63/docs/search-index.json</code></td><td>200</td><td>同样没有显式缓存头，与上面的页面一致</td></tr><tr><td><code>/tc63/nope/</code></td><td>404</td><td>响应体是站点自己的 404 页，状态码未被改写</td></tr></tbody></table>
+<p>核对 <code>Cache-Control</code> 用响应头即可，判断 404 页是否生效则要看响应体内容与状态码两者，只看页面样式无法区分自定义页与默认错误页。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>判据</th></tr></thead><tbody><tr><td>换图标后浏览器仍是旧图</td><td>固定名文件没有缓存头</td><td>强制刷新或看响应头</td></tr><tr><td>搜索索引落后一个版本</td><td>数据文件被浏览器缓存</td><td>请求 <code>search-index.json</code> 看响应头</td></tr><tr><td>把静态站的 404 改成回退 <code>index.html</code></td><td>套用了 SPA 的规则</td><td>未知路径会返回 200 而不是 404</td></tr><tr><td>404 页状态码被改成 200</td><td><code>error_page</code> 写了状态改写</td><td>请求不存在路径看状态码</td></tr><tr><td>旧页面引用已删除资源</td><td>产物整体替换加浏览器缓存</td><td>控制台出现 404 的资源请求</td></tr><tr><td>期望目录能列出文件</td><td><code>autoindex</code> 默认关闭</td><td>状态码为 403 或 404</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>内容哈希是长缓存成立的前提，缓存头只加在带哈希的路径上。</li>
+<li>没有显式缓存头的页面与数据文件由浏览器自行判断。</li>
+<li>多页静态站用 <code>=404</code> 加自定义页，SPA 用 <code>index.html</code> 回退。</li>
+<li><code>error_page</code> 替换响应体但保留 404 状态码。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>资源缓存</td><td>30 天 immutable</td><td>回访节省带宽与时间</td><td>旧页面可能引用已删除资源</td></tr><tr><td>页面缓存</td><td>不设显式头</td><td>配置简单</td><td>不同浏览器行为不一致</td></tr><tr><td>缺失处理</td><td>返回真实 404</td><td>状态码准确</td><td>需要额外维护 404 页</td></tr><tr><td>目录列举</td><td>保持默认关闭</td><td>不暴露文件结构</td><td>需要目录索引时要另加规则</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>资源文件名里的哈希段起什么作用？为什么它让 30 天缓存变得安全？</li>
+<li>列出前面提到的、没有显式缓存头但名字固定的三个路径。</li>
+<li>请求 <code>/tc63/nope/</code> 经过哪两步返回自定义 404 页？状态码是多少？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>给页面 HTML 加 <code>no-cache</code>，写出指令与放置位置，并说明它与 <code>_astro</code> 缓存头的作用范围如何区分。</p>
+</li>
+<li>
+<p>说明「缓存的旧 HTML 引用已删除资源」这个问题的成因，给出两种缓解方案并比较维护成本。</p>
+</li>
+<li>
+<p>如果要把 <code>/tc63/docs/</code> 做成前端路由的单页应用，说明 <code>try_files</code> 与 404 页需要怎么改。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>资源缓存头与 404 页配置（<code>:63-77</code>）</td></tr><tr><td><code>dist/_astro/</code></td><td>带内容哈希的资源文件名</td></tr><tr><td><code>dist/404.html</code></td><td>自定义 404 页与其 canonical</td></tr><tr><td>KD 仓库 <code>deploy/nginx.conf</code></td><td>SPA 回退规则对照（<code>:9-12</code>）</td></tr><tr><td>KD 仓库 <code>deploy/deploy.sh</code></td><td>域名根 server 块的生成逻辑（<code>:47-50</code>）</td></tr><tr><td><code>/etc/nginx/sites-available/knowledgediver</code></td><td>线上生效配置（服务器文件，未在本机核对）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/01-%E5%8F%8D%E5%90%91%E4%BB%A3%E7%90%86/"><span class="k">← 上一篇</span><span class="t">反向代理</span><span class="d">nginx 配置 · 6 个文件</span></a><a class="next" href="/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/03-SSE%E4%B8%8E%E6%B5%81%E5%BC%8F%E4%BB%A3%E7%90%86/"><span class="k">下一篇 →</span><span class="t">SSE与流式代理</span><span class="d">nginx 配置 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

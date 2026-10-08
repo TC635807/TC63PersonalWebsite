@@ -1,0 +1,1871 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>描述符与枚举 · USB Device · 王宇翔</title><meta name="description" content="从 bLength 与类型号讲起，梳理设备、配置、接口、端点、字符串与 BOS 的层级，并给出本工程 CDC 描述符树与库按类型号的分发路径"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/05-USB%20Device/02-%E6%8F%8F%E8%BF%B0%E7%AC%A6%E4%B8%8E%E6%9E%9A%E4%B8%BE/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="描述符与枚举 · USB Device · 王宇翔"><meta property="og:description" content="从 bLength 与类型号讲起，梳理设备、配置、接口、端点、字符串与 BOS 的层级，并给出本工程 CDC 描述符树与库按类型号的分发路径"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/05-USB%20Device/02-%E6%8F%8F%E8%BF%B0%E7%AC%A6%E4%B8%8E%E6%9E%9A%E4%B8%BE/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/05-USB%20Device/">USB Device</a><span class="sep" aria-hidden="true">/</span><span class="now">描述符与枚举</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>描述符与枚举</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>USB 描述符体系</span></a><ul class="toc__heads"><li><a href="#主机靠一条可遍历的字节链认识设备" data-depth="2" data-heading-j="0">主机靠一条可遍历的字节链认识设备</a></li><li><a href="#设备配置接口端点构成的四级树" data-depth="2" data-heading-j="1">设备、配置、接口、端点构成的四级树</a></li><li><a href="#类型号决定主机与库走哪条分派" data-depth="2" data-heading-j="2">类型号决定主机与库走哪条分派</a></li><li><a href="#每一类描述符在枚举里提供什么" data-depth="2" data-heading-j="3">每一类描述符在枚举里提供什么</a></li><li><a href="#设备描述符固定-18-字节" data-depth="3" data-heading-j="4">设备描述符固定 18 字节</a></li><li><a href="#配置描述符是一块-9-字节的头加后续内容" data-depth="3" data-heading-j="5">配置描述符是一块 9 字节的头加后续内容</a></li><li><a href="#接口描述符把端点按功能分组" data-depth="3" data-heading-j="6">接口描述符把端点按功能分组</a></li><li><a href="#端点描述符给出通信的物理入口" data-depth="3" data-heading-j="7">端点描述符给出通信的物理入口</a></li><li><a href="#字符串描述符用-utf-16le-编码" data-depth="3" data-heading-j="8">字符串描述符用 UTF-16LE 编码</a></li><li><a href="#bos-与设备限定符只服务特定场景" data-depth="3" data-heading-j="9">BOS 与设备限定符只服务特定场景</a></li><li><a href="#本工程-cdc-描述符树的实际形状" data-depth="2" data-heading-j="10">本工程 CDC 描述符树的实际形状</a></li><li><a href="#设备与字符串描述符在-usbd_descc" data-depth="3" data-heading-j="11">设备与字符串描述符在 usbd_desc.c</a></li><li><a href="#配置功能与端点在-usbd_cdcc" data-depth="3" data-heading-j="12">配置、功能与端点在 usbd_cdc.c</a></li><li><a href="#库按-wvalue-分派请求" data-depth="2" data-heading-j="13">库按 wValue 分派请求</a></li><li><a href="#描述符写法上的易错点" data-depth="2" data-heading-j="14">描述符写法上的易错点</a></li><li><a href="#把配置描述符当成-9-字节" data-depth="3" data-heading-j="15">把配置描述符当成 9 字节</a></li><li><a href="#字符串索引指向了没人实现的回调" data-depth="3" data-heading-j="16">字符串索引指向了没人实现的回调</a></li><li><a href="#类型号与类功能子类型号混用" data-depth="3" data-heading-j="17">类型号与类功能子类型号混用</a></li><li><a href="#丢掉描述符数组的对齐声明" data-depth="3" data-heading-j="18">丢掉描述符数组的对齐声明</a></li><li><a href="#小结" data-depth="2" data-heading-j="19">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="20">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="21">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="22">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="23">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="24">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="25">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>设备描述符与 VID-PID</span></a><ul class="toc__heads"><li><a href="#主机为什么先读-8-字节再读-18-字节" data-depth="2" data-heading-j="0">主机为什么先读 8 字节再读 18 字节</a></li><li><a href="#逐偏移拆开这-18-个字节" data-depth="2" data-heading-j="1">逐偏移拆开这 18 个字节</a></li><li><a href="#bcdusb-用-bcd-编码表示规范版本" data-depth="3" data-heading-j="2">bcdUSB 用 BCD 编码表示规范版本</a></li><li><a href="#设备级类别的三个字段" data-depth="3" data-heading-j="3">设备级类别的三个字段</a></li><li><a href="#bmaxpacketsize0-决定端点-0-一次能读多少" data-depth="3" data-heading-j="4">bMaxPacketSize0 决定端点 0 一次能读多少</a></li><li><a href="#idvendor-与-idproduct-是两个-16-位编号" data-depth="3" data-heading-j="5">idVendor 与 idProduct 是两个 16 位编号</a></li><li><a href="#bcddevice-是固件版本而不是规范版本" data-depth="3" data-heading-j="6">bcdDevice 是固件版本而不是规范版本</a></li><li><a href="#三个字符串索引指向回调而不是文本" data-depth="3" data-heading-j="7">三个字符串索引指向回调而不是文本</a></li><li><a href="#bnumconfigurations-与配置上限引用同一个宏" data-depth="3" data-heading-j="8">bNumConfigurations 与配置上限引用同一个宏</a></li><li><a href="#宏与数组分别写在哪里" data-depth="2" data-heading-j="9">宏与数组分别写在哪里</a></li><li><a href="#vid-与-pid-如何与主机驱动对应" data-depth="2" data-heading-j="10">VID 与 PID 如何与主机驱动对应</a></li><li><a href="#这个文件里几个容易读错的字段" data-depth="2" data-heading-j="11">这个文件里几个容易读错的字段</a></li><li><a href="#忽略小端字节序" data-depth="3" data-heading-j="12">忽略小端字节序</a></li><li><a href="#改了宏却忘了数组里的字节拆分" data-depth="3" data-heading-j="13">改了宏却忘了数组里的字节拆分</a></li><li><a href="#bcdusb-与-bcddevice-混用" data-depth="3" data-heading-j="14">bcdUSB 与 bcdDevice 混用</a></li><li><a href="#以为-bmaxpacketsize0-与数据端点包长相同" data-depth="3" data-heading-j="15">以为 bMaxPacketSize0 与数据端点包长相同</a></li><li><a href="#lpm-开关牵动两处编译分支" data-depth="3" data-heading-j="16">LPM 开关牵动两处编译分支</a></li><li><a href="#小结" data-depth="2" data-heading-j="17">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="18">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="19">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="20">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="21">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="22">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="23">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>配置与接口描述符</span></a><ul class="toc__heads"><li><a href="#配置头固定-9-字节整块长度写在-wtotallength" data-depth="2" data-heading-j="0">配置头固定 9 字节，整块长度写在 wTotalLength</a></li><li><a href="#两个接口如何拼出一条虚拟串口" data-depth="2" data-heading-j="1">两个接口如何拼出一条虚拟串口</a></li><li><a href="#通信接口-0-承担命令与状态" data-depth="3" data-heading-j="2">通信接口 0 承担命令与状态</a></li><li><a href="#数据接口-1-承担载荷" data-depth="3" data-heading-j="3">数据接口 1 承担载荷</a></li><li><a href="#四个类功能描述符跟着通信接口走" data-depth="2" data-heading-j="4">四个类功能描述符跟着通信接口走</a></li><li><a href="#三条端点的方向类型与包长" data-depth="2" data-heading-j="5">三条端点的方向、类型与包长</a></li><li><a href="#主机取描述符时类驱动回写端点参数" data-depth="2" data-heading-j="6">主机取描述符时类驱动回写端点参数</a></li><li><a href="#配置生效时打开哪些端点" data-depth="2" data-heading-j="7">配置生效时打开哪些端点</a></li><li><a href="#这一块里已经确认的写法问题" data-depth="2" data-heading-j="8">这一块里已经确认的写法问题</a></li><li><a href="#定义了字符串却没有索引指向" data-depth="3" data-heading-j="9">定义了字符串却没有索引指向</a></li><li><a href="#usbd_max_num_interfaces-的名字与用法不一致" data-depth="3" data-heading-j="10">USBD_MAX_NUM_INTERFACES 的名字与用法不一致</a></li><li><a href="#追加描述符时漏改总长" data-depth="3" data-heading-j="11">追加描述符时漏改总长</a></li><li><a href="#bmattributes-的注释与取值不符" data-depth="3" data-heading-j="12">bmAttributes 的注释与取值不符</a></li><li><a href="#端点包长与端点描述符不一致" data-depth="3" data-heading-j="13">端点包长与端点描述符不一致</a></li><li><a href="#小结" data-depth="2" data-heading-j="14">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="15">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="16">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="17">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="18">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="19">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="20">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>枚举流程</span></a><ul class="toc__heads"><li><a href="#枚举把设备从默认状态推到可收发" data-depth="2" data-heading-j="0">枚举把设备从默认状态推到可收发</a></li><li><a href="#复位后速度协商再回到默认状态" data-depth="3" data-heading-j="1">复位后速度协商，再回到默认状态</a></li><li><a href="#地址分配把设备推进到-addressed" data-depth="3" data-heading-j="2">地址分配把设备推进到 ADDRESSED</a></li><li><a href="#设备描述符分两次取回" data-depth="3" data-heading-j="3">设备描述符分两次取回</a></li><li><a href="#配置描述符一次取回整块" data-depth="3" data-heading-j="4">配置描述符一次取回整块</a></li><li><a href="#字符串按索引逐个取" data-depth="3" data-heading-j="5">字符串按索引逐个取</a></li><li><a href="#set_configuration-打开端点" data-depth="3" data-heading-j="6">SET_CONFIGURATION 打开端点</a></li><li><a href="#一次完整枚举的-setup-往返" data-depth="2" data-heading-j="7">一次完整枚举的 SETUP 往返</a></li><li><a href="#设备状态与挂起恢复" data-depth="2" data-heading-j="8">设备状态与挂起恢复</a></li><li><a href="#从硬件中断到库函数的调用链" data-depth="2" data-heading-j="9">从硬件中断到库函数的调用链</a></li><li><a href="#任务描述里那个不存在的-cdc_setconfig" data-depth="2" data-heading-j="10">任务描述里那个不存在的 CDC_SetConfig</a></li><li><a href="#枚举相关的易错点" data-depth="2" data-heading-j="11">枚举相关的易错点</a></li><li><a href="#以为-8-字节与-18-字节是两条路径" data-depth="3" data-heading-j="12">以为 8 字节与 18 字节是两条路径</a></li><li><a href="#在复位回调里做耗时操作" data-depth="3" data-heading-j="13">在复位回调里做耗时操作</a></li><li><a href="#状态判断缺失" data-depth="3" data-heading-j="14">状态判断缺失</a></li><li><a href="#地址大于-127" data-depth="3" data-heading-j="15">地址大于 127</a></li><li><a href="#只改描述符不改端点打开参数" data-depth="3" data-heading-j="16">只改描述符不改端点打开参数</a></li><li><a href="#小结" data-depth="2" data-heading-j="17">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="18">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="19">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="20">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="21">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="22">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="23">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#这类问题的共同来源" data-depth="2" data-heading-j="0">这类问题的共同来源</a></li><li><a href="#字符串描述符的长度与共享缓冲" data-depth="2" data-heading-j="1">字符串描述符的长度与共享缓冲</a></li><li><a href="#端点地址最高位是方向位" data-depth="2" data-heading-j="2">端点地址最高位是方向位</a></li><li><a href="#描述符数组与结构体视图之间的对齐" data-depth="2" data-heading-j="3">描述符数组与结构体视图之间的对齐</a></li><li><a href="#usbd_max_str_desc_siz-同时管缓冲与上限" data-depth="2" data-heading-j="4">USBD_MAX_STR_DESC_SIZ 同时管缓冲与上限</a></li><li><a href="#lpm-开关同时影响-bcdusb-与-bos" data-depth="2" data-heading-j="5">LPM 开关同时影响 bcdUSB 与 BOS</a></li><li><a href="#cdc_control_fs-的空实现丢掉了哪些请求" data-depth="2" data-heading-j="6">CDC_Control_FS 的空实现丢掉了哪些请求</a></li><li><a href="#打开日志看状态在主机侧读描述符" data-depth="2" data-heading-j="7">打开日志、看状态、在主机侧读描述符</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">USB Device</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>USB / 描述符 / CDC / STM32 / 枚举 / 设备描述符 / VID / PID</span></div><h1 class="docs__title">描述符与枚举</h1><p class="docs__lead">从 bLength 与类型号讲起，梳理设备、配置、接口、端点、字符串与 BOS 的层级，并给出本工程 CDC 描述符树与库按类型号的分发路径</p></header><section class="dfile" id="file-1" data-file="01-USB描述符体系"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-USB描述符体系</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/02-描述符与枚举/01-USB描述符体系.md</span></div><div class="dfile__body"><h1 id="usb-描述符体系">USB 描述符体系</h1>
+<p>主机在设备刚接上总线时对设备一无所知。设备属于哪一类、有几份配置、每个接口能做什么、端点一次能传多少字节、厂商与产品名怎么写，这些信息没有一条写在总线的电气层里，全部由设备侧提供一串只读结构，主机按固定格式逐条读走，这串结构就是描述符。它与枚举的关系类似寄存器手册与初始化代码：描述符是设备对自己的声明，枚举是主机据此建立档案的过程。</p>
+<p>本工程的 USB 设备栈是 ST 的 USB Device Library，工作在 CDC 类。设备侧描述符分散在两处：设备描述符与字符串回调在 <code>USB_DEVICE/App/usbd_desc.c</code>，配置、接口、功能与端点描述符在 CDC 类驱动 <code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code>。把这两处读通，就能回答主机在枚举的每一步向设备要了什么。</p>
+<p>本页先说明描述符的公共头部与遍历方式，再展开设备、配置、接口、端点四级树，对照类型号表，然后落到本工程 CDC 描述符树的实际字节数与字符串索引，最后给出库按类型号分派请求的路径。同单元的《设备描述符与 VID-PID》逐字段拆 18 字节设备描述符，《配置与接口描述符》拆 67 字节配置块，《枚举流程》讲这些描述符在什么时序下被请求，本页负责提供它们共用的层级与类型号口径。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_desc.c</code></td><td>设备描述符数组、字符串回调表、序列号生成</td></tr><tr><td><code>USB_DEVICE/App/usbd_desc.h</code></td><td>序列号长度与 UID 宏</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.h</code></td><td>字符串缓冲大小、配置数、LPM 开关</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h</code></td><td>描述符类型号、字符串索引、状态常量</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</code></td><td><code>USBD_GetDescriptor</code> 的类型号分派</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</code></td><td><code>USBD_GetNextDesc</code> 的线性遍历</td></tr><tr><td><code>.../Class/CDC/Src/usbd_cdc.c</code></td><td>CDC 配置描述符整块与类回调</td></tr><tr><td><code>.../Class/CDC/Inc/usbd_cdc.h</code></td><td>端点地址、包长与间隔宏</td></tr></tbody></table>
+<h2 id="主机靠一条可遍历的字节链认识设备">主机靠一条可遍历的字节链认识设备</h2>
+<p>描述符的公共头部只有两个字节。第一个字节 <code>bLength</code> 给出本描述符的总字节数，第二个字节 <code>bDescriptorType</code> 给出类型号。把长度放在最前面是一个遍历约定：接收方拿到一块缓冲后，读一个描述符、按 <code>bLength</code> 前进到下一条、再读下一条，直到走满整块缓冲。没有这个约定，接收方必须提前知道每种描述符的长度才能切分，而配置块里混着接口、功能与端点，长度各不相同。</p>
+<p>库里的 <code>USBD_GetNextDesc()</code> 就是这个走法（<code>usbd_core.c:1198-1206</code>）。它接收当前描述符指针与一个指向目标类型号的指针，循环条件是当前偏移还没有到缓冲末尾：若当前描述符的类型号等于目标，返回当前指针；否则把指针加上 <code>p[0]</code>，也就是加上本描述符自己声明的长度。整个函数不校验 <code>bLength</code> 是否为零，缓冲里若写出一处长度为 0 的描述符，指针就不再前进，循环会一直停在同一条上。描述符数组是手写的常量，这个风险由写数组的人承担。</p>
+<p>遍历的另一个后果是顺序有意义。配置块内描述符的先后必须与实际布局一致，主机只按字节流解析，不会按类型号重新排序。接口描述符之后紧跟的端点描述符，按 USB 规范属于该接口；类功能描述符必须紧跟它所属的接口，否则主机会把它算到上一个接口名下。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["p 指向配置块起点"] --> B["读 p[0] 得到本条的字节数&#x3C;br/>读 p[1] 得到类型号"]
+  B --> C{"类型号等于目标吗"}
+  C -- "等于" --> D["返回 p 作为命中结果"]
+  C -- "不等于" --> E["p 前进 bLength 个字节"]
+  E --> F{"已走字节数超出总长吗"}
+  F -- "否" --> B
+  F -- "是" --> G["返回空指针"]</pre></div>
+<p>以本工程 67 字节的配置块为例，从配置头出发依次是接口 0 描述符、四个 CDC 功能描述符、一条中断端点、接口 1 描述符、两条批量端点。要定位中断端点，遍历会在类型号 0x05 处停下；要定位接口 1，遍历在类型号 0x04 且接口号为 1 处停下。同一套循环服务所有查找。</p>
+<h2 id="设备配置接口端点构成的四级树">设备、配置、接口、端点构成的四级树</h2>
+<p>USB 描述符按树形组织。设备描述符是根，它下面的每个配置是一棵子树，配置下面是接口，接口下面是端点。字符串描述符不挂在这棵树上，而是单独成组，由设备、配置、接口里各自的索引字段指向。BOS 与设备限定符同样独立于四级树，前者报告规范之外的能力，后者描述设备在另一速度下的外形。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  D["设备描述符 bDeviceClass=0x02"] --> C1["配置描述符 bNumInterfaces=2 wTotalLength=67"]
+  C1 --> I0["接口 0 通信 class=0x02 subclass=0x02"]
+  C1 --> I1["接口 1 数据 class=0x0A"]
+  I0 --> F0["Header 功能描述符 subtype=0"]
+  I0 --> F1["Call Management subtype=1"]
+  I0 --> F2["ACM subtype=2"]
+  I0 --> F3["Union subtype=6"]
+  I0 --> E2["端点 0x82 中断 IN 8 字节"]
+  I1 --> EO["端点 0x01 批量 OUT 64 字节"]
+  I1 --> EI["端点 0x81 批量 IN 64 字节"]
+  D --> S["字符串组 索引 0 至 5"]
+  D --> B["BOS 仅在 LPM 打开时提供"]</pre></div>
+<p>每一层回答一个不同的问题，字段也各管一段，整理如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>回答的问题</th><th>关键字段</th></tr></thead><tbody><tr><td>设备</td><td>整体是什么设备、按什么协议通信</td><td><code>bcdUSB</code> <code>bDeviceClass</code> <code>idVendor</code> <code>idProduct</code> <code>bMaxPacketSize0</code></td></tr><tr><td>配置</td><td>这一套配置包含几个接口、耗电多少</td><td><code>wTotalLength</code> <code>bNumInterfaces</code> <code>bmAttributes</code> <code>bMaxPower</code></td></tr><tr><td>接口</td><td>一组完成同一功能的端点，属于哪一类</td><td><code>bInterfaceNumber</code> <code>bInterfaceClass</code> <code>bNumEndpoints</code></td></tr><tr><td>端点</td><td>数据从哪个方向、用什么传输类型、多大包</td><td><code>bEndpointAddress</code> <code>bmAttributes</code> <code>wMaxPacketSize</code> <code>bInterval</code></td></tr><tr><td>字符串</td><td>厂商、产品、序列号的可读名称</td><td>索引与 UTF-16LE 内容</td></tr><tr><td>BOS</td><td>设备支持哪些超出基础规范的扩展能力</td><td>设备能力与 LPM 位</td></tr></tbody></table>
+<p>层级里的数量关系是：一个设备可以有多个配置，同一时刻只有一份生效；一份配置里的接口数量写在 <code>bNumInterfaces</code>；每个接口的端点数写在它的 <code>bNumEndpoints</code>，端点 0 不计入任何接口，它由库在复位时单独打开。</p>
+<h2 id="类型号决定主机与库走哪条分派">类型号决定主机与库走哪条分派</h2>
+<p>类型号定义在 <code>usbd_def.h:131-139</code>，是描述符第二字节的取值空间，也是 <code>GET_DESCRIPTOR</code> 请求里 <code>wValue</code> 高字节的取值空间。两者共用同一套编号，主机请求与设备返回才能对上。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型号</th><th>宏</th><th>对应描述符</th></tr></thead><tbody><tr><td>0x01</td><td><code>USB_DESC_TYPE_DEVICE</code></td><td>设备描述符</td></tr><tr><td>0x02</td><td><code>USB_DESC_TYPE_CONFIGURATION</code></td><td>配置描述符</td></tr><tr><td>0x03</td><td><code>USB_DESC_TYPE_STRING</code></td><td>字符串描述符</td></tr><tr><td>0x04</td><td><code>USB_DESC_TYPE_INTERFACE</code></td><td>接口描述符</td></tr><tr><td>0x05</td><td><code>USB_DESC_TYPE_ENDPOINT</code></td><td>端点描述符</td></tr><tr><td>0x06</td><td><code>USB_DESC_TYPE_DEVICE_QUALIFIER</code></td><td>设备限定符</td></tr><tr><td>0x0B</td><td><code>USB_DESC_TYPE_IAD</code></td><td>接口关联描述符</td></tr><tr><td>0x0F</td><td><code>USB_DESC_TYPE_BOS</code></td><td>BOS 描述符</td></tr></tbody></table>
+<p>这张表只覆盖通用描述符。CDC 类自己的功能描述符用的是另一套编号：类型号固定为 <code>CS_INTERFACE</code> 即 0x24，区分靠紧随其后的 <code>bDescriptorSubtype</code>。两套编号不共享空间，0x24 不会出现在 <code>GET_DESCRIPTOR</code> 的 <code>wValue</code> 里，主机也不会主动请求它，它是配置块内部的结构。</p>
+<h2 id="每一类描述符在枚举里提供什么">每一类描述符在枚举里提供什么</h2>
+<h3 id="设备描述符固定-18-字节">设备描述符固定 18 字节</h3>
+<p>设备描述符是主机读到的第一个描述符，长度固定，字段与偏移在《设备描述符与 VID-PID》里逐项列出。它给出 <code>bMaxPacketSize0</code>，主机据此决定端点 0 一次能读多少字节，随后读完整 18 字节，用 <code>idVendor</code> 与 <code>idProduct</code> 匹配驱动，用 <code>bNumConfigurations</code> 知道后面还有几份配置要读。</p>
+<h3 id="配置描述符是一块-9-字节的头加后续内容">配置描述符是一块 9 字节的头加后续内容</h3>
+<p>配置描述符本身 9 字节，后面紧跟该配置下所有接口、功能与端点描述符。<code>wTotalLength</code> 给出这一整块的字节数，主机因此可以用一次控制传输取回全部内容。本工程的整块长度是 67 字节（<code>usbd_cdc.c:173</code>），其中配置头 9 字节，其余为接口、功能与端点。一个设备可以有多份配置，<code>bConfigurationValue</code> 是主机在 <code>SET_CONFIGURATION</code> 里回填的编号，本工程只有一份，值为 1。</p>
+<h3 id="接口描述符把端点按功能分组">接口描述符把端点按功能分组</h3>
+<p>接口把端点分组。CDC 设备定义两个接口：通信接口负责命令与状态，数据接口负责载荷。<code>bInterfaceNumber</code> 是接口编号，<code>bNumEndpoints</code> 是本接口独占的端点数。通信接口后面还跟随四个类功能描述符，它们是接口的一部分，不单独占接口号。</p>
+<h3 id="端点描述符给出通信的物理入口">端点描述符给出通信的物理入口</h3>
+<p>端点描述符给出通信的物理入口。<code>bEndpointAddress</code> 的最高位是方向，1 表示 IN，0 表示 OUT，低四位是端点号。<code>bmAttributes</code> 低两位给出传输类型，0 控制、1 同步、2 批量、3 中断。<code>wMaxPacketSize</code> 是全速下一次事务的最大字节数，全速批量端点上限 64。<code>bInterval</code> 只对中断与同步端点有意义，全速下单位是帧，一帧 1 ms。</p>
+<h3 id="字符串描述符用-utf-16le-编码">字符串描述符用 UTF-16LE 编码</h3>
+<p>字符串描述符用 UTF-16LE 编码，每个字符占两字节，因此描述符长度是偶数。索引 0 是固定的语言 ID 描述符，内容是 LANGID 列表，主机会先取它再决定用哪种语言去取其余字符串。设备描述符的 <code>iManufacturer</code> <code>iProduct</code> <code>iSerialNumber</code> 三个索引指向其余字符串，取值来自 <code>usbd_def.h:102-107</code>。</p>
+<h3 id="bos-与设备限定符只服务特定场景">BOS 与设备限定符只服务特定场景</h3>
+<p>BOS 描述符用于报告超出基础规范的能力，LPM 是其中一项，全速设备通常不需要。设备限定符描述设备在另一速度下的能力，只在高速设备上有意义。本工程的 CDC 类提供了设备限定符（<code>usbd_cdc.c:117-129</code>、<code>usbd_cdc.c:722-727</code>），全速下库不会向主机返回它（<code>usbd_ctlreq.c:602-621</code>），所以主机看不到这一条。BOS 的编译与否由 <code>USBD_LPM_ENABLED</code> 决定，本工程该开关为 0（<code>usbd_conf.h:74</code>），数组中不提供 BOS。</p>
+<h2 id="本工程-cdc-描述符树的实际形状">本工程 CDC 描述符树的实际形状</h2>
+<h3 id="设备与字符串描述符在-usbd_descc">设备与字符串描述符在 usbd_desc.c</h3>
+<p>设备描述符数组在 <code>usbd_desc.c:155-181</code>，长度 18 字节。字符串由一组回调函数按索引返回，回调表在 <code>usbd_desc.c:137-149</code>，即 <code>FS_Desc</code>。回调与索引的对应关系如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>索引</th><th>回调</th><th>返回内容</th><th>位置</th></tr></thead><tbody><tr><td>0</td><td><code>USBD_FS_LangIDStrDescriptor</code></td><td>语言 ID 1033</td><td><code>usbd_desc.c:271-276</code></td></tr><tr><td>1</td><td><code>USBD_FS_ManufacturerStrDescriptor</code></td><td>STMicroelectronics</td><td><code>usbd_desc.c:303-308</code></td></tr><tr><td>2</td><td><code>USBD_FS_ProductStrDescriptor</code></td><td>STM32 Virtual ComPort</td><td><code>usbd_desc.c:284-295</code></td></tr><tr><td>3</td><td><code>USBD_FS_SerialStrDescriptor</code></td><td>芯片 UID 转出的序列号</td><td><code>usbd_desc.c:316-328</code></td></tr><tr><td>4</td><td><code>USBD_FS_ConfigStrDescriptor</code></td><td>CDC Config</td><td><code>usbd_desc.c:336-347</code></td></tr><tr><td>5</td><td><code>USBD_FS_InterfaceStrDescriptor</code></td><td>CDC Interface</td><td><code>usbd_desc.c:355-366</code></td></tr></tbody></table>
+<p>字符串回调共用一个缓冲 <code>USBD_StrDesc</code>，大小由 <code>USBD_MAX_STR_DESC_SIZ</code> 决定，为 512 字节（<code>usbd_desc.c:233</code>、<code>usbd_conf.h:70</code>）。序列号不共享这个缓冲，它有一个 0x1A 字节的独立数组（<code>usbd_desc.h:52</code>、<code>usbd_desc.c:238-241</code>），内容由 <code>Get_SerialNum()</code> 从三个 UID 寄存器拼出（<code>usbd_desc.c:388-405</code>）。</p>
+<h3 id="配置功能与端点在-usbd_cdcc">配置、功能与端点在 usbd_cdc.c</h3>
+<p>CDC 的配置描述符数组 <code>USBD_CDC_CfgDesc</code> 在 <code>usbd_cdc.c:168-265</code>，总长 67 字节，由类驱动通过 <code>USBD_CDC_GetFSCfgDesc()</code> 返回（<code>usbd_cdc.c:629-652</code>）。<code>wTotalLength</code> 与数组长度共用同一个宏 <code>USB_CDC_CONFIG_DESC_SIZ</code>（<code>usbd_cdc.h:69</code>），数组声明与长度声明出自同一处，不会各写一套。</p>
+<h2 id="库按-wvalue-分派请求">库按 wValue 分派请求</h2>
+<p>主机用 <code>GET_DESCRIPTOR</code> 请求描述符，<code>wValue</code> 的高字节是类型号，低字节是索引。库在 <code>USBD_GetDescriptor()</code> 里按类型号分派（<code>usbd_ctlreq.c:428-672</code>）：设备描述符来自 <code>pdev->pDesc</code> 指向的描述符表，配置描述符来自已注册的类，字符串描述符按低字节在回调表里选函数，BOS 在编译开关关闭时不参与。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  H["主机 GET_DESCRIPTOR&#x3C;br/>wValue 高字节为类型号 低字节为索引"] --> G["USBD_GetDescriptor usbd_ctlreq.c 428"]
+  G --> T{"类型号"}
+  T -->|"0x01"| DEV["pDesc 的 GetDeviceDescriptor 449"]
+  T -->|"0x02"| CFG["类指针 0 的 GetFSConfigDescriptor 478"]
+  T -->|"0x03"| STR["按低字节选字符串回调 484"]
+  T -->|"0x0F"| BOS["pDesc 的 GetBOSDescriptor&#x3C;br/>LPM 关闭时不编译 437"]
+  DEV --> SEND["按主机 wLength 截断后发送 660"]
+  CFG --> SEND
+  STR --> SEND
+  BOS --> SEND</pre></div>
+<p>取到缓冲与长度后，库按主机请求的 <code>wLength</code> 截断再发送（<code>usbd_ctlreq.c:656-671</code>）。设备描述符数组始终保持 18 字节，主机先要 8 字节时截断由库完成，设备侧不需要另一份 8 字节数组。分派按类型号而不是按长度，所以同一类型号的描述符无论主机要多少字节都走同一条路径。</p>
+<h2 id="描述符写法上的易错点">描述符写法上的易错点</h2>
+<h3 id="把配置描述符当成-9-字节">把配置描述符当成 9 字节</h3>
+<p>请求配置时设备返回的是 <code>wTotalLength</code> 指定的整块，主机一次拿到配置头、接口、功能与端点全部内容。只看 9 字节配置头会漏掉接口与端点，用工具解析时容易把接口描述符当成配置块的垃圾数据。</p>
+<h3 id="字符串索引指向了没人实现的回调">字符串索引指向了没人实现的回调</h3>
+<p>设备描述符里的索引只是编号。库拿着编号去回调表里取函数，取不到就返回错误并让端点 0 停机（<code>usbd_ctlreq.c:559-598</code>）。索引与回调必须成套出现，改索引时先确认表里有对应项。反过来，定义了回调却没有字段指向它，这个字符串永远不会被主机请求，本工程的索引 4 与 5 就处于这种状态，见《配置与接口描述符》。</p>
+<h3 id="类型号与类功能子类型号混用">类型号与类功能子类型号混用</h3>
+<p>通用描述符用 <code>usbd_def.h</code> 里的类型号，值域到 0x0F。CDC 功能描述符的类型号固定为 0x24，子类型号另有 0x00 至 0x06 一套。写配置块时把两者填错，主机解析出的接口与端点会整体错位。</p>
+<h3 id="丢掉描述符数组的对齐声明">丢掉描述符数组的对齐声明</h3>
+<p>描述符数组用 <code>__ALIGN_BEGIN</code> 与 <code>__ALIGN_END</code> 包裹，库会把这些数组强制转换为结构体视图来访问字段。去掉对齐声明后，在某些编译器与优化级别上会生成非对齐访问，Cortex-M4 对非对齐的多字节访问支持有限。改动数组内容时保留这两对宏。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>描述符由设备单方面提供，公共头部为 <code>bLength</code> 与 <code>bDescriptorType</code>，接收方按长度逐条前进。</li>
+<li>层级为设备、配置、接口、端点四级，字符串独立成组并按索引引用，BOS 与设备限定符独立于四级树。</li>
+<li>配置描述符是一整块，<code>wTotalLength</code> 给出总长，接口、功能与端点依次跟随，顺序不能重排。</li>
+<li>端点地址最高位是方向位，低四位是端点号；传输类型由 <code>bmAttributes</code> 低两位给出。</li>
+<li>通用描述符类型号到 0x0F，CDC 功能描述符统一用 0x24 加子类型号区分。</li>
+<li>库按 <code>wValue</code> 高字节选描述符类型，按低字节选字符串索引，取到后按 <code>wLength</code> 截断发送。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>配置描述符整块一次返回</td><td>主机一次控制传输拿全，枚举快</td><td><code>wTotalLength</code> 与实际字节数必须手写一致，改端点要同步两处</td></tr><tr><td>字符串按索引动态生成</td><td>序列号可读芯片 UID，无需烧录</td><td>每次请求都要重算，共用一个 512 字节缓冲</td></tr><tr><td>功能描述符跟随接口而不占接口号</td><td>主机按接口统一管理类别</td><td>类描述符解析依赖它紧跟接口，位置写错会错位</td></tr><tr><td>BOS 由编译开关控制</td><td>不需要 LPM 时省掉一段代码</td><td>开关同时改变 <code>bcdUSB</code>，开关两侧行为不同</td></tr><tr><td>描述符数组用对齐声明</td><td>库可安全地做结构体视图</td><td>数组长度与结构体布局要一致</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出本工程配置描述符整块的字节数，并说明该值写在哪个字段里。</li>
+<li>数出 <code>usbd_cdc.c:168-265</code> 里一共有几个描述符，各是什么类型。</li>
+<li>说明端点地址 0x81 与 0x01 的差别，以及库用哪个掩码取端点号。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>新增一个 CDC 之外的自定义接口，写出它在配置描述符里需要追加的字节，并指出 <code>wTotalLength</code> 与 <code>bNumInterfaces</code> 应如何改。</li>
+<li>设计一个带两个配置的设备，说明 <code>bConfigurationValue</code>、<code>bNumConfigurations</code> 与 <code>USBD_MAX_NUM_CONFIGURATION</code> 三者的关系。</li>
+<li>若某个描述符的 <code>bLength</code> 被误写成 0，说明 <code>USBD_GetNextDesc()</code> 的循环行为，以及在主机侧会观察到什么现象。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c</td><td>设备描述符（:155-181）、回调表（:137-149）、字符串回调（:271-366）、序列号（:388-405）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.h</td><td>序列号长度 0x1A（:52）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h</td><td><code>USBD_MAX_STR_DESC_SIZ</code>（:70）、<code>USBD_LPM_ENABLED</code>（:74）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h</td><td>类型号（:131-139）、字符串索引（:102-107）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</td><td><code>USBD_GetDescriptor</code>（:428-672）、设备限定符返回条件（:602-621）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</td><td><code>USBD_GetNextDesc</code>（:1198-1206）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</td><td>CDC 配置描述符（:168-265）、<code>USBD_CDC_GetFSCfgDesc</code>（:629-652）、设备限定符（:117-129、:722-727）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</td><td>端点与包长宏（:43-76）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-设备描述符与VID-PID"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-设备描述符与VID-PID</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/02-描述符与枚举/02-设备描述符与VID-PID.md</span></div><div class="dfile__body"><h1 id="设备描述符与-vid-pid">设备描述符与 VID-PID</h1>
+<p>设备描述符是主机在枚举开始时读到的第一份结构，长度固定 18 字节，位置固定在描述符数组的最前面。它要回答的问题很少但都很硬：设备按哪一版 USB 规范通信、端点 0 一次能收发多少字节、用什么厂商与产品编号去匹配驱动。其余信息由它内部的索引和后续的配置描述符补充，所以 18 字节写错任何一个字段，后面几步都会受影响。</p>
+<p>本工程这一份是 CubeMX 生成 CDC 工程后的默认值，没有做项目化定制。VID 与 PID 仍取 ST 的 0x0483 与 0x5740，字符串索引指向 ST 提供的回调，设备与产品名也保持出厂文本。这一组取值能正常工作，但会带来设备识别上的限制。</p>
+<p>本页按偏移逐字段拆开 <code>usbd_desc.c:155-181</code> 的数组，核对每一处的宏来源，然后单独说明 VID 与 PID 与主机驱动的对应关系，以及沿用一个不属于本项目的编号会造成什么结果。所有数值都可以在仓库里比对，推断的部分会单独标注。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_desc.c</code></td><td>设备描述符数组、VID 与 PID 宏、字符串回调</td></tr><tr><td><code>USB_DEVICE/App/usbd_desc.h</code></td><td>UID 寄存器宏、序列号数组长度</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.h</code></td><td>配置数量与 LPM 开关</td></tr><tr><td><code>.../Core/Inc/usbd_def.h</code></td><td><code>USB_MAX_EP0_SIZE</code>、字符串索引宏</td></tr><tr><td><code>.../Core/Src/usbd_ctlreq.c</code></td><td><code>USBD_GetDescriptor</code> 取设备描述符、<code>USBD_SetConfig</code> 上限判断</td></tr><tr><td><code>.../Core/Src/usbd_core.c</code></td><td>总线复位时按 <code>USB_MAX_EP0_SIZE</code> 打开端点 0</td></tr></tbody></table>
+<h2 id="主机为什么先读-8-字节再读-18-字节">主机为什么先读 8 字节再读 18 字节</h2>
+<p>设备描述符是主机在枚举开始时读取的第一份描述符，长度固定 18 字节。主机通常分两次读它。第一次只请求前 8 字节，因为此时主机还不知道设备的端点 0 包长，只能用保守的方式试探；第 8 个字节恰好是 <code>bMaxPacketSize0</code>，主机拿到它之后按这个包长重新发起一次请求，取回完整 18 字节。</p>
+<p>库对两次请求的处理相同，都是按主机给出的 <code>wLength</code> 截断后发送（<code>usbd_ctlreq.c:656-671</code>）。设备侧只有一份 18 字节数组，主机要多少字节就发多少，不需要为试探请求准备第二份数据。这一点在后文的易错点里还会用到：8 字节与 18 字节不是两条路径。</p>
+<h2 id="逐偏移拆开这-18-个字节">逐偏移拆开这 18 个字节</h2>
+<p>本工程的设备描述符数组在 <code>usbd_desc.c:155-181</code>。按偏移整理如下，数值列取自数组内容与相关宏。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>字段</th><th>本工程取值</th><th>含义</th></tr></thead><tbody><tr><td>0</td><td><code>bLength</code></td><td>0x12</td><td>描述符长度 18</td></tr><tr><td>1</td><td><code>bDescriptorType</code></td><td>0x01</td><td>设备描述符</td></tr><tr><td>2</td><td><code>bcdUSB</code> 低字节</td><td>0x00</td><td>USB 版本 0x0200</td></tr><tr><td>3</td><td><code>bcdUSB</code> 高字节</td><td>0x02</td><td>与低字节合成 0x0200</td></tr><tr><td>4</td><td><code>bDeviceClass</code></td><td>0x02</td><td>设备级类别为 CDC</td></tr><tr><td>5</td><td><code>bDeviceSubClass</code></td><td>0x02</td><td>抽象控制模型</td></tr><tr><td>6</td><td><code>bDeviceProtocol</code></td><td>0x00</td><td>无协议</td></tr><tr><td>7</td><td><code>bMaxPacketSize0</code></td><td>64</td><td>端点 0 包长</td></tr><tr><td>8</td><td><code>idVendor</code> 低字节</td><td>0x83</td><td>厂商编号 0x0483</td></tr><tr><td>9</td><td><code>idVendor</code> 高字节</td><td>0x04</td><td>与低字节合成 0x0483</td></tr><tr><td>10</td><td><code>idProduct</code> 低字节</td><td>0x40</td><td>产品编号 0x5740</td></tr><tr><td>11</td><td><code>idProduct</code> 高字节</td><td>0x57</td><td>与低字节合成 0x5740</td></tr><tr><td>12</td><td><code>bcdDevice</code> 低字节</td><td>0x00</td><td>设备版本 0x0200</td></tr><tr><td>13</td><td><code>bcdDevice</code> 高字节</td><td>0x02</td><td>与低字节合成 0x0200</td></tr><tr><td>14</td><td><code>iManufacturer</code></td><td>1</td><td>厂商字符串索引</td></tr><tr><td>15</td><td><code>iProduct</code></td><td>2</td><td>产品字符串索引</td></tr><tr><td>16</td><td><code>iSerialNumber</code></td><td>3</td><td>序列号字符串索引</td></tr><tr><td>17</td><td><code>bNumConfigurations</code></td><td>1</td><td>配置数量</td></tr></tbody></table>
+<p>多字节字段统一按小端存放，低字节在前。读数组时按出现顺序把低位字节放前面，不能按人眼顺序直接拼。0x00 在前、0x02 在后合成的是 0x0200，不是 0x0002。下面按数组顺序画出 18 个字节的排列。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  B0["0 bLength 0x12"] --> B1["1 类型 0x01"]
+  B1 --> B2["2 到 3 bcdUSB 00 02"]
+  B2 --> B4["4 bDeviceClass 0x02"]
+  B4 --> B5["5 SubClass 0x02"]
+  B5 --> B6["6 Protocol 0x00"]
+  B6 --> B7["7 bMaxPacketSize0 64"]
+  B7 --> B8["8 到 9 VID 83 04"]
+  B8 --> B10["10 到 11 PID 40 57"]
+  B10 --> B12["12 到 13 bcdDevice 00 02"]
+  B12 --> B14["14 iManufacturer 1"]
+  B14 --> B15["15 iProduct 2"]
+  B15 --> B16["16 iSerialNumber 3"]
+  B16 --> B17["17 bNumConfigurations 1"]</pre></div>
+<h3 id="bcdusb-用-bcd-编码表示规范版本">bcdUSB 用 BCD 编码表示规范版本</h3>
+<p><code>bcdUSB</code> 表示设备支持的 USB 规范版本，编码为 BCD，即每个十六进制位对应一个十进制位。0x0200 读作 2.00，对应 USB 2.00；0x0201 读作 2.01，对应 USB 2.01。本工程非 LPM 分支写入 0x00 与 0x02 两个字节，合成 0x0200（<code>usbd_desc.c:163-166</code>）。</p>
+<p>当 <code>USBD_LPM_ENABLED</code> 为 1 时，数组改走另一分支，字节变为 0x01 与 0x02，合成 0x0201，用来声明支持 LPM 的 L1 挂起恢复。本工程该宏为 0（<code>usbd_conf.h:74</code>），因此设备对外声明 0x0200。同一个开关还决定 BOS 描述符是否编译（<code>usbd_desc.c:185-205</code>），只改一处会让声明与实现不一致。</p>
+<h3 id="设备级类别的三个字段">设备级类别的三个字段</h3>
+<p><code>bDeviceClass</code> <code>bDeviceSubClass</code> <code>bDeviceProtocol</code> 描述设备级类别，依次占偏移 4、5、6。本工程取 0x02 / 0x02 / 0x00：0x02 表示通信设备类，子类 0x02 表示抽象控制模型，协议字段为 0。</p>
+<p>设备级类别填 CDC 是一种做法，另一种做法是把设备级类别填 0x00，交给接口描述符各自声明类别。本工程的配置描述符里两个接口也各自带了类别，因此设备级这一组即使改成 0x00，通信功能仍由接口级声明承担，设备仍会被识别成虚拟串口。当前取值是 CubeMX 生成 CDC 工程的默认写法，改动它属于可选优化，不影响功能。</p>
+<h3 id="bmaxpacketsize0-决定端点-0-一次能读多少">bMaxPacketSize0 决定端点 0 一次能读多少</h3>
+<p><code>bMaxPacketSize0</code> 是端点 0 的最大包长，本工程填 <code>USB_MAX_EP0_SIZE</code>，该宏在 <code>usbd_def.h:157</code> 定义为 64。库在总线复位时打开端点 0 用的也是同一个宏（<code>usbd_core.c:825</code>、<code>usbd_core.c:831</code>），描述符里的声明与控制器里的实际配置来自同一处，不会漂移。</p>
+<p>全速设备的端点 0 包长只能取 8、16、32 或 64。主机在拿到这个值之前只能用最大包长试探，这也是它先读 8 字节的原因。这个字段只约束端点 0，与数据端点的包长无关，后者写在端点描述符里。</p>
+<h3 id="idvendor-与-idproduct-是两个-16-位编号">idVendor 与 idProduct 是两个 16 位编号</h3>
+<p><code>idVendor</code> 与 <code>idProduct</code> 占偏移 8 到 11 四个字节。本工程的宏在 <code>usbd_desc.c:65</code> 与 <code>usbd_desc.c:68</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>宏</th><th>十进制</th><th>十六进制</th><th>归属</th></tr></thead><tbody><tr><td><code>USBD_VID</code></td><td>1155</td><td>0x0483</td><td>STMicroelectronics</td></tr><tr><td><code>USBD_PID_FS</code></td><td>22336</td><td>0x5740</td><td>STM32 Virtual ComPort 示例</td></tr></tbody></table>
+<p>描述符数组用 <code>LOBYTE</code> 与 <code>HIBYTE</code> 把两个宏拆成两个字节（<code>usbd_desc.c:171-174</code>）。宏写的是十进制，十六进制值只在注释与主机侧工具里出现，核对时用 1155 与 22336 去搜源码更直接。</p>
+<h3 id="bcddevice-是固件版本而不是规范版本">bcdDevice 是固件版本而不是规范版本</h3>
+<p><code>bcdDevice</code> 是设备自身的版本号，与 <code>bcdUSB</code> 无关，两者在同一份数组里相邻，容易看混。本工程写 0x00 与 0x02，合成 0x0200，注释标为 rel. 2.00（<code>usbd_desc.c:175-176</code>）。主机与驱动可以用它区分同一 VID 与 PID 下的不同固件版本，本工程没有利用这个能力，改版本号不影响枚举。</p>
+<h3 id="三个字符串索引指向回调而不是文本">三个字符串索引指向回调而不是文本</h3>
+<p><code>iManufacturer</code> <code>iProduct</code> <code>iSerialNumber</code> 取 <code>usbd_def.h:102-107</code> 的宏：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>宏</th><th>值</th><th>对应回调</th></tr></thead><tbody><tr><td><code>iManufacturer</code></td><td><code>USBD_IDX_MFC_STR</code></td><td>1</td><td><code>USBD_FS_ManufacturerStrDescriptor</code></td></tr><tr><td><code>iProduct</code></td><td><code>USBD_IDX_PRODUCT_STR</code></td><td>2</td><td><code>USBD_FS_ProductStrDescriptor</code></td></tr><tr><td><code>iSerialNumber</code></td><td><code>USBD_IDX_SERIAL_STR</code></td><td>3</td><td><code>USBD_FS_SerialStrDescriptor</code></td></tr></tbody></table>
+<p>索引 0 留给语言 ID 描述符，主机会先取它。索引值本身没有内容，返回文本的是回调函数。序列号的内容不是常量，<code>Get_SerialNum()</code> 每次请求时从 <code>UID_BASE</code> 处的三个 32 位寄存器读出并转成十六进制文本（<code>usbd_desc.c:388-405</code>、<code>usbd_desc.h:48-50</code>）。同一颗芯片的 UID 固定，序列号在设备复位与重新插拔后保持稳定。</p>
+<h3 id="bnumconfigurations-与配置上限引用同一个宏">bNumConfigurations 与配置上限引用同一个宏</h3>
+<p><code>bNumConfigurations</code> 填 <code>USBD_MAX_NUM_CONFIGURATION</code>，值为 1（<code>usbd_desc.c:180</code>、<code>usbd_conf.h:68</code>）。同一个宏还被 <code>USBD_SetConfig()</code> 用作配置编号的上限判断（<code>usbd_ctlreq.c:730</code>），描述符里声明的数量与请求处理里能接受的编号出自同一个常量，两边不会漂移。当前只有一份配置，<code>SET_CONFIGURATION</code> 只接受值 1。</p>
+<h2 id="宏与数组分别写在哪里">宏与数组分别写在哪里</h2>
+<p>设备描述符里的数值不是散落在数组里的字面量，每一处都能追到一个宏或一段代码。核对时按下表定位：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>位置</th><th>值</th></tr></thead><tbody><tr><td><code>USBD_VID</code></td><td><code>usbd_desc.c:65</code></td><td>1155</td></tr><tr><td><code>USBD_PID_FS</code></td><td><code>usbd_desc.c:68</code></td><td>22336</td></tr><tr><td><code>USBD_MANUFACTURER_STRING</code></td><td><code>usbd_desc.c:67</code></td><td>STMicroelectronics</td></tr><tr><td><code>USBD_PRODUCT_STRING_FS</code></td><td><code>usbd_desc.c:69</code></td><td>STM32 Virtual ComPort</td></tr><tr><td>设备描述符数组</td><td><code>usbd_desc.c:155-181</code></td><td>18 字节</td></tr><tr><td>设备描述符回调</td><td><code>usbd_desc.c:258-263</code></td><td>返回数组与长度</td></tr></tbody></table>
+<p>设备描述符数组与字符串宏分处同一文件的不同段落，宏定义集中在文件开头，数组在中段，回调在文件末尾。主机在地址分配前后各读一次设备描述符，库的入口是 <code>USBD_GetDescriptor()</code>（<code>usbd_ctlreq.c:428-672</code>），类型号 0x01 分支调用 <code>pdev->pDesc->GetDeviceDescriptor</code>（<code>usbd_ctlreq.c:449-451</code>），也就是 <code>USBD_FS_DeviceDescriptor()</code>。完整往返见本单元《枚举流程》。</p>
+<h2 id="vid-与-pid-如何与主机驱动对应">VID 与 PID 如何与主机驱动对应</h2>
+<p>主机拿 <code>idVendor</code> 与 <code>idProduct</code> 匹配驱动。厂商编号由 USB-IF 分配，产品编号由厂商自行分配。操作系统与驱动库通常按这两个编号识别设备类别，再决定加载哪个驱动。CDC 的通信能力写在接口描述符里，但设备能不能被自动识别，第一步就取决于这两个编号是否落在已知列表里。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  P["设备插入总线"] --> E["枚举读到 VID 与 PID"]
+  E --> M{"编号是否在已知列表"}
+  M -->|"0x0483 0x5740"| ST["匹配 STM32 Virtual ComPort 驱动"]
+  M -->|"其他编号"| UNK["未知设备，需要用户指定 inf"]
+  ST --> C["创建串口实例"]
+  C --> S{"主机是否使用序列号关联"}
+  S -->|"使用"| F["同一块板固定同一个串口号"]
+  S -->|"不使用"| V["多板之间串口号可能互换"]</pre></div>
+<p>本工程沿用 ST 默认组合，没有改成项目自己的编号。由此产生的后果如下，这几条属推断，不在源码中直接体现。</p>
+<ol>
+<li>同一台主机插入两块本工程的板，设备管理器里会出现两个同名 STM32 Virtual ComPort 实例，仅凭名称无法区分。序列号来自 UID，编号本身不同，主机若按序列号关联，两块板的串口号各自稳定。</li>
+<li>主机或驱动若只按 VID 与 PID 建立设备与串口号的映射，重新插拔后两块板的串口号可能互换，上位机按固定串口名打开时会连错板。</li>
+<li>0x0483 属于 STMicroelectronics，0x5740 对应其虚拟串口示例。把这两个值用于对外发布的产品，在 USB-IF 规则下不属于自己的编号，正式产品需要自备 VID 与 PID。</li>
+</ol>
+<p>第一条与第三条依赖主机与 USB-IF 的行为，第二条依赖具体驱动的映射策略，均属推断，落地前应在目标主机上实测。</p>
+<h2 id="这个文件里几个容易读错的字段">这个文件里几个容易读错的字段</h2>
+<h3 id="忽略小端字节序">忽略小端字节序</h3>
+<p>数组里 0x00 在前、0x02 在后，合成的是 0x0200。若按顺序读成 0x0002，会把 USB 2.00 误判为 0.02，进而去查一个不存在的规范版本。VID 与 PID 同理，0x83 0x04 是 0x0483。</p>
+<h3 id="改了宏却忘了数组里的字节拆分">改了宏却忘了数组里的字节拆分</h3>
+<p><code>idVendor</code> 与 <code>idProduct</code> 在数组里通过 <code>LOBYTE</code> 与 <code>HIBYTE</code> 展开。直接改数组里的字节而不改宏，或者只改宏而漏掉某一份数组，都会让设备对外编号与预期不一致。<code>bMaxPacketSize0</code> 与 <code>bNumConfigurations</code> 也各有宏来源，改动前先确认宏定义位置。</p>
+<h3 id="bcdusb-与-bcddevice-混用">bcdUSB 与 bcdDevice 混用</h3>
+<p>两个字段都写成 0x0200，但含义不同。前者是 USB 规范版本，后者是设备固件版本。排查驱动兼容问题时先看的是 <code>bcdUSB</code>，它决定主机按哪版规范与设备交互。</p>
+<h3 id="以为-bmaxpacketsize0-与数据端点包长相同">以为 bMaxPacketSize0 与数据端点包长相同</h3>
+<p><code>bMaxPacketSize0</code> 只约束端点 0。数据端点的包长写在端点描述符里，本工程为 64，两者数值相同但来源不同，改一个不会影响另一个。</p>
+<h3 id="lpm-开关牵动两处编译分支">LPM 开关牵动两处编译分支</h3>
+<p><code>USBD_LPM_ENABLED</code> 同时改变 <code>bcdUSB</code> 与 BOS 描述符。只开 BOS 不改 <code>bcdUSB</code>，或者反过来，都会让设备声明与实现不一致。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>设备描述符固定 18 字节，是主机枚举时读到的第一个描述符，主机分 8 字节与 18 字节两次读取。</li>
+<li>多字节字段小端存放，<code>bcdUSB</code> 的 0x00 与 0x02 合成 0x0200。</li>
+<li><code>bDeviceClass</code> 取 0x02 表示设备级类别为 CDC；设备级与接口级可以各自声明类别。</li>
+<li><code>bMaxPacketSize0</code> 取 <code>USB_MAX_EP0_SIZE</code> 64，与库打开端点 0 时用的宏一致。</li>
+<li>VID 0x0483 与 PID 0x5740 是 ST 的虚拟串口默认组合，本工程未定制。</li>
+<li>三个字符串索引 1、2、3 分别指向厂商、产品、序列号回调，序列号由芯片 UID 生成。</li>
+<li><code>bNumConfigurations</code> 与 <code>USBD_SetConfig()</code> 的编号上限共用 <code>USBD_MAX_NUM_CONFIGURATION</code>。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>沿用 ST 默认 VID 与 PID</td><td>免申请编号，操作系统自带驱动即可识别</td><td>同一主机多板同名，属推断的串口互换风险</td></tr><tr><td>序列号动态取自 UID</td><td>不占用固件常量，编号唯一且稳定</td><td>每次请求都要读寄存器并转换</td></tr><tr><td>设备级类别取 0x02</td><td>与 ST 生成的 CDC 工程一致</td><td>与接口级类别重复声明，改类别要改两处</td></tr><tr><td><code>bMaxPacketSize0</code> 用统一宏</td><td>描述符与端点打开两处不会漂移</td><td>包长改动影响端点 0 与所有描述符引用方</td></tr><tr><td>不改 <code>bcdDevice</code></td><td>与出厂固件版本保持一致</td><td>无法用版本号区分同一 VID 与 PID 下的不同固件</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出本工程设备描述符 18 个字节的取值，并标出哪些字段是多字节小端。</li>
+<li>说明 <code>bcdUSB</code> 与 <code>bcdDevice</code> 的区别，各自由哪个宏控制。</li>
+<li>列出三个字符串索引的数值与对应回调函数名。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把 VID 与 PID 改成一套自定义编号，列出需要修改的所有位置，并说明主机侧驱动会发生什么变化。</li>
+<li><code>USBD_LPM_ENABLED</code> 由 0 改为 1 时，设备描述符与 BOS 描述符各发生哪些变化，主机看到的 <code>bcdUSB</code> 变成多少。</li>
+<li>主机在一次枚举中先请求 8 字节、后请求 18 字节设备描述符，说明设备侧两次各返回多少个字节，以及截断发生在哪个函数里。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c</td><td>宏定义（:65-71）、设备描述符数组（:155-181）、BOS（:185-205）、回调（:258-263）、序列号（:388-405）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.h</td><td><code>DEVICE_ID1</code> 至 <code>DEVICE_ID3</code>（:48-50）、序列号长度（:52）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h</td><td><code>USBD_MAX_NUM_CONFIGURATION</code>（:68）、<code>USBD_LPM_ENABLED</code>（:74）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h</td><td><code>USBD_IDX_*</code>（:102-107）、<code>USB_MAX_EP0_SIZE</code>（:157）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</td><td><code>USBD_GetDescriptor</code>（:428-672）、<code>USBD_SetConfig</code> 上限（:730）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</td><td>端点 0 打开（:825、:831）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-配置与接口描述符"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-配置与接口描述符</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/02-描述符与枚举/03-配置与接口描述符.md</span></div><div class="dfile__body"><h1 id="配置与接口描述符">配置与接口描述符</h1>
+<p>配置描述符回答的是设备以哪种形态工作：它下面挂几个接口、耗电多少、这份配置编号是多少。接口描述符再往下分，每个接口代表一类功能，接口下面挂这个功能独占的端点。CDC 虚拟串口需要两个接口配合，一个管命令与状态，一个管载荷，两条链路合起来才是一条能用的串口。</p>
+<p>本工程的这一整块共 67 字节，全部写在 CDC 类驱动 <code>usbd_cdc.c:168-265</code> 里，由 <code>USBD_CDC_GetFSCfgDesc()</code> 交给库。它同时是描述符与端点打开参数的来源：同一份数据既告诉主机端点长什么样，也决定设备侧 <code>USBD_CDC_Init()</code> 按什么参数打开端点。两端对不上时，大包传输先出问题。</p>
+<p>本页按配置头、两个接口、四个功能描述符、三条端点的顺序走一遍字节布局，再说明主机取描述符时类驱动对数组做的运行期回写，最后列出这一块里几处已经确认的写法问题。整块长度与每一条的长度都能在源码里逐字节核对。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>.../Class/CDC/Src/usbd_cdc.c</code></td><td>配置描述符数组、<code>USBD_CDC_Init</code>、<code>USBD_CDC_GetFSCfgDesc</code></td></tr><tr><td><code>.../Class/CDC/Inc/usbd_cdc.h</code></td><td>端点地址、包长与间隔宏、整块长度宏</td></tr><tr><td><code>.../Core/Src/usbd_core.c</code></td><td><code>USBD_GetEpDesc</code> 定位端点、<code>USBD_SetClassConfig</code> 调类 Init</td></tr><tr><td><code>.../Core/Src/usbd_ctlreq.c</code></td><td>接口请求分发、<code>USBD_SetConfig</code></td></tr><tr><td><code>.../Core/Inc/usbd_def.h</code></td><td><code>USBD_MAX_POWER</code>、<code>USBD_SELF_POWERED</code></td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.h</code></td><td><code>USBD_MAX_NUM_INTERFACES</code>、<code>USBD_SELF_POWERED</code></td></tr><tr><td><code>USB_DEVICE/App/usbd_desc.c</code></td><td>配置与接口字符串定义与回调</td></tr></tbody></table>
+<h2 id="配置头固定-9-字节整块长度写在-wtotallength">配置头固定 9 字节，整块长度写在 wTotalLength</h2>
+<p>配置描述符本身固定 9 字节，后面紧跟该配置下所有接口、功能与端点描述符。主机读配置时拿到的是整块，它用第一个字节里的 <code>wTotalLength</code> 知道这块有多长，因此一次控制传输就能取全，不需要按类型逐条请求。本工程配置头取值如下（<code>usbd_cdc.c:170-184</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏移</th><th>字段</th><th>取值</th><th>含义</th></tr></thead><tbody><tr><td>0</td><td><code>bLength</code></td><td>0x09</td><td>配置描述符长度</td></tr><tr><td>1</td><td><code>bDescriptorType</code></td><td>0x02</td><td>配置描述符类型</td></tr><tr><td>2</td><td><code>wTotalLength</code> 低字节</td><td>67</td><td>整块总长</td></tr><tr><td>3</td><td><code>wTotalLength</code> 高字节</td><td>0x00</td><td>与低字节合成 67</td></tr><tr><td>4</td><td><code>bNumInterfaces</code></td><td>0x02</td><td>两个接口</td></tr><tr><td>5</td><td><code>bConfigurationValue</code></td><td>0x01</td><td>配置编号 1</td></tr><tr><td>6</td><td><code>iConfiguration</code></td><td>0x00</td><td>无配置字符串</td></tr><tr><td>7</td><td><code>bmAttributes</code></td><td>0xC0</td><td>自供电</td></tr><tr><td>8</td><td><code>bMaxPower</code></td><td>0x32</td><td>最大取电 100 mA</td></tr></tbody></table>
+<p><code>wTotalLength</code> 与数组长度共用同一个宏 <code>USB_CDC_CONFIG_DESC_SIZ</code>，值为 67（<code>usbd_cdc.h:69</code>、<code>usbd_cdc.c:168</code>、<code>usbd_cdc.c:173</code>）。数组多大，整块就声明多大，两边由同一个常量约束。追加任何描述符都要同时改这个宏，否则主机按旧总长解析，多出来的字节落在整块之外。</p>
+<p><code>bMaxPower</code> 的单位是 2 mA，0x32 等于十进制 50，即 100 mA。宏 <code>USBD_MAX_POWER</code> 在 <code>usbd_def.h:81-83</code> 定义为 0x32，注释写明 100 mA。这个数字与主机能否直接供电有关，取电声明小于实际电流时主机可能在枚举后限流。</p>
+<p><code>bmAttributes</code> 由 <code>USBD_SELF_POWERED</code> 决定（<code>usbd_cdc.c:179-183</code>）。该宏在 <code>usbd_conf.h:76</code> 为 1，走 <code>#if</code> 分支取 0xC0。0xC0 的二进制是 1100 0000，第 6 位为 1 表示自供电，第 5 位为 0 表示不支持远程唤醒。数组里两个分支的注释都写成 Bus Powered，与实际取值不符，以取值为准。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  C["配置 9 字节"] --> I0["接口 0 通信 9 字节"]
+  I0 --> H["Header 5 字节"]
+  H --> CM["Call Management 5 字节"]
+  CM --> A["ACM 4 字节"]
+  A --> U["Union 5 字节"]
+  U --> E2["端点 0x82 中断 IN 7 字节"]
+  E2 --> I1["接口 1 数据 9 字节"]
+  I1 --> EO["端点 0x01 批量 OUT 7 字节"]
+  EO --> EI["端点 0x81 批量 IN 7 字节"]
+  EI --> SUM["合计 67 字节"]</pre></div>
+<p>各段长度相加可以复核总长：9 加 9 加 5 加 5 加 4 加 5 加 7 加 9 加 7 加 7，等于 67。这个加法在任何一次改描述符后都应重做一遍，它可以提前发现漏改的 <code>wTotalLength</code>。</p>
+<h2 id="两个接口如何拼出一条虚拟串口">两个接口如何拼出一条虚拟串口</h2>
+<p>CDC 的通信与数据功能分成两个接口，因为规范规定命令链路与数据链路各自成组。通信接口负责枚举阶段的类请求、线路状态与通知，数据接口只负责载荷。两个接口靠 Union 功能描述符关联，主机据此把它们当成同一个功能，否则会出现两个互不相关的接口。</p>
+<h3 id="通信接口-0-承担命令与状态">通信接口 0 承担命令与状态</h3>
+<p>接口编号 0，一个端点，类为通信设备（<code>usbd_cdc.c:189-198</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>取值</th><th>含义</th></tr></thead><tbody><tr><td><code>bInterfaceNumber</code></td><td>0x00</td><td>接口 0</td></tr><tr><td><code>bAlternateSetting</code></td><td>0x00</td><td>无备用设置</td></tr><tr><td><code>bNumEndpoints</code></td><td>0x01</td><td>一个中断 IN 端点</td></tr><tr><td><code>bInterfaceClass</code></td><td>0x02</td><td>通信接口类</td></tr><tr><td><code>bInterfaceSubClass</code></td><td>0x02</td><td>抽象控制模型</td></tr><tr><td><code>bInterfaceProtocol</code></td><td>0x01</td><td>常用 AT 命令</td></tr><tr><td><code>iInterface</code></td><td>0x00</td><td>无接口字符串</td></tr></tbody></table>
+<h3 id="数据接口-1-承担载荷">数据接口 1 承担载荷</h3>
+<p>接口编号 1，两个批量端点，类为 CDC 数据（<code>usbd_cdc.c:237-246</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>取值</th><th>含义</th></tr></thead><tbody><tr><td><code>bInterfaceNumber</code></td><td>0x01</td><td>接口 1</td></tr><tr><td><code>bAlternateSetting</code></td><td>0x00</td><td>无备用设置</td></tr><tr><td><code>bNumEndpoints</code></td><td>0x02</td><td>一进一出一对批量端点</td></tr><tr><td><code>bInterfaceClass</code></td><td>0x0A</td><td>CDC 数据接口类</td></tr><tr><td><code>bInterfaceSubClass</code></td><td>0x00</td><td>无子类</td></tr><tr><td><code>bInterfaceProtocol</code></td><td>0x00</td><td>无协议</td></tr><tr><td><code>iInterface</code></td><td>0x00</td><td>无接口字符串</td></tr></tbody></table>
+<p>两个接口的 <code>bAlternateSetting</code> 都是 0，说明没有备用设置。带备用设置的接口可以在同一接口号下切换不同的端点组合，本工程用不到这一层。<code>bNumEndpoints</code> 是本接口独占的端点数，端点 0 不在此列。</p>
+<h2 id="四个类功能描述符跟着通信接口走">四个类功能描述符跟着通信接口走</h2>
+<p>通信接口后面跟着四个类功能描述符，类型号都是 <code>CS_INTERFACE</code> 即 0x24，用子类型区分（<code>usbd_cdc.c:200-225</code>）。它们不是通用描述符，主机只有按 CDC 规范解析才会认出它们；解析时它们按位置归属于紧邻的接口 0。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>子类型</th><th>名称</th><th>长度</th><th>关键字段</th></tr></thead><tbody><tr><td>0x00</td><td>Header</td><td>5</td><td><code>bcdCDC</code> 为 0x0110，CDC 规范 1.10</td></tr><tr><td>0x01</td><td>Call Management</td><td>5</td><td><code>bmCapabilities</code> 为 0，<code>bDataInterface</code> 为 1</td></tr><tr><td>0x02</td><td>ACM</td><td>4</td><td><code>bmCapabilities</code> 为 0x02</td></tr><tr><td>0x06</td><td>Union</td><td>5</td><td>主接口 0，从接口 1</td></tr></tbody></table>
+<p>Header 声明设备实现的 CDC 规范版本，主机据此决定按哪版规范解析。Call Management 描述呼叫管理能力，<code>bmCapabilities</code> 为 0 表示呼叫管理由主机负责，<code>bDataInterface</code> 为 1 指出数据接口编号。ACM 的 <code>bmCapabilities</code> 为 0x02，声明设备支持线路编码相关请求的组合，而这组请求在本工程固件里是空实现，详见本单元《易错点与调试》。Union 把接口 0 与接口 1 关联成一个功能。</p>
+<h2 id="三条端点的方向类型与包长">三条端点的方向、类型与包长</h2>
+<p>端点描述符各 7 字节（<code>usbd_cdc.c:227-264</code>），依次跟在数据接口与通信接口之后。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>地址</th><th>方向</th><th>类型</th><th>包长</th><th><code>bInterval</code></th><th>用途</th></tr></thead><tbody><tr><td>0x82</td><td>IN</td><td>中断</td><td>8</td><td>0x10</td><td>命令与通知</td></tr><tr><td>0x01</td><td>OUT</td><td>批量</td><td>64</td><td>0x00</td><td>主机到设备载荷</td></tr><tr><td>0x81</td><td>IN</td><td>批量</td><td>64</td><td>0x00</td><td>设备到主机载荷</td></tr></tbody></table>
+<p>方向由地址最高位给出，0x81 与 0x82 为 IN，0x01 为 OUT。传输类型由 <code>bmAttributes</code> 低两位给出，0x03 为中断，0x02 为批量。端点号取自地址低四位，0x81 与 0x01 是同一对端点号 1 的两个方向。</p>
+<p>命令端点的包长 8 来自 <code>CDC_CMD_PACKET_SIZE</code>（<code>usbd_cdc.h:62</code>），<code>bInterval</code> 0x10 来自 <code>CDC_FS_BINTERVAL</code>（<code>usbd_cdc.h:58</code>）。全速下 <code>bInterval</code> 的单位是帧，一帧 1 ms，0x10 即 16 ms。批量端点的包长 64 来自 <code>CDC_DATA_FS_MAX_PACKET_SIZE</code>（<code>usbd_cdc.h:67</code>），批量端点无轮询间隔，<code>bInterval</code> 填 0。这三个宏把描述符里的数字与类驱动里的端点参数绑在一起。</p>
+<h2 id="主机取描述符时类驱动回写端点参数">主机取描述符时类驱动回写端点参数</h2>
+<p>主机请求配置描述符时，库调用类驱动的 <code>USBD_CDC_GetFSCfgDesc()</code>（<code>usbd_cdc.c:629-652</code>）。该函数先用 <code>USBD_GetEpDesc()</code> 在数组里定位三条端点描述符（<code>usbd_core.c:1157-1189</code>），再把 <code>wMaxPacketSize</code> 与 <code>bInterval</code> 写成当前速度对应的值，最后返回整块与长度。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant H as 主机
+  participant C as USBD_GetDescriptor
+  participant K as USBD_CDC_GetFSCfgDesc
+  H->>C: GET_DESCRIPTOR 配置 wLength 67
+  C->>K: 请求全速配置描述符
+  K->>K: USBD_GetEpDesc 定位三条端点
+  K->>K: 回写 bInterval 与 wMaxPacketSize
+  K-->>C: 数组地址与长度 67
+  C-->>H: 按 wLength 截断后发送</pre></div>
+<p>回写发生在数组本身，属于对共享数据的运行期写入。全速下写回的值与数组初值相同，当前行为不变；若将来数组初值与速度参数不一致，主机每次取到的值以回写后的为准。这也是数组不能放进只读段的原因。</p>
+<h2 id="配置生效时打开哪些端点">配置生效时打开哪些端点</h2>
+<p><code>SET_CONFIGURATION</code> 之后库调用 <code>USBD_SetClassConfig()</code>（<code>usbd_core.c:465-496</code>），进而调用 <code>USBD_CDC_Init()</code>（<code>usbd_cdc.c:287-379</code>）。该函数按速度打开三条端点：批量 IN 用 <code>CDC_IN_EP</code> 与 64 字节（<code>usbd_cdc.c:332-335</code>），批量 OUT 用 <code>CDC_OUT_EP</code> 与 64 字节（<code>usbd_cdc.c:338-341</code>），命令 IN 用 <code>CDC_CMD_EP</code> 与 <code>CDC_CMD_PACKET_SIZE</code> 8 字节（<code>usbd_cdc.c:348-349</code>），并设置命令端点的 <code>bInterval</code>（<code>usbd_cdc.c:343-344</code>）。描述符里声明的参数与这里打开的端点参数一一对应，改描述符而不改这里会让两端不一致。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  SC["主机 SET_CONFIGURATION wValue 1"] --> S1["USBD_SetConfig"]
+  S1 --> S2["USBD_SetClassConfig"]
+  S2 --> S3["USBD_CDC_Init 287"]
+  S3 --> E1["打开批量 IN 0x81 包长 64"]
+  S3 --> E2["打开批量 OUT 0x01 包长 64"]
+  S3 --> E3["打开命令 IN 0x82 包长 8 间隔 16"]
+  E1 --> OK["返回 USBD_OK 并转 CONFIGURED"]
+  E2 --> OK
+  E3 --> OK</pre></div>
+<h2 id="这一块里已经确认的写法问题">这一块里已经确认的写法问题</h2>
+<h3 id="定义了字符串却没有索引指向">定义了字符串却没有索引指向</h3>
+<p>配置文件与接口字符串分别定义为 CDC Config 与 CDC Interface（<code>usbd_desc.c:70-71</code>），回调也齐全（<code>usbd_desc.c:336-366</code>）。但配置描述符的 <code>iConfiguration</code> 与两个接口的 <code>iInterface</code> 都填 0（<code>usbd_cdc.c:177</code>、<code>usbd_cdc.c:198</code>、<code>usbd_cdc.c:246</code>），主机不会去请求索引 4 与索引 5。索引 0 表示没有字符串，这两段字符串在当前配置下不生效。要让它们在设备管理器里显示，需要把对应字段改成 4 与 5。</p>
+<h3 id="usbd_max_num_interfaces-的名字与用法不一致">USBD_MAX_NUM_INTERFACES 的名字与用法不一致</h3>
+<p><code>usbd_conf.h:66</code> 把 <code>USBD_MAX_NUM_INTERFACES</code> 定义为 1，而配置里声明了两个接口。该宏在库中只用于一处判断（<code>usbd_ctlreq.c:183</code>）：<code>if (LOBYTE(req->wIndex) &#x3C;= USBD_MAX_NUM_INTERFACES)</code>。判断用的是接口号上界，值为 1 时允许接口号 0 与 1，恰好覆盖两个接口。把它当成接口数量改成 2 会让判断放宽到接口号 2；改成 0 会让接口 1 的类请求被拒绝。名称是数量，用法是接口号上界，改动前先看这行判断。</p>
+<h3 id="追加描述符时漏改总长">追加描述符时漏改总长</h3>
+<p><code>wTotalLength</code> 由数组长度宏给出，追加描述符必须同时改 <code>USB_CDC_CONFIG_DESC_SIZ</code>，否则主机按错误总长解析，多出来的字节落在整块之外，接口与端点会读错位置。</p>
+<h3 id="bmattributes-的注释与取值不符">bmAttributes 的注释与取值不符</h3>
+<p>两个分支的注释都写 Bus Powered，取值为 0xC0 时表示自供电。判断供电方式看第 6 位，不看注释。</p>
+<h3 id="端点包长与端点描述符不一致">端点包长与端点描述符不一致</h3>
+<p>描述符声明 64 字节，类驱动打开端点时也用 64。若只改其中一处，主机按描述符分配缓冲，设备按实际值收发，大包会出错。命令端点的 8 与批量端点的 64 各自来自独立宏，改一个不要顺手改另一个。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>配置描述符 9 字节，<code>wTotalLength</code> 给出整块长度 67，<code>bNumInterfaces</code> 为 2。</li>
+<li>通信接口编号 0 类 0x02，数据接口编号 1 类 0x0A，两个接口靠 Union 功能描述符关联。</li>
+<li>四个功能描述符类型号 0x24：Header、Call Management、ACM、Union。</li>
+<li>三条端点：0x82 中断 IN 包长 8、0x01 批量 OUT 包长 64、0x81 批量 IN 包长 64。</li>
+<li>命令端点 <code>bInterval</code> 0x10 在全速下为 16 ms。</li>
+<li><code>SET_CONFIGURATION</code> 后 <code>USBD_CDC_Init()</code> 按描述符参数打开三条端点。</li>
+<li>取描述符时类驱动会回写端点包长与间隔，数组不能放只读段。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>配置整块放在类驱动里</td><td>描述符与端点打开参数集中在一处</td><td>换类要整体替换，不能只改设备描述符</td></tr><tr><td>运行期回写包长与间隔</td><td>同一份数组可服务全速与高速</td><td>每次请求都写共享数组，数组不能放只读段</td></tr><tr><td>ACM 声明支持线路编码</td><td>与主机期望的虚拟串口能力一致</td><td>固件未解析对应请求，声明与实际不符</td></tr><tr><td>命令端点用中断传输</td><td>命令可及时上报，包长需求小</td><td>占用一个端点与一帧内的调度机会</td></tr><tr><td>两个接口靠 Union 关联</td><td>符合 CDC 规范，主机识别为一条串口</td><td>少一个功能描述符就无法拼成完整设备</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出配置描述符 9 个字段的取值，并说明 <code>wTotalLength</code> 为什么是 67。</li>
+<li>列出四个功能描述符的子类型号与关键字段。</li>
+<li>说明端点 0x82 的传输类型、方向、包长与轮询间隔。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>在通信接口上再增加一个中断 IN 端点，写出需要追加的字节数，并指出 <code>wTotalLength</code>、<code>bNumEndpoints</code>、<code>USBD_MAX_NUM_INTERFACES</code> 是否要改。</li>
+<li>把 <code>USBD_SELF_POWERED</code> 改为 0，列出配置描述符与 <code>GET_STATUS</code> 返回值各发生什么变化。</li>
+<li>把三个字符串索引改成 4 与 5，说明主机侧会多出哪几次请求，以及回调链路上还需要确认什么。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</td><td>配置描述符数组（:168-265）、<code>USBD_CDC_Init</code>（:287-379）、<code>USBD_CDC_GetFSCfgDesc</code>（:629-652）、设备限定符（:117-129、:722-727）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</td><td>端点地址（:43-51）、包长与间隔宏（:57-74）、请求码（:80-88）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</td><td><code>USBD_GetEpDesc</code>（:1157-1189）、<code>USBD_SetClassConfig</code>（:465-496）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</td><td>接口请求分发（:167-230）、<code>USBD_SetConfig</code>（:723-812）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h</td><td><code>USBD_MAX_POWER</code>（:81-83）、<code>USBD_SELF_POWERED</code>（:77-79）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h</td><td><code>USBD_MAX_NUM_INTERFACES</code>（:66）、<code>USBD_SELF_POWERED</code>（:76）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c</td><td>配置与接口字符串定义（:70-71）、字符串回调（:336-366）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-枚举流程"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-枚举流程</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/02-描述符与枚举/04-枚举流程.md</span></div><div class="dfile__body"><h1 id="枚举流程">枚举流程</h1>
+<p>设备插入总线后，主机对它一无所知。枚举就是主机用一串控制传输问出设备的身份与能力，把设备从默认状态推进到可收发数据的状态。整个过程由主机发起，设备被动应答，每一步都通过端点 0 的 SETUP 阶段完成。前面两篇拆的是描述符的内容，接下来看这些描述符在什么时序下被请求，以及设备侧在哪一层回应。</p>
+<p>设备侧的回应分三层：硬件中断把 SETUP 包收进控制器，HAL 与 USB 设备库把请求分派给标准请求处理函数，标准请求处理再调用描述符回调或类回调。任何一层没接好，主机看到的都是枚举中途停下。本工程的中断入口在 <code>Core/Src/stm32f4xx_it.c:331-337</code>，底层回调在 <code>USB_DEVICE/Target/usbd_conf.c</code>。</p>
+<p>读完本页应当能回答三件事：枚举的主要阶段与先后顺序、每个阶段对应哪个库函数、以及主机停在哪一步时应当去查哪里。最后一节记录了任务描述里一个不存在的函数名，命名以类结构体里的指针为准。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td><code>OTG_FS_IRQHandler</code> 中断入口</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>复位、SETUP、数据阶段回调与回调注册</td></tr><tr><td><code>.../Core/Src/usbd_core.c</code></td><td><code>USBD_LL_SetupStage</code>、<code>USBD_LL_Reset</code>、<code>USBD_SetClassConfig</code></td></tr><tr><td><code>.../Core/Src/usbd_ctlreq.c</code></td><td>标准请求分派与处理</td></tr><tr><td><code>.../Core/Inc/usbd_def.h</code></td><td>设备状态常量</td></tr><tr><td><code>.../Class/CDC/Src/usbd_cdc.c</code></td><td>CDC 类函数指针表与 <code>USBD_CDC_Init</code></td></tr></tbody></table>
+<h2 id="枚举把设备从默认状态推到可收发">枚举把设备从默认状态推到可收发</h2>
+<p>控制传输分三个阶段：SETUP 阶段传送 8 字节请求头，DATA 阶段按方向传数据，STATUS 阶段回一个空包确认。设备侧由中断驱动，每次硬件事件进入 <code>OTG_FS_IRQHandler()</code>，再交给 HAL 与 USB 设备库。请求头的 8 个字节里，<code>bmRequestType</code> 决定请求的收件人，<code>bRequest</code> 决定动作，<code>wValue</code> <code>wIndex</code> <code>wLength</code> 决定参数，库按这几项分派。</p>
+<p>枚举的常见顺序是：上电连接、总线复位、速度协商、分配地址、读设备描述符前 8 字节、读完整 18 字节、读配置描述符整块、按索引读字符串、<code>SET_CONFIGURATION</code>。各阶段的先后顺序由主机决定，设备侧只按当前请求与 <code>dev_state</code> 回应。部分主机会先取 8 字节设备描述符再分配地址，部分主机在复位后直接分配地址，本工程对两种次序都能处理。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  P["上电并连接总线"] --> R["主机发起总线复位"]
+  R --> S["设备回调做速度协商，dev_speed 确定"]
+  S --> A["主机 SET_ADDRESS 分配地址"]
+  A --> D8["主机取设备描述符前 8 字节"]
+  D8 --> D18["主机取完整 18 字节设备描述符"]
+  D18 --> CFG["主机取配置描述符整块 67 字节"]
+  CFG --> STR["主机按索引取字符串描述符"]
+  STR --> SC["主机 SET_CONFIGURATION 值 1"]
+  SC --> C["类驱动打开端点，dev_state 变 CONFIGURED"]</pre></div>
+<h3 id="复位后速度协商再回到默认状态">复位后速度协商，再回到默认状态</h3>
+<p>设备侧上拉 D+ 之后主机检测到连接并发起复位。复位事件由 HAL 回调 <code>HAL_PCD_ResetCallback()</code> 接手（<code>usbd_conf.c:193-215</code>）。回调先把控制器速度映射为库速度，调用 <code>USBD_LL_SetSpeed()</code>（<code>usbd_conf.c:211</code>），再调用 <code>USBD_LL_Reset()</code>（<code>usbd_conf.c:214</code>）。</p>
+<p><code>USBD_LL_Reset()</code> 把设备状态清回 <code>USBD_STATE_DEFAULT</code>，清空配置号与端点 0 状态，调用类的 <code>DeInit</code>，然后打开端点 0 的 OUT 与 IN 两个方向，包长取 <code>USB_MAX_EP0_SIZE</code> 64（<code>usbd_core.c:777-837</code>）。复位是枚举的起点，之后的每一步都建立在端点 0 已经可用这个前提上。</p>
+<p>速度协商在同一回调里完成。<code>HAL_PCD_ResetCallback()</code> 读 <code>hpcd->Init.speed</code>，匹配 <code>PCD_SPEED_FULL</code> 时把库速度设为 <code>USBD_SPEED_FULL</code>，匹配 <code>PCD_SPEED_HIGH</code> 时设为 <code>USBD_SPEED_HIGH</code>（<code>usbd_conf.c:196-209</code>）。速度值写入 <code>pdev->dev_speed</code>（<code>usbd_core.c:845-851</code>），后续选择描述符版本与端点包长都读它。本工程在 <code>usbd_conf.c:337</code> 固定初始化为全速，因此走全速分支。</p>
+<h3 id="地址分配把设备推进到-addressed">地址分配把设备推进到 ADDRESSED</h3>
+<p>主机发 <code>SET_ADDRESS</code>，库在 <code>USBD_SetAddress()</code> 里检查索引与长度，取 <code>wValue</code> 低 7 位作为地址，调用 <code>USBD_LL_SetUSBAddress()</code> 写进控制器（<code>usbd_ctlreq.c:682-714</code>、<code>usbd_conf.c:541-551</code>），然后把 <code>dev_state</code> 从 <code>DEFAULT</code> 改为 <code>ADDRESSED</code>。地址为 0 时状态退回 <code>DEFAULT</code>。这一步不涉及描述符，但后面所有按地址寻址的传输都依赖它。</p>
+<h3 id="设备描述符分两次取回">设备描述符分两次取回</h3>
+<p>主机先请求 8 字节。库把 <code>wValue</code> 高字节 0x01 分派给 <code>USBD_GetDescriptor()</code>（<code>usbd_ctlreq.c:434-451</code>），取到 18 字节设备描述符后按主机 <code>wLength</code> 截断到 8 字节发出（<code>usbd_ctlreq.c:656-671</code>）。主机从第 8 字节读到 <code>bMaxPacketSize0</code>，再请求完整 18 字节。两次请求走同一条路径，区别只在 <code>wLength</code>，设备侧只有一份 18 字节数组。</p>
+<h3 id="配置描述符一次取回整块">配置描述符一次取回整块</h3>
+<p>主机用 <code>wValue</code> 高字节 0x02 请求配置。库调用已注册类的 <code>GetFSConfigDescriptor</code>（<code>usbd_ctlreq.c:453-482</code>），本工程即 <code>USBD_CDC_GetFSCfgDesc()</code>（<code>usbd_cdc.c:629-652</code>），返回 67 字节整块。主机也可能先请求 9 字节探总长，再请求完整块，两种情况都由 <code>wLength</code> 截断处理，类回调始终返回同一块数据。</p>
+<h3 id="字符串按索引逐个取">字符串按索引逐个取</h3>
+<p>主机按设备描述符里的三个索引依次取厂商、产品、序列号字符串，通常还会先取索引 0 的语言 ID。库按 <code>wValue</code> 低字节选回调（<code>usbd_ctlreq.c:484-600</code>），回调内容见本单元《设备描述符与 VID-PID》与《USB 描述符体系》。回调返回的长度写进字符串描述符的 <code>bLength</code>。</p>
+<h3 id="set_configuration-打开端点">SET_CONFIGURATION 打开端点</h3>
+<p>主机发 <code>SET_CONFIGURATION</code>，<code>wValue</code> 为 1。库在 <code>USBD_SetConfig()</code> 里对 <code>ADDRESSED</code> 状态做处理：写 <code>dev_config</code>，调用 <code>USBD_SetClassConfig()</code>（<code>usbd_ctlreq.c:738-762</code>）。后者调用已注册类的 <code>Init</code>（<code>usbd_core.c:465-496</code>），CDC 类对应 <code>USBD_CDC_Init()</code>（<code>usbd_cdc.c:287-379</code>），打开三条端点并准备接收缓冲。全部成功之后状态改为 <code>CONFIGURED</code> 并回状态阶段。</p>
+<h2 id="一次完整枚举的-setup-往返">一次完整枚举的 SETUP 往返</h2>
+<p>把上面的阶段按主机与设备的交互画出来，可以看到设备侧的每一次回应都由 SETUP 阶段触发，DATA 与 STATUS 阶段由库的状态机接手。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant H as 主机
+  participant C as USBD 核心
+  participant D as usbd_desc.c
+  participant K as USBD_CDC
+  H->>C: SETUP GET_DESCRIPTOR 设备 wLength 8
+  C->>D: USBD_FS_DeviceDescriptor
+  D-->>C: 18 字节描述符
+  C-->>H: 截为 8 字节
+  H->>C: SET_ADDRESS 地址 n
+  C->>C: USBD_LL_SetUSBAddress 并转 ADDRESSED
+  C-->>H: 状态阶段确认
+  H->>C: SETUP GET_DESCRIPTOR 设备 wLength 18
+  C-->>H: 完整 18 字节
+  H->>C: SETUP GET_DESCRIPTOR 配置 wLength 67
+  C->>K: USBD_CDC_GetFSCfgDesc
+  K-->>C: 67 字节
+  C-->>H: 完整配置描述符
+  H->>C: SETUP GET_DESCRIPTOR 字符串 索引 1 2 3
+  C->>D: 对应字符串回调
+  D-->>C: UTF-16LE 内容
+  C-->>H: 字符串描述符
+  H->>C: SETUP SET_CONFIGURATION wValue 1
+  C->>K: USBD_CDC_Init 打开三条端点
+  K-->>C: USBD_OK
+  C->>C: 转 CONFIGURED
+  C-->>H: 状态阶段确认</pre></div>
+<p>SETUP 阶段的 8 字节由硬件收进 <code>hpcd->Setup</code>，回调 <code>HAL_PCD_SetupStageCallback()</code> 把它交给 <code>USBD_LL_SetupStage()</code>（<code>usbd_conf.c:135-139</code>、<code>usbd_core.c:546-576</code>）。库在那里解析请求头并按收件人分派：设备请求进 <code>USBD_StdDevReq()</code>，接口请求进 <code>USBD_StdItfReq()</code>，端点请求进 <code>USBD_StdEPReq()</code>（<code>usbd_ctlreq.c:104-158</code>、<code>usbd_ctlreq.c:167-230</code>、<code>usbd_ctlreq.c:239-317</code>）。收件人来自 <code>bmRequestType</code> 的低 5 位，分派错了会把类请求当标准请求处理。</p>
+<h2 id="设备状态与挂起恢复">设备状态与挂起恢复</h2>
+<p>设备状态只有四个，状态常量定义在 <code>usbd_def.h:160-163</code>。枚举只走其中三个：复位回到 <code>DEFAULT</code>，<code>SET_ADDRESS</code> 进入 <code>ADDRESSED</code>，<code>SET_CONFIGURATION</code> 进入 <code>CONFIGURED</code>。挂起状态由总线事件触发，与枚举流程分开。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  state "DEFAULT" as DEF
+  state "ADDRESSED" as ADDR
+  state "CONFIGURED" as CFG
+  state "SUSPENDED" as SUSP
+  [*] --> DEF
+  DEF --> ADDR: SET_ADDRESS 非 0
+  ADDR --> CFG: SET_CONFIGURATION 值 1
+  CFG --> ADDR: SET_CONFIGURATION 值 0
+  DEF --> DEF: 总线复位
+  ADDR --> DEF: 总线复位
+  CFG --> DEF: 总线复位
+  ADDR --> SUSP: 总线挂起
+  CFG --> SUSP: 总线挂起
+  SUSP --> ADDR: 唤醒恢复
+  SUSP --> CFG: 唤醒恢复</pre></div>
+<p>挂起时库把原状态存进 <code>dev_old_state</code> 再置为 <code>SUSPENDED</code>，恢复时写回原状态（<code>usbd_core.c:859-885</code>）。设备进入配置状态之后，主机侧看到的虚拟串口才可用。发送链路判断 <code>dev_state == USBD_STATE_CONFIGURED</code> 也依赖这一状态。</p>
+<h2 id="从硬件中断到库函数的调用链">从硬件中断到库函数的调用链</h2>
+<p>把上面各节里出现的函数按层排开，可以看清一次枚举事件经过哪些代码。排查时按这张表自上而下定位，比从描述符数组开始猜要快。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>位置</th><th>动作</th></tr></thead><tbody><tr><td>中断入口</td><td><code>stm32f4xx_it.c:331-337</code></td><td><code>OTG_FS_IRQHandler()</code> 调 <code>HAL_PCD_IRQHandler()</code></td></tr><tr><td>复位回调</td><td><code>usbd_conf.c:193-215</code></td><td>速度协商后调 <code>USBD_LL_Reset()</code></td></tr><tr><td>SETUP 回调</td><td><code>usbd_conf.c:135-139</code></td><td>把 8 字节请求交给 <code>USBD_LL_SetupStage()</code></td></tr><tr><td>数据回调</td><td><code>usbd_conf.c:150-154</code>、<code>usbd_conf.c:165-169</code></td><td>交给 <code>USBD_LL_DataOutStage()</code> 与 <code>USBD_LL_DataInStage()</code></td></tr><tr><td>库分派</td><td><code>usbd_core.c:546-576</code></td><td>按收件人分派标准请求</td></tr><tr><td>标准请求</td><td><code>usbd_ctlreq.c:104-158</code></td><td>取描述符、设地址、设配置</td></tr><tr><td>类回调</td><td><code>usbd_cdc.c:287-379</code>、<code>usbd_cdc.c:432-527</code></td><td>打开端点、处理类请求</td></tr></tbody></table>
+<p>底层回调函数在 <code>usbd_conf.c:350-363</code> 通过 <code>HAL_PCD_RegisterCallback()</code> 注册到 HAL，只有在 <code>USE_HAL_PCD_REGISTER_CALLBACKS</code> 打开时走注册分支，否则用同名弱符号默认回调。核对回调有没有注册上，先看这个宏。</p>
+<h2 id="任务描述里那个不存在的-cdc_setconfig">任务描述里那个不存在的 CDC_SetConfig</h2>
+<p>任务描述里把 <code>SET_CONFIGURATION</code> 对应的处理称作 CDC_SetConfig。这份库里没有这个名字的函数。<code>USBD_SetConfig()</code> 是设备级的标准请求处理（<code>usbd_ctlreq.c:723</code>），它通过 <code>USBD_SetClassConfig()</code> 调用类结构里的 <code>Init</code> 指针（<code>usbd_core.c:488-492</code>），CDC 类的 <code>Init</code> 指针指向 <code>USBD_CDC_Init()</code>（<code>usbd_cdc.c:143</code>、<code>usbd_cdc.c:287</code>）。配置生效的实际动作发生在这个函数里。命名对不上时以类结构体里的函数指针为准。</p>
+<h2 id="枚举相关的易错点">枚举相关的易错点</h2>
+<h3 id="以为-8-字节与-18-字节是两条路径">以为 8 字节与 18 字节是两条路径</h3>
+<p>两次请求都由 <code>USBD_GetDescriptor()</code> 处理，区别只是 <code>wLength</code>。设备描述符数组始终保持 18 字节，截断由库完成。不会因为先读了 8 字节就把数组改成 8 字节。</p>
+<h3 id="在复位回调里做耗时操作">在复位回调里做耗时操作</h3>
+<p><code>HAL_PCD_ResetCallback()</code> 运行在中断上下文。放入耗时操作会推迟 SETUP 响应，主机可能判定枚举失败。本工程该回调只做速度映射与库复位，没有别的工作。</p>
+<h3 id="状态判断缺失">状态判断缺失</h3>
+<p>发送链路只在 <code>hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED</code> 时才应发数据。枚举未完成时端点尚未打开，直接调发送会返回失败或忙。</p>
+<h3 id="地址大于-127">地址大于 127</h3>
+<p><code>USBD_SetAddress()</code> 要求 <code>wValue</code> 小于 128 且索引与长度为 0（<code>usbd_ctlreq.c:686</code>）。主机不会给出越界地址，手写测试工具时要注意这个约束。</p>
+<h3 id="只改描述符不改端点打开参数">只改描述符不改端点打开参数</h3>
+<p>描述符决定主机侧的期望，类驱动的 <code>Init</code> 决定设备侧的实际参数。两端要一致，否则大包传输会出错。这条与本单元《配置与接口描述符》里回写包长的那一节是同一个问题的两个侧面。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>枚举由主机发起，设备通过端点 0 的控制传输被动应答。</li>
+<li>复位后设备回到 <code>DEFAULT</code>，库打开端点 0 并取 64 字节包长，速度在同一次回调里确定。</li>
+<li>地址分配把设备推进到 <code>ADDRESSED</code>，取描述符不改变状态。</li>
+<li>主机通常先读 8 字节设备描述符拿到 <code>bMaxPacketSize0</code>，再读完整 18 字节。</li>
+<li>配置描述符一次返回整块 67 字节，字符串按索引逐个取。</li>
+<li><code>SET_CONFIGURATION</code> 触发类 <code>Init</code>，本工程为 <code>USBD_CDC_Init()</code>，成功后进入 <code>CONFIGURED</code>。</li>
+<li>挂起只改状态，原状态存入 <code>dev_old_state</code>，恢复时写回。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>描述符读取按 <code>wLength</code> 统一截断</td><td>8 字节与 18 字节共用一条路径</td><td>设备无法感知主机是试探还是取全量</td></tr><tr><td>状态机集中在库核心</td><td>各类设备行为一致</td><td>类驱动要严格按状态办事，越界请求被停机</td></tr><tr><td>类 <code>Init</code> 延迟到配置阶段</td><td>枚举期间不占用数据端点</td><td>配置失败时状态退回 <code>ADDRESSED</code>，主机需重试</td></tr><tr><td>挂起只改状态不重配端点</td><td>恢复快</td><td>挂起期间的端点状态要由应用自行确认</td></tr><tr><td>回调优先，弱符号兜底</td><td>不改 HAL 也能工作</td><td>注册开关关闭时回调表静默失效，排查要另查宏</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>按顺序列出枚举的主要 SETUP 请求，并标出哪一步让 <code>dev_state</code> 从 <code>ADDRESSED</code> 变为 <code>CONFIGURED</code>。</li>
+<li>说明主机为什么先读 8 字节设备描述符。</li>
+<li>写出从 <code>OTG_FS_IRQHandler()</code> 到 <code>USBD_LL_SetupStage()</code> 的调用链。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用调试器在 <code>USBD_SetConfig()</code> 与 <code>USBD_CDC_Init()</code> 下断点，记录一次完整枚举中两者被调用的次数与顺序。</li>
+<li>假设 <code>SET_CONFIGURATION</code> 值为 2，分析 <code>USBD_SetConfig()</code> 的判断路径与设备最终状态。</li>
+<li>把 <code>USBD_STATE_CONFIGURED</code> 判断去掉后直接调用发送函数，说明在枚举未完成时会走哪条失败路径。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</td><td><code>OTG_FS_IRQHandler</code>（:331-337）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</td><td>复位回调（:193-215）、SETUP 回调（:135-139）、数据回调（:150-169）、回调注册（:350-363）、<code>USBD_LL_SetUSBAddress</code>（:541-551）、初始化（:327-370）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</td><td><code>USBD_LL_SetupStage</code>（:546-576）、<code>USBD_LL_Reset</code>（:777-837）、<code>USBD_SetClassConfig</code>（:465-496）、挂起恢复（:859-885）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</td><td>设备请求分发（:104-158）、接口请求（:167-230）、端点请求（:239-317）、取描述符（:428-672）、设地址（:682-714）、设配置（:723-812）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h</td><td>状态常量（:160-163）、<code>USB_MAX_EP0_SIZE</code>（:157）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</td><td>类函数指针表（:141-164）、<code>USBD_CDC_Init</code>（:287-379）、<code>USBD_CDC_Setup</code>（:432-527）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/02-描述符与枚举/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<p>描述符与枚举相关的问题有一个共同特征：多数不会在数据通路上立刻发作。描述符写错时设备仍可能枚举成功，只是在某个字段上表现异常；类请求被丢弃时载荷收发照常，只有依赖该请求的上位机出现异常。排查时按主机侧看到的现象与设备侧的字段逐项对照，比直接读代码更快。</p>
+<p>本页把这一单元里已经确认的问题归成四类：长度类来自单字节字段与共享缓冲的边界，方向类来自端点地址的最高位，对齐类来自缓冲与结构体之间的强制转换，配置类来自几个同时控制多处行为的宏。最后两节给出打开日志、看设备状态与在主机侧读描述符的操作路径。</p>
+<p>其中的潜在缺陷会明确标注触发条件与是否当前成立。已经确认的缺陷给出源码位置与行号，属推断的部分会在句子里写明。</p>
+<blockquote>
+<p>源码索引</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_desc.c</code></td><td>描述符数组对齐、字符串缓冲、序列号数组</td></tr><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td><code>CDC_Control_FS</code> 类请求回调</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.h</code></td><td>字符串缓冲上限、调试等级、LPM 开关</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>端点停机判断、低功耗开关、静态分配</td></tr><tr><td><code>USB_DEVICE/App/usb_device.c</code></td><td>设备句柄 <code>hUsbDeviceFS</code></td></tr><tr><td><code>.../Core/Src/usbd_ctlreq.c</code></td><td>字符串生成与长度计算、BOS 分支</td></tr><tr><td><code>.../Core/Src/usbd_core.c</code></td><td>端点描述符定位与端点下标掩码</td></tr><tr><td><code>.../Core/Inc/usbd_def.h</code></td><td>对齐宏、状态常量</td></tr><tr><td><code>.../Class/CDC/Src/usbd_cdc.c</code></td><td>类请求处理、配置描述符</td></tr><tr><td><code>.../Class/CDC/Inc/usbd_cdc.h</code></td><td>端点地址、句柄缓冲</td></tr></tbody></table>
+<h2 id="这类问题的共同来源">这类问题的共同来源</h2>
+<p>长度类问题的根源是 USB 描述符里的长度字段多为单字节，而设备侧共用一块固定大小的缓冲。单字节能表达 0 到 255，缓冲是 512 字节，两者在正常内容下相安无事，一旦内容长度接近上限，长度字段会先回绕。方向类问题的根源是端点地址把一个方向位和四位端点号压在一个字节里，用地址当数组下标就出错。对齐类问题的根源是描述符缓冲是字节数组，库却按结构体访问它。配置类问题的根源是某个宏同时参与编译分支与运行期判断，只改一处就会让声明与实现分家。</p>
+<h2 id="字符串描述符的长度与共享缓冲">字符串描述符的长度与共享缓冲</h2>
+<p>字符串描述符由 <code>USBD_GetString()</code> 生成（<code>usbd_ctlreq.c:996-1023</code>）。流程是：先求 ASCII 字符数，算出 UTF-16LE 长度，写入 <code>bLength</code> 与类型号，再把每个字符与一个 0 字节交替写入缓冲。一个 ASCII 字符展开成两个字节，所以描述符长度等于字符数乘 2 再加 2，加上的 2 是 <code>bLength</code> 与 <code>bDescriptorType</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["回调传入 ASCII 字符串与共享缓冲"] --> B["USBD_GetLen 求字符数"]
+  B --> C["len 取 512 与 字符数乘 2 加 2 的较小值"]
+  C --> D["写入 bLength 与类型号"]
+  D --> E["循环把所有字符按 UTF-16LE 写入"]
+  E --> F{"字符数是否超过 255"}
+  F -->|"否"| G["写入长度与 len 一致"]
+  F -->|"是"| H["字符数回绕使长度偏小 且写入超出 512 字节缓冲"]</pre></div>
+<p>两处细节需要单独指出。第一，<code>USBD_GetLen()</code> 的返回类型是 <code>uint8_t</code>（<code>usbd_ctlreq.c:1032-1044</code>），字符数到 256 会回绕。第二，<code>*len</code> 被限制在 512 以内，但后面的写入循环不检查这个上限，每个字符固定写两个字节。</p>
+<p>现有字符串都很短，最长的是 STMicroelectronics，18 个字符，描述符长度等于 18 乘 2 加 2，即 38 字节，距离 512 很远，不会触发问题。上面第二条属潜在缺陷：一旦有人把厂商或产品字符串改得很长，长度字段与缓冲区都会出错。推断的触发条件是 ASCII 字符数超过 255，当前配置下不成立，改动字符串长度时需要重新核对。</p>
+<p>所有字符串回调共用同一个缓冲 <code>USBD_StrDesc</code>，大小 512 字节（<code>usbd_desc.c:233</code>、<code>usbd_conf.h:70</code>）。序列号不占用这个缓冲，它有自己的 0x1A 字节数组（<code>usbd_desc.h:52</code>、<code>usbd_desc.c:238-241</code>）。共用一个缓冲意味着两次字符串请求不能同时进行，枚举是串行的，这一点不构成问题。</p>
+<h2 id="端点地址最高位是方向位">端点地址最高位是方向位</h2>
+<p>端点地址用一个字节表示，最高位是方向，低四位是端点号。中间三位保留。CDC 用了三条端点（<code>usbd_cdc.h:43-51</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>地址</th><th>最高位</th><th>方向</th><th>端点号</th><th>用途</th></tr></thead><tbody><tr><td>0x81</td><td>1</td><td>IN</td><td>1</td><td>数据回传</td></tr><tr><td>0x01</td><td>0</td><td>OUT</td><td>1</td><td>数据下发</td></tr><tr><td>0x82</td><td>1</td><td>IN</td><td>2</td><td>命令与通知</td></tr></tbody></table>
+<p>0x81 与 0x01 是同一对端点号 1 的两个方向，靠最高位区分。库判断停机状态时按最高位选表（<code>usbd_conf.c:521-533</code>）：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["端点地址 0x81"] --> B{"最高位是否为 1"}
+  B -->|"是"| C["IN 方向"]
+  B -->|"否"| D["OUT 方向"]
+  C --> E["查 ep_in 表"]
+  D --> F["查 ep_out 表"]
+  E --> G["索引用地址与掩码取端点号"]
+  F --> G</pre></div>
+<p>写端点数组下标时容易直接用地址。库在别处用 <code>ep_addr &#x26; 0x0F</code> 或 <code>&#x26; 0x7F</code> 取端点号（<code>usbd_core.c:826</code>、<code>usbd_core.c:832</code>、<code>usbd_core.c:747</code>），把 0x81 直接当 1 使用会越界。判断方向用最高位，取号用低四位，两件事分开做。</p>
+<h2 id="描述符数组与结构体视图之间的对齐">描述符数组与结构体视图之间的对齐</h2>
+<p>描述符数组与端点结构体之间靠强制类型转换建立视图。<code>usbd_core.c:1157-1189</code> 的 <code>USBD_GetEpDesc()</code> 把配置描述符缓冲逐字节走一遍，遇到端点类型号就转成 <code>USBD_EpDescTypeDef *</code> 访问字段。这类转换要求地址对齐，否则多字节成员可能被拆成两次错位访问。</p>
+<p>本工程的处理方式有两处。描述符数组用 <code>__ALIGN_BEGIN</code> 与 <code>__ALIGN_END</code> 包裹（<code>usbd_desc.c:155</code>、<code>usbd_desc.c:221</code>、<code>usbd_desc.c:233</code>、<code>usbd_desc.c:238</code>、<code>usbd_cdc.c:117</code>、<code>usbd_cdc.c:168</code>），宏在 <code>usbd_def.h:471-487</code> 按编译器展开为 4 字节对齐属性。CDC 句柄里的数据缓冲声明为 <code>uint32_t data[...]</code> 以强制 32 位对齐（<code>usbd_cdc.h:120-132</code>），静态分配器返回的是一段 <code>uint32_t</code> 数组（<code>usbd_conf.c:625-629</code>）。</p>
+<p>去掉对齐声明后，GCC 在 Cortex-M4 上遇到非对齐的多字节访问可能触发硬件异常或读到错误值。改动描述符数组时不要动这两对宏，也不要把数组换成运行期分配的缓冲区。</p>
+<h2 id="usbd_max_str_desc_siz-同时管缓冲与上限">USBD_MAX_STR_DESC_SIZ 同时管缓冲与上限</h2>
+<p><code>USBD_MAX_STR_DESC_SIZ</code> 在 <code>usbd_conf.h:70</code> 定义为 512，它同时决定共享缓冲大小（<code>usbd_desc.c:233</code>）与 <code>USBD_GetString()</code> 里的长度上限（<code>usbd_ctlreq.c:1007</code>）。两个用途绑定在同一个宏上，改它等于同时改两处。</p>
+<p>USB 字符串描述符的 <code>bLength</code> 是单字节，最大值 255。一个字符串最多约 126 个 UTF-16 字符。把宏改大不能突破 <code>bLength</code> 的上限，反而会放大上一节提到的写入越界范围，因为长度字段会先回绕而写入循环继续。需要更长的可读名称时，正确做法是缩短内容或拆成多个字符串索引，而不是调大缓冲。</p>
+<h2 id="lpm-开关同时影响-bcdusb-与-bos">LPM 开关同时影响 bcdUSB 与 BOS</h2>
+<p><code>USBD_LPM_ENABLED</code> 在 <code>usbd_conf.h:74</code> 为 0。它控制设备描述符里的 <code>bcdUSB</code> 与 BOS 描述符两处编译分支：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>宏取值</th><th><code>bcdUSB</code></th><th>数组字节</th><th>BOS 描述符</th><th>位置</th></tr></thead><tbody><tr><td>0</td><td>0x0200</td><td>0x00 0x02</td><td>不编译</td><td><code>usbd_desc.c:163-165</code></td></tr><tr><td>1</td><td>0x0201</td><td>0x01 0x02</td><td>编译并回调</td><td><code>usbd_desc.c:159-162</code>、<code>usbd_desc.c:185-205</code></td></tr></tbody></table>
+<p>库取描述符时，BOS 分支只在 <code>USBD_LPM_ENABLED</code> 或 <code>USBD_CLASS_BOS_ENABLED</code> 为 1 时才参与编译（<code>usbd_ctlreq.c:436-448</code>）。把宏改为 1 之后，设备对主机声明 USB 2.01 并提供 BOS，但底层 PCD 的 <code>lpm_enable</code> 仍固定为 <code>DISABLE</code>（<code>usbd_conf.c:342</code>），控制器侧并未启用 LPM。声明与控制器配置不一致，属配置错误，需要两处一起改。</p>
+<h2 id="cdc_control_fs-的空实现丢掉了哪些请求">CDC_Control_FS 的空实现丢掉了哪些请求</h2>
+<p>主机的类请求最终进到 <code>CDC_Control_FS()</code>（<code>usbd_cdc_if.c:180-244</code>）。该函数对所有命令都是空 case，统一返回 <code>USBD_OK</code>。上层路径在 <code>USBD_CDC_Setup()</code> 与 <code>USBD_CDC_EP0_RxReady()</code>（<code>usbd_cdc.c:432-527</code>、<code>usbd_cdc.c:603-621</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant H as 主机
+  participant K as USBD_CDC_Setup
+  participant I as CDC_Control_FS
+  H->>K: SET_LINE_CODING 0x20 携带 7 字节
+  K->>K: 记录 CmdOpCode 与 CmdLength 并准备接收
+  H->>K: 数据阶段送达 7 字节
+  K->>I: EP0_RxReady 调 Control 0x20
+  I-->>K: 空 case 返回 USBD_OK
+  K-->>H: 状态阶段确认
+  Note over H,I: 线路编码被丢弃 主机设置的参数未生效</pre></div>
+<p>主机发了什么、固件在哪一步丢掉，整理如下。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>主机请求</th><th>编码</th><th>数据方向</th><th>固件行为</th><th>后果</th></tr></thead><tbody><tr><td><code>CDC_SET_LINE_CODING</code></td><td>0x20</td><td>主机到设备 7 字节</td><td>收到后空 case，参数不解析</td><td>波特率、数据位、校验设置不生效</td></tr><tr><td><code>CDC_GET_LINE_CODING</code></td><td>0x21</td><td>设备到主机</td><td>空 case，返回句柄里未更新的数据</td><td>主机读到全 0 或旧值</td></tr><tr><td><code>CDC_SET_CONTROL_LINE_STATE</code></td><td>0x22</td><td>无数据</td><td>空 case，DTR 与 RTS 被忽略</td><td>依赖 DTR 的上位机可能一直等待</td></tr><tr><td><code>CDC_SEND_BREAK</code></td><td>0x23</td><td>无数据</td><td>空 case</td><td>断开信号不处理</td></tr></tbody></table>
+<p>对虚拟串口而言，载荷走批量端点，与线路编码无关，因此数据收发本身不受影响。虚拟串口的波特率由 USB 全速链路决定，改波特率不改变实际速率。受影响的只是依赖这些命令做流控或握手的上位机，它们可能超时或认为端口未就绪，这一条属推断，需在目标上位机上实测。</p>
+<p>功能描述符里 ACM 的 <code>bmCapabilities</code> 为 0x02（<code>usbd_cdc.c:214-218</code>），声明设备支持线路编码相关请求。声明与空实现不一致。要让主机改参数生效，需要在 <code>CDC_SET_LINE_CODING</code> 分支里解析 7 字节并保存，在 <code>CDC_GET_LINE_CODING</code> 分支里回填。</p>
+<h2 id="打开日志看状态在主机侧读描述符">打开日志、看状态、在主机侧读描述符</h2>
+<p><code>USBD_DEBUG_LEVEL</code> 在 <code>usbd_conf.h:72</code> 为 0，三组日志宏都被展开为空（<code>usbd_conf.h:110-132</code>）。改成 1 打开 <code>USBD_UsrLog</code>，改成 2 或 3 再打开 <code>USBD_ErrLog</code> 与 <code>USBD_DbgLog</code>。日志走 <code>printf</code>，需要先接好输出通道，否则看不到内容。</p>
+<p>设备句柄是 <code>hUsbDeviceFS</code>（<code>usb_device.c:44</code>）。枚举完成时 <code>hUsbDeviceFS.dev_state</code> 为 <code>USBD_STATE_CONFIGURED</code>（<code>usbd_def.h:162</code>）。发送链路也用它做条件判断，状态停在 <code>ADDRESSED</code> 说明 <code>SET_CONFIGURATION</code> 没有走完，通常是类 <code>Init</code> 返回了失败。</p>
+<p>主机侧工具可以直接读出设备描述符与配置描述符。Windows 用设备管理器看设备名与硬件 ID，用 USB 树查看器看完整描述符；Linux 用 <code>lsusb -v</code> 或 usbmon。重点核对 <code>idVendor</code>、<code>idProduct</code>、<code>bcdUSB</code>、<code>wTotalLength</code> 与端点的 <code>wMaxPacketSize</code>。这些工具属通用手段，版本差异较大。</p>
+<p>把常见现象与优先检查点对应起来：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>优先检查</th></tr></thead><tbody><tr><td>主机完全不认设备</td><td><code>bMaxPacketSize0</code>、端点 0 打开是否成功、中断是否进入</td></tr><tr><td>设备名对但驱动装不上</td><td><code>idVendor</code> 与 <code>idProduct</code> 是否与 inf 一致</td></tr><tr><td>枚举到中途失败</td><td>配置描述符 <code>wTotalLength</code> 与实际字节数是否一致</td></tr><tr><td>打开串口后收不到数据</td><td><code>dev_state</code> 是否为 <code>CONFIGURED</code>、端点是否打开</td></tr><tr><td>改波特率无变化</td><td><code>CDC_Control_FS</code> 对应分支是否为空</td></tr><tr><td>字符串显示乱码或截断</td><td>字符串长度计算与 UTF-16LE 编码</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>字符串长度由 <code>USBD_GetString()</code> 计算，写入循环不检查 512 上限，超长字符串有越界风险。</li>
+<li>端点地址最高位是方向，低四位是端点号，取数组下标不能直接用地址。</li>
+<li>描述符数组与句柄缓冲都靠对齐声明支撑强制类型转换。</li>
+<li><code>USBD_MAX_STR_DESC_SIZ</code> 同时管缓冲大小与长度上限，改大不能突破单字节 <code>bLength</code>。</li>
+<li><code>USBD_LPM_ENABLED</code> 同时改 <code>bcdUSB</code> 与 BOS 编译，控制器 LPM 开关是另一处配置。</li>
+<li><code>CDC_Control_FS()</code> 对所有类请求空实现，线路编码与控制线状态被丢弃。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>好处</th><th>代价</th></tr></thead><tbody><tr><td>字符串共用一个静态缓冲</td><td>省 RAM，生成逻辑集中</td><td>超长字符串越界，多个字符串不能同时缓存</td></tr><tr><td>线路编码请求空实现</td><td>数据通路简单，不占用解析状态</td><td>主机设置的参数不生效，声明与实现不符</td></tr><tr><td>描述符数组固定对齐</td><td>转换视图安全</td><td>改动数组布局要维持对齐与长度一致</td></tr><tr><td>LPM 默认关闭</td><td>不引入低功耗挂起状态机</td><td>需要 LPM 时要同时改宏与控制器配置</td></tr><tr><td>调试日志默认关闭</td><td>不占用串口与代码空间</td><td>出问题时要先改宏并准备输出通道</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明 <code>USBD_GetString()</code> 里 <code>bLength</code> 的计算公式，并算出 STMicroelectronics 的描述符长度。</li>
+<li>写出端点地址 0x82 的方向、端点号与传输类型。</li>
+<li>列出 <code>USBD_LPM_ENABLED</code> 从 0 改为 1 时受影响的文件与位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把 <code>USBD_MAX_STR_DESC_SIZ</code> 改为 64，分析厂商字符串 STMicroelectronics 是否还能完整返回，并说明 <code>USBD_GetString()</code> 的行为。</li>
+<li>为 <code>CDC_SET_LINE_CODING</code> 与 <code>CDC_GET_LINE_CODING</code> 补上解析与回填，写出需要保存的字段，并说明如何与 ACM 功能描述符的声明保持一致。</li>
+<li>主机打开串口后依赖 DTR 才发数据，而 <code>CDC_SET_CONTROL_LINE_STATE</code> 是空实现，说明现象与可在固件侧做的两种改法。</li>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c</td><td>对齐声明（:155、:221、:233、:238）、<code>bcdUSB</code> 分支（:159-165）、BOS（:185-205）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.h</td><td>序列号长度（:52）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</td><td><code>CDC_Control_FS</code>（:180-244）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h</td><td><code>USBD_MAX_STR_DESC_SIZ</code>（:70）、<code>USBD_DEBUG_LEVEL</code>（:72）、<code>USBD_LPM_ENABLED</code>（:74）、日志宏（:110-132）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</td><td><code>USBD_LL_IsStallEP</code>（:521-533）、LPM 与低功耗开关（:341-342）、静态分配（:625-629）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usb_device.c</td><td>设备句柄（:44）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</td><td><code>USBD_GetString</code>（:996-1023）、<code>USBD_GetLen</code>（:1032-1044）、BOS 分支（:436-448）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</td><td><code>USBD_GetEpDesc</code>（:1157-1189）、端点下标（:747、:826、:832）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h</td><td>对齐宏（:471-487）、状态常量（:160-163）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</td><td><code>USBD_CDC_Setup</code>（:432-527）、<code>USBD_CDC_EP0_RxReady</code>（:603-621）、配置描述符（:168-265）</td></tr><tr><td>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</td><td>端点地址（:43-51）、句柄缓冲（:120-132）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/05-USB%20Device/01-CDC%E8%99%9A%E6%8B%9F%E4%B8%B2%E5%8F%A3/"><span class="k">← 上一篇</span><span class="t">CDC虚拟串口</span><span class="d">USB Device · 5 个文件</span></a><a class="next" href="/tc63/docs/05-USB%20Device/03-USB%E5%8D%8F%E8%AE%AE%E6%94%B6%E5%8F%91/"><span class="k">下一篇 →</span><span class="t">USB协议收发</span><span class="d">USB Device · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

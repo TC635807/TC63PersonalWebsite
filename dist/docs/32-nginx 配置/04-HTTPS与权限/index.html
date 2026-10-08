@@ -1,0 +1,1115 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>HTTPS与权限 · nginx 配置 · 王宇翔</title><meta name="description" content="443 的终止点、证书与域名的绑定关系、/tc63 复用同一张证书的原因、Let’s Encrypt 在 live 与 archive 两处的文件组织，以及 nginx 引用证书的四行配置。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/04-HTTPS%E4%B8%8E%E6%9D%83%E9%99%90/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="HTTPS与权限 · nginx 配置 · 王宇翔"><meta property="og:description" content="443 的终止点、证书与域名的绑定关系、/tc63 复用同一张证书的原因、Let’s Encrypt 在 live 与 archive 两处的文件组织，以及 nginx 引用证书的四行配置。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/04-HTTPS%E4%B8%8E%E6%9D%83%E9%99%90/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/">nginx 配置</a><span class="sep" aria-hidden="true">/</span><span class="now">HTTPS与权限</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>HTTPS与权限</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>TLS 终止与证书绑定域名</span></a><ul class="toc__heads"><li><a href="#域名先于路径被校验" data-depth="2" data-heading-j="0">域名先于路径被校验</a></li><li><a href="#一个域名只有一张有效证书" data-depth="2" data-heading-j="1">一个域名只有一张有效证书</a></li><li><a href="#80-与-443-两个入口的分工" data-depth="2" data-heading-j="2">80 与 443 两个入口的分工</a></li><li><a href="#证书文件的引用只有四行" data-depth="2" data-heading-j="3">证书文件的引用只有四行</a></li><li><a href="#live-与-archive-两处目录" data-depth="2" data-heading-j="4">live 与 archive 两处目录</a></li><li><a href="#私钥权限与读取时机" data-depth="2" data-heading-j="5">私钥权限与读取时机</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>证书申请与自动续期</span></a><ul class="toc__heads"><li><a href="#acme-与-http-01-的验证路径" data-depth="2" data-heading-j="0">ACME 与 HTTP-01 的验证路径</a></li><li><a href="#首次签发在部署脚本里的位置" data-depth="2" data-heading-j="1">首次签发在部署脚本里的位置</a></li><li><a href="#nginx-插件改动的三处" data-depth="2" data-heading-j="2">—nginx 插件改动的三处</a></li><li><a href="#续期由定时器驱动" data-depth="2" data-heading-j="3">续期由定时器驱动</a></li><li><a href="#续期之后的重载" data-depth="2" data-heading-j="4">续期之后的重载</a></li><li><a href="#续期失败的排查顺序" data-depth="2" data-heading-j="5">续期失败的排查顺序</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>文件权限与 nginx 读取路径</span></a><ul class="toc__heads"><li><a href="#worker-进程以什么身份读文件" data-depth="2" data-heading-j="0">worker 进程以什么身份读文件</a></li><li><a href="#路径上每一级目录都要有-x" data-depth="2" data-heading-j="1">路径上每一级目录都要有 x</a></li><li><a href="#家目录穿透的两种做法" data-depth="2" data-heading-j="2">家目录穿透的两种做法</a></li><li><a href="#站点树的可读位与它的代价" data-depth="2" data-heading-j="3">站点树的可读位与它的代价</a></li><li><a href="#软链接把仓库产物接到站点根" data-depth="2" data-heading-j="4">软链接把仓库产物接到站点根</a></li><li><a href="#更新脚本里的两行权限修复" data-depth="2" data-heading-j="5">更新脚本里的两行权限修复</a></li><li><a href="#账号边界与最小权限" data-depth="2" data-heading-j="6">账号边界与最小权限</a></li><li><a href="#易错点" data-depth="2" data-heading-j="7">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>上线验证与故障分层</span></a><ul class="toc__heads"><li><a href="#改动后的动作顺序" data-depth="2" data-heading-j="0">改动后的动作顺序</a></li><li><a href="#用-openssl-s_client-看实际生效的证书" data-depth="2" data-heading-j="1">用 openssl s_client 看实际生效的证书</a></li><li><a href="#从状态码区分权限与内容问题" data-depth="2" data-heading-j="2">从状态码区分权限与内容问题</a></li><li><a href="#线上回归清单" data-depth="2" data-heading-j="3">线上回归清单</a></li><li><a href="#构建产物在本地先验一次" data-depth="2" data-heading-j="4">构建产物在本地先验一次</a></li><li><a href="#服务器上可用的工具受限" data-depth="2" data-heading-j="5">服务器上可用的工具受限</a></li><li><a href="#权限与证书故障的分层判定" data-depth="2" data-heading-j="6">权限与证书故障的分层判定</a></li><li><a href="#易错点" data-depth="2" data-heading-j="7">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="14">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">nginx 配置</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>nginx / HTTPS / TLS / Let’s Encrypt / 证书 / certbot / ACME / 续期</span></div><h1 class="docs__title">HTTPS与权限</h1><p class="docs__lead">443 的终止点、证书与域名的绑定关系、/tc63 复用同一张证书的原因、Let’s Encrypt 在 live 与 archive 两处的文件组织，以及 nginx 引用证书的四行配置。</p></header><section class="dfile" id="file-1" data-file="01-TLS终止与证书绑定域名"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-TLS终止与证书绑定域名</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/04-HTTPS与权限/01-TLS终止与证书绑定域名.md</span></div><div class="dfile__body"><h1 id="tls-终止与证书绑定域名">TLS 终止与证书绑定域名</h1>
+<p>个人主页的线上地址是 <a href="https://knowledgediver.cloud/tc63/">https://knowledgediver.cloud/tc63/</a> 。这个 URL 里 HTTPS 与 /tc63 属于两层不同的机制：TLS 在 TCP 连接建立时完成，证书只回答「你是不是 knowledgediver.cloud」；路径分流发生在握手之后，由 nginx 的 location 决定。浏览器在握手阶段看不到 /tc63，也就不会为它单独校验任何东西。</p>
+<p>443 这一端由谁负责、证书为什么只有一张、nginx 从哪里读它、证书文件在磁盘上有哪两处组织，是配置 TLS 终止时必须先确定的事。TLS 的密码学细节不在范围内，重点是文件位置、引用方式与配置错误的表现。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>决定因素</th><th>本工程取值</th><th>出处</th></tr></thead><tbody><tr><td>连接目标</td><td>DNS A 记录</td><td><code>knowledgediver.cloud</code> → <code>43.136.78.68</code></td><td><code>README.md:158</code>、<code>personal-homepage-research/15-deploy-tc63.md:9</code></td></tr><tr><td>证书校验</td><td>证书 SAN 与请求域名</td><td><code>knowledgediver.cloud</code>、<code>www.knowledgediver.cloud</code></td><td>KD 仓库 <code>deploy/deploy.sh:108</code></td></tr><tr><td>路径分流</td><td>nginx <code>location</code></td><td><code>/tc63/</code> 归个人主页，<code>/</code> 与 <code>/api/</code> 归 KnowledgeDiver</td><td><code>personal-homepage-research/15-deploy-tc63.md:13-15</code>、<code>:63-77</code></td></tr><tr><td>站点文件</td><td><code>root</code> 指令</td><td><code>root /home/tc63/www</code>，其下 <code>tc63</code> 为软链</td><td><code>personal-homepage-research/15-deploy-tc63.md:71-74</code>、<code>README.md:163</code></td></tr></tbody></table>
+<p>KD 仓库的路径以服务器上的 <code>~/KnowledgeDiver</code> 为根，正文与附录都按这个根书写；个人主页仓库的路径按仓库根书写。</p>
+<h2 id="域名先于路径被校验">域名先于路径被校验</h2>
+<p>TLS 握手开始时，客户端在 <code>ClientHello</code> 里带上 SNI 字段，写明想访问的域名。nginx 用这个字段挑出 <code>server_name</code> 匹配的 server 块，把对应的证书链发回去。客户端检查签发者、有效期与 SAN 列表里有没有该域名，全部通过之后才开始发 HTTP 请求。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant B as 浏览器
+    participant N as nginx :443
+    participant F as 证书文件
+    B->>N: ClientHello（SNI = knowledgediver.cloud）
+    N->>N: 按 server_name 选中 443 server 块
+    N->>F: 读 fullchain.pem 与 privkey.pem
+    F-->>N: 证书链与私钥
+    N-->>B: 证书链，握手完成
+    B->>B: 校验签发者、有效期、SAN
+    B->>N: GET /tc63/
+    N->>N: location ^~ /tc63/ 命中
+    N-->>B: 200 与 index.html</pre></div>
+<p>证书里没有任何与路径有关的字段，SAN 是一串域名。校验通过之后，<code>/tc63/</code> 与 <code>/</code> 对 TLS 层完全等价。这也是子路径部署不需要第二张证书的根本原因。</p>
+<h2 id="一个域名只有一张有效证书">一个域名只有一张有效证书</h2>
+<p>服务器上 nginx 1.24 的站点配置文件是 <code>/etc/nginx/sites-available/knowledgediver</code>，同时监听 80 与 443，证书由 Let’s Encrypt 签发（<code>personal-homepage-research/15-deploy-tc63.md:13</code>）。域名根已经被 KnowledgeDiver 占用：<code>/</code> 指向 <code>frontend/dist</code>，<code>/api/</code> 转发到 127.0.0.1:8000（<code>personal-homepage-research/15-deploy-tc63.md:14-15</code>）。</p>
+<p>个人主页落在 <code>/tc63/</code>，处理方式是往已有的每个 server 块里插入三条 location，而不是新建 server 块（<code>personal-homepage-research/15-deploy-tc63.md:63-77</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> /tc63 </span><span style="color:#24292E">{ </span><span style="color:#D73A49">return</span><span style="color:#005CC5"> 301</span><span style="color:#24292E"> /tc63/; }</span></span>
+<span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> ^~</span><span style="color:#032F62"> /tc63/_astro/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    root </span><span style="color:#24292E">/home/tc63/www;</span></span>
+<span class="line"><span style="color:#D73A49">    add_header </span><span style="color:#24292E">Cache-Control </span><span style="color:#032F62">"public, max-age=2592000, immutable"</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">location</span><span style="color:#D73A49"> ^~</span><span style="color:#032F62"> /tc63/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    root </span><span style="color:#24292E">/home/tc63/www;</span></span>
+<span class="line"><span style="color:#D73A49">    index </span><span style="color:#24292E">index.html;</span></span>
+<span class="line"><span style="color:#D73A49">    try_files </span><span style="color:#24292E">$uri $uri/ </span><span style="color:#005CC5">=404</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    error_page </span><span style="color:#005CC5">404</span><span style="color:#24292E"> /tc63/404.html;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>这段配置里没有出现 <code>ssl_certificate</code>，因为证书属于整个 server 块，<code>/tc63/</code> 只是它内部的一条路径。证书换新时个人主页跟着一起换，不需要单独处理。</p>
+<h2 id="80-与-443-两个入口的分工">80 与 443 两个入口的分工</h2>
+<p>两个入口在配置里是分开的 server 块，职责也不同。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>入口</th><th>本工程行为</th><th>依据</th></tr></thead><tbody><tr><td>80</td><td>无证书阶段直接服务前端与接口；签发后由 certbot 加整站 301 跳到 443</td><td>KD <code>deploy/deploy.sh:40-64</code>、<code>:108-110</code></td></tr><tr><td>443</td><td><code>listen 443 ssl http2</code>，引用 fullchain、privkey 与 certbot 的 TLS 片段</td><td>KD <code>deploy/deploy.sh:70-78</code></td></tr><tr><td><code>/tc63</code> → <code>/tc63/</code></td><td>301 补尾斜杠，与协议无关</td><td><code>personal-homepage-research/15-deploy-tc63.md:66</code></td></tr></tbody></table>
+<p>第三条容易和协议重定向混淆：<code>location = /tc63 { return 301 /tc63/; }</code> 只补一个尾斜杠，HTTP 与 HTTPS 下都会触发。把 http 跳到 https 的是 certbot 写入的重定向，它在 server 块级别生效。</p>
+<h2 id="证书文件的引用只有四行">证书文件的引用只有四行</h2>
+<p>443 server 块里与证书相关的配置是四行（KD <code>deploy/deploy.sh:75-78</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">ssl_certificate </span><span style="color:#24292E">    /etc/letsencrypt/live/$DOMAIN/fullchain.pem;</span></span>
+<span class="line"><span style="color:#D73A49">ssl_certificate_key </span><span style="color:#24292E">/etc/letsencrypt/live/$DOMAIN/privkey.pem;</span></span>
+<span class="line"><span style="color:#D73A49">include </span><span style="color:#24292E">/etc/letsencrypt/options-ssl-nginx.conf;</span></span>
+<span class="line"><span style="color:#D73A49">ssl_dhparam </span><span style="color:#24292E">/etc/letsencrypt/ssl-dhparams.pem;</span></span></code></pre>
+<p><code>fullchain.pem</code> 是叶证书加中间证书的拼接，带上它客户端就不必再去补中间证书。<code>privkey.pem</code> 是私钥。<code>options-ssl-nginx.conf</code> 提供协议版本、加密套件与会话缓存参数，<code>ssl-dhparams.pem</code> 是 DHE 用的参数文件。</p>
+<p>后两个文件由 certbot 包安装时生成，内容不在本仓库里，其协议版本与套件列表按 certbot 包的默认值（服务器上的实际内容未在本机核对）。</p>
+<h2 id="live-与-archive-两处目录">live 与 archive 两处目录</h2>
+<p><code>live</code> 下的文件名固定，配置只引用这一层；真实文件放在 <code>archive</code> 下并按签发次数编号，<code>live</code> 里是符号链接。另一处是 <code>renewal</code>，记录这张证书签发时的参数。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    CFG["sites-available/knowledgediver&#x3C;br/>ssl_certificate 四行"] --> LIVE
+    subgraph LIVE["/etc/letsencrypt/live/knowledgediver.cloud/"]
+        L1["fullchain.pem"]
+        L2["privkey.pem"]
+        L3["cert.pem"]
+        L4["chain.pem"]
+    end
+    LIVE -.->|"符号链接"| ARCH
+    subgraph ARCH["/etc/letsencrypt/archive/knowledgediver.cloud/"]
+        A1["cert1.pem、cert2.pem …"]
+        A2["privkey1.pem、privkey2.pem …"]
+        A3["chain1.pem、fullchain1.pem …"]
+    end
+    REN["/etc/letsencrypt/renewal/knowledgediver.cloud.conf&#x3C;br/>插件、域名列表、续期 hook"] -.->|"续期时按此配置"| LIVE</pre></div>
+<p>续期一次就向 <code>archive</code> 追加一组带序号的文件，然后把 <code>live</code> 下的符号链接指到新文件；配置里的路径不变，因此续期不需要改 nginx。<code>renewal</code> 目录下的 conf 记录了签发方式（这里走 nginx 插件）、覆盖的域名列表与是否配置了 hook，<code>certbot renew</code> 只读它，不读命令行历史。</p>
+<p>这套目录结构是 certbot 的默认布局（按 certbot 通用行为整理，服务器上的实际内容未在本机核对）。</p>
+<h2 id="私钥权限与读取时机">私钥权限与读取时机</h2>
+<p><code>privkey.pem</code> 的默认权限是 600 且属主为 root（按 certbot 默认）。nginx 的 master 进程以 root 启动，在启动与 reload 时把证书和私钥读进内存；worker 进程以 <code>www-data</code> 运行，之后不需要再读这两个文件。因此不存在「为了 nginx 能读而放开私钥权限」的需求，把 600 改成 644 只会扩大暴露面。</p>
+<p>站点目录的权限是另一回事：worker 进程要读静态文件，而文件在 <code>/home/tc63</code> 下面，家目录的穿透权限必须单独处理，这部分在 <code>03-文件权限与nginx读取路径</code> 展开。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td>用 IP 直接访问报证书域名不匹配</td><td>证书 SAN 只含域名，不含 IP</td><td>一律用域名访问；IP 访问仅用于临时排查</td></tr><tr><td><code>www.knowledgediver.cloud</code> 报证书错误</td><td>签发的 <code>-d</code> 参数漏了 www</td><td>重新签发时同时给两个域名（KD <code>deploy/deploy.sh:108</code>）</td></tr><tr><td><code>nginx -t</code> 报找不到证书</td><td>配置引用了 live 下不存在的文件名</td><td>先确认签发成功，再检查 <code>live/&#x3C;域名>/</code> 目录</td></tr><tr><td>续期成功后浏览器仍看到旧证书</td><td>nginx 启动时读入内存，不自动跟随文件变化</td><td>续期后执行 <code>systemctl reload nginx</code>，或用 deploy hook 自动完成</td></tr><tr><td>私钥被改成 644 或换属主</td><td>误以为 worker 进程需要读私钥</td><td>恢复 600 root；读私钥发生在 master 启动阶段</td></tr><tr><td>只改了 80 的 server 块</td><td>两个 server 块内容相近，容易漏改</td><td>用 <code>nginx -T</code> 查看实际生效的完整配置再改</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>证书绑定域名，不绑定路径；<code>/tc63/</code> 与 <code>/</code> 共用同一张证书。</li>
+<li>nginx 用 SNI 选 server 块，用 location 选路径，两件事在时间上先后发生。</li>
+<li>配置只引用 <code>live</code> 下的稳定路径；<code>archive</code> 与 <code>renewal</code> 由 certbot 维护。</li>
+<li>证书与私钥由 master 进程在启动与 reload 时读入，worker 进程不读文件本身。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>子路径是否单独签发证书</td><td>复用域名根已有的证书</td><td>不用新增签发与续期对象，配置改动只有 location</td><td>证书出问题时同域名的所有路径一起受影响</td></tr><tr><td>TLS 参数来源</td><td>include certbot 的片段</td><td>版本与套件跟随 certbot 更新</td><td>自定义空间小，手改的文件会被覆盖</td></tr><tr><td>私钥权限</td><td>600 root</td><td>只有 root 能读，暴露面最小</td><td>排错时非 root 账号看不到内容</td></tr><tr><td>证书路径引用</td><td>只引用 <code>live</code> 下的固定名</td><td>续期不触发配置修改</td><td>排查时要记得 <code>live</code> 里是符号链接</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明访问 <code>https://knowledgediver.cloud/tc63/</code> 时，证书校验发生在请求路径解析之前还是之后。</li>
+<li>如果只为 <code>knowledgediver.cloud</code> 签发了证书，用 <code>https://www.knowledgediver.cloud/tc63/</code> 访问会发生什么？</li>
+<li><code>fullchain.pem</code> 与 <code>cert.pem</code> 的差别是什么？配置里为什么用前者？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>证书续期后没有 reload，nginx 会继续使用内存里的旧证书。写出一条能验证当前生效证书日期的命令，并说明读取的是文件还是内存中的证书。</li>
+<li>如果要把个人主页迁到独立域名 <code>tc63.example.com</code>，列出需要改动的配置层与权限层各一项，并说明哪些部分不受影响。</li>
+<li>说明 <code>location = /tc63 { return 301 /tc63/; }</code> 与 certbot 写入的整站重定向在触发条件上的差别。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>README.md</code></td><td>线上地址、登录方式与更新脚本（<code>:143</code>、<code>:158-159</code>、<code>:163</code>）</td></tr><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>服务器现状、证书归属、location 插入内容（<code>:9</code>、<code>:13-15</code>、<code>:63-80</code>、<code>:163-167</code>）</td></tr><tr><td><code>deploy.sh</code>、<code>astro.config.mjs</code></td><td>本地构建与 base 前缀（<code>deploy.sh:9-13</code>、<code>astro.config.mjs:16-17</code>）</td></tr><tr><td><code>.github/workflows/deploy.yml</code></td><td>GitHub Pages 侧的构建参数（<code>:8-11</code>、<code>:31</code>）</td></tr><tr><td>KD 仓库 <code>deploy/deploy.sh</code></td><td>certbot 安装、443 server 块与签发命令（<code>:21</code>、<code>:70-78</code>、<code>:107-113</code>）</td></tr><tr><td>KD 仓库 <code>deploy/nginx.conf</code></td><td>样例 server 块（<code>:4-26</code>）</td></tr><tr><td>证书目录 <code>/etc/letsencrypt/</code></td><td>live、archive、renewal 三处布局（服务器文件，未在本机核对）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-证书申请与自动续期"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-证书申请与自动续期</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/04-HTTPS与权限/02-证书申请与自动续期.md</span></div><div class="dfile__body"><h1 id="证书申请与自动续期">证书申请与自动续期</h1>
+<p>证书不是一次性的配置，它有两个时间点需要处理：第一次把域名指向服务器之后签发，以及此后每隔一段时间续期。签发命令由部署脚本发起，续期则交给系统定时器，两者共用同一份 renewal 配置。</p>
+<p>这里的对象是 KD 仓库 <code>deploy/deploy.sh</code> 的第 5 步与 certbot 的续期机制。脚本顺序里有一个容易忽略的细节：首次运行时 443 server 块并不存在，那份配置是 certbot 自己写进去的。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>触发者</th><th>关键条件</th><th>出处</th></tr></thead><tbody><tr><td>首次签发</td><td><code>deploy/deploy.sh</code> 第 5 步</td><td>域名已解析、80 可达、<code>live</code> 下无证书</td><td>KD <code>deploy/deploy.sh:107-113</code></td></tr><tr><td>配置改写</td><td>certbot 的 nginx 插件</td><td>使用 <code>--nginx</code>，插件直接改 sites-available</td><td>KD <code>deploy/deploy.sh:108-110</code></td></tr><tr><td>自动续期</td><td><code>certbot.timer</code> 或 cron</td><td>到期前 30 天内才实际签发</td><td>按 certbot 包默认，服务器实际未核对</td></tr><tr><td>生效</td><td>nginx reload</td><td>续期写文件，进程内的证书要重载才更新</td><td>见「续期之后的重载」一节</td></tr></tbody></table>
+<h2 id="acme-与-http-01-的验证路径">ACME 与 HTTP-01 的验证路径</h2>
+<p>Let’s Encrypt 用 ACME 协议签发证书。客户端要先证明自己控制着目标域名，最常用的是 HTTP-01：ACME 服务端向 <code>http://&#x3C;域名>/.well-known/acme-challenge/&#x3C;token></code> 发起一次 GET，能取到约定的 token 内容就通过。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+    autonumber
+    participant CB as certbot（nginx 插件）
+    participant N as nginx :80
+    participant LE as ACME 服务端
+    CB->>N: 为 /.well-known/acme-challenge/ 写临时 location
+    CB->>LE: 申请证书（域名列表来自 -d 参数）
+    LE->>N: GET /.well-known/acme-challenge/&#x3C;token>
+    N-->>LE: token 内容
+    LE-->>CB: 校验通过，签发证书
+    CB->>CB: 写入 443 server 块与重定向
+    CB->>N: nginx -t 与 reload
+    CB->>N: 删除临时 location</pre></div>
+<p>验证走的是 80 端口，因此签发的两个前提是：域名的 A 记录已经指向这台服务器，且 80 端口从公网可达。腾讯云的安全组默认不放开 80 与 443 时需要另行放行（控制台操作，按服务商文档）。</p>
+<p>HTTP-01 只关心 80 端口能否返回 token 文件，不关心 80 上原先是静态站点还是重定向。但 <code>--redirect</code> 生效后 80 会整站跳到 443，如果此时 443 的配置有问题，验证请求跟着跳过去也会失败。</p>
+<h2 id="首次签发在部署脚本里的位置">首次签发在部署脚本里的位置</h2>
+<p>脚本第 4 步先写 HTTP server 块并 reload，第 5 步才申请证书（KD <code>deploy/deploy.sh:38-113</code>）。第 5 步的判断很直接：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> [ </span><span style="color:#D73A49">!</span><span style="color:#D73A49"> -f</span><span style="color:#032F62"> "/etc/letsencrypt/live/</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">/fullchain.pem"</span><span style="color:#24292E"> ]; </span><span style="color:#D73A49">then</span></span>
+<span class="line"><span style="color:#6F42C1">    certbot</span><span style="color:#005CC5"> --nginx</span><span style="color:#005CC5"> -d</span><span style="color:#032F62"> "</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">"</span><span style="color:#005CC5"> -d</span><span style="color:#032F62"> "www.</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">        --non-interactive</span><span style="color:#005CC5"> --agree-tos</span><span style="color:#005CC5"> --email</span><span style="color:#032F62"> "admin@</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">        --redirect</span><span style="color:#D73A49"> 2></span><span style="color:#032F62">/dev/null</span><span style="color:#D73A49"> ||</span><span style="color:#005CC5"> echo</span><span style="color:#032F62"> "  SSL 申请跳过（可能域名未解析）"</span></span>
+<span class="line"><span style="color:#D73A49">else</span></span>
+<span class="line"><span style="color:#005CC5">    echo</span><span style="color:#032F62"> "  SSL 证书已存在，跳过"</span></span>
+<span class="line"><span style="color:#D73A49">fi</span></span></code></pre>
+<p>（KD <code>deploy/deploy.sh:107-113</code>）四个参数各有作用：<code>--nginx</code> 指定用 nginx 插件做验证与安装，两个 <code>-d</code> 决定 SAN 覆盖的域名，<code>--non-interactive</code> 配合 <code>--agree-tos</code> 与邮箱免交互，<code>--redirect</code> 要求装完后加 http 到 https 的跳转。</p>
+<p>同一段脚本在第 4 步有个条件分支：只有 <code>live/$DOMAIN/fullchain.pem</code> 已经存在时才追加 443 server 块（KD <code>deploy/deploy.sh:67-98</code>）。首次运行时证书还不存在，443 块不会被写入；certbot 的 nginx 插件接管配置后把 443 与重定向补上。第二次运行起，脚本自己写 443 块，<code>certbot --nginx</code> 因为证书存在而被跳过。</p>
+<p>另外，签发失败被 <code>|| echo</code> 兜住，脚本不会中断（KD <code>deploy/deploy.sh:110</code>）。部署可能在没有证书的状态下继续跑完，判断是否真的签发成功要看 <code>live</code> 目录，而不是脚本退出码。</p>
+<h2 id="nginx-插件改动的三处">—nginx 插件改动的三处</h2>
+<p>nginx 插件不只是签发，它还负责安装。它改动的三处都在同一份站点配置里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>改动</th><th>内容</th></tr></thead><tbody><tr><td>验证期</td><td>临时插入 <code>/.well-known/acme-challenge/</code> 的 location，验证后删除</td></tr><tr><td>安装证书</td><td>在匹配的 server 块写入 <code>ssl_certificate</code>、<code>ssl_certificate_key</code>、<code>include</code> 与 <code>ssl_dhparam</code></td></tr><tr><td>重定向</td><td><code>--redirect</code> 时在 80 的 server 块加 <code>return 301 https://$host$request_uri</code></td></tr></tbody></table>
+<p>这三处都写在 <code>/etc/nginx/sites-available/knowledgediver</code> 里，会与脚本自己生成的 443 块共存。理解这一点的用处是：线上生效的配置不等于仓库里脚本模板的展开结果，排查时要看服务器上那份文件（<code>nginx -T</code>）。</p>
+<h2 id="续期由定时器驱动">续期由定时器驱动</h2>
+<p>Let’s Encrypt 证书的有效期是 90 天，certbot 默认在剩余不到 30 天时才执行续期（按 certbot 默认策略）。触发者是系统定时任务，不依赖人工记忆。</p>
+<p>Ubuntu 上用包管理器装的 certbot 会带一个 systemd 定时器 <code>certbot.timer</code>，每天运行两次 <code>certbot renew</code>，两次之间带随机延迟以错开官方服务端的负载高峰；不带 systemd 的环境是 <code>/etc/cron.d/certbot</code> 里的等价任务。这两处的实际内容未在本机核对，按 certbot 包的分发方式整理。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    T["certbot.timer 触发"] --> R["certbot renew 遍历 renewal/ 下的配置"]
+    R --> C{"剩余有效期是否低于阈值"}
+    C -->|"否"| SKIP["本次不签发，退出"]
+    C -->|"是"| ISS["向 ACME 申请新证书"]
+    ISS --> ARC["写入 archive/ 新一组文件"]
+    ARC --> LINK["更新 live/ 下的符号链接"]
+    LINK --> HOOK{"续期后是否重载 nginx"}
+    HOOK -->|"nginx 插件管理"| RL["插件自行 reload"]
+    HOOK -->|"仅由 renew 命令执行"| MAN["需要 deploy hook 或手工 reload"]</pre></div>
+<p><code>certbot renew</code> 读的是 <code>/etc/letsencrypt/renewal/&#x3C;域名>.conf</code>，里面记着签发方式、域名列表与 hook。命令行的签发参数不会在续期时重放，所以对 <code>--nginx</code>、<code>--redirect</code>、deploy hook 的改动要落在 renewal 配置里或用 certbot 的子命令写入。</p>
+<p>两个常用命令用于核对状态：<code>certbot certificates</code> 列出已签发证书的域名与到期时间，<code>certbot renew --dry-run</code> 用演练环境走一遍续期流程，不改动真实证书。</p>
+<h2 id="续期之后的重载">续期之后的重载</h2>
+<p>证书文件更新后，nginx 内存里仍是启动时读入的那份，页面会继续用旧证书直到 reload。使用 nginx 插件管理的证书，插件在续期成功后会自己完成重载；如果证书是别的方式签发的，需要在 renewal 配置里挂 deploy hook：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">certbot</span><span style="color:#032F62"> renew</span><span style="color:#005CC5"> --deploy-hook</span><span style="color:#032F62"> "systemctl reload nginx"</span></span></code></pre>
+<p>deploy hook 只在实际签发时才执行，被跳过的轮次不会触发。这一点比用 cron 无条件 reload 更合适：无谓的 reload 会打断连接。</p>
+<h2 id="续期失败的排查顺序">续期失败的排查顺序</h2>
+<p>续期失败的现象是 <code>certbot certificates</code> 里的到期时间不再延后。按下面的顺序逐层排除，前一层不成立时后一层没有意义。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    A["续期失败"] --> D1{"域名仍解析到本机？"}
+    D1 -->|"否"| F1["修正 DNS A 记录"]
+    D1 -->|"是"| D2{"公网能访问 80 端口？"}
+    D2 -->|"否"| F2["检查安全组与防火墙，确认 80 放行"]
+    D2 -->|"是"| D3{"80 的 server 块能通过 nginx -t？"}
+    D3 -->|"否"| F3["先修配置语法，再重试"]
+    D3 -->|"是"| D4{"近期反复强制签发过？"}
+    D4 -->|"是"| F4["等待官方限额窗口过去，避免再强制"]
+    D4 -->|"否"| F5["查看 /var/log/letsencrypt/letsencrypt.log 的具体报错"]</pre></div>
+<p>日志在 <code>/var/log/letsencrypt/letsencrypt.log</code>，每次运行一份带时间戳的记录。常见报错有三类：<code>DNS problem</code> 说明解析没生效或解析到别处；<code>Timeout during connect</code> 说明 80 被安全组挡住或没有服务监听；<code>too many certificates</code> 说明触发了 Let’s Encrypt 的签发限额。限额的具体数值以官方文档为准，实际做法是避免为了测试反复强制签发，测试用 <code>--dry-run</code>。</p>
+<p>另一类失败不报错但同样致命：续期成功、文件已更新，nginx 没有 reload。判定方式是比对 <code>openssl s_client</code> 返回的 <code>notAfter</code> 与 <code>live/fullchain.pem</code> 里那份证书的到期时间，两者不一致就说明内存里还是旧的。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td>脚本跑完没有证书，退出码却是 0</td><td>签发失败被 `</td><td></td></tr><tr><td>首次部署后没有 443 块</td><td>443 块只在证书已存在时写入，首次靠插件补</td><td>确认 certbot 运行成功；第二次部署起脚本自带的 443 块生效</td></tr><tr><td>签发时报域名未解析</td><td>A 记录没指向本机或还没传播</td><td>解析生效后再签发（KD <code>deploy/deploy.sh:110</code> 的提示）</td></tr><tr><td>反复执行强制签发</td><td>每次都可能计入限额</td><td>测试用 <code>certbot renew --dry-run</code>，正式签发按需</td></tr><tr><td>续期后浏览器仍用旧证书</td><td>没有 reload</td><td>挂 deploy hook 重载 nginx</td></tr><tr><td>续期配置里的域名与服务器实际不符</td><td>证书是手工签发、renewal conf 未同步</td><td>查看 <code>/etc/letsencrypt/renewal/</code>，必要时重新签发覆盖</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>HTTP-01 通过 80 端口返回 token 完成域名控制权验证。</li>
+<li><code>certbot --nginx</code> 同时完成验证、安装与重定向三件事，改动落在站点配置文件里。</li>
+<li>续期由 <code>certbot.timer</code> 或 cron 触发，<code>certbot renew</code> 只读 renewal 配置。</li>
+<li>文件更新不等于生效，重载 nginx 或 deploy hook 才能让新证书进入服务。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>验证方式</td><td>HTTP-01 加 nginx 插件</td><td>不需要改 DNS，插件自动处理配置</td><td>依赖 80 端口可达，且插件会改配置文件</td></tr><tr><td>首次签发的位置</td><td>放在部署脚本第 5 步</td><td>与新装机器流程合并</td><td>失败被兜底语句吞掉，需要单独核对</td></tr><tr><td>续期触发</td><td>系统定时器</td><td>不需要人工干预</td><td>服务器上多一个后台任务，排查要看日志</td></tr><tr><td>生效方式</td><td>deploy hook 重载</td><td>reload 只在签发后发生</td><td>需要把 hook 写进 renewal 配置</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明 HTTP-01 验证请求落在哪个端口、请求哪条路径。</li>
+<li>首次运行 <code>deploy/deploy.sh</code> 时，443 server 块是谁写进配置文件的？</li>
+<li><code>certbot certificates</code> 与 <code>certbot renew --dry-run</code> 各自会不会改动真实证书？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>部署脚本用 <code>|| echo</code> 兜住签发失败。写出两条能在部署后确认证书真的签下来的检查命令，并说明检查的是文件还是服务状态。</p>
+</li>
+<li>
+<p>续期成功后没有 reload，写出一条比对命令，用 <code>notAfter</code> 判断服务实际在用的是新证书还是旧证书。</p>
+</li>
+<li>
+<p>如果要把 <code>--redirect</code> 去掉、让 80 与 443 并存，列出需要修改的位置，并说明为什么这类改动要落在 renewal 配置或用 certbot 子命令完成。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>KD 仓库 <code>deploy/deploy.sh</code></td><td>依赖安装、首次签发命令、443 块的条件写入（<code>:21</code>、<code>:67-98</code>、<code>:107-113</code>）</td></tr><tr><td>KD 仓库 <code>deploy/nginx.conf</code></td><td>只监听 80 的样例 server 块（<code>:4-26</code>）</td></tr><tr><td>KD 仓库 <code>deploy/knowledgediver.service</code></td><td>后端 systemd 单元（<code>:1-15</code>）</td></tr><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>服务器现状与证书归属（<code>:13-16</code>）</td></tr><tr><td><code>README.md</code></td><td>线上地址与更新流程（<code>:143</code>、<code>:155-164</code>）</td></tr><tr><td><code>/etc/letsencrypt/renewal/</code>、<code>/var/log/letsencrypt/</code></td><td>renewal 配置与日志（服务器文件，未在本机核对）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-文件权限与nginx读取路径"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-文件权限与nginx读取路径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/04-HTTPS与权限/03-文件权限与nginx读取路径.md</span></div><div class="dfile__body"><h1 id="文件权限与-nginx-读取路径">文件权限与 nginx 读取路径</h1>
+<p>HTTPS 这一侧的权限要求是私钥 600 且属主 root，静态文件那一侧的要求正好相反：nginx 的 worker 进程以非特权用户运行，必须能穿过路径上的每一级目录、读到每一个文件。个人主页的站点文件放在 <code>/home/tc63</code> 下面，而家目录默认不允许其他用户进入，于是权限成为这条链路上最容易出错的一环。</p>
+<p>读取路径上的要求可以按「进程身份 → 路径逐级检查 → 软链接 → 更新脚本」的顺序逐项确认，最后落到账号边界上的现有状态与改进方向。对象是服务器上的 <code>/home/tc63</code> 目录树与两份更新脚本。</p>
+<h2 id="worker-进程以什么身份读文件">worker 进程以什么身份读文件</h2>
+<p>nginx 启动后有一个 master 进程与若干 worker 进程。master 以 root 运行，负责读配置、绑定端口与读证书私钥；worker 降权到 <code>www-data</code>（Debian 与 Ubuntu 的 nginx 包默认值），负责处理连接与读静态文件。请求落到 <code>/tc63/</code> 时，执行打开文件动作的是 worker。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    M["nginx master（root）&#x3C;br/>读配置、绑定 80/443、读私钥"] --> W1["worker（www-data）&#x3C;br/>处理连接"]
+    M --> W2["worker（www-data）&#x3C;br/>读静态文件"]
+    W1 --> OPEN["发起 open 调用&#x3C;br/>/home/tc63/www/tc63/index.html"]
+    OPEN --> CHK{"路径每一级是否可进入、&#x3C;br/>目标文件是否可读"}
+    CHK -->|"是"| OK["返回 200"]
+    CHK -->|"否"| ERR["403 或 404"]</pre></div>
+<p>这一分工解释了两种权限为什么方向相反而互不冲突：私钥由 master 在启动阶段读入内存，worker 不需要碰它；静态文件由 worker 随时打开，必须对 <code>www-data</code> 可读。</p>
+<h2 id="路径上每一级目录都要有-x">路径上每一级目录都要有 x</h2>
+<p>Linux 打开 <code>/home/tc63/www/tc63/index.html</code> 时，内核沿路径逐级检查：每一级目录都需要对目标进程有执行位 <code>x</code>，最后一级文件需要读位 <code>r</code>。任何一级缺 <code>x</code>，后续路径都不可达，返回的是权限错误而不是「文件不存在」。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径组件</th><th>作用</th><th>对 www-data 的要求</th><th>现状</th></tr></thead><tbody><tr><td><code>/</code></td><td>根</td><td><code>x</code></td><td>默认满足</td></tr><tr><td><code>/home</code></td><td>目录</td><td><code>x</code></td><td>默认满足</td></tr><tr><td><code>/home/tc63</code></td><td>家目录</td><td><code>x</code></td><td>默认不满足，需专门打开（<code>personal-homepage-research/15-deploy-tc63.md:91</code>）</td></tr><tr><td><code>/home/tc63/www</code></td><td>nginx 的 <code>root</code></td><td><code>x</code></td><td>由 <code>chmod -R o+rX</code> 覆盖</td></tr><tr><td><code>/home/tc63/www/tc63</code></td><td>指向 <code>~/site/dist</code> 的软链</td><td>解析目标需要路径上的 <code>x</code></td><td>见下一节</td></tr><tr><td><code>/home/tc63/site/dist</code></td><td>实际产物目录</td><td><code>x</code>（目录）与 <code>r</code>（文件）</td><td>由更新脚本每次修复</td></tr><tr><td>目标 <code>.html</code>、<code>.css</code> 等</td><td>静态文件</td><td><code>r</code></td><td>打包产物默认 644</td></tr></tbody></table>
+<p>家目录的默认权限不包含 <code>o+x</code>，所以「文件在 <code>/home/tc63</code> 里」本身就是一道门槛。这条链上一次只错一级，表现都是访问 <code>/tc63/</code> 返回错误，需要从 <code>/home/tc63</code> 开始逐级核对。</p>
+<h2 id="家目录穿透的两种做法">家目录穿透的两种做法</h2>
+<p>服务器上采用的做法是给家目录补 <code>o+x</code>（<code>personal-homepage-research/15-deploy-tc63.md:91</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">chmod</span><span style="color:#032F62"> o+x</span><span style="color:#032F62"> /home/tc63</span></span>
+<span class="line"><span style="color:#6F42C1">chmod</span><span style="color:#005CC5"> -R</span><span style="color:#032F62"> o+rX</span><span style="color:#032F62"> /home/tc63/www</span></span></code></pre>
+<p><code>o+x</code> 只加执行位，不加读位：其他用户能穿过家目录进入已知路径，但列不出家目录的内容。这是让 nginx 读到文件的通行做法，代价是家目录里的目录名对其他本地用户不再保密。</p>
+<p>另一条路是不放开家目录，改用组或 ACL 授权。可行方式有把 <code>www-data</code> 加入文件所属组后用 <code>g+rX</code> 放开，或用 <code>setfacl -m u:www-data:x /home/tc63</code> 单独授权。这两种做法需要服务器上有对应的组关系或 <code>acl</code> 挂载选项与 <code>setfacl</code> 命令，本工程未采用，属于可选的替代方案（通用做法，未在服务器上验证）。</p>
+<h2 id="站点树的可读位与它的代价">站点树的可读位与它的代价</h2>
+<p><code>chmod -R o+rX</code> 把整棵树的权限一次性放开。这里的 <code>X</code> 是大写形式，只在目录上补执行位，对普通文件不补；<code>r</code> 则递归加到所有文件上。结果是目录可进入、文件可读，而不需要给每个文件单独设执行位。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权限</th><th>对象</th><th>效果</th></tr></thead><tbody><tr><td><code>o+x</code></td><td>目录</td><td>能进入、能按已知路径访问，不能列目录内容</td></tr><tr><td><code>o+rX</code>（目录）</td><td>目录</td><td>能列出内容并进入</td></tr><tr><td><code>o+rX</code>（文件）</td><td>普通文件</td><td>可读，不改变执行位</td></tr></tbody></table>
+<p>代价是站点树对所有本地用户可读。静态构建产物本身就是给公网看的，这一点可以接受；但同一棵树下不能放密钥、<code>.env</code>、数据库口令一类文件。个人主页把产物放在 <code>dist/</code> 并整树放开，源码与 <code>node_modules</code> 在仓库根，不在被放开的那一层。</p>
+<h2 id="软链接把仓库产物接到站点根">软链接把仓库产物接到站点根</h2>
+<p>nginx 的配置是 <code>root /home/tc63/www</code>，而构建产物在 <code>/home/tc63/site/dist</code>。两者用一条软链接连接（<code>personal-homepage-research/15-deploy-tc63.md:129</code>、<code>README.md:163</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">rm</span><span style="color:#005CC5"> -rf</span><span style="color:#032F62"> ~/www/tc63</span><span style="color:#24292E"> &#x26;&#x26; </span><span style="color:#6F42C1">ln</span><span style="color:#005CC5"> -s</span><span style="color:#032F62"> /home/tc63/site/dist</span><span style="color:#032F62"> ~/www/tc63</span></span></code></pre>
+<p>于是 <code>git pull</code> 更新 <code>~/site/dist</code> 之后，站点立即跟着变，不需要复制文件，也不需要改 nginx 配置。请求路径的解析过程如下。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+    REQ["GET /tc63/assets/index.css"] --> R["location ^~ /tc63/&#x3C;br/>root /home/tc63/www"]
+    R --> P["拼成 /home/tc63/www/tc63/assets/index.css"]
+    P --> S["tc63 是软链，解析到 /home/tc63/site/dist"]
+    S --> T["dist 下按剩余路径找到文件"]
+    T --> RD["worker 读文件，返回内容"]</pre></div>
+<p>软链接本身不需要权限位，但解析目标路径时内核要检查链上每一级目录的 <code>x</code>。这里出现两个方向：经 <code>/home/tc63/www</code> 进入，以及解析后落在 <code>/home/tc63/site</code> 下。两侧都要可进入，只放开 <code>www</code> 而不放开 <code>site</code> 时，症状是 <code>/tc63/</code> 返回错误而文件名看起来完全正确。</p>
+<p>顺带说明 <code>root</code> 与 <code>alias</code> 的取舍：文件本来就放在 <code>/home/tc63/www/tc63/</code> 这一层，用 <code>root</code> 直接拼接最省事；<code>alias</code> 与 <code>try_files</code> 组合在路径拼接上容易出错，服务器上的配置也确认用了 <code>root</code>（<code>personal-homepage-research/15-deploy-tc63.md:79-80</code>）。</p>
+<h2 id="更新脚本里的两行权限修复">更新脚本里的两行权限修复</h2>
+<p>服务器侧每次拉取后都要修一次权限，理由是 <code>git pull</code> 新增的文件权限由服务器上的 umask 决定，目录上的 <code>o+x</code> 也不会因为文件内容没变而被保留。脚本放在仓库外面，避免被 <code>git pull</code> 的目录语义影响（<code>personal-homepage-research/15-deploy-tc63.md:123-130</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">git</span><span style="color:#032F62"> pull</span><span style="color:#005CC5"> --ff-only</span><span style="color:#032F62"> origin</span><span style="color:#032F62"> main</span></span>
+<span class="line"><span style="color:#6F42C1">chmod</span><span style="color:#032F62"> o+x</span><span style="color:#032F62"> "</span><span style="color:#24292E">$HOME</span><span style="color:#032F62">"</span><span style="color:#032F62"> "$(</span><span style="color:#6F42C1">dirname</span><span style="color:#032F62"> "</span><span style="color:#005CC5">$0</span><span style="color:#032F62">")"</span><span style="color:#24292E">; </span><span style="color:#6F42C1">chmod</span><span style="color:#005CC5"> -R</span><span style="color:#032F62"> o+rX</span><span style="color:#032F62"> dist</span></span></code></pre>
+<p>第一行拉取产物，第二行补齐两处：家目录与脚本所在目录（也就是 <code>~/site</code>）的 <code>o+x</code>，以及 <code>dist</code> 整树的可读位。<code>README.md:159</code> 把这步记作 <code>~/update-tc63.sh</code>，内容是 <code>cd ~/site &#x26;&#x26; git pull &#x26;&#x26; 修权限</code>。</p>
+<p>本地侧的 <code>deploy.sh</code> 不参与权限：它只做构建、提交与推送，不连服务器（<code>deploy.sh:9-13</code>）。两侧解耦之后，本地机器不需要服务器凭据，服务器拉的是公开仓库，用匿名 HTTPS 即可（<code>personal-homepage-research/15-deploy-tc63.md:110-113</code>）。</p>
+<h2 id="账号边界与最小权限">账号边界与最小权限</h2>
+<p>服务器上可登录的账号是 <code>tc63</code>（uid 1005），sudo 组里原本只有 <code>ubuntu</code>（<code>personal-homepage-research/15-deploy-tc63.md:16</code>）。启用 nginx 的 location 需要写 <code>/etc/nginx</code> 并 reload，属于 root 操作，所以那一步是在临时给 <code>tc63</code> 开 sudo 后执行的（<code>personal-homepage-research/15-deploy-tc63.md:163-167</code>）。</p>
+<p>文档里给出的后续处理是收回 sudo 并改用 SSH key 登录（<code>personal-homepage-research/15-deploy-tc63.md:167</code>、<code>:171</code>）。现状记录中，本地到服务器的免密登录公钥已经被删除，<code>authorized_keys</code> 是空文件（<code>personal-homepage-research/15-deploy-tc63.md:111-113</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>现状</th><th>方向</th></tr></thead><tbody><tr><td>登录方式</td><td>密码登录</td><td>改用 SSH key，轮换密码（<code>personal-homepage-research/15-deploy-tc63.md:171</code>）</td></tr><tr><td>提权</td><td>曾临时给 <code>tc63</code> 开 sudo</td><td>用完收回（<code>:167</code>）</td></tr><tr><td>站点文件</td><td><code>www-data</code> 靠 <code>o+rX</code> 读取</td><td>保持公网可见内容的只读放开</td></tr><tr><td>证书私钥</td><td>600 root</td><td>不因站点权限需求而改动</td></tr><tr><td>仓库凭据</td><td>公开仓库，匿名拉取</td><td>不需要在服务器上放 token</td></tr></tbody></table>
+<p>这份清单里的四项是已经落地的事实，两项（SSH key、收回 sudo）是文档提出的改进方向，尚未在服务器上确认完成。</p>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>判据</th></tr></thead><tbody><tr><td><code>/tc63/</code> 返回 403</td><td>路径上某一级目录对 <code>www-data</code> 缺 <code>x</code></td><td>用 <code>namei -l /home/tc63/www/tc63/index.html</code> 逐级看权限</td></tr><tr><td>更新后静态资源忽然 403</td><td><code>git pull</code> 新增的目录没有 <code>o+x</code></td><td>重跑更新脚本里的 <code>chmod o+rX dist</code></td></tr><tr><td>只放开 <code>www</code> 仍打不开</td><td>软链目标在 <code>~/site</code> 下，那一级缺 <code>x</code></td><td>检查 <code>~/site</code> 与 <code>dist</code> 两级</td></tr><tr><td>页面能打开但样式丢失</td><td>部分子目录没有可读位</td><td>对整棵 <code>dist</code> 递归核对</td></tr><tr><td>为排查把私钥改成 644</td><td>把静态文件权限的结论套到证书上</td><td>证书与站点目录是两套要求，恢复 600 root</td></tr><tr><td>用列目录方式验证 <code>o+x</code></td><td><code>o+x</code> 不提供读位，<code>ls</code> 本来就会失败</td><td>用 <code>stat</code> 或直接请求已知路径</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>worker 进程以 <code>www-data</code> 运行，读静态文件；master 以 root 运行，读私钥。</li>
+<li>打开文件要求路径上每一级目录都有 <code>x</code>，最后一级文件有 <code>r</code>。</li>
+<li><code>o+x</code> 让其他用户穿过家目录但不列出内容；<code>o+rX</code> 递归放开站点树。</li>
+<li>软链接把 <code>~/www/tc63</code> 接到 <code>~/site/dist</code>，两侧路径都要可进入。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>家目录处理</td><td>补 <code>o+x</code></td><td>一条命令解决穿透，不改用户与组</td><td>家目录下的目录名对其他本地用户可见</td></tr><tr><td>站点树权限</td><td><code>o+rX</code> 递归放开</td><td>新文件加入后不需要逐个授权</td><td>整棵树对所有本地用户可读</td></tr><tr><td>站点根接入方式</td><td>软链接到 <code>dist</code></td><td><code>git pull</code> 后立即生效，配置不动</td><td>解析链变长，路径上多两级要检查</td></tr><tr><td>更新与权限修复</td><td>放在服务器侧脚本</td><td>本地不需要服务器凭据</td><td>每次更新多一步，忘记执行就出现 403</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明 <code>/home/tc63</code> 为什么需要 <code>o+x</code>，以及加了这个位之后其他用户能不能列出家目录内容。</li>
+<li><code>chmod -R o+rX</code> 里大写 <code>X</code> 与 <code>x</code> 的差别是什么？对普通文件分别有什么效果？</li>
+<li>用一条命令列出 <code>/home/tc63/www/tc63/index.html</code> 路径上每一级的权限，并指出哪一级由 <code>www-data</code> 决定成败。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>站点从 <code>/home/tc63/www/tc63/</code> 换成直接放在 <code>/home/tc63/site/dist/</code>，列出需要同步修改的 nginx 指令与权限命令，并说明少改哪一处会先出现什么现象。</p>
+</li>
+<li>
+<p>设计一套不放开家目录、只对 <code>www-data</code> 授权的方案，写出所需命令，并说明它与 <code>o+rX</code> 方案在新增文件时的维护差别。</p>
+</li>
+<li>
+<p>假设 <code>git pull</code> 后只有新目录缺 <code>o+x</code>、旧文件仍然可读，解释为什么现象是部分资源 403 而不是整站不可用。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>权限命令、软链接、更新脚本、账号与 sudo 现状（<code>:16</code>、<code>:91</code>、<code>:110-113</code>、<code>:123-130</code>、<code>:163-167</code>、<code>:171</code>）</td></tr><tr><td><code>README.md</code></td><td>服务器侧更新脚本与 nginx root（<code>:158-164</code>）</td></tr><tr><td><code>deploy.sh</code></td><td>本地只与 GitHub 交互的分工说明（<code>:9-13</code>）</td></tr><tr><td><code>/home/tc63/www</code>、<code>/home/tc63/site/dist</code></td><td>站点根与产物目录（服务器路径，未在本机核对）</td></tr><tr><td><code>/etc/nginx/sites-available/knowledgediver</code></td><td><code>root /home/tc63/www</code> 的来源（服务器文件）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-验证与故障分层"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-验证与故障分层</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/32-nginx 配置/04-HTTPS与权限/04-验证与故障分层.md</span></div><div class="dfile__body"><h1 id="上线验证与故障分层">上线验证与故障分层</h1>
+<p>改完 nginx 配置或站点权限之后，需要确认三件事：配置本身能不能通过语法检查、生效的证书与服务是不是期望的那一份、路径与权限组合起来能不能返回正确内容。三件事的检查手段不同，混在一起做会浪费时间。</p>
+<p>按同一顺序走下去就能得到可执行的检查命令与判定依据，其中 403 与 404 在权限问题上的区分方式最容易走偏。对象是服务器上的 nginx 与 <code>/tc63/</code> 这条路径，验证记录取自部署时的实测结果。</p>
+<h2 id="改动后的动作顺序">改动后的动作顺序</h2>
+<p>服务器上启用 <code>/tc63/</code> 的脚本只做一件事：备份配置，插入 location，<code>nginx -t</code> 通过才 reload，不通过就回滚到备份（<code>personal-homepage-research/15-deploy-tc63.md:63-80</code>）。这套顺序适合沿用到所有手工改动里，因为 reload 会用新配置替换工作进程，语法错误会让服务直接不可用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    E["编辑站点配置"] --> BK["复制一份备份&#x3C;br/>knowledgediver.bak-日期"]
+    BK --> T{"nginx -t 通过？"}
+    T -->|"否"| RB["回滚备份，停止本次改动"]
+    T -->|"是"| RL["systemctl reload nginx"]
+    RL --> C1["curl 检查 80 与 443 的状态码"]
+    C1 --> C2["openssl s_client 检查实际证书"]
+    C2 --> C3["请求具体路径，核对 200 / 301 / 404"]</pre></div>
+<p>备份名在实测记录里是 <code>knowledgediver.bak-20261007-020423</code>（<code>personal-homepage-research/15-deploy-tc63.md:159</code>），格式是配置名加时间戳。回滚动作是把备份复制回 <code>sites-available</code> 后再次校验并重载。</p>
+<h2 id="用-openssl-s_client-看实际生效的证书">用 openssl s_client 看实际生效的证书</h2>
+<p>浏览器看到的证书来自 nginx 内存，不是磁盘上的文件。服务端已经 reload、客户端没有连接缓存时，下面的命令返回的就是当前生效的证书信息：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">openssl</span><span style="color:#032F62"> s_client</span><span style="color:#005CC5"> -connect</span><span style="color:#032F62"> knowledgediver.cloud:443</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">  -servername</span><span style="color:#032F62"> knowledgediver.cloud</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#032F62">/dev/null</span><span style="color:#D73A49"> 2></span><span style="color:#032F62">/dev/null</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#D73A49">  |</span><span style="color:#6F42C1"> openssl</span><span style="color:#032F62"> x509</span><span style="color:#005CC5"> -noout</span><span style="color:#005CC5"> -dates</span><span style="color:#005CC5"> -subject</span><span style="color:#005CC5"> -ext</span><span style="color:#032F62"> subjectAltName</span></span></code></pre>
+<p>输出里要看三项：<code>notAfter</code> 的日期是否已经更新到最近一次续期之后、<code>subject</code> 的域名、<code>subjectAltName</code> 里是否包含签发时给的两个域名。命令带 <code>-servername</code>，与浏览器发 SNI 的行为一致，否则服务端可能返回默认 server 块的证书。</p>
+<p>磁盘上的文件与内存中的证书可以直接比对：<code>openssl x509 -noout -dates -in /etc/letsencrypt/live/knowledgediver.cloud/fullchain.pem</code> 读文件，前一条命令读服务。两者日期不一致就说明续期写入了文件但没有 reload。</p>
+<h2 id="从状态码区分权限与内容问题">从状态码区分权限与内容问题</h2>
+<p><code>/tc63/</code> 返回 403 与返回 404 的原因不同。403 表示 nginx 找到了目标但无权打开，多与目录缺 <code>x</code> 或文件缺 <code>r</code> 有关；404 表示按 <code>try_files</code> 找不到文件，配置里的 <code>error_page 404 /tc63/404.html</code> 会把它替换成自定义页面（<code>personal-homepage-research/15-deploy-tc63.md:74-75</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+    Q["请求 /tc63/... 返回错误"] --> S{"状态码"}
+    S -->|"403"| P1["权限问题：逐级检查目录 x 与文件 r"]
+    P1 --> P2["看 error.log 是否 Permission denied"]
+    S -->|"404"| N1["路径或文件不存在：核对 dist 下是否真有该文件"]
+    N1 --> N2["核对 try_files 与 error_page 是否命中自定义 404"]
+    S -->|"301"| R1["补尾斜杠或协议跳转，属于预期行为"]
+    S -->|"证书警告"| T1["用 s_client 比对域名、SAN 与有效期"]
+    T1 --> T2["区分文件未更新与已更新未 reload"]</pre></div>
+<p>判断权限问题时，错误日志比状态码更直接：<code>tail -n 20 /var/log/nginx/error.log</code> 里出现 <code>Permission denied</code> 或 <code>stat() failed</code>，就按路径逐级核对 <code>x</code> 位。日志里没有权限字样、只有 <code>open() ... failed (2: No such file or directory)</code> 时，属于路径或产物缺失。</p>
+<h2 id="线上回归清单">线上回归清单</h2>
+<p>部署记录里的实测覆盖了域名根、子路径的入口与子路径内部的资源（<code>personal-homepage-research/15-deploy-tc63.md:155-161</code>）。这套清单可以直接作为改动后的回归项。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>请求</th><th>期望</th><th>检查点</th></tr></thead><tbody><tr><td><code>http://knowledgediver.cloud/tc63</code></td><td>301 到 <code>/tc63/</code></td><td>补尾斜杠的 location 生效</td></tr><tr><td><code>https://knowledgediver.cloud/tc63/</code></td><td>200</td><td>入口页面与证书</td></tr><tr><td><code>https://knowledgediver.cloud/tc63/about/</code></td><td>200</td><td>子页面路径</td></tr><tr><td><code>https://knowledgediver.cloud/tc63/docs/</code></td><td>200</td><td>文档区入口</td></tr><tr><td><code>https://knowledgediver.cloud/tc63/docs/search-index.json</code></td><td>200</td><td>构建期生成的资源</td></tr><tr><td><code>https://knowledgediver.cloud/tc63/favicon.svg</code></td><td>200</td><td>站点根下的静态文件</td></tr><tr><td><code>https://knowledgediver.cloud/tc63/nope/</code></td><td>404</td><td>自定义 404 页</td></tr><tr><td><code>https://knowledgediver.cloud/</code></td><td>200</td><td>域名根未受影响</td></tr></tbody></table>
+<p>最后一行是回归里容易被忽略的一项：改动插入的是共享 server 块，域名根的 KnowledgeDiver 必须保持原状（<code>personal-homepage-research/15-deploy-tc63.md:173</code>）。另外还要核对页面的 <code>canonical</code> 是否为 <code>https://knowledgediver.cloud/tc63/</code>，它由构建时的 <code>site</code> 与 <code>base</code> 决定（<code>astro.config.mjs:16-17</code>）。</p>
+<h2 id="构建产物在本地先验一次">构建产物在本地先验一次</h2>
+<p>本地构建阶段有两道廉价检查，能在推送到服务器之前发现路径前缀问题。<code>deploy.sh</code> 在构建后确认 <code>dist/index.html</code> 存在，并用 <code>grep</code> 检查链接是否带 <code>/tc63/</code> 前缀（<code>deploy.sh:25-29</code>）；<code>astro preview</code> 下可以逐个请求 <code>/tc63/</code> 开头的路径，确认资源命中。</p>
+<p>GitHub Pages 那一侧走的是另一套前缀：构建时传 <code>SITE_BASE=/TC63PersonalWebsite</code>，产物供项目站点使用（<code>.github/workflows/deploy.yml:29-31</code>）。两套产物的前缀不同，验证时不要拿 Pages 的产物去核对服务器路径。</p>
+<h2 id="服务器上可用的工具受限">服务器上可用的工具受限</h2>
+<p>这台服务器上没有 <code>python3</code>、<code>curl</code>、<code>wget</code>（<code>personal-homepage-research/15-deploy-tc63.md:82-89</code>）。<code>python3</code> 是个断链，实际 Python 只存在于 KnowledgeDiver 的虚拟环境里。可用的工具是 <code>awk</code>、<code>sed</code>、<code>perl</code>、<code>nc</code> 与 busybox 一套。</p>
+<p>要在服务器上直接验证，可以用 <code>nc</code> 手工发一次 HTTP 请求：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#005CC5">printf</span><span style="color:#032F62"> "GET /tc63/ HTTP/1.0\r\nHost: knowledgediver.cloud\r\n\r\n"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#D73A49">  |</span><span style="color:#6F42C1"> nc</span><span style="color:#005CC5"> 127.0.0.1</span><span style="color:#005CC5"> 80</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> head</span><span style="color:#005CC5"> -n</span><span style="color:#005CC5"> 8</span></span></code></pre>
+<p>这只能确认本机 80 端口的响应，证书与外部可达性要在本地机器上用 <code>curl</code> 与 <code>openssl</code> 验证。部署记录里的线上状态码就是在外网侧测的（<code>personal-homepage-research/15-deploy-tc63.md:160</code>）。</p>
+<h2 id="权限与证书故障的分层判定">权限与证书故障的分层判定</h2>
+<p>两类故障的症状都是「页面不对」，但检查位置完全不同。按下面这张表先分类，再进入各自的排查路径。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>症状</th><th>先查</th><th>再查</th><th>不查</th></tr></thead><tbody><tr><td>浏览器提示证书无效</td><td><code>openssl s_client</code> 的域名与有效期</td><td>证书文件是否存在、是否已 reload</td><td>站点文件权限</td></tr><tr><td>页面返回 403</td><td><code>nginx</code> error.log 的 <code>Permission denied</code></td><td>路径逐级 <code>x</code> 位</td><td>证书</td></tr><tr><td>页面返回 404</td><td><code>dist</code> 下是否有该文件</td><td><code>try_files</code> 与 <code>error_page</code></td><td>证书与目录 <code>x</code></td></tr><tr><td>部分资源 403、页面本身正常</td><td>新增子目录的权限位</td><td>更新脚本是否执行过</td><td>证书</td></tr><tr><td>改动后整站不可用</td><td><code>nginx -t</code> 的结果</td><td>是否已回滚备份</td><td>站点内容</td></tr></tbody></table>
+<h2 id="易错点">易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td><code>nginx -t</code> 没过就 reload</td><td>顺序颠倒，服务被错误配置替换</td><td>先校验；失败时回滚备份再 reload</td></tr><tr><td>只看磁盘证书、不看服务实际证书</td><td>两者可能不一致</td><td>用 <code>s_client</code> 验证服务端返回的那一份</td></tr><tr><td>把 403 当成 404 处理</td><td>两者原因不同</td><td>403 查权限与 error.log，404 查文件与 try_files</td></tr><tr><td>在服务器上找 curl</td><td>这台机器没装</td><td>用 <code>nc</code> 验证本机响应，外部验证放到本地</td></tr><tr><td>拿 Pages 产物核对服务器路径</td><td>两套 base 前缀不同</td><td>服务器版本默认 <code>/tc63</code>，Pages 版本带 <code>/TC63PersonalWebsite</code></td></tr><tr><td>改动后只验证子路径</td><td>共享 server 块可能影响域名根</td><td>回归清单里保留 <code>https://knowledgediver.cloud/</code> 一项</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>顺序固定：备份、编辑、<code>nginx -t</code>、reload、分层验证。</li>
+<li>证书验证看服务端返回的那一份，与磁盘文件比对能定位「已续期但未重载」。</li>
+<li>403 属于路径权限问题，404 属于文件与 <code>try_files</code> 问题。</li>
+<li>回归清单要覆盖子路径内部资源与域名根两条线。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>配置改动方式</td><td>备份加校验加回滚</td><td>出错时服务不中断</td><td>每次改动多两步操作</td></tr><tr><td>验证位置</td><td>服务器测本机响应、本地测外部表现</td><td>绕开服务器工具缺失</td><td>需要两边配合</td></tr><tr><td>状态码与日志</td><td>两者都看</td><td>能区分权限与内容问题</td><td>需要登录服务器读日志</td></tr><tr><td>回归范围</td><td>同时覆盖 <code>/tc63/</code> 与 <code>/</code></td><td>及早发现共享配置的连带影响</td><td>检查项比单页验证多</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出校验并重载 nginx 的两条命令，并说明校验失败时应该做什么。</li>
+<li>请求 <code>/tc63/</code> 返回 403 与 404，分别先看哪一处证据？</li>
+<li>用一条命令读出服务端当前证书的 <code>notAfter</code>。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>
+<p>续期后没有 reload，写出比对磁盘证书与服务端证书的两条命令，并说明如何根据结果判断是「文件没更新」还是「更新了没重载」。</p>
+</li>
+<li>
+<p>服务器上没有 <code>curl</code>，设计一套只用 <code>nc</code> 与本地工具的验证流程，覆盖 80 的跳转与 443 的证书。</p>
+</li>
+<li>
+<p>改动插入的 location 与域名根共享 server 块。列出至少三条回归请求，说明每条在保护什么。</p>
+</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>personal-homepage-research/15-deploy-tc63.md</code></td><td>校验与回滚顺序、工具受限情况、线上状态码与回归结果（<code>:63-80</code>、<code>:82-89</code>、<code>:155-161</code>、<code>:173</code>）</td></tr><tr><td><code>deploy.sh</code></td><td>本地构建后的前缀检查（<code>:25-29</code>）</td></tr><tr><td><code>.github/workflows/deploy.yml</code></td><td>Pages 侧的 <code>SITE_BASE</code>（<code>:29-31</code>）</td></tr><tr><td><code>astro.config.mjs</code></td><td><code>site</code> 与 <code>base</code> 决定 canonical（<code>:16-17</code>）</td></tr><tr><td><code>README.md</code></td><td>线上地址与服务器侧更新（<code>:143</code>、<code>:155-164</code>）</td></tr><tr><td><code>/var/log/nginx/error.log</code>、<code>/etc/letsencrypt/live/</code></td><td>错误日志与证书文件（服务器路径，未在本机核对）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/32-nginx%20%E9%85%8D%E7%BD%AE/03-SSE%E4%B8%8E%E6%B5%81%E5%BC%8F%E4%BB%A3%E7%90%86/"><span class="k">← 上一篇</span><span class="t">SSE与流式代理</span><span class="d">nginx 配置 · 4 个文件</span></a><a class="next" href="/tc63/docs/33-%E9%83%A8%E7%BD%B2%E4%B8%8E%20CI/01-%E8%85%BE%E8%AE%AF%E4%BA%91%E4%B8%8Esystemd/"><span class="k">下一篇 →</span><span class="t">腾讯云与systemd</span><span class="d">部署与 CI · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

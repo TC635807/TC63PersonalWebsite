@@ -1,0 +1,2304 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Schema与多store · SQLite 数据层 · 王宇翔</title><meta name="description" content="DatabaseManager 的双检锁单例、连接参数与两条 PRAGMA、建表脚本的执行方式，以及连接关闭后单例重置带来的影响"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/01-Schema%E4%B8%8E%E5%A4%9Astore/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="Schema与多store · SQLite 数据层 · 王宇翔"><meta property="og:description" content="DatabaseManager 的双检锁单例、连接参数与两条 PRAGMA、建表脚本的执行方式，以及连接关闭后单例重置带来的影响"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/01-Schema%E4%B8%8E%E5%A4%9Astore/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/">SQLite 数据层</a><span class="sep" aria-hidden="true">/</span><span class="now">Schema与多store</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>Schema与多store</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>全局数据库与连接管理</span></a><ul class="toc__heads"><li><a href="#1-单例与双检锁" data-depth="2" data-heading-j="0">1. 单例与双检锁</a></li><li><a href="#2-数据库路径" data-depth="2" data-heading-j="1">2. 数据库路径</a></li><li><a href="#3-连接参数与两条-pragma" data-depth="2" data-heading-j="2">3. 连接参数与两条 PRAGMA</a></li><li><a href="#4-建表脚本" data-depth="2" data-heading-j="3">4. 建表脚本</a></li><li><a href="#5-对外的四个方法" data-depth="2" data-heading-j="4">5. 对外的四个方法</a></li><li><a href="#6-线程安全的口径" data-depth="2" data-heading-j="5">6. 线程安全的口径</a></li><li><a href="#7-谁在用它" data-depth="2" data-heading-j="6">7. 谁在用它</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>五张全局表</span></a><ul class="toc__heads"><li><a href="#1-类型约定" data-depth="2" data-heading-j="0">1. 类型约定</a></li><li><a href="#2-users-表" data-depth="2" data-heading-j="1">2. users 表</a></li><li><a href="#3-orders-表" data-depth="2" data-heading-j="2">3. orders 表</a></li><li><a href="#4-hub_sessions-表" data-depth="2" data-heading-j="3">4. hub_sessions 表</a></li><li><a href="#5-share_tokens-表" data-depth="2" data-heading-j="4">5. share_tokens 表</a></li><li><a href="#6-domain_quality-表" data-depth="2" data-heading-j="5">6. domain_quality 表</a></li><li><a href="#7-表与运行期存储的对照" data-depth="2" data-heading-j="6">7. 表与运行期存储的对照</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>Storage 抽象与实现清单</span></a><ul class="toc__heads"><li><a href="#1-五个抽象基类" data-depth="2" data-heading-j="0">1. 五个抽象基类</a></li><li><a href="#2-实现类与介质" data-depth="2" data-heading-j="1">2. 实现类与介质</a></li><li><a href="#3-包级导出的取舍" data-depth="2" data-heading-j="2">3. 包级导出的取舍</a></li><li><a href="#4-运行期的选择" data-depth="2" data-heading-j="3">4. 运行期的选择</a></li><li><a href="#5-抽象是否被遵守" data-depth="2" data-heading-j="4">5. 抽象是否被遵守</a></li><li><a href="#6-未继承基类的存储" data-depth="2" data-heading-j="5">6. 未继承基类的存储</a></li><li><a href="#7-会话的基类实现是文件存储" data-depth="2" data-heading-j="6">7. 会话的基类实现是文件存储</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>会话级数据库</span></a><ul class="toc__heads"><li><a href="#1-文件布局与设计意图" data-depth="2" data-heading-j="0">1. 文件布局与设计意图</a></li><li><a href="#2-三张表与一张可选虚表" data-depth="2" data-heading-j="1">2. 三张表与一张可选虚表</a></li><li><a href="#3-构造与建表顺序" data-depth="2" data-heading-j="2">3. 构造与建表顺序</a></li><li><a href="#4-幂等补列" data-depth="2" data-heading-j="3">4. 幂等补列</a></li><li><a href="#5-向量表与静默降级" data-depth="2" data-heading-j="4">5. 向量表与静默降级</a></li><li><a href="#6-实例注册表与关闭路径" data-depth="2" data-heading-j="5">6. 实例注册表与关闭路径</a></li><li><a href="#7-一个会话会有多少连接" data-depth="2" data-heading-j="6">7. 一个会话会有多少连接</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-风险清单" data-depth="2" data-heading-j="0">1. 风险清单</a></li><li><a href="#2-排查顺序" data-depth="2" data-heading-j="1">2. 排查顺序</a></li><li><a href="#3-两套库的路径与基准" data-depth="2" data-heading-j="2">3. 两套库的路径与基准</a></li><li><a href="#4-连接与实例注册表" data-depth="2" data-heading-j="3">4. 连接与实例注册表</a></li><li><a href="#5-建表与补列的口径差异" data-depth="2" data-heading-j="4">5. 建表与补列的口径差异</a></li><li><a href="#6-向量能力的静默缺失" data-depth="2" data-heading-j="5">6. 向量能力的静默缺失</a></li><li><a href="#7-权限与单例重置" data-depth="2" data-heading-j="6">7. 权限与单例重置</a></li><li><a href="#8-容易走错的方向" data-depth="2" data-heading-j="7">8. 容易走错的方向</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">SQLite 数据层</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>SQLite / DatabaseManager / 单例 / WAL / 连接 / Schema / 表结构 / 迁移</span></div><h1 class="docs__title">Schema与多store</h1><p class="docs__lead">DatabaseManager 的双检锁单例、连接参数与两条 PRAGMA、建表脚本的执行方式，以及连接关闭后单例重置带来的影响</p></header><section class="dfile" id="file-1" data-file="01-全局数据库与连接管理"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-全局数据库与连接管理</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/01-Schema与多store/01-全局数据库与连接管理.md</span></div><div class="dfile__body"><h1 id="全局数据库与连接管理">全局数据库与连接管理</h1>
+<p>全局数据（用户、订单、论坛、分享令牌、域名质量）共用一个 SQLite 文件，由 <code>DatabaseManager</code> 管理。它是一个进程内单例，用双检锁保证只初始化一次，对外只暴露执行、批量执行、提交与关闭四个方法。</p>
+<p>连接的建立与生命周期在这里展开。五张表的列定义在 <code>02-五张全局表.md</code>，会话级数据库在 <code>04-会话级数据库.md</code>。</p>
+<h2 id="1-单例与双检锁">1. 单例与双检锁</h2>
+<p><code>DatabaseManager</code> 用 <code>__new__</code> 实现单例（<code>backend/storage/database.py:103-109</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#005CC5"> __new__</span><span style="color:#24292E">(cls, db_path: Optional[</span><span style="color:#005CC5">str</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span><span style="color:#24292E">) -> </span><span style="color:#032F62">"DatabaseManager"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> cls</span><span style="color:#24292E">._instance </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        with</span><span style="color:#005CC5"> cls</span><span style="color:#24292E">._lock:</span></span>
+<span class="line"><span style="color:#D73A49">            if</span><span style="color:#005CC5"> cls</span><span style="color:#24292E">._instance </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">                cls</span><span style="color:#24292E">._instance </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> super</span><span style="color:#24292E">().</span><span style="color:#005CC5">__new__</span><span style="color:#24292E">(</span><span style="color:#005CC5">cls</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">                cls</span><span style="color:#24292E">._instance._initialize(db_path </span><span style="color:#D73A49">or</span><span style="color:#005CC5"> DATABASE_PATH</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> cls</span><span style="color:#24292E">._instance</span></span></code></pre>
+<p>锁定义在类上（<code>:101</code>），第一次检查不加锁，只有需要初始化时才进入临界区并在锁内二次检查。这样多线程同时首次访问时只建一个实例，后续访问不付锁开销。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>细节</th><th>实现</th><th>位置</th></tr></thead><tbody><tr><td>单例字段</td><td><code>_instance</code></td><td><code>:100</code></td></tr><tr><td>锁</td><td><code>threading.Lock()</code></td><td><code>:101</code></td></tr><tr><td>首次检查</td><td>无锁快速路径</td><td><code>:104</code></td></tr><tr><td>二次检查</td><td>锁内判空</td><td><code>:105-108</code></td></tr></tbody></table>
+<p>注意 <code>db_path</code> 只在首次构造时生效：第二个调用者传入不同路径不会得到新连接，而是拿到已有实例。需要指向另一个库时必须先 <code>close</code> 重置单例。</p>
+<h2 id="2-数据库路径">2. 数据库路径</h2>
+<p>路径来自配置（<code>backend/storage/database.py:16</code>、<code>backend/config.py:140</code>）：环境变量 <code>KNOWLEDGEDIVER_DB</code> 未设置时用相对路径 <code>data/knowledgediver.db</code>。相对路径以进程工作目录为基准，因此从不同目录启动程序会指向不同的库文件。</p>
+<p><code>_initialize</code> 会先创建父目录（<code>:113</code>），所以库文件不存在时无需手工建目录。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>环境变量</td><td><code>KNOWLEDGEDIVER_DB</code></td></tr><tr><td>默认值</td><td><code>data/knowledgediver.db</code></td></tr><tr><td>是否创建目录</td><td>是，<code>os.makedirs(exist_ok=True)</code></td></tr></tbody></table>
+<h2 id="3-连接参数与两条-pragma">3. 连接参数与两条 PRAGMA</h2>
+<p>建连接时指定三个参数与两条 PRAGMA（<code>backend/storage/database.py:115-120</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn </span><span style="color:#D73A49">=</span><span style="color:#24292E"> sqlite3.connect(db_path, </span><span style="color:#E36209">check_same_thread</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.row_factory </span><span style="color:#D73A49">=</span><span style="color:#24292E"> sqlite3.Row</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.execute(</span><span style="color:#032F62">"PRAGMA journal_mode=WAL;"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.execute(</span><span style="color:#032F62">"PRAGMA foreign_keys=ON;"</span><span style="color:#24292E">)</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>设置</th><th>作用</th><th>影响</th></tr></thead><tbody><tr><td><code>check_same_thread=False</code></td><td>允许跨线程使用连接</td><td>需调用方自行保证互斥</td></tr><tr><td><code>row_factory = Row</code></td><td>查询结果可按列名取值</td><td>存储层用 <code>row["points"]</code> 之类写法</td></tr><tr><td><code>journal_mode=WAL</code></td><td>读写不互相阻塞</td><td>目录里出现 <code>-wal</code> 与 <code>-shm</code> 文件</td></tr><tr><td><code>foreign_keys=ON</code></td><td>打开外键约束</td><td>当前表结构没有外键声明，暂无约束可执行</td></tr></tbody></table>
+<p><code>foreign_keys</code> 打开后并没有生效对象：<code>SCHEMA_SQL</code> 里没有任何 <code>REFERENCES</code> 子句（<code>:19-85</code>）。表之间的关系靠业务代码维护，例如订单表有 <code>username</code> 列但不会阻止写不存在的用户。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["DatabaseManager 调用"] --> B{"_instance 为空"}
+  B -->|否| C["返回已有实例"]
+  B -->|是| D["进入类锁"]
+  D --> E{"再次判空"}
+  E -->|否| C
+  E -->|是| F["创建目录"]
+  F --> G["sqlite3.connect check_same_thread=False"]
+  G --> H["设置 Row 工厂"]
+  H --> I["PRAGMA WAL 与 foreign_keys"]
+  I --> J["executescript 建表"]
+  J --> K["返回实例"]</pre></div>
+<h2 id="4-建表脚本">4. 建表脚本</h2>
+<p><code>_init_schema</code> 用 <code>executescript</code> 一次性执行 <code>SCHEMA_SQL</code> 并提交（<code>backend/storage/database.py:122-124</code>）。脚本里全部是 <code>CREATE TABLE IF NOT EXISTS</code>，因此重复启动不会报错，也不会覆盖已有数据。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>特性</th><th>说明</th></tr></thead><tbody><tr><td>幂等</td><td><code>IF NOT EXISTS</code></td></tr><tr><td>执行方式</td><td><code>executescript</code> 单次调用</td></tr><tr><td>事务</td><td>脚本后显式 <code>commit</code></td></tr></tbody></table>
+<p>这条路径只负责建表，不做列迁移。会话级数据库另有一个 <code>ALTER TABLE</code> 补列的方法（见 <code>04-会话级数据库.md</code>），全局库没有对应实现：如果 <code>SCHEMA_SQL</code> 新增列，已有库不会自动补上。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant S as Store
+  participant M as DatabaseManager
+  participant DB as SQLite 文件
+  S->>M: DatabaseManager()
+  M->>M: 双检锁判断
+  alt 首次构造
+    M->>DB: connect
+    M->>DB: PRAGMA journal_mode WAL
+    M->>DB: PRAGMA foreign_keys ON
+    M->>DB: executescript 建五张表
+  end
+  M-->>S: 共享实例
+  S->>M: execute 与 commit</pre></div>
+<h2 id="5-对外的四个方法">5. 对外的四个方法</h2>
+<p><code>DatabaseManager</code> 的方法面很窄（<code>backend/storage/database.py:126-137</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方法</th><th>参数</th><th>说明</th></tr></thead><tbody><tr><td><code>execute</code></td><td>SQL 与参数元组</td><td>返回游标</td></tr><tr><td><code>executemany</code></td><td>SQL 与序列</td><td>批量写入</td></tr><tr><td><code>commit</code></td><td>无</td><td>提交当前事务</td></tr><tr><td><code>close</code></td><td>无</td><td>关闭连接并重置单例</td></tr></tbody></table>
+<p><code>close</code> 在关闭连接后把 <code>_instance</code> 置空（<code>:137</code>），下一次调用 <code>DatabaseManager()</code> 会重新建连接。重置只影响单例字段，不影响已经持有旧连接引用的对象：这些对象继续调用 <code>execute</code> 会操作已关闭的连接。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>操作</th><th>单例字段</th><th>已有 Store 对象</th></tr></thead><tbody><tr><td><code>close</code></td><td>置空</td><td>仍持有旧连接</td></tr><tr><td>再次构造</td><td>新建连接</td><td>不会自动换到新连接</td></tr></tbody></table>
+<h2 id="6-线程安全的口径">6. 线程安全的口径</h2>
+<p>单例初始化是线程安全的，运行期并发则依赖两层：连接以 <code>check_same_thread=False</code> 创建，允许跨线程；WAL 模式允许并发读与单写。类里没有为 <code>execute</code> 与 <code>commit</code> 加互斥锁，两个线程同时写同一连接时的行为由 sqlite3 模块的内部状态决定。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>是否有保护</th></tr></thead><tbody><tr><td>实例创建</td><td>有，双检锁</td></tr><tr><td>连接建立</td><td>一次</td></tr><tr><td>执行与提交</td><td>无显式锁</td></tr><tr><td>跨进程</td><td>无，每进程一个连接</td></tr></tbody></table>
+<h2 id="7-谁在用它">7. 谁在用它</h2>
+<p>全局连接的实际使用者有三类：用户存储（<code>backend/storage/sqlite_user_store.py:27-28</code> 构造时取 <code>DatabaseManager()</code>）、域名质量缓存（<code>backend/scraper/domain_quality.py</code> 多处取 <code>db = DatabaseManager()</code>）、迁移脚本（<code>backend/scripts/migrate_to_sqlite.py</code>）。订单、论坛与分享令牌在当前代码里走文件存储，详见 <code>02-五张全局表.md</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>使用方</th><th>访问的表</th><th>位置</th></tr></thead><tbody><tr><td><code>SqliteUserStore</code></td><td><code>users</code></td><td><code>sqlite_user_store.py:27</code></td></tr><tr><td><code>_DomainQualityCache</code></td><td><code>domain_quality</code></td><td><code>scraper/domain_quality.py:105</code> 起</td></tr><tr><td>迁移脚本</td><td>五张表</td><td><code>scripts/migrate_to_sqlite.py</code></td></tr></tbody></table>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>期望第二次构造能换库</td><td>拿到同一实例</td><td><code>database.py:104-109</code></td></tr><tr><td>从不同目录启动</td><td>指向不同库文件</td><td><code>config.py:140</code> 相对路径</td></tr><tr><td>认为外键已生效</td><td>表结构没有外键</td><td><code>database.py:19-85</code></td></tr><tr><td><code>close</code> 后期望已有 Store 恢复</td><td>旧连接已关闭</td><td><code>:135-137</code></td></tr><tr><td>新增列后期望自动迁移</td><td>只有 <code>IF NOT EXISTS</code> 建表</td><td><code>:122-124</code></td></tr><tr><td>把 WAL 当成互斥保证</td><td>只保证读写不互相阻塞</td><td><code>:118</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>单例</td><td><code>__new__</code> 加双检锁，首次构造时建连接</td></tr><tr><td>路径</td><td><code>KNOWLEDGEDIVER_DB</code>，默认相对路径</td></tr><tr><td>连接设置</td><td>跨线程允许、行按列名取值、WAL、外键打开</td></tr><tr><td>建表</td><td><code>executescript</code> 执行幂等建表脚本</td></tr><tr><td>方法面</td><td><code>execute</code>、<code>executemany</code>、<code>commit</code>、<code>close</code></td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>连接模型</td><td>进程内一个共享连接</td><td>无需连接池</td><td>运行期并发靠库自身保证</td></tr><tr><td>路径</td><td>支持环境变量覆盖</td><td>部署灵活</td><td>相对路径受工作目录影响</td></tr><tr><td>建表</td><td>启动时幂等执行</td><td>无需迁移工具</td><td>新增列不会自动补齐</td></tr><tr><td><code>close</code></td><td>重置单例</td><td>可重建连接</td><td>已持有引用者不会更新</td></tr><tr><td>外键</td><td>打开但未声明</td><td>未来加约束即可生效</td><td>当前无实际约束</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>单例的两次判空分别在锁内还是锁外？为什么这样写？</li>
+<li>连接创建时指定了哪三个参数与两条 PRAGMA？</li>
+<li><code>close</code> 之后已有 Store 对象会发生什么？</li>
+<li>全局库的建表为什么可以重复执行？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>为全局库补一个幂等的列迁移机制，说明与 <code>executescript</code> 建表的分工。</li>
+<li>评估把单例连接改成每线程一连接的代价与收益，说明需要修改的调用方。</li>
+<li>设计一条从旧库文件平滑升级到新库路径的流程，说明校验点与回滚方式。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/database.py</code></td><td>建表脚本（:19-85）、单例与初始化（:100-124）、方法与关闭（:126-137）</td></tr><tr><td><code>backend/config.py</code></td><td><code>DATABASE_PATH</code>（:140）</td></tr><tr><td><code>backend/storage/sqlite_user_store.py</code></td><td>取连接（:27-28）</td></tr><tr><td><code>backend/scraper/domain_quality.py</code></td><td>域名质量表的读写（:105 起）</td></tr><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>迁移脚本对五张表的使用</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-五张全局表"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-五张全局表</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/01-Schema与多store/02-五张全局表.md</span></div><div class="dfile__body"><h1 id="五张全局表">五张全局表</h1>
+<p>全局库的建表脚本定义五张表：用户、订单、论坛会话、分享令牌、域名质量。五张表都由启动时的 <code>executescript</code> 创建，但运行期实际被读写的只有两张：<code>users</code> 与 <code>domain_quality</code>。另外三张由迁移脚本写入，运行时代码走的是文件存储。</p>
+<p>五张表逐列的定义与使用者在这里对照。连接管理在 <code>01-全局数据库与连接管理.md</code>，存储类与抽象在 <code>03-Storage抽象与实现清单.md</code>，迁移脚本见 29/03 单元。</p>
+<h2 id="1-类型约定">1. 类型约定</h2>
+<p>五张表的列类型可以归成四类：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型</th><th>用途</th><th>例子</th></tr></thead><tbody><tr><td><code>TEXT</code></td><td>标识、状态、ISO 时间</td><td><code>username</code>、<code>status</code>、<code>created_at</code></td></tr><tr><td><code>TEXT</code> 存 JSON</td><td>列表与结构</td><td><code>topics</code>、<code>comments</code>、<code>liked_by</code></td></tr><tr><td><code>INTEGER</code></td><td>计数与积分</td><td><code>points</code>、<code>fetch_count</code></td></tr><tr><td><code>REAL</code></td><td>时间戳与阻断截止</td><td><code>blocked_until</code>、<code>last_updated</code></td></tr></tbody></table>
+<p>时间出现两种表示：<code>users</code> 与 <code>orders</code> 用 <code>TEXT</code> 存 ISO 字符串，<code>domain_quality</code> 用 <code>REAL</code> 存数值时间。同一个库里的两套约定意味着跨表比较时间需要先转换。</p>
+<h2 id="2-users-表">2. users 表</h2>
+<p><code>users</code> 是运行期使用最充分的表（<code>backend/storage/database.py:20-29</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>列</th><th>类型</th><th>约束</th><th>说明</th></tr></thead><tbody><tr><td><code>username</code></td><td><code>TEXT</code></td><td>主键</td><td>登录名</td></tr><tr><td><code>hashed_password</code></td><td><code>TEXT</code></td><td>非空</td><td>bcrypt 哈希</td></tr><tr><td><code>created_at</code></td><td><code>TEXT</code></td><td>非空</td><td>ISO 时间</td></tr><tr><td><code>avatar_url</code></td><td><code>TEXT</code></td><td>可空</td><td>头像地址</td></tr><tr><td><code>membership</code></td><td><code>TEXT</code></td><td>非空，默认 <code>'free'</code></td><td>会员等级</td></tr><tr><td><code>membership_expiry</code></td><td><code>TEXT</code></td><td>可空</td><td>到期时间</td></tr><tr><td><code>points</code></td><td><code>INTEGER</code></td><td>非空，默认 48</td><td>积分</td></tr><tr><td><code>last_points_refill</code></td><td><code>TEXT</code></td><td>可空</td><td>上次恢复时间</td></tr></tbody></table>
+<p>读写由 <code>SqliteUserStore</code> 完成，八个方法与基类声明一一对应（<code>backend/storage/base.py:125-167</code>）。积分默认值 48 与配置、模型三处重复，这一点在 28/03 单元已记录。</p>
+<h2 id="3-orders-表">3. orders 表</h2>
+<p><code>orders</code> 有 15 列，覆盖订单的全部状态字段（<code>backend/storage/database.py:31-47</code>）：订单号为主键，<code>username</code> 为非空外键列（无约束），金额与支付方式为非空，状态默认 <code>'pending'</code>，其余为可空的时间、网关订单号、支付链接、原始回调与错误信息。</p>
+<p>运行期没有任何代码读写这张表。订单实际走 <code>OrderStore</code> 的按用户 JSON 文件（<code>backend/storage/order_store.py:35-57</code>）。表里的列名与 <code>Order</code> 模型字段基本一致，说明它对应的是「订单迁到 SQLite」的预留结构。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>orders 表</th><th>运行期存储</th></tr></thead><tbody><tr><td>位置</td><td>全局库</td><td><code>data/orders/{username}.json</code></td></tr><tr><td>写入方</td><td>迁移脚本</td><td><code>OrderStore</code></td></tr><tr><td>查询方式</td><td>SQL</td><td>读文件加扫描</td></tr></tbody></table>
+<h2 id="4-hub_sessions-表">4. hub_sessions 表</h2>
+<p><code>hub_sessions</code> 用复合主键 <code>(creator, name)</code> 表示「谁的哪个会话被分享」（<code>backend/storage/database.py:49-64</code>）。列表与结构字段全部用 <code>TEXT</code> 存 JSON：<code>topics</code>、<code>liked_by</code>、<code>disliked_by</code>、<code>comments</code>、<code>graph</code>，默认值分别是 <code>'[]'</code> 与 <code>'{}'</code>。计数类字段 <code>card_count</code>、<code>likes</code>、<code>dislikes</code> 用 <code>INTEGER</code>。</p>
+<p>运行期论坛数据走 <code>HubStore</code> 的文件存储（<code>backend/storage/hub_store.py:26</code> 定义锁上下文，<code>:60</code> 定义存储类），不经过这张表。迁移脚本的文档注释写明来源是 <code>Hub/{creator}/{name}/</code> 目录（<code>backend/scripts/migrate_to_sqlite.py:8</code>）。</p>
+<h2 id="5-share_tokens-表">5. share_tokens 表</h2>
+<p><code>share_tokens</code> 只有四列（<code>backend/storage/database.py:66-71</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>列</th><th>类型</th><th>约束</th><th>说明</th></tr></thead><tbody><tr><td><code>token</code></td><td><code>TEXT</code></td><td>主键</td><td>分享令牌</td></tr><tr><td><code>username</code></td><td><code>TEXT</code></td><td>非空</td><td>创建者</td></tr><tr><td><code>session_id</code></td><td><code>TEXT</code></td><td>非空</td><td>被分享会话</td></tr><tr><td><code>created_at</code></td><td><code>TEXT</code></td><td>非空</td><td>创建时间</td></tr></tbody></table>
+<p>表里没有过期时间、使用次数或撤销标记，令牌一旦写入就是永久有效。运行期分享功能走 <code>backend/share/tokens.json</code>（迁移脚本注释 <code>:9</code> 记录了来源），因此这张表的校验能力目前只影响迁移数据。</p>
+<h2 id="6-domain_quality-表">6. domain_quality 表</h2>
+<p><code>domain_quality</code> 是第二张运行期活跃的表（<code>backend/storage/database.py:73-84</code>），以域名为主键，记录抓取次数、成功与失败次数、内容长度合计、连续失败次数、阻断截止时间、首次与最近更新时间、最近使用的抓取方式。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>列</th><th>类型</th><th>默认</th><th>用途</th></tr></thead><tbody><tr><td><code>domain</code></td><td><code>TEXT</code></td><td>主键</td><td>域名</td></tr><tr><td><code>fetch_count</code></td><td><code>INTEGER</code></td><td>0</td><td>抓取次数</td></tr><tr><td><code>success_count</code> / <code>fail_count</code></td><td><code>INTEGER</code></td><td>0</td><td>成败计数</td></tr><tr><td><code>total_content_len</code></td><td><code>INTEGER</code></td><td>0</td><td>内容长度合计</td></tr><tr><td><code>consecutive_fails</code></td><td><code>INTEGER</code></td><td>0</td><td>连续失败</td></tr><tr><td><code>blocked_until</code></td><td><code>REAL</code></td><td>0</td><td>阻断截止</td></tr><tr><td><code>first_seen</code> / <code>last_updated</code></td><td><code>REAL</code></td><td>0</td><td>时间戳</td></tr><tr><td><code>last_method</code></td><td><code>TEXT</code></td><td><code>''</code></td><td>最近方式</td></tr></tbody></table>
+<p><code>_DomainQualityCache</code> 负责读写这张表：成功与失败记录、阻断判断与解除、评分与列表都直接走 SQL（<code>backend/scraper/domain_quality.py:105</code> 起）。它取 <code>DatabaseManager()</code> 而不是继承存储基类，因为这张表不在 <code>base.py</code> 的抽象范围内。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["一次抓取结果"] --> B{"成功还是失败"}
+  B -->|成功| C["record_success 累加成功次数与内容长度"]
+  B -->|失败| D["record_failure 累加失败与连续失败"]
+  C --> E["domain_quality 表"]
+  D --> E
+  E --> F{"连续失败是否达到阈值"}
+  F -->|是| G["block_domain 写入 blocked_until"]
+  F -->|否| H["score 依据计数与阻断算出评分"]</pre></div>
+<h2 id="7-表与运行期存储的对照">7. 表与运行期存储的对照</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph TD
+  A["全局库 knowledgediver.db"] --> B["users"]
+  A --> C["orders"]
+  A --> D["hub_sessions"]
+  A --> E["share_tokens"]
+  A --> F["domain_quality"]
+  B --> G["SqliteUserStore 运行期读写"]
+  F --> H["DomainQualityCache 运行期读写"]
+  C --> I["仅迁移脚本写入，运行期用 JSON 文件"]
+  D --> J["仅迁移脚本写入，运行期用文件存储"]
+  E --> K["仅迁移脚本写入，运行期用 tokens.json"]</pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表</th><th>运行期读</th><th>运行期写</th><th>迁移脚本</th></tr></thead><tbody><tr><td><code>users</code></td><td>是</td><td>是</td><td>是</td></tr><tr><td><code>domain_quality</code></td><td>是</td><td>是</td><td>否</td></tr><tr><td><code>orders</code></td><td>否</td><td>否</td><td>是</td></tr><tr><td><code>hub_sessions</code></td><td>否</td><td>否</td><td>是</td></tr><tr><td><code>share_tokens</code></td><td>否</td><td>否</td><td>是</td></tr></tbody></table>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为订单已在库里</td><td>表存在但运行期写 JSON</td><td><code>order_store.py:35-57</code></td></tr><tr><td>认为论坛数据在库里</td><td><code>HubStore</code> 用文件</td><td><code>hub_store.py:26</code>、<code>:60</code></td></tr><tr><td>按表结构判断分享有效期</td><td>表里没有过期列</td><td><code>database.py:66-71</code></td></tr><tr><td>混用两种时间表示</td><td><code>REAL</code> 与 <code>TEXT</code> 不能直接比较</td><td><code>:73-84</code> 与 <code>:20-29</code></td></tr><tr><td>以为有外键约束</td><td>无 <code>REFERENCES</code> 声明</td><td><code>:19-85</code></td></tr><tr><td>认为列新增会自动迁移</td><td>建表脚本无列迁移</td><td><code>:122-124</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>表数量</td><td>五张，均由启动时建表脚本创建</td></tr><tr><td>类型约定</td><td>标识与时间用 <code>TEXT</code>，列表用 JSON 文本，计数用整数，质量时间戳用 <code>REAL</code></td></tr><tr><td>运行期活跃</td><td><code>users</code> 与 <code>domain_quality</code></td></tr><tr><td>预留结构</td><td><code>orders</code>、<code>hub_sessions</code>、<code>share_tokens</code> 由迁移脚本写入</td></tr><tr><td>约束</td><td>仅主键与非空、默认值，无外键声明</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>全局表范围</td><td>五张集中在建表脚本</td><td>启动即就绪</td><td>部分表与运行期存储脱节</td></tr><tr><td>列表存储</td><td>JSON 文本</td><td>结构灵活</td><td>无法用 SQL 查询内部字段</td></tr><tr><td>时间表示</td><td>两套并用</td><td>各表按需</td><td>跨表比较要转换</td></tr><tr><td>分享令牌</td><td>无过期列</td><td>结构简单</td><td>无法在库层控制有效期</td></tr><tr><td>外键</td><td>打开 PRAGMA 不声明</td><td>便于未来加约束</td><td>当前无约束生效</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出五张表名与各自的主键。</li>
+<li>哪两张表在运行期有读写？另外三张由谁写入？</li>
+<li><code>hub_sessions</code> 用哪些列存 JSON？默认值分别是什么？</li>
+<li><code>domain_quality</code> 的时间列为 <code>REAL</code> 意味着什么？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把订单改回 <code>orders</code> 表，列出需要改动的存储类、查询方式与数据迁移步骤。</li>
+<li>为 <code>share_tokens</code> 增加过期与撤销语义，说明列设计与查询改动。</li>
+<li>统一两张表的时间表示，比较「全部改 <code>TEXT</code>」与「全部改 <code>REAL</code>」两种方案的成本。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/database.py</code></td><td>五张表定义（:19-85）、建表执行（:122-124）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>订单的文件存储（:35-57）</td></tr><tr><td><code>backend/storage/hub_store.py</code></td><td>论坛存储类与锁（:26、:60）</td></tr><tr><td><code>backend/storage/base.py</code></td><td>用户存储抽象（:125-167）</td></tr><tr><td><code>backend/scraper/domain_quality.py</code></td><td>域名质量表的读写入口（:105 起）</td></tr><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>迁移来源与目标（:8-9）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-Storage抽象与实现清单"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-Storage抽象与实现清单</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/01-Schema与多store/03-Storage抽象与实现清单.md</span></div><div class="dfile__body"><h1 id="storage-抽象与实现清单">Storage 抽象与实现清单</h1>
+<p><code>backend/storage</code> 目录有十四个模块、约一千八百行代码，对外形态是「一套基类加多个实现」。基类在 <code>base.py</code>，实现按存储介质分成两代：早期用 markdown 与 JSON 文件，后期逐步迁到 SQLite。两代实现共存，调用方通过构造具体的类来选择。</p>
+<p>抽象与实现在这里逐一对照。全局库与表结构在 <code>01-全局数据库与连接管理.md</code> 与 <code>02-五张全局表.md</code>，会话级数据库在 <code>04-会话级数据库.md</code>。</p>
+<h2 id="1-五个抽象基类">1. 五个抽象基类</h2>
+<p><code>backend/storage/base.py</code> 共 309 行，定义五个 <code>ABC</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>基类</th><th>行范围</th><th>方法数</th><th>职责</th></tr></thead><tbody><tr><td><code>BaseCardStore</code></td><td><code>:26-75</code></td><td>8</td><td>卡片增删改查与批量保存</td></tr><tr><td><code>BaseSessionStore</code></td><td><code>:77-123</code></td><td>6</td><td>会话增删改查与卡片迁移</td></tr><tr><td><code>BaseUserStore</code></td><td><code>:125-174</code></td><td>8</td><td>用户增删改查与凭据校验</td></tr><tr><td><code>BaseHubStore</code></td><td><code>:176-264</code></td><td>11</td><td>分享、列表、点赞、评论</td></tr><tr><td><code>BaseOrderStore</code></td><td><code>:266-309</code></td><td>8</td><td>订单生命周期</td></tr></tbody></table>
+<p>方法体都是 <code>raise NotImplementedError</code> 或空实现，基类只固定接口形状。<code>BaseCardStore</code> 同时提供 <code>read_card</code> 与 <code>get_card</code> 两个名字（<code>:38</code>、<code>:43</code>），语义重叠，实现类两个都写。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>基类</th><th>代表方法</th></tr></thead><tbody><tr><td><code>BaseCardStore</code></td><td><code>create_card</code>、<code>list_cards</code>、<code>save_cards</code></td></tr><tr><td><code>BaseSessionStore</code></td><td><code>list_sessions</code>、<code>move_cards_to_session</code></td></tr><tr><td><code>BaseUserStore</code></td><td><code>verify_user</code>、<code>get_user_raw</code>、<code>save_user_raw</code></td></tr><tr><td><code>BaseHubStore</code></td><td><code>share_session</code>、<code>like_session</code>、<code>add_comment</code></td></tr><tr><td><code>BaseOrderStore</code></td><td><code>create_order</code>、<code>mark_paid</code>、<code>mark_expired</code></td></tr></tbody></table>
+<h2 id="2-实现类与介质">2. 实现类与介质</h2>
+<p>九个实现类分布在七个模块里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>实现类</th><th>基类</th><th>介质</th><th>位置</th></tr></thead><tbody><tr><td><code>CardStore</code></td><td><code>BaseCardStore</code></td><td>markdown 文件加锁文件</td><td><code>card_store.py:50</code></td></tr><tr><td><code>InMemoryCardStore</code></td><td><code>BaseCardStore</code></td><td>内存列表</td><td><code>card_store.py:204</code></td></tr><tr><td><code>SqliteCardStore</code></td><td><code>BaseCardStore</code></td><td>会话级 SQLite</td><td><code>sqlite_card_store.py:37</code></td></tr><tr><td><code>SessionStore</code></td><td><code>BaseSessionStore</code></td><td><code>sessions.json</code></td><td><code>session_store.py:26</code></td></tr><tr><td><code>UserStore</code></td><td><code>BaseUserStore</code></td><td><code>data/users.json</code></td><td><code>user_store.py:19</code></td></tr><tr><td><code>SqliteUserStore</code></td><td><code>BaseUserStore</code></td><td>全局 SQLite</td><td><code>sqlite_user_store.py:20</code></td></tr><tr><td><code>HubStore</code></td><td><code>BaseHubStore</code></td><td>文件加锁文件</td><td><code>hub_store.py:60</code></td></tr><tr><td><code>OrderStore</code></td><td><code>BaseOrderStore</code></td><td><code>data/orders/{username}.json</code></td><td><code>order_store.py:28</code></td></tr><tr><td><code>RawPageStore</code></td><td>无</td><td>会话级 SQLite</td><td><code>raw_store.py:28</code></td></tr></tbody></table>
+<p>三处细节：<code>RawPageStore</code> 不继承任何基类，直接组合 <code>SessionDatabaseManager</code>；<code>CardStore</code> 每个卡片写一个 <code>.md</code> 文件，目录用 <code>CARDS_DIR</code>（<code>card_store.py:20</code>、<code>:74</code>）；<code>HubStore</code> 与 <code>CardStore</code> 都带一个基于锁文件的上下文管理器（<code>card_store.py:23</code>、<code>hub_store.py:26</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph TD
+  A["BaseCardStore"] --> B["CardStore markdown"]
+  A --> C["InMemoryCardStore 内存"]
+  A --> D["SqliteCardStore 会话库"]
+  E["BaseSessionStore"] --> F["SessionStore sessions.json"]
+  G["BaseUserStore"] --> H["UserStore users.json"]
+  G --> I["SqliteUserStore 全局库"]
+  J["BaseHubStore"] --> K["HubStore 文件"]
+  L["BaseOrderStore"] --> M["OrderStore 按用户 JSON"]
+  N["无基类"] --> O["RawPageStore 会话库 raw_pages"]</pre></div>
+<h2 id="3-包级导出的取舍">3. 包级导出的取舍</h2>
+<p><code>backend/storage/__init__.py</code> 只导出一部分类（<code>:6-17</code>）：五个基类、<code>CardStore</code>、<code>InMemoryCardStore</code>、<code>SqliteCardStore</code>、<code>RawPageStore</code>、<code>SqliteUserStore</code>，外加两个 frontmatter 工具函数。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>是否导出</th><th>类</th></tr></thead><tbody><tr><td>导出</td><td>五个基类、<code>CardStore</code>、<code>InMemoryCardStore</code>、<code>SqliteCardStore</code>、<code>SqliteUserStore</code>、<code>RawPageStore</code></td></tr><tr><td>未导出</td><td><code>SessionStore</code>、<code>HubStore</code>、<code>OrderStore</code>、<code>UserStore</code>、<code>SessionDatabaseManager</code></td></tr></tbody></table>
+<p>未导出的类走模块级导入，例如 <code>from backend.storage.session_store import SessionStore</code>。包级导出的收益是常用类导入路径短，代价是「哪些类算主推实现」没有统一标准：<code>SqliteUserStore</code> 在包级导出，<code>SqliteCardStore</code> 也在，但会话与订单的 SQLite 化还没发生。</p>
+<h2 id="4-运行期的选择">4. 运行期的选择</h2>
+<p>按实例化位置统计，运行期实际使用的实现如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>存储</th><th>使用方</th><th>位置</th></tr></thead><tbody><tr><td><code>SqliteCardStore</code></td><td>卡片路由、流水线、链接、论坛详情</td><td><code>routes/cards.py:52</code> 等多处</td></tr><tr><td><code>SqliteUserStore</code></td><td>认证、支付、文档、登录初始化</td><td><code>routes/auth.py:25</code> 等四处</td></tr><tr><td><code>SessionStore</code></td><td>会话路由、会话导入导出、论坛导入</td><td><code>routes/sessions.py:21</code> 等三处</td></tr><tr><td><code>HubStore</code></td><td>论坛路由</td><td><code>routes/hub.py:33</code></td></tr><tr><td><code>OrderStore</code></td><td>支付路由</td><td><code>routes/payment.py:47</code>、<code>:163</code></td></tr><tr><td><code>RawPageStore</code></td><td>卡片原始页与流水线</td><td><code>routes/cards.py:139</code>、<code>pipeline/api.py:59</code></td></tr><tr><td><code>InMemoryCardStore</code></td><td>导出路由的空存储回退</td><td><code>routes/export.py:34</code></td></tr></tbody></table>
+<p><code>CardStore</code> 与 <code>UserStore</code> 在运行期没有实例化点：前者被 <code>SqliteCardStore</code> 取代，后者被 <code>SqliteUserStore</code> 取代。两者仍保留在包内，导入路径与抽象实现都完整。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["路由层"] --> B["SqliteCardStore"]
+  A --> C["SqliteUserStore"]
+  A --> D["SessionStore"]
+  A --> E["HubStore"]
+  A --> F["OrderStore"]
+  B --> G["SessionDatabaseManager 会话库"]
+  C --> H["DatabaseManager 全局库"]
+  D --> I["sessions.json"]
+  E --> J["文件存储"]
+  F --> K["orders 目录 JSON"]</pre></div>
+<h2 id="5-抽象是否被遵守">5. 抽象是否被遵守</h2>
+<p>基类的价值在于调用方可以面向接口编程，但仓库里有两种做法并存：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>做法</th><th>例子</th><th>效果</th></tr></thead><tbody><tr><td>提供者函数返回基类</td><td><code>routes/auth.py:23-25</code> 返回 <code>SqliteUserStore</code></td><td>调用方看不到具体类</td></tr><tr><td>端点内直接构造</td><td><code>routes/cards.py:52</code> 构造 <code>SqliteCardStore</code></td><td>换实现要改端点</td></tr></tbody></table>
+<p>卡片是最典型的一例：<code>get_current_user</code> 通过 <code>get_user_store</code> 间接取用户存储，而卡片端点在函数体里直接 <code>new</code> 出 SQLite 实现，签名上写的是 <code>List[dict]</code>（<code>:50</code>）。要换成文件存储需要改十余处构造点。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>存储</th><th>是否走提供者函数</th><th>直接构造点数量</th></tr></thead><tbody><tr><td>用户</td><td>是（认证与支付各有一份）</td><td>少量</td></tr><tr><td>卡片</td><td>否</td><td>十余处</td></tr><tr><td>会话</td><td>是（三个模块各一份）</td><td>0</td></tr><tr><td>订单</td><td>是（支付路由内）</td><td>回调与查询各一次</td></tr></tbody></table>
+<h2 id="6-未继承基类的存储">6. 未继承基类的存储</h2>
+<p><code>RawPageStore</code> 直接组合会话数据库管理器（<code>raw_store.py:36-43</code>），方法名是 <code>save</code>、<code>get</code> 一类，与 <code>base.py</code> 的五套接口都不同。它在 29/01 单元的定位是「会话内的另一张表」，不参与卡片或会话的多态替换。</p>
+<p><code>frontmatter_utils</code> 提供 <code>parse_frontmatter</code> 与 <code>generate_frontmatter</code>（<code>:1-64</code>），供 markdown 卡片读写使用，属于 <code>CardStore</code> 的配套工具。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模块</th><th>是否继承基类</th><th>说明</th></tr></thead><tbody><tr><td><code>raw_store.py</code></td><td>否</td><td>组合会话库</td></tr><tr><td><code>frontmatter_utils.py</code></td><td>否</td><td>工具函数</td></tr><tr><td><code>parent_migration.py</code></td><td>否</td><td>卡片父子关系迁移脚本</td></tr><tr><td><code>session_database.py</code></td><td>否</td><td>连接管理器</td></tr></tbody></table>
+<h2 id="7-会话的基类实现是文件存储">7. 会话的基类实现是文件存储</h2>
+<p>会话元数据存在 <code>cards/{username}/sessions.json</code>（<code>session_store.py:1-7</code>、<code>:35-36</code>），而会话的卡片数据已经进 SQLite。同一个会话因此有两个位置：元数据在 JSON，卡片在 <code>session.db</code>。<code>SessionStore</code> 的路径用相对目录（<code>:35</code>），<code>SessionDatabaseManager</code> 用项目根目录拼绝对路径（<code>session_database.py:23</code>、<code>:99-104</code>），两者对工作目录的敏感度不同。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数据</th><th>位置</th><th>路径基准</th></tr></thead><tbody><tr><td>会话元数据</td><td><code>cards/{username}/sessions.json</code></td><td>进程工作目录</td></tr><tr><td>会话卡片</td><td><code>cards/{username}/{session_id}/session.db</code></td><td>项目根目录</td></tr></tbody></table>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>在包级导入里找 <code>SessionStore</code></td><td>未导出</td><td><code>storage/__init__.py:6-17</code></td></tr><tr><td>以为 <code>CardStore</code> 已废弃删除</td><td>仍在包内且实现完整</td><td><code>card_store.py:50</code></td></tr><tr><td>认为卡片端点可换实现</td><td>直接构造具体类</td><td><code>routes/cards.py:52</code></td></tr><tr><td>以为 <code>RawPageStore</code> 有基类</td><td>未继承</td><td><code>raw_store.py:28</code></td></tr><tr><td>混用相对与绝对路径基准</td><td>换工作目录后找不到数据</td><td><code>session_store.py:35</code> 与 <code>session_database.py:99-104</code></td></tr><tr><td>认为基类方法名唯一</td><td><code>read_card</code> 与 <code>get_card</code> 并存</td><td><code>base.py:38</code>、<code>:43</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>抽象</td><td>五个基类固定接口形状，实现类各自落地</td></tr><tr><td>实现数量</td><td>九个实现类，覆盖文件、内存与 SQLite 三种介质</td></tr><tr><td>两代并存</td><td>卡片与用户已迁 SQLite，会话元数据与订单仍是文件</td></tr><tr><td>导出取舍</td><td>包级只导出部分类，其余走模块级导入</td></tr><tr><td>抽象遵守度</td><td>用户与会话走提供者函数，卡片直接构造</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>基类划分</td><td>按业务实体五个</td><td>接口清晰</td><td>基类多，重复定义</td></tr><tr><td>实现并存</td><td>旧实现保留</td><td>可回退、可对照</td><td>同一实体两套代码需同步</td></tr><tr><td>包级导出</td><td>只导出部分</td><td>常用导入短</td><td>主推实现不统一</td></tr><tr><td>会话元数据</td><td>继续用 JSON</td><td>无迁移成本</td><td>与卡片库分离，计数需维护</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出五个基类与各自的方法数。</li>
+<li>哪两个实现类在运行期没有实例化点？被谁取代？</li>
+<li>包的 <code>__init__.py</code> 导出了哪些类？哪些未导出？</li>
+<li>会话的元数据与卡片分别存在哪里？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把卡片端点改为通过提供者函数取存储，列出需要改动的文件与回退到文件实现的步骤。</li>
+<li>评估删除 <code>CardStore</code> 与 <code>UserStore</code> 的影响面，说明需要保留的能力。</li>
+<li>统一会话元数据与卡片的存储位置，给出迁移方案与计数维护方式。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/base.py</code></td><td>五个基类（:26-309）</td></tr><tr><td><code>backend/storage/__init__.py</code></td><td>包级导出（:6-17）</td></tr><tr><td><code>backend/storage/card_store.py</code></td><td><code>CardStore</code> 与 <code>InMemoryCardStore</code>（:23、:50、:204）、卡片目录（:20）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td><code>SqliteCardStore</code>（:37）</td></tr><tr><td><code>backend/storage/session_store.py</code></td><td><code>SessionStore</code> 与存储位置（:26、:35-36）</td></tr><tr><td><code>backend/storage/user_store.py</code></td><td><code>UserStore</code>（:19）</td></tr><tr><td><code>backend/storage/sqlite_user_store.py</code></td><td><code>SqliteUserStore</code>（:20）</td></tr><tr><td><code>backend/storage/hub_store.py</code></td><td><code>HubStore</code>（:26、:60）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td><code>OrderStore</code>（:28）</td></tr><tr><td><code>backend/storage/raw_store.py</code></td><td><code>RawPageStore</code>（:28、:36-43）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>直接构造（:52）与端点签名（:50）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>用户存储提供者（:23-25）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-会话级数据库"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-会话级数据库</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/01-Schema与多store/04-会话级数据库.md</span></div><div class="dfile__body"><h1 id="会话级数据库">会话级数据库</h1>
+<p>卡片数据不在全局库里。每个会话有自己的 <code>session.db</code>，路径是 <code>cards/{username}/{session_id}/session.db</code>，由 <code>SessionDatabaseManager</code> 管理。它与全局单例相反：没有 <code>__new__</code> 拦截，每构造一个实例就打开一条独立连接。隔离换来的是「按会话查询不需要过滤条件」，代价是跨会话查询无法用一条 SQL 完成。</p>
+<p>会话库的结构与生命周期在这里展开。全局库在 <code>01-全局数据库与连接管理.md</code>，存储类清单在 <code>03-Storage抽象与实现清单.md</code>。</p>
+<h2 id="1-文件布局与设计意图">1. 文件布局与设计意图</h2>
+<p>模块注释写明了三条设计决定（<code>backend/storage/session_database.py:1-10</code>）：每个会话一个 <code>.db</code> 文件、文件路径本身提供身份、与全局单例不同每实例只管理一个会话。路径由项目根目录拼出（<code>:23</code>、<code>:99-104</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">root </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> PROJECT_ROOT</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.db_dir </span><span style="color:#D73A49">=</span><span style="color:#24292E"> root </span><span style="color:#D73A49">/</span><span style="color:#032F62"> "cards"</span><span style="color:#D73A49"> /</span><span style="color:#24292E"> username </span><span style="color:#D73A49">/</span><span style="color:#24292E"> session_id</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.db_dir.mkdir(</span><span style="color:#E36209">parents</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#E36209">exist_ok</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.db_path </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.db_dir </span><span style="color:#D73A49">/</span><span style="color:#032F62"> "session.db"</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决定</th><th>表现</th></tr></thead><tbody><tr><td>每会话一库</td><td>路径含用户名与会话 ID</td></tr><tr><td>路径即身份</td><td><code>cards</code> 表没有 <code>username</code> 与 <code>session_id</code> 列</td></tr><tr><td>每实例一连接</td><td>构造函数里 <code>sqlite3.connect</code></td></tr><tr><td>目录自动创建</td><td><code>mkdir(parents=True, exist_ok=True)</code></td></tr></tbody></table>
+<h2 id="2-三张表与一张可选虚表">2. 三张表与一张可选虚表</h2>
+<p>建表脚本分三段，各一个常量：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>表</th><th>常量</th><th>列数</th><th>用途</th></tr></thead><tbody><tr><td><code>cards</code></td><td><code>SESSION_CARDS_SCHEMA</code>（<code>:26-41</code>）</td><td>11</td><td>卡片正文与关系</td></tr><tr><td><code>raw_pages</code></td><td><code>SESSION_RAW_SCHEMA</code>（<code>:44-53</code>）</td><td>6</td><td>原始网页内容</td></tr><tr><td><code>card_vec_map</code></td><td><code>SESSION_VECTOR_SCHEMA</code>（<code>:55-60</code>）</td><td>2</td><td>卡片到向量行的映射</td></tr></tbody></table>
+<p><code>cards</code> 表把列表与结构字段存成 JSON 文本：<code>links</code>、<code>backlinks</code>、<code>sources</code>、<code>tags</code>、<code>metadata</code>，默认值分别是 <code>'[]'</code> 与 <code>'{}'</code>。<code>confidence</code> 是 <code>REAL</code>，其余为文本。</p>
+<p><code>raw_pages</code> 以 <code>url</code> 为主键，写入用 <code>INSERT OR REPLACE</code>（<code>backend/storage/raw_store.py:57-59</code>），同 URL 重复保存即覆盖。<code>card_vec_map</code> 用 <code>vec_rowid</code> 关联向量表的行号。</p>
+<p>第四张是可选虚表：装载 <code>sqlite_vec</code> 扩展后创建 <code>cards_vec</code>，向量维度写死 512（<code>:148-152</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.execute(</span></span>
+<span class="line"><span style="color:#032F62">    "CREATE VIRTUAL TABLE IF NOT EXISTS cards_vec USING vec0("</span></span>
+<span class="line"><span style="color:#032F62">    "  embedding FLOAT[512] distance_metric=cosine"</span></span>
+<span class="line"><span style="color:#032F62">    ")"</span></span>
+<span class="line"><span style="color:#24292E">)</span></span></code></pre>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph TD
+  A["cards/用户名/会话ID/session.db"] --> B["cards 十一列 JSON 存列表与结构"]
+  A --> C["raw_pages URL 主键"]
+  A --> D["card_vec_map 卡片到向量行"]
+  A --> E["cards_vec 虚表 512 维 余弦"]
+  B --> F["SqliteCardStore"]
+  E --> F
+  C --> G["RawPageStore"]</pre></div>
+<h2 id="3-构造与建表顺序">3. 构造与建表顺序</h2>
+<p>构造函数按固定顺序完成六件事（<code>backend/storage/session_database.py:87-123</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>动作</th><th>行号</th></tr></thead><tbody><tr><td>1</td><td>记录用户名与会话 ID</td><td><code>:93-94</code></td></tr><tr><td>2</td><td>解析根目录并建立目录</td><td><code>:96-102</code></td></tr><tr><td>3</td><td>连接 <code>session.db</code></td><td><code>:106</code></td></tr><tr><td>4</td><td>设置行工厂</td><td><code>:119</code></td></tr><tr><td>5</td><td>打开 WAL</td><td><code>:120</code></td></tr><tr><td>6</td><td>建表与迁移，并注册实例</td><td><code>:121-123</code></td></tr></tbody></table>
+<p><code>_init_schema</code> 依次执行三段建表脚本、提交，再调用补列与向量表初始化（<code>:125-131</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.executescript(</span><span style="color:#005CC5">SESSION_CARDS_SCHEMA</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.executescript(</span><span style="color:#005CC5">SESSION_RAW_SCHEMA</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.executescript(</span><span style="color:#005CC5">SESSION_VECTOR_SCHEMA</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.conn.commit()</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._migrate_columns()</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._init_vector_table()</span></span></code></pre>
+<p>建表本身幂等，补列与向量表各自负责存量库与新环境。</p>
+<h2 id="4-幂等补列">4. 幂等补列</h2>
+<p>存量库缺 <code>parent_id</code> 时由 <code>_migrate_columns</code> 补上（<code>backend/storage/session_database.py:133-141</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.conn.execute(</span><span style="color:#032F62">"ALTER TABLE cards ADD COLUMN parent_id TEXT DEFAULT ''"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.conn.commit()</span></span>
+<span class="line"><span style="color:#24292E">    logger.info(</span><span style="color:#032F62">"Session DB migrated: added parent_id column (</span><span style="color:#005CC5">%s</span><span style="color:#032F62">/</span><span style="color:#005CC5">%s</span><span style="color:#032F62">)"</span><span style="color:#24292E">, </span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#24292E"> sqlite3.OperationalError:</span></span>
+<span class="line"><span style="color:#D73A49">    pass</span></span></code></pre>
+<p>列已存在时 <code>ALTER TABLE</code> 抛 <code>OperationalError</code>，被捕获后忽略，因此新库与已迁移库都走同一条路径。这条机制只覆盖 <code>parent_id</code> 一列：将来新增列需要在同一个方法里继续追加 <code>ALTER</code> 语句，或者引入版本号表。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情形</th><th>ALTER 结果</th><th>处理</th></tr></thead><tbody><tr><td>缺列</td><td>成功</td><td>记日志</td></tr><tr><td>已有列</td><td><code>OperationalError</code></td><td>忽略</td></tr><tr><td>其他 SQL 错误</td><td><code>OperationalError</code></td><td>同样被忽略，无区分</td></tr></tbody></table>
+<h2 id="5-向量表与静默降级">5. 向量表与静默降级</h2>
+<p>向量表初始化整段包在 <code>try</code> 里（<code>backend/storage/session_database.py:143-156</code>）：导入 <code>sqlite_vec</code>、打开扩展加载开关、装载扩展、建虚表、关闭开关、提交。任何一步失败都只写一条警告日志，构造函数继续返回。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    import</span><span style="color:#24292E"> sqlite_vec</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.conn.enable_load_extension(</span><span style="color:#005CC5">True</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    sqlite_vec.load(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.conn)</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.conn.execute(</span><span style="color:#032F62">"CREATE VIRTUAL TABLE IF NOT EXISTS cards_vec USING vec0(...)"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.conn.enable_load_extension(</span><span style="color:#005CC5">False</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.conn.commit()</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#24292E">    logger.warning(</span><span style="color:#032F62">"Vector extension load failed: </span><span style="color:#005CC5">%s</span><span style="color:#032F62">"</span><span style="color:#24292E">, e)</span></span></code></pre>
+<p>降级后的表现是语义检索不可用，而卡片增删改查不受影响。<code>SqliteCardStore</code> 在自动建索引前会先探测 <code>cards_vec</code> 是否存在（<code>backend/storage/sqlite_card_store.py:74-78</code>），探测失败就跳过索引，同样只写调试日志。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>能力</th><th>扩展可用</th><th>扩展缺失</th></tr></thead><tbody><tr><td>卡片读写</td><td>正常</td><td>正常</td></tr><tr><td>语义检索</td><td>正常</td><td>不可用</td></tr><tr><td>启动表现</td><td>无提示</td><td>警告日志</td></tr></tbody></table>
+<h2 id="6-实例注册表与关闭路径">6. 实例注册表与关闭路径</h2>
+<p>类级字典 <code>_instances</code> 按 <code>(username, session_id)</code> 收集所有实例（<code>backend/storage/session_database.py:77</code>、<code>:123</code>）。三个关闭入口：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>入口</th><th>行为</th><th>行号</th></tr></thead><tbody><tr><td><code>close()</code></td><td>从注册表移除自身并关连接</td><td><code>:167-172</code></td></tr><tr><td><code>close_for_session()</code></td><td>弹出该键的列表并全部关闭</td><td><code>:79-85</code></td></tr><tr><td><code>__del__()</code></td><td>调用 <code>close()</code></td><td><code>:180-181</code></td></tr></tbody></table>
+<p><code>close_for_session</code> 的唯一调用点是会话删除（<code>backend/storage/session_store.py:199</code>），顺序是先关连接再 <code>shutil.rmtree</code> 目录（<code>:201-203</code>），避免在 Windows 上删除被占用的文件。<code>__del__</code> 让未显式关闭的实例在回收时释放连接，但它依赖垃圾回收时机。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant R as 卡片路由
+  participant S as SqliteCardStore
+  participant M as SessionDatabaseManager
+  participant D as session.db
+  R->>S: 构造 username 与 session_id
+  S->>M: 构造连接管理器
+  M->>D: connect 并建目录
+  M->>D: 建三张表并补列
+  M->>D: 尝试装载向量扩展
+  M-->>S: 可用连接
+  S-->>R: 提供卡片方法
+  R->>S: 读写卡片
+  Note over R,M: 未显式关闭时依赖 __del__ 回收连接</pre></div>
+<h2 id="7-一个会话会有多少连接">7. 一个会话会有多少连接</h2>
+<p>每构造一个 <code>SqliteCardStore</code> 或 <code>RawPageStore</code> 就会新开一条连接，而卡片路由在每个端点函数里构造（<code>backend/routes/cards.py:52</code> 起多处），多数端点不调用 <code>close</code>。因此一个会话在多次请求后可能同时存在多条连接，直到对应的管理器实例被回收。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>连接数</th><th>说明</th></tr></thead><tbody><tr><td>单次请求用完即回收</td><td>1</td><td>依赖 <code>__del__</code></td></tr><tr><td>并发多个请求</td><td>每条一次</td><td>注册表里累积</td></tr><tr><td>会话删除</td><td>全部关闭</td><td><code>close_for_session</code></td></tr></tbody></table>
+<p>WAL 模式下多条连接可以并发读写，因此这一设计在功能上成立，代价是连接数与内存占用随请求量上升，且注册表在长期运行的进程里会持有已失活实例的引用直到关闭。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为会话库是单例</td><td>每次构造一条新连接</td><td><code>session_database.py:87-123</code></td></tr><tr><td>在卡片表里找会话字段</td><td>路径即身份，无该列</td><td><code>:26-41</code></td></tr><tr><td>依赖向量表一定可用</td><td>扩展缺失只写警告</td><td><code>:143-156</code></td></tr><tr><td>认为补列机制覆盖所有列</td><td>只补 <code>parent_id</code></td><td><code>:133-141</code></td></tr><tr><td>期望不用关闭连接</td><td>依赖 <code>__del__</code> 时机</td><td><code>:180-181</code></td></tr><tr><td>先删目录再关连接</td><td>删除可能失败</td><td><code>session_store.py:199-203</code> 顺序相反</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>隔离单位</td><td>用户名加会话 ID 决定一个 <code>session.db</code></td></tr><tr><td>表</td><td><code>cards</code>、<code>raw_pages</code>、<code>card_vec_map</code> 加可选 <code>cards_vec</code></td></tr><tr><td>补列</td><td>只有 <code>parent_id</code>，靠捕获 <code>OperationalError</code> 实现幂等</td></tr><tr><td>向量</td><td>512 维余弦，装载失败静默降级</td></tr><tr><td>关闭</td><td><code>close</code>、<code>close_for_session</code> 与 <code>__del__</code> 三条路径</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>隔离粒度</td><td>每会话一库</td><td>查询无需过滤，删除即删目录</td><td>跨会话统计困难</td></tr><tr><td>连接模型</td><td>每实例一连接</td><td>实现简单</td><td>连接数随构造增长</td></tr><tr><td>向量扩展</td><td>可选装载</td><td>环境缺失也能运行</td><td>检索能力静默缺失</td></tr><tr><td>补列</td><td>捕获异常</td><td>无需版本表</td><td>无法区分列已存在与真错误</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>会话库的文件路径如何拼出？为什么表里没有会话字段？</li>
+<li>会话库有几张表？各自主键是什么？</li>
+<li>向量表初始化失败时会发生什么？</li>
+<li>关闭连接的三个入口分别是什么？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把每实例一连接改成按会话复用连接池，说明注册表的改动与并发正确性验证方式。</li>
+<li>为会话库引入列版本表，替代当前的异常捕获补列方式，写出迁移流程。</li>
+<li>设计一个既保留会话隔离又能做跨会话统计的方案，说明需要新增的索引或汇总表。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/session_database.py</code></td><td>设计说明与路径（:1-23、:99-104）、三张表（:26-60）、构造（:87-123）、建表（:125-131）、补列（:133-141）、向量表（:143-156）、关闭路径（:79-85、:167-181）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>包装会话库与自动索引（:48-52、:62-78）</td></tr><tr><td><code>backend/storage/raw_store.py</code></td><td>原始页写入（:36-43、:57-59）</td></tr><tr><td><code>backend/storage/session_store.py</code></td><td>会话删除时的关闭顺序（:191-208）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>每端点构造存储（:52 起）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/29-SQLite 数据层/01-Schema与多store/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="数据层的易错点与排查">数据层的易错点与排查</h1>
+<p>数据层的问题表现集中：读写不到数据、启动权限报错、语义检索失效、会话删不掉。这些现象分属全局库与会话库两套机制，排查前先确认数据属于哪一套，再沿着路径、连接、表结构三层往下看。</p>
+<p>全局库见 <code>01-全局数据库与连接管理.md</code> 与 <code>02-五张全局表.md</code>，存储清单见 <code>03-Storage抽象与实现清单.md</code>，会话库见 <code>04-会话级数据库.md</code>。</p>
+<h2 id="1-风险清单">1. 风险清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>会话库有补列机制，全局库没有</td><td><code>session_database.py:133-141</code> 与 <code>database.py:122-124</code></td><td>新增全局列在存量库不生效</td></tr><tr><td>R2</td><td>每构造一个存储就开一条连接</td><td><code>session_database.py:106</code></td><td>连接与注册表条目随请求增长</td></tr><tr><td>R3</td><td>向量扩展装载失败静默降级</td><td><code>:143-156</code></td><td>语义检索失效无报错</td></tr><tr><td>R4</td><td>补列吞掉所有 <code>OperationalError</code></td><td><code>:133-141</code></td><td>真实 SQL 错误被当成「列已存在」</td></tr><tr><td>R5</td><td>路径基准不一致</td><td><code>session_store.py:35</code> 与 <code>session_database.py:99-104</code></td><td>换工作目录后数据找不到</td></tr><tr><td>R6</td><td>全局库默认相对路径</td><td><code>config.py:140</code></td><td>不同启动目录指向不同库</td></tr><tr><td>R7</td><td>目录归属导致连接失败</td><td><code>session_database.py:105-118</code></td><td>抛带提示的 <code>RuntimeError</code></td></tr><tr><td>R8</td><td><code>close</code> 重置单例但旧引用不更新</td><td><code>database.py:135-137</code></td><td>旧 Store 操作已关闭连接</td></tr><tr><td>R9</td><td>外键 PRAGMA 打开但无约束</td><td><code>database.py:19-85</code></td><td>业务依赖关系无库层保证</td></tr><tr><td>R10</td><td>三张全局表只有迁移脚本在写</td><td><code>scripts/migrate_to_sqlite.py:8-9</code></td><td>运行期订单与论坛数据在文件里</td></tr><tr><td>R11</td><td>WAL 产生副产物文件</td><td><code>database.py:118</code>、<code>session_database.py:120</code></td><td>目录出现 <code>-wal</code> 与 <code>-shm</code></td></tr><tr><td>R12</td><td>向量维度硬编码 512</td><td><code>session_database.py:149-151</code></td><td>换嵌入模型需重建虚表</td></tr><tr><td>R13</td><td>时间表示两套</td><td><code>database.py:20-29</code> 与 <code>:73-84</code></td><td>跨表比较要转换</td></tr></tbody></table>
+<h2 id="2-排查顺序">2. 排查顺序</h2>
+<p>先用「数据在哪一套库里」分流，再逐层确认：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["数据读写异常"] --> B{"数据属于哪一套"}
+  B -->|全局 users 或域名质量| C["确认 DATABASE_PATH 与工作目录"]
+  B -->|会话卡片或原始页| D["确认用户名 会话ID 与项目根目录"]
+  C --> E{"库文件与表是否存在"}
+  D --> E
+  E -->|否| F["检查是否启动过 建表脚本执行情况"]
+  E -->|是| G{"是否有权限错误"}
+  G -->|是| H["按 RuntimeError 提示修正目录归属"]
+  G -->|否| I["检查连接是否被关闭或单例被重置"]
+  I --> J["检查具体 SQL 与参数"]</pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层级</th><th>检查点</th><th>对应风险</th></tr></thead><tbody><tr><td>路径</td><td>环境变量、工作目录、项目根</td><td>R5、R6</td></tr><tr><td>文件</td><td>库文件与 <code>-wal</code> 是否存在</td><td>R11</td></tr><tr><td>权限</td><td>目录归属与权限位</td><td>R7</td></tr><tr><td>连接</td><td>生命周期与单例状态</td><td>R2、R8</td></tr><tr><td>结构</td><td>表与列是否存在</td><td>R1、R4</td></tr><tr><td>能力</td><td>向量扩展是否装载</td><td>R3、R12</td></tr></tbody></table>
+<h2 id="3-两套库的路径与基准">3. 两套库的路径与基准</h2>
+<p>四个存储模块使用三种路径基准：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模块</th><th>基准</th><th>结果</th></tr></thead><tbody><tr><td><code>DatabaseManager</code></td><td><code>DATABASE_PATH</code>，默认相对 <code>data/</code></td><td>随工作目录变化</td></tr><tr><td><code>SessionDatabaseManager</code></td><td>项目根目录</td><td>固定</td></tr><tr><td><code>SessionStore</code></td><td>相对 <code>cards/</code></td><td>随工作目录变化</td></tr><tr><td><code>OrderStore</code> / <code>UserStore</code></td><td><code>os.getcwd()</code></td><td>随工作目录变化</td></tr></tbody></table>
+<p>从服务目录启动与从仓库根目录启动，会得到不同的数据文件集合。排查「数据忽然为空」时先确认启动目录，再确认环境变量是否覆盖了默认值。</p>
+<h2 id="4-连接与实例注册表">4. 连接与实例注册表</h2>
+<p>会话库没有单例，每构造一个 <code>SqliteCardStore</code> 就开一条连接，并在类级字典里登记。三个可观测点：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>观察项</th><th>含义</th></tr></thead><tbody><tr><td>注册表键的数量</td><td>当前进程打开过的会话</td></tr><tr><td>键下实例数</td><td>该会话的连接数</td></tr><tr><td>长期运行后内存上升</td><td>未关闭实例被注册表持有</td></tr></tbody></table>
+<p>显式关闭的两个时机：会话删除时 <code>close_for_session</code> 会清掉整个键，以及存储对象被回收时 <code>__del__</code> 触发 <code>close</code>。排查连接占用时可用 <code>lsof</code> 类工具观察 <code>session.db</code> 的打开数，与注册表对照。</p>
+<h2 id="5-建表与补列的口径差异">5. 建表与补列的口径差异</h2>
+<p>全局库与会话库对结构演进的处理不同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>库</th><th>建表</th><th>补列</th><th>新增列的支持</th></tr></thead><tbody><tr><td>全局</td><td><code>executescript</code> 幂等</td><td>无</td><td>需手写迁移或删库重建</td></tr><tr><td>会话</td><td>三段幂等脚本</td><td>捕获异常的 <code>ALTER</code></td><td>每列一条 <code>ALTER</code>，异常不区分原因</td></tr></tbody></table>
+<p>会话库的补列实现把 <code>OperationalError</code> 一律视为「列已存在」（<code>session_database.py:139-141</code>），因此语法错误或锁超时也会被吞掉。排查「列没加上」时，把 <code>ALTER</code> 单独执行一次看是否报错。</p>
+<h2 id="6-向量能力的静默缺失">6. 向量能力的静默缺失</h2>
+<p><code>sqlite_vec</code> 装载失败只写一条警告（<code>session_database.py:155-156</code>），进程照常运行。判断向量能力是否可用有两种方式：查看启动日志中的 <code>Vector extension load failed</code>，或直接查询虚表是否存在。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查</th><th>命令或代码</th></tr></thead><tbody><tr><td>日志</td><td>搜索 <code>Vector extension load failed</code></td></tr><tr><td>表存在性</td><td><code>SELECT 1 FROM cards_vec LIMIT 0</code></td></tr><tr><td>映射表内容</td><td><code>SELECT COUNT(*) FROM card_vec_map</code></td></tr></tbody></table>
+<p><code>SqliteCardStore</code> 的自动索引在探测失败后跳过（<code>sqlite_card_store.py:74-78</code>），因此映射表为空也可能只是扩展缺失，而不是没有卡片。</p>
+<h2 id="7-权限与单例重置">7. 权限与单例重置</h2>
+<p>会话库连接失败时会先读取目录的归属与权限位，再抛出带修复提示的 <code>RuntimeError</code>（<code>session_database.py:105-118</code>）。提示里的命令是 <code>chown -R $(whoami) &#x3C;目录></code>，对应「上次以 sudo 启动留下 root 属主目录」这一常见场景。</p>
+<p>全局库的 <code>close</code> 会把单例字段置空（<code>database.py:137</code>），下一次构造打开新连接。已经持有旧连接的对象不会自动切换，继续操作会报「连接已关闭」类错误。排查这类错误时确认是否有代码在运行期调用了 <code>close</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant D as 排查者
+  participant F as 文件系统
+  participant L as 启动日志
+  participant C as 连接注册表
+  D->>F: 确认库文件与 wal 文件位置
+  D->>L: 搜索建表与向量装载日志
+  alt 权限报错
+    D->>F: 查看目录归属与权限位
+  else 数据为空
+    D->>C: 确认连接与单例状态
+    D->>F: 确认启动工作目录
+  end
+  D->>D: 最后核对表与列是否存在</pre></div>
+<h2 id="8-容易走错的方向">8. 容易走错的方向</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>容易先怀疑</th><th>实际应先查</th></tr></thead><tbody><tr><td>数据全空</td><td>数据库损坏</td><td>启动工作目录与路径基准</td></tr><tr><td>语义检索无结果</td><td>没有卡片</td><td>向量扩展是否装载</td></tr><tr><td>会话目录删不掉</td><td>文件系统锁</td><td>连接是否已关闭</td></tr><tr><td>新增列读不到</td><td>代码写错</td><td>全局库没有补列机制</td></tr><tr><td>连接数持续上升</td><td>应用泄漏</td><td>每请求构造存储与注册表</td></tr><tr><td>外键约束未生效</td><td>数据写入错误</td><td>表结构没有外键声明</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>两套库</td><td>全局单例库与每会话一库，路径基准不同</td></tr><tr><td>连接</td><td>全局共享一条，会话每实例一条</td></tr><tr><td>结构演进</td><td>会话库补列，全局库只建表</td></tr><tr><td>可选能力</td><td>向量扩展失败静默降级</td></tr><tr><td>关闭</td><td>显式关闭与回收关闭两条路径</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>路径基准</td><td>三种并存</td><td>各模块就近取值</td><td>工作目录敏感，排查成本高</td></tr><tr><td>补列</td><td>捕获异常</td><td>幂等且代码短</td><td>错误无法区分</td></tr><tr><td>可选扩展</td><td>失败告警继续</td><td>环境门槛低</td><td>能力缺失不易察觉</td></tr><tr><td>连接管理</td><td>交给回收</td><td>调用方无需关心</td><td>连接数随时机波动</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>数据层的风险里，哪两条与路径基准有关？分别影响哪些存储？</li>
+<li>会话库补列为什么可以重复执行？它牺牲了什么？</li>
+<li>向量扩展缺失时如何确认？</li>
+<li>全局库 <code>close</code> 之后旧的对象会怎样？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>统一四个存储模块的路径基准，说明放置位置与对现有部署的影响。</li>
+<li>为全局库设计列迁移机制，要求能区分「列已存在」与真实错误。</li>
+<li>设计一份数据层健康检查清单，覆盖库文件、连接数、表结构、向量能力与权限五项，写出每项的判定命令。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/database.py</code></td><td>表定义（:19-85）、WAL 与单例（:118、:135-137）</td></tr><tr><td><code>backend/storage/session_database.py</code></td><td>连接与权限提示（:99-118）、补列（:133-141）、向量表（:143-156）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>自动索引探测（:74-78）</td></tr><tr><td><code>backend/storage/session_store.py</code></td><td>会话路径基准与删除（:35、:191-208）</td></tr><tr><td><code>backend/config.py</code></td><td><code>DATABASE_PATH</code>（:140）</td></tr><tr><td><code>backend/scripts/migrate_to_sqlite.py</code></td><td>迁移脚本覆盖的表与来源（:8-9）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/05-%E6%94%AF%E4%BB%98%E4%B8%8E%E7%A7%AF%E5%88%86/"><span class="k">← 上一篇</span><span class="t">支付与积分</span><span class="d">FastAPI 后端 · 5 个文件</span></a><a class="next" href="/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/02-%E4%BC%9A%E8%AF%9D%E6%95%B0%E6%8D%AE%E5%BA%93/"><span class="k">下一篇 →</span><span class="t">会话数据库</span><span class="d">SQLite 数据层 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

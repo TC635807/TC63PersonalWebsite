@@ -1,0 +1,839 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>DSH插件开发 · 工程与发布 · 王宇翔</title><meta name="description" content="一个 DSH 插件包在 package.json 里声明什么、profile 如何按清单解析组合包、补丁文件在安装目录与 profile 目录之间怎样定位，以 better-crawler 的接入包为例"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/35-%E5%B7%A5%E7%A8%8B%E4%B8%8E%E5%8F%91%E5%B8%83/04-DSH%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="DSH插件开发 · 工程与发布 · 王宇翔"><meta property="og:description" content="一个 DSH 插件包在 package.json 里声明什么、profile 如何按清单解析组合包、补丁文件在安装目录与 profile 目录之间怎样定位，以 better-crawler 的接入包为例"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/35-%E5%B7%A5%E7%A8%8B%E4%B8%8E%E5%8F%91%E5%B8%83/04-DSH%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/35-%E5%B7%A5%E7%A8%8B%E4%B8%8E%E5%8F%91%E5%B8%83/">工程与发布</a><span class="sep" aria-hidden="true">/</span><span class="now">DSH插件开发</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>DSH插件开发</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>插件的形态与清单</span></a><ul class="toc__heads"><li><a href="#包清单里只有一个关键字段" data-depth="2" data-heading-j="0">包清单里只有一个关键字段</a></li><li><a href="#profile-清单决定用哪些包" data-depth="2" data-heading-j="1">profile 清单决定用哪些包</a></li><li><a href="#补丁文件才是功能入口" data-depth="2" data-heading-j="2">补丁文件才是功能入口</a></li><li><a href="#一个真实的小插件包" data-depth="2" data-heading-j="3">一个真实的小插件包</a></li><li><a href="#插件与普通依赖的区别" data-depth="2" data-heading-j="4">插件与普通依赖的区别</a></li><li><a href="#版本与运行时兼容" data-depth="2" data-heading-j="5">版本与运行时兼容</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="6">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>配置分层与补丁语义</span></a><ul class="toc__heads"><li><a href="#从空根开始的第一层" data-depth="2" data-heading-j="0">从空根开始的第一层</a></li><li><a href="#补丁行的语义" data-depth="2" data-heading-j="1">补丁行的语义</a></li><li><a href="#层的优先级如何体现" data-depth="2" data-heading-j="2">层的优先级如何体现</a></li><li><a href="#组合结果的检查手段" data-depth="2" data-heading-j="3">组合结果的检查手段</a></li><li><a href="#热重载什么时候生效" data-depth="2" data-heading-j="4">热重载什么时候生效</a></li><li><a href="#版本兼容与豁免" data-depth="2" data-heading-j="5">版本兼容与豁免</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="6">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>安装、技能与调试</span></a><ul class="toc__heads"><li><a href="#安装命令把活交给包管理器" data-depth="2" data-heading-j="0">安装命令把活交给包管理器</a></li><li><a href="#profile-什么时候被初始化" data-depth="2" data-heading-j="1">profile 什么时候被初始化</a></li><li><a href="#为什么本地插件要暂存一份" data-depth="2" data-heading-j="2">为什么本地插件要暂存一份</a></li><li><a href="#技能从哪些目录被发现" data-depth="2" data-heading-j="3">技能从哪些目录被发现</a></li><li><a href="#验证与诊断" data-depth="2" data-heading-j="4">验证与诊断</a></li><li><a href="#故障对照表" data-depth="2" data-heading-j="5">故障对照表</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="6">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">工程与发布</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>DSH / 插件 / bundle / 清单 / 补丁 / 配置 / cordis 补丁 / 分层</span></div><h1 class="docs__title">DSH插件开发</h1><p class="docs__lead">一个 DSH 插件包在 package.json 里声明什么、profile 如何按清单解析组合包、补丁文件在安装目录与 profile 目录之间怎样定位，以 better-crawler 的接入包为例</p></header><section class="dfile" id="file-1" data-file="01-插件的形态与清单"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-插件的形态与清单</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/35-工程与发布/04-DSH插件开发/01-插件的形态与清单.md</span></div><div class="dfile__body"><h1 id="插件的形态与清单">插件的形态与清单</h1>
+<p>给 DSH 写插件，第一步要决定的是包的形状，而不是先写代码。DSH 把功能组织成一棵配置树，树上的每一行都是一个插件的配置项；一个插件包可以只贡献一行配置，也可以贡献一整组。这类包在 DSH 的术语里叫组合包，它的作用是往配置树里插入或者修改若干行。</p>
+<p>一个组合包对外只需要一个声明：它的 <code>package.json</code> 里写着补丁文件在哪。profile 按自己的清单依次应用这些补丁，叠成最终的配置树。理解这条链路的关键在于分清三样东西：包清单、profile 清单、补丁文件。</p>
+<h2 id="包清单里只有一个关键字段">包清单里只有一个关键字段</h2>
+<p>组合包的 package.json 至少要声明一个 <code>dsh</code> 字段，里面是 <code>bundle.patch</code>：一个相对包目录的补丁文件路径，或者一组按顺序应用的路径（<code>node_modules/@deepseek-ai/dsh-app-boot/lib/types/profile.d.ts:38-52</code>）。校验逻辑写得很直接：既不是字符串也不是字符串数组就报错，错误信息是 <code>dsh.bundle.patch must be a file path or a list of file paths</code>（<code>node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:495-497</code>）。</p>
+<p>除这个字段之外，包就是一个普通的 npm 包：有名字、版本、许可证，可以被安装到 profile 的 <code>node_modules</code> 下。是否发布到 npm 由使用者决定，本地目录用 <code>file:</code> 形式也能安装。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>作用</th><th>必填</th></tr></thead><tbody><tr><td><code>name</code> / <code>version</code></td><td>包标识与版本</td><td>是</td></tr><tr><td><code>dsh.bundle.patch</code></td><td>补丁文件路径或路径列表</td><td>组合包必填</td></tr><tr><td><code>private</code></td><td>标记不发布</td><td>按需</td></tr><tr><td><code>type</code></td><td>模块类型</td><td>按需</td></tr><tr><td>依赖项</td><td>插件运行时需要的包</td><td>按需</td></tr></tbody></table>
+<h2 id="profile-清单决定用哪些包">profile 清单决定用哪些包</h2>
+<p>profile 目录里也有一份 <code>package.json</code>，它除了记录树外插件依赖，还保存 profile 清单：<code>dsh.profile</code> 以及其中有顺序的 <code>bundles</code> 列表（<code>README.zh.md:37</code>）。同一段的说明里还提到，配置树由这些组合包的补丁层按顺序叠加，再应用用户自己的覆盖层。</p>
+<p>清单里的名字解析有两处锚点：先从 dsh 安装目录解析内置组合包，再从 profile 自身的 <code>node_modules</code> 解析外部插件；包管理器会把树外插件装进后者（<code>README.zh.md:46</code>）。两处锚点的顺序解释了一个现象：同名的内置包不会被本地安装的同名包顶掉。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>内置组合包</th><th>对应 profile 模板</th></tr></thead><tbody><tr><td><code>@deepseek-ai/dsh-base</code> 加应用包</td><td>web、headless、acp 等</td></tr><tr><td><code>@deepseek-ai/dsh-sdk-minimal</code></td><td>sdk-minimal 单包模板</td></tr></tbody></table>
+<p>模板与组合包列表写在安装包源码里（<code>node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:530-534</code>）：web 是 base 加 web 应用包，headless 是 base 加 headless 应用包，sdk 是 base 加 sdk 应用包，sdk-minimal 只有自己。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["profile 清单 dsh.profile.bundles"] --> B{"名字解析"}
+  B -->|"内置名"| C["dsh 安装目录"]
+  B -->|"外部名"| D["profile 的 node_modules"]
+  C --> E["读取该包 package.json"]
+  D --> E
+  E --> F["取得 dsh.bundle.patch 路径"]
+  F --> G["按顺序叠加到配置树"]</pre></div>
+<h2 id="补丁文件才是功能入口">补丁文件才是功能入口</h2>
+<p>包本身可以是空的，功能全部由补丁文件描述。补丁文件的读取与定位由两个函数完成：一个校验声明形态并返回按应用顺序排列的相对路径，另一个把它们解析成绝对路径（<code>node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:495-508</code>）。因此运行期不关心补丁文件名，只关心 package.json 里的声明。</p>
+<p>这个设计带来的直接好处是同一份补丁可以被不同的包复用，包与补丁分离；代价是多了一层间接，排查时需要先确认声明指向的文件是否存在。</p>
+<h2 id="一个真实的小插件包">一个真实的小插件包</h2>
+<p>better-crawler 的 DSH 接入包就是一个最小例子。它的 <code>package.json</code> 里声明 <code>dsh.bundle.patch</code> 指向 <code>./cordis.patch.yml</code>，补丁内容是一行插入：一个标识为 <code>mcp-better-crawler</code> 的 MCP 客户端行，插件名是 <code>'@deepseek-ai/dsh-mcp-client'</code>，配置里写明服务名（<code>dsh-plugin/cordis.patch.yml:17-25</code>）。</p>
+<p>补丁头部还留了设计说明：这是一个普通的可寻址补丁行，profile 自己的补丁或者命令行叠加层可以把它禁用、换命令、改超时，而不需要改这个包。这条注释解释了组合包与用户配置的职责边界。</p>
+<h2 id="插件与普通依赖的区别">插件与普通依赖的区别</h2>
+<p>普通依赖是”装进来给某些代码用”，组合包是”装进来改变配置树”。判断一个包是不是组合包，看它有没有 <code>dsh.bundle</code> 声明：插件管理器在预检时也会给出 <code>bundle</code> 为真或假的判断（<code>node_modules/@deepseek-ai/dsh-plugin-manager/lib/types/types.d.ts:151</code>）。</p>
+<p>组合包还可以携带补丁之外的内容。better-crawler 的接入包顺带把一份技能说明发布到公共技能目录，这部分由安装脚本完成，不属于包清单的声明范围（<code>dsh-plugin/install.sh:7-13</code>）。</p>
+<h2 id="版本与运行时兼容">版本与运行时兼容</h2>
+<p>安装与启动会按插件声明的 peer 范围校验 DSH 运行时版本，不兼容时需要明确确认精确版本的豁免；管理豁免的命令是 <code>allow-version</code>、<code>revoke-version</code> 与 <code>version-exemptions</code>（<code>README.zh.md:39</code>，<code>lib/plugin-BGnVfe_D.js:14-56</code>）。豁免记录按包与运行时版本精确匹配，命令行会提示风险。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情形</th><th>表现</th><th>处理</th></tr></thead><tbody><tr><td>peer 范围匹配</td><td>正常安装与启动</td><td>无需操作</td></tr><tr><td>peer 范围不匹配</td><td>安装或启动被拒绝</td><td>确认风险后加豁免</td></tr><tr><td>豁免后仍失败</td><td>运行时报错</td><td>检查 API 是否真的兼容</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 预检
+  预检 --> 兼容: peer 范围匹配
+  预检 --> 拒绝: 版本不符
+  拒绝 --> 豁免: allow-version 加风险确认
+  豁免 --> 兼容
+  兼容 --> 已加载
+  已加载 --> 已加载: 补丁行生效</pre></div>
+<p>补丁文件也可以只做一件事：把某个内置行关掉。组合包并不总是”增加功能”，关闭一个默认开启的能力同样是它的一种用法。</p>
+<p>包清单的校验发生在加载之前，因此一个指向不存在文件的补丁声明会在启动时报错，而不是静默跳过。这条行为让错误更早暴露，代价是清单里的路径必须始终可用。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>把组合包当成普通库直接导入</td><td>装上了但没有效果</td><td>效果来自补丁层</td></tr><tr><td>2</td><td>补丁路径写绝对路径</td><td>换机器后解析失败</td><td>声明是包目录相对路径</td></tr><tr><td>3</td><td>认为本地包会顶掉内置包</td><td>内置行仍在</td><td>解析有两处锚点，内置优先</td></tr><tr><td>4</td><td>改了补丁文件却没改声明</td><td>新文件不生效</td><td>只读取声明中的路径</td></tr><tr><td>5</td><td>忽略 peer 范围</td><td>启动被拒或运行报错</td><td>有版本兼容检查</td></tr><tr><td>6</td><td>把技能当成包清单的一部分</td><td>技能目录不存在</td><td>技能由安装脚本单独发布</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>组合包在 package.json 的 <code>dsh.bundle.patch</code> 里声明一个或一组补丁文件。</li>
+<li>profile 清单 <code>dsh.profile.bundles</code> 决定应用哪些组合包以及顺序。</li>
+<li>组合包名字先从 dsh 安装目录解析，再从 profile 的 node_modules 解析。</li>
+<li>补丁文件才是功能入口，包本身可以只有清单。</li>
+<li>安装与启动会校验 peer 版本，不匹配需要精确版本豁免。</li>
+<li>技能等附带内容由安装脚本发布，不属于包清单。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>包与补丁</td><td>分离，声明指向文件</td><td>补丁可复用；代价是多一层间接</td></tr><tr><td>解析锚点</td><td>内置优先于 profile</td><td>内置行为稳定；代价是本地同名包不会覆盖</td></tr><tr><td>补丁粒度</td><td>一行插入即可</td><td>小改动成本低；代价是包多时行分散</td></tr><tr><td>版本校验</td><td>peer 范围加精确豁免</td><td>不兼容时不静默；代价是需要人工确认</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>组合包的 package.json 里哪个字段是必须的，它的取值有哪两种形态？</li>
+<li>profile 清单里的组合包按什么顺序应用？</li>
+<li>组合包名字的两处解析锚点分别是什么？</li>
+<li>说明补丁文件与包的职责分工。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>写一个只插入一行配置的最小组合包，列出目录结构与清单内容。</li>
+<li>如果两个组合包插入同一行 id，说明可能的冲突表现与排查方式。</li>
+<li>设计一条检查，判断某个已安装包是不是组合包以及它的补丁文件是否存在。</li>
+<li>版本豁免的粒度是包加运行时版本，说明这种粒度带来的管理负担与替代方案。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>README.zh.md</code></td><td>profile 组成、层叠顺序与兼容性说明（相对 DSH 安装目录）</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-app-boot/lib/types/profile.d.ts</code></td><td>profile 清单与补丁文件的类型声明</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-app-boot/lib/index.js</code></td><td>补丁路径解析与内置模板列表</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-plugin-manager/lib/types/types.d.ts</code></td><td>组合包预检与补丁行检查</td></tr><tr><td><code>lib/plugin-BGnVfe_D.js</code></td><td>版本豁免命令的实现</td></tr><tr><td><code>dsh-plugin/package.json</code> 与 <code>dsh-plugin/cordis.patch.yml</code></td><td>better-crawler 的最小组合包实例</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-配置分层与补丁语义"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-配置分层与补丁语义</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/35-工程与发布/04-DSH插件开发/02-配置分层与补丁语义.md</span></div><div class="dfile__body"><h1 id="配置分层与补丁语义">配置分层与补丁语义</h1>
+<p>同一个 profile 在不同机器上表现不同，原因通常不在插件代码，而在配置叠了哪几层。DSH 的配置树从一个空根开始，先把清单里各个组合包的补丁按顺序叠上去，再叠 profile 自己的覆盖文件与 home 级覆盖文件，最后叠启动器命令行指定的覆盖层（<code>README.zh.md:41-44</code>）。每一层只能看到前一层的产物，最终结果是这些层的串行组合。</p>
+<p>理解分层的价值在于定位问题：某一行被禁用、某段超时被改掉，先问它是哪一层写进去的，比先看插件源码有效得多。</p>
+<h2 id="从空根开始的第一层">从空根开始的第一层</h2>
+<p>第一层来自 profile 清单 <code>dsh.profile.bundles</code> 里列出的组合包。它们按清单顺序依次应用，每个包贡献自己的补丁文件，补丁文件里可以是插入行，也可以是修改或禁用已有行（<code>node_modules/@deepseek-ai/dsh-app-boot/lib/types/profile.d.ts:5-14</code>）。顺序有意义：后面的包可以覆盖前面包插入的同一行。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>来源</th><th>顺序位置</th></tr></thead><tbody><tr><td>组合包层</td><td><code>dsh.profile.bundles</code> 各包的补丁</td><td>最先</td></tr><tr><td>profile 用户层</td><td>profile 目录的 <code>cordis.patch.yml</code></td><td>其次</td></tr><tr><td>home 用户层</td><td><code>$DSH_HOME/cordis.patch.yml</code></td><td>再次</td></tr><tr><td>启动器覆盖层</td><td><code>--patch</code> 指定文件与命令衍生的补丁</td><td>最后</td></tr></tbody></table>
+<p>profile 用户层的文件名是固定的：<code>PROFILE_PATCH_FILENAME</code> 定义为 <code>cordis.patch.yml</code>（<code>node_modules/@deepseek-ai/dsh-app-boot/lib/types/profile.d.ts:28-29</code>）。home 层的同名文件作用于所有 profile，适合放跨 profile 的公共覆盖。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TB
+  A["空根"] --> B["组合包 1 的补丁"]
+  B --> C["组合包 2 的补丁"]
+  C --> D["profile 的 cordis.patch.yml"]
+  D --> E["home 级 cordis.patch.yml"]
+  E --> F["启动器 --patch 层"]
+  F --> G["最终配置树"]</pre></div>
+<h2 id="补丁行的语义">补丁行的语义</h2>
+<p>补丁文件描述对配置树的操作，最小单位是行。行的标识由补丁自己声明，插件管理器把每个组合包贡献的行整理出来，包括它插入的行与它修改却不插入的行（<code>node_modules/@deepseek-ai/dsh-plugin-manager/lib/types/types.d.ts:32-65</code>）。“修改却不插入”指的是改内置行的配置或者把内置行关掉。</p>
+<p>行标识的意义在于可寻址：写补丁的人可以用 id 定位到某一行，替换它的配置字段，或者禁用它。better-crawler 的补丁头注释把这一点写明：profile 自己的补丁或叠加补丁可以禁用这一行、换掉命令、改超时，不需要动组合包（<code>dsh-plugin/cordis.patch.yml:17-19</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>操作</th><th>作用对象</th><th>典型用途</th></tr></thead><tbody><tr><td>插入</td><td>新行</td><td>增加一个插件配置项</td></tr><tr><td>修改字段</td><td>已有行</td><td>换命令、改超时、加环境变量</td></tr><tr><td>禁用</td><td>已有行</td><td>临时关闭某个能力</td></tr></tbody></table>
+<h2 id="层的优先级如何体现">层的优先级如何体现</h2>
+<p>优先级高的层后应用，因此可以覆盖前面的结果。一个常见例子是超时：组合包声明默认值，profile 层改成自己的值，启动器再用 <code>--patch</code> 临时改一次，最终生效的是最后一次修改。判断当前值来自哪一层，要按层顺序从后往前比对。</p>
+<p>这条规则也解释了为什么修改组合包源码往往不是正确的解法：同一个效果可以在更靠后的层里写一行覆盖，成本更低，也不会在升级时被覆盖。</p>
+<h2 id="组合结果的检查手段">组合结果的检查手段</h2>
+<p>不启动应用也能检查配置树。<code>--dump-default-config</code> 与 <code>--dump-config</code> 打印组合后的配置，<code>--dump-config-schema</code> 则导入组合树中插件声明的 schema，打印描述条目与补丁的 JSON Schema，而不是配置值（<code>README.zh.md:48</code>）。检查不受信任的插件之前，文档建议先看 schema dump 的安全性与范围说明。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>手段</th><th>输出</th><th>用途</th></tr></thead><tbody><tr><td><code>--dump-default-config</code></td><td>默认层组合结果</td><td>确认内置行的初始形态</td></tr><tr><td><code>--dump-config</code></td><td>当前组合结果</td><td>确认覆盖是否生效</td></tr><tr><td><code>--dump-config-schema</code></td><td>条目的 schema</td><td>在加载前查看插件声明</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant U as 使用者
+  participant CLI as dsh 命令
+  participant L as 分层器
+  participant P as 插件
+  U->>CLI: --dump-config
+  CLI->>L: 按顺序应用各层
+  L->>P: 读取组合树中插件声明
+  P-->>L: 条目与 schema
+  L-->>U: 打印组合结果</pre></div>
+<h2 id="热重载什么时候生效">热重载什么时候生效</h2>
+<p>在配置里启用 HMR 插件之后，profile 清单、profile 补丁与 home 级补丁都会进入监视范围，改动通过统一串行重载重新组合所有层；没有启用时，改动在重启后生效（<code>README.zh.md:37</code>）。串行的含义是重载不会并发执行，因此连续保存多次只会触发一串重载。</p>
+<p>排查”改了配置没反应”时，先确认 HMR 是否启用，再看改动落在哪一层。落在启动器覆盖层上的改动不受文件监视影响，需要重新启动命令。</p>
+<h2 id="版本兼容与豁免">版本兼容与豁免</h2>
+<p>配置层叠加之前还有一道版本检查：安装与启动按插件声明的 peer 范围校验运行时版本，不匹配时需要确认精确版本的豁免（<code>README.zh.md:39</code>）。豁免记录按包名与运行时版本精确匹配，因此升级 DSH 之后旧豁免不会自动生效，需要重新确认。</p>
+<p>分层的另一面是可读性：层数变多之后，同一行的最终形态需要跨几个文件才能拼出来。给每层写清用途注释，比事后从结果倒推省力得多。</p>
+<p>补丁的应用顺序不依赖文件在磁盘上的位置，只依赖清单里的列表顺序。同一个包在不同 profile 中被放在不同位置，产生的组合结果就可能不同，这一点在跨 profile 对比行为时需要注意。</p>
+<p>层的覆盖是后写覆盖前写，而不是合并同名字段。要改一个嵌套字段，补丁需要写出该字段所在的完整行结构，否则可能只改到部分字段。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为补丁只有插入一种操作</td><td>找不到关闭某能力的写法</td><td>补丁可修改与禁用已有行</td></tr><tr><td>2</td><td>改组合包源码来调参数</td><td>升级后改动丢失</td><td>更靠后的层可以覆盖</td></tr><tr><td>3</td><td>把 home 层当成 profile 专属</td><td>其他 profile 被连带修改</td><td>home 层作用于所有 profile</td></tr><tr><td>4</td><td>改了文件立刻期望生效</td><td>需要重启才生效</td><td>HMR 未启用时改动延后</td></tr><tr><td>5</td><td>不检查组合结果就启动</td><td>靠运行时报错定位</td><td>有 dump 手段可先看</td></tr><tr><td>6</td><td>升级后沿用旧豁免</td><td>仍然被判定不兼容</td><td>豁免按版本精确匹配</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>配置树从空根开始，按组合包、profile、home、启动器覆盖的顺序叠加。</li>
+<li>profile 用户层文件名固定为 <code>cordis.patch.yml</code>，home 层同名且作用于所有 profile。</li>
+<li>补丁以行为单位，支持插入、修改字段与禁用三种操作。</li>
+<li>行标识使配置可被更靠后的层寻址覆盖。</li>
+<li>dump 系列命令可以在不启动的情况下检查组合结果与 schema。</li>
+<li>启用 HMR 时补丁文件改动会触发串行重载，否则重启生效。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>分层模型</td><td>空根加逐层补丁</td><td>组合逻辑清晰；代价是排查要按层定位</td></tr><tr><td>覆盖入口</td><td>profile 与 home 两级用户层</td><td>灵活；代价是容易忘记某一层</td></tr><tr><td>热重载</td><td>可选启用</td><td>改动即时生效；代价是需要一个常驻监视</td></tr><tr><td>版本校验</td><td>peer 范围加精确豁免</td><td>不兼容不静默；代价是升级后需重新确认</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>按顺序写出配置树的四层来源。</li>
+<li>profile 用户层的文件名是什么，home 层与它的区别在哪？</li>
+<li>补丁支持哪三种操作？</li>
+<li>dump 系列三个命令分别输出什么？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>设计一次覆盖实验：用启动器覆盖层改动某个组合包插入行的配置，写出验证步骤。</li>
+<li>说明两个组合包插入同一行标识时，层顺序会如何影响最终结果。</li>
+<li>HMR 启用与未启用时排查路径有什么不同？写出各自的检查项。</li>
+<li>给版本豁免设计一份管理方案，说明升级 DSH 后怎样发现需要重新确认的条目。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>README.zh.md</code></td><td>分层顺序、HMR、dump 手段与版本兼容说明</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-app-boot/lib/types/profile.d.ts</code></td><td>profile 清单、补丁文件名与组合顺序</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-plugin-manager/lib/types/types.d.ts</code></td><td>补丁行的插入与修改记录</td></tr><tr><td><code>dsh-plugin/cordis.patch.yml</code></td><td>可寻址补丁行的实例与说明注释</td></tr><tr><td><code>lib/plugin-BGnVfe_D.js</code></td><td>版本豁免命令实现</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-安装技能与调试"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-安装技能与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/35-工程与发布/04-DSH插件开发/03-安装技能与调试.md</span></div><div class="dfile__body"><h1 id="安装技能与调试">安装、技能与调试</h1>
+<p>把组合包装进 profile 有两种方式：直接往 profile 的 <code>node_modules</code> 里装，或者用 <code>dsh plugin</code> 命令。后者更省事，因为它同时处理 profile 初始化、写锁与兼容性提示；但它并不自己实现包管理，而是把参数转发给 pnpm 在 profile 目录里执行（<code>README.zh.md:18</code>，<code>lib/plugin-BGnVfe_D.js:63-97</code>）。理解这一点能解释很多现象：报错信息是包管理器的、构建脚本的批准提示也是包管理器的。</p>
+<p>这篇讲安装命令实际做了什么、profile 什么时候被初始化、技能从哪些目录被发现，最后给出一份故障对照表。</p>
+<h2 id="安装命令把活交给包管理器">安装命令把活交给包管理器</h2>
+<p><code>dsh plugin --profile &#x3C;名字></code> 后面的参数原样交给 pnpm，在该 profile 目录里执行。命令内部先处理两类 DSH 自己的子命令：版本豁免相关的 <code>allow-version</code>、<code>revoke-version</code>、<code>version-exemptions</code>；其余参数才进入包管理流程（<code>lib/plugin-BGnVfe_D.js:14-16</code>、<code>:63-97</code>）。</p>
+<p>写操作加锁，锁的对象是 profile 的 <code>package.json</code>，等待上限写在调用处（<code>lib/plugin-BGnVfe_D.js:39-50</code>）。同一 profile 上并发执行两次安装会被串行化，这与配置层的串行重载是同一思路。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数形态</th><th>结果</th></tr></thead><tbody><tr><td><code>add file:/绝对路径</code></td><td>以本地目录形式加入</td></tr><tr><td><code>add 包名</code></td><td>从注册源安装</td></tr><tr><td><code>add git+...</code></td><td>从 git 安装，构建脚本需要批准</td></tr><tr><td><code>remove 包名</code></td><td>移除依赖</td></tr></tbody></table>
+<h2 id="profile-什么时候被初始化">profile 什么时候被初始化</h2>
+<p>内置名称的 profile 在首次使用时按模板初始化：web、headless、sdk、sdk-minimal、acp 都有各自的组合包列表（<code>README.zh.md:20</code>）。用一个未使用的自定义名字时，可以用 <code>--from-default-profile</code> 基于模板创建，或者直接用插件命令初始化一个以 base 为基础的 profile（<code>lib/plugin-BGnVfe_D.js:41</code>）。desktop 是保留名字，由桌面应用持有，命令行会拒绝针对它的启动与配置请求。</p>
+<p>初始化只发生一次。之后 profile 目录里固定有 <code>package.json</code> 与 <code>cordis.patch.yml</code> 两个文件，清单里记录组合包列表，用户层记录覆盖。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["dsh plugin --profile web add ..."] --> B{"profile 已初始化"}
+  B -- "否" --> C["按模板初始化清单与补丁文件"]
+  B -- "是" --> D["直接操作"]
+  C --> D
+  D --> E["DSH 子命令 版本豁免"]
+  D --> F["其余参数转发 pnpm"]
+  F --> G["写入 profile 依赖"]</pre></div>
+<h2 id="为什么本地插件要暂存一份">为什么本地插件要暂存一份</h2>
+<p>stdio 形态的插件行必须写可执行的绝对路径，而包被安装到随机位置。better-crawler 的安装脚本用了一个两步方案：先把插件目录复制到 <code>$DSH_HOME/plugins/</code> 下，再把拷贝里的占位符替换成真实绝对路径，最后把这份副本注册为 profile 的 bundle（<code>dsh-plugin/install.sh:7-13</code>、<code>:25-34</code>）。</p>
+<p>这样做还有一层好处：注册的是副本，源码仓库可以继续改动，需要重新安装时才同步。代价是副本与源码可能不一致，升级时要记得重跑安装脚本。</p>
+<h2 id="技能从哪些目录被发现">技能从哪些目录被发现</h2>
+<p>技能由文件系统提供者发现，它支持目录式与单文件 Markdown 两种形态，来源覆盖项目、自定义与用户三个层级（<code>node_modules/@deepseek-ai/dsh-skill-filesystem/lib/index.js:14-15</code>）。具体根目录按顺序包括项目下的 <code>.dsh/skills</code>、项目下的 <code>.agents/skills</code>、自定义目录、<code>$DSH_HOME/skills</code>、用户目录下的 <code>.agents/skills</code>，最后是内置目录（<code>node_modules/@deepseek-ai/dsh-skill-filesystem/lib/index.js:150-184</code>）。</p>
+<p>better-crawler 的安装脚本把技能发布到 <code>$DSH_HOME/skills</code> 下的一个子目录，这样所有 profile 都能发现它（<code>dsh-plugin/install.sh:11-13</code>）。技能不随组合包声明走，因此卸载插件不会自动删掉技能，需要单独清理。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>来源</th><th>路径</th><th>生效范围</th></tr></thead><tbody><tr><td>项目 dsh</td><td>项目下 <code>.dsh/skills</code></td><td>该项目</td></tr><tr><td>项目 agents</td><td>项目下 <code>.agents/skills</code></td><td>该项目</td></tr><tr><td>自定义</td><td>配置指定的目录</td><td>按配置</td></tr><tr><td>用户 dsh</td><td><code>$DSH_HOME/skills</code></td><td>所有 profile</td></tr><tr><td>用户 agents</td><td>用户目录下 <code>.agents/skills</code></td><td>所有 profile</td></tr><tr><td>内置</td><td>安装包附带目录</td><td>所有 profile</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["技能发现"] --> B["项目根 .dsh/skills"]
+  A --> C["项目根 .agents/skills"]
+  A --> D["自定义目录"]
+  A --> E["DSH_HOME/skills"]
+  A --> F["用户 .agents/skills"]
+  A --> G["内置目录"]
+  B --> H["合并为可见技能列表"]
+  C --> H
+  D --> H
+  E --> H
+  F --> H
+  G --> H</pre></div>
+<h2 id="验证与诊断">验证与诊断</h2>
+<p>装完之后先确认包被解析到组合包：预检接口会返回某个依赖是否声明了补丁，取值可能是真、假或者无法判断（<code>node_modules/@deepseek-ai/dsh-plugin-manager/lib/types/types.d.ts:138-151</code>）。再确认补丁文件存在，最后用 dump 命令看它插入的行是否出现在组合结果里。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查项</th><th>手段</th><th>通过标准</th></tr></thead><tbody><tr><td>依赖是否装上</td><td>看 profile 依赖列表</td><td>包名与版本出现</td></tr><tr><td>是否组合包</td><td>预检返回值</td><td><code>bundle</code> 为真</td></tr><tr><td>补丁是否存在</td><td>检查声明的文件</td><td>文件可读</td></tr><tr><td>行是否生效</td><td>dump 组合结果</td><td>目标行出现</td></tr><tr><td>技能是否可见</td><td>看技能列表</td><td>名称出现</td></tr></tbody></table>
+<h2 id="故障对照表">故障对照表</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>可能原因</th><th>先看什么</th></tr></thead><tbody><tr><td>命令提示 dsh 不在 PATH</td><td>安装脚本前置检查未通过</td><td><code>install.sh:22-23</code> 的检查</td></tr><tr><td>插件行里的路径是占位符</td><td>手工注册而非跑安装脚本</td><td>补丁文件里的占位符是否被替换</td></tr><tr><td>安装被拒，提示版本不兼容</td><td>peer 范围不匹配</td><td>按提示加精确版本豁免</td></tr><tr><td>git 安装提示构建被阻止</td><td>包管理器的构建批准策略</td><td>profile 的 pnpm 工作区配置</td></tr><tr><td>装上了但行为没变</td><td>组合包未加入清单或被跳过</td><td>清单中的组合包列表与跳过提示</td></tr><tr><td>技能不出现</td><td>发布到了错误的根目录</td><td>用户级技能目录下是否存在</td></tr></tbody></table>
+<p>其中构建批准一项需要单独说明：从 git 安装的插件会在安装时运行准备脚本，包管理器默认阻止，命令会提示把对应的键加到 profile 的 pnpm 工作区配置里再重跑（<code>lib/plugin-BGnVfe_D.js:97</code>）。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为插件命令自己实现包管理</td><td>报错信息风格不像 DSH</td><td>参数被转发给 pnpm</td></tr><tr><td>2</td><td>手工注册插件目录</td><td>占位路径未替换</td><td>安装脚本负责替换</td></tr><tr><td>3</td><td>卸载组合包后期望技能消失</td><td>技能仍在列表里</td><td>技能单独发布</td></tr><tr><td>4</td><td>把内置技能目录当成可写</td><td>改动在升级后丢失</td><td>内置目录属于安装包</td></tr><tr><td>5</td><td>忽略 profile 保留名</td><td>针对 desktop 的命令被拒</td><td>desktop 由应用持有</td></tr><tr><td>6</td><td>认为装完立即生效</td><td>需要重载或重启</td><td>与 HMR 是否启用有关</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li><code>dsh plugin</code> 把非 DSH 参数转发给包管理器，在 profile 目录里执行。</li>
+<li>安装写操作对 profile 的 package.json 加锁，并发操作被串行化。</li>
+<li>内置 profile 名称首次使用时按模板初始化，desktop 是保留名。</li>
+<li>本地插件需要暂存副本并把占位符替换成绝对路径。</li>
+<li>技能从项目、自定义、用户与内置多个根目录被发现，安装脚本负责发布。</li>
+<li>诊断顺序是：装上了、是组合包、补丁存在、行生效、技能可见。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>本工程的选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>安装入口</td><td>命令转发给包管理器</td><td>复用成熟工具；代价是错误信息需要翻译</td></tr><tr><td>本地安装</td><td>复制到插件目录</td><td>路径固定可覆盖；代价是副本与源码需同步</td></tr><tr><td>技能发布</td><td>复制到用户技能目录</td><td>所有 profile 可见；代价是需单独卸载</td></tr><tr><td>诊断手段</td><td>预检加 dump</td><td>不启动即可定位；代价是层次较多</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li><code>dsh plugin</code> 后面的参数最终由谁执行？</li>
+<li>内置 profile 名称有哪几个，保留名是哪一个？</li>
+<li>本地组合包为什么需要暂存一份副本？</li>
+<li>技能的用户级根目录是哪两个？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>写一份安装失败的分步排查清单，按”命令、依赖、组合包、补丁、行”排序。</li>
+<li>设计一个升级脚本，同步插件副本与源码并重新发布技能。</li>
+<li>说明卸载一个组合包时需要清理哪些位置，避免留下无效技能。</li>
+<li>如果同一技能名出现在两个根目录，设计一种判断实际生效来源的方法。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>README.zh.md</code></td><td>插件命令、profile 初始化与保留名说明</td></tr><tr><td><code>lib/plugin-BGnVfe_D.js</code></td><td>插件命令实现、写锁与构建批准提示</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-skill-filesystem/lib/index.js</code></td><td>技能发现的根目录与顺序</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-plugin-manager/lib/types/types.d.ts</code></td><td>组合包预检与错误分类</td></tr><tr><td><code>dsh-plugin/install.sh</code></td><td>暂存、占位符替换与技能发布实例</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/35-%E5%B7%A5%E7%A8%8B%E4%B8%8E%E5%8F%91%E5%B8%83/03-PythonCLI%E6%89%93%E5%8C%85/"><span class="k">← 上一篇</span><span class="t">PythonCLI打包</span><span class="d">工程与发布 · 3 个文件</span></a><span class="unitnav__pad" aria-hidden="true"></span></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

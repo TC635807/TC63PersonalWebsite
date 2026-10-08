@@ -1,0 +1,1808 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>上下板分工与CAN拓扑 · 嵌入式软件架构 · 王宇翔</title><meta name="description" content="云台板与底盘板各自承担哪些传感器、执行器与任务，任务实例清单与板间唯一数据通道，以及职责边界在三层目录中的落位。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/03-%E4%B8%8A%E4%B8%8B%E6%9D%BF%E5%88%86%E5%B7%A5%E4%B8%8ECAN%E6%8B%93%E6%89%91/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="上下板分工与CAN拓扑 · 嵌入式软件架构 · 王宇翔"><meta property="og:description" content="云台板与底盘板各自承担哪些传感器、执行器与任务，任务实例清单与板间唯一数据通道，以及职责边界在三层目录中的落位。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/03-%E4%B8%8A%E4%B8%8B%E6%9D%BF%E5%88%86%E5%B7%A5%E4%B8%8ECAN%E6%8B%93%E6%89%91/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/">嵌入式软件架构</a><span class="sep" aria-hidden="true">/</span><span class="now">上下板分工与CAN拓扑</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>上下板分工与CAN拓扑</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>两板职责划分</span></a><ul class="toc__heads"><li><a href="#1-判断依据" data-depth="2" data-heading-j="0">1. 判断依据</a></li><li><a href="#2-任务实例是职责的第一层证据" data-depth="2" data-heading-j="1">2. 任务实例是职责的第一层证据</a></li><li><a href="#3-外设注册决定谁收到什么" data-depth="2" data-heading-j="2">3. 外设注册决定谁收到什么</a></li><li><a href="#4-同名-controltarget-各写一半字段" data-depth="2" data-heading-j="3">4. 同名 ControlTarget 各写一半字段</a></li><li><a href="#5-板间只有三帧" data-depth="2" data-heading-j="4">5. 板间只有三帧</a></li><li><a href="#6-两套-usb-链路互不兼容" data-depth="2" data-heading-j="5">6. 两套 USB 链路互不兼容</a></li><li><a href="#7-分工相关的常见误判" data-depth="2" data-heading-j="6">7. 分工相关的常见误判</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>0x301 遥控帧与跨板数据流</span></a><ul class="toc__heads"><li><a href="#1-三帧的分工与载荷" data-depth="2" data-heading-j="0">1. 三帧的分工与载荷</a></li><li><a href="#2-0x301-的字节布局与编码" data-depth="2" data-heading-j="1">2. 0x301 的字节布局与编码</a></li><li><a href="#3-强制-s1-与两路-dbus-的竞争" data-depth="2" data-heading-j="2">3. 强制 s1 与两路 dbus 的竞争</a></li><li><a href="#4-底盘板-0x301-分支的落穿" data-depth="2" data-heading-j="3">4. 底盘板 0x301 分支的落穿</a></li><li><a href="#5-0x302-的落点与下游" data-depth="2" data-heading-j="4">5. 0x302 的落点与下游</a></li><li><a href="#6-0x303-的字节序与落点" data-depth="2" data-heading-j="5">6. 0x303 的字节序与落点</a></li><li><a href="#7-三个环节的源码位置" data-depth="2" data-heading-j="6">7. 三个环节的源码位置</a></li><li><a href="#8-三帧相关的易错点" data-depth="2" data-heading-j="7">8. 三帧相关的易错点</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>跨板控制时序</span></a><ul class="toc__heads"><li><a href="#1-端到端时序由三段合成" data-depth="2" data-heading-j="0">1. 端到端时序由三段合成</a></li><li><a href="#2-任务周期与定节奏语句" data-depth="2" data-heading-j="1">2. 任务周期与定节奏语句</a></li><li><a href="#3-中断优先级与抢占关系" data-depth="2" data-heading-j="2">3. 中断优先级与抢占关系</a></li><li><a href="#4-帧线上时间与延迟上界" data-depth="2" data-heading-j="3">4. 帧线上时间与延迟上界</a></li><li><a href="#5-dt-与实际周期不一致" data-depth="2" data-heading-j="4">5. dt 与实际周期不一致</a></li><li><a href="#6-两帧的发送顺序与启动相位" data-depth="2" data-heading-j="5">6. 两帧的发送顺序与启动相位</a></li><li><a href="#7-usb-时基不会成为瓶颈" data-depth="2" data-heading-j="6">7. USB 时基不会成为瓶颈</a></li><li><a href="#8-时序相关的易错点" data-depth="2" data-heading-j="7">8. 时序相关的易错点</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>单板失效与降级</span></a><ul class="toc__heads"><li><a href="#1-三类失效的边界" data-depth="2" data-heading-j="0">1. 三类失效的边界</a></li><li><a href="#2-云台板停摆后底盘读到什么" data-depth="2" data-heading-j="1">2. 云台板停摆后底盘读到什么</a></li><li><a href="#3-底盘板停摆后云台读到什么" data-depth="2" data-heading-j="2">3. 底盘板停摆后云台读到什么</a></li><li><a href="#4-can1-共享段断开的范围" data-depth="2" data-heading-j="3">4. CAN1 共享段断开的范围</a></li><li><a href="#5-bus-off-与错误回调缺失" data-depth="2" data-heading-j="4">5. bus-off 与错误回调缺失</a></li><li><a href="#6-陈旧与新鲜的状态划分" data-depth="2" data-heading-j="5">6. 陈旧与新鲜的状态划分</a></li><li><a href="#7-固件里缺的检测点" data-depth="2" data-heading-j="6">7. 固件里缺的检测点</a></li><li><a href="#8-降级动作的可选范围" data-depth="2" data-heading-j="7">8. 降级动作的可选范围</a></li><li><a href="#9-失效相关的易错点" data-depth="2" data-heading-j="8">9. 失效相关的易错点</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#1-三层观测点与判据" data-depth="2" data-heading-j="0">1. 三层观测点与判据</a></li><li><a href="#2-从下到上的隔离顺序" data-depth="2" data-heading-j="1">2. 从下到上的隔离顺序</a></li><li><a href="#3-现象到层的对应" data-depth="2" data-heading-j="2">3. 现象到层的对应</a></li><li><a href="#4-临时观测的加计数方法" data-depth="2" data-heading-j="3">4. 临时观测的加计数方法</a></li><li><a href="#5-debug_vars-的实际状态" data-depth="2" data-heading-j="4">5. Debug_vars 的实际状态</a></li><li><a href="#6-调试串口的可用状态" data-depth="2" data-heading-j="5">6. 调试串口的可用状态</a></li><li><a href="#7-现成的上位机观测通路" data-depth="2" data-heading-j="6">7. 现成的上位机观测通路</a></li><li><a href="#8-可直接监视的全局量" data-depth="2" data-heading-j="7">8. 可直接监视的全局量</a></li><li><a href="#9-本单元易错点汇总" data-depth="2" data-heading-j="8">9. 本单元易错点汇总</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">嵌入式软件架构</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>嵌入式架构 / 上下板 / 职责划分 / 哨兵固件 / FreeRTOS / CAN / 769 / 数据流</span></div><h1 class="docs__title">上下板分工与CAN拓扑</h1><p class="docs__lead">云台板与底盘板各自承担哪些传感器、执行器与任务，任务实例清单与板间唯一数据通道，以及职责边界在三层目录中的落位。</p></header><section class="dfile" id="file-1" data-file="01-两板职责划分"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-两板职责划分</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/03-上下板分工与CAN拓扑/01-两板职责划分.md</span></div><div class="dfile__body"><h1 id="两板职责划分">两板职责划分</h1>
+<p>哨兵主控是两块独立的 STM32F407 板，各自烧录一份固件、各自跑一个 FreeRTOS 调度器。哪块板负责什么，判据是任务实例清单、外设接收通道与执行器挂载位置；CAN 外设寄存器与过滤器配置不在这里展开。</p>
+<blockquote>
+<p>云台板源码根 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。下文相对路径都相对这两个根目录，未加板名前缀的默认指底盘板。总线分段、标识符分配与波特率见 <code>docs/03-CAN 与电机/05-拓扑与波特率/</code>，本单元不重复推导。</p>
+</blockquote>
+<h2 id="1-判断依据">1. 判断依据</h2>
+<p>两块板的分工依据是执行器挂在哪一段总线上，以及外设的接收中断注册在哪块板的工程里。硬件上没有共享内存，唯一的板间通道是 CAN1 共享段上的一组标准帧。</p>
+<p>判断职责归属有三个可以独立核对的证据层：任务实例清单说明哪块板上有执行体，外设注册位置说明哪块板能收到哪类报文，执行器写点说明电流指令由哪块板算出。三层证据互相印证时结论可靠；只凭目录名或注释判断，容易把源码里存在但未启动的功能算成职责。</p>
+<p>核对某项功能归属时按固定顺序走一遍：</p>
+<ol>
+<li>在 <code>MX_FREERTOS_Init</code> 里找调用点，确认有任务在跑。</li>
+<li>在 <code>main.c</code> 里找外设回调注册，确认数据能进来。</li>
+<li>在中断向量表里找入口函数，确认中断有处理体。</li>
+<li>在任务目录里找执行器写点，确认指令由本板发出。</li>
+</ol>
+<p>四步全过的功能才算这块板的职责；中间任何一步断掉，源码存在也只是一段未启用的实现。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>云台板</th><th>底盘板</th></tr></thead><tbody><tr><td>姿态传感器</td><td>BMI088，ImuTask 以 1 ms 读取并解算</td><td>BMI088 驱动存在，但启动函数被注释</td></tr><tr><td>遥控接收</td><td>USART3 加 DMA，直接解 DBUS</td><td>同款接收代码在 main 里注册，是否接接收机待现场确认</td></tr><tr><td>裁判系统</td><td>USART6 中断体为空，无接收通路</td><td>USART6 加 RefereeCallback，维护 g_referee_info</td></tr><tr><td>云台执行器</td><td>yaw GM6020、pitch LK、两个摩擦轮、拨弹盘</td><td>无</td></tr><tr><td>底盘执行器</td><td>无</td><td>四路 M3508 全向轮</td></tr><tr><td>USB 对端</td><td>视觉小电脑，产出 vision_data</td><td>小电脑导航，产出 cmd</td></tr><tr><td>板间发送帧</td><td>0x301、0x302</td><td>0x303</td></tr><tr><td>板间接收帧</td><td>0x303</td><td>0x301、0x302</td></tr></tbody></table>
+<p>这张表决定了两条控制闭环的归属：云台角度闭环的反馈来自本板 BMI088，执行器也挂在本板一侧的总线上；底盘速度闭环的反馈来自本板 CAN2，执行器同样在本板。跨板流动的只是目标量，反馈量留在各自板上。</p>
+<p>执行器挂载位置同时决定了谁承担安全责任。云台板一旦不再运行，摩擦轮与拨弹盘失去控制；底盘板一旦不再运行，四轮失去控制。两块板都没有对方的使能信号，所以停板表现为对应执行器保持最后一条指令，不会自动失能。</p>
+<h2 id="2-任务实例是职责的第一层证据">2. 任务实例是职责的第一层证据</h2>
+<p>FreeRTOS 启动时按 <code>MX_FREERTOS_Init</code> 里的注册顺序创建任务，注册了才有执行体，注释掉的就是没有运行。云台板注册 5 个任务，底盘板注册 3 个，两板都有 ControlCenterTask 与 UsbConnectTask，这是职责重叠的部分。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>板</th><th>任务</th><th>循环周期</th><th>主要职责</th><th>源码</th></tr></thead><tbody><tr><td>云台板</td><td>ImuTask</td><td>1 ms</td><td>读 BMI088、FusionAHRS、写 imu_data</td><td><code>Task/Src/ImuTask.cpp:111</code></td></tr><tr><td>云台板</td><td>FireTask</td><td>1 ms</td><td>摩擦轮与拨弹盘速度环</td><td><code>Task/Src/FireTask.cpp:70</code></td></tr><tr><td>云台板</td><td>GimbalTask</td><td>2 ms</td><td>yaw 串级角度环、pitch 串级、发 0x141</td><td><code>Task/Src/GimbalTask.cpp:100</code></td></tr><tr><td>云台板</td><td>ControlCenterTask</td><td>1 ms</td><td>意图解析、写 control_target、发 0x1FF/0x301/0x302</td><td><code>Task/Src/ControlCenterTask.cpp:111</code></td></tr><tr><td>云台板</td><td>UsbConnectTask</td><td>10 ms</td><td>视觉协议收发、转发弹速与弹量</td><td><code>Task/Src/UsbConnectTask.cpp:154</code></td></tr><tr><td>底盘板</td><td>ControlCenterTask</td><td>1 ms</td><td>底盘运动学、发 0x200/0x303</td><td><code>Task/Src/ControlCenterTask.cpp:128</code></td></tr><tr><td>底盘板</td><td>ChassisTask</td><td>1 ms</td><td>四轮速度环与跟随环</td><td><code>Task/Src/ChassisTask.cpp:94</code></td></tr><tr><td>底盘板</td><td>UsbConnectTask</td><td>10 ms</td><td>导航协议收发、回传云台角度</td><td><code>Task/Src/UsbConnectTask.cpp:174</code></td></tr></tbody></table>
+<p>底盘板的 ImuTask 启动调用位于 <code>Core/Src/freertos.c:100</code> 并被注释，所以它虽有 BMI088 源码与 <code>Task/Src/ImuTask.cpp:33</code> 的调试串口初始化，上电后都不执行。把源码文件数当任务数，会把底盘板算成有 4 个任务。</p>
+<p>注册顺序本身不影响职责判断，但影响启动后的第一轮执行顺序。两板都在 <code>MX_FREERTOS_Init</code> 里先建队列再建任务，任务创建完由调度器按优先级挑选，而所有任务优先级相同，实际从就绪表头部开始跑。核对某个任务是否存在，看它有没有被 <code>StartXxxTask_Init()</code> 调用，不看头文件里有没有声明。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  subgraph GB["云台板 2026OmniSentryGimbal"]
+    GI["ImuTask 1 ms&#x3C;br/>BMI088 姿态"] --> GM["imu_data"]
+    GR["USART3 DBUS&#x3C;br/>DBUS_Decode 中断"] --> GD["dbus"]
+    GC["ControlCenterTask 1 ms"] --> GT["control_target"]
+    GF["FireTask 1 ms"] --> FO["摩擦轮与拨弹盘电流"]
+    GG["GimbalTask 2 ms"] --> GO["yaw 与 pitch 电流"]
+    GU["UsbConnectTask 10 ms&#x3C;br/>vision_data"] --> GC
+    GM --> GG
+    GT --> GG
+  end
+  subgraph CB["底盘板 2026OmniSentryChassis"]
+    CD["USART3 DBUS&#x3C;br/>DBUS_Decode 中断"] --> DD["dbus"]
+    CR["USART6 裁判&#x3C;br/>RefereeCallback 中断"] --> RD["g_referee_info"]
+    CC["ControlCenterTask 1 ms"] --> CT["control_target"]
+    CT --> CS["ChassisTask 1 ms"]
+    CS --> CO["四轮电流"]
+    CU["UsbConnectTask 10 ms&#x3C;br/>cmd"] --> CC
+  end</pre></div>
+<p>第二层证据是执行器写点落在哪个文件。云台板的 yaw、pitch、摩擦轮、拨弹盘电流都在云台板任务里算出，底盘板的四轮电流只在底盘板任务里算出。两块板各自持有一半的执行器，任何一板停机都不会让另一板的执行器停摆，只会让跨越板边界的目标量失效。</p>
+<h2 id="3-外设注册决定谁收到什么">3. 外设注册决定谁收到什么</h2>
+<p>云台板 <code>Core/Src/main.c:125</code> 只注册一路串口回调 <code>Uart_Init(&#x26;huart3, MyUartCallbackFun)</code>；底盘板 <code>Core/Src/main.c:131-132</code> 注册两路，第二路是 <code>Uart_Init(&#x26;huart6, RefereeUartCallback)</code>。中断向量侧同样：两板的 <code>Core/Src/stm32f4xx_it.c:250</code> 都调用 <code>Uart_IRQHandler(&#x26;huart3)</code>，底盘板在 <code>stm32f4xx_it.c:362</code> 额外调用 <code>Uart_IRQHandler(&#x26;huart6)</code>，云台板的 <code>USART6_IRQHandler</code> 在 <code>stm32f4xx_it.c:359</code> 是空函数。裁判系统只进底盘板。</p>
+<p>注册位置决定了任务能不能等到数据。云台板没有 USART6 的接收通路，本板上 <code>g_referee_info</code> 不会被更新；底盘板注册了两路串口，USART3 与 USART6 的中断都会写各自的全局量。核对某块板是否具备某项能力时，先看它在 <code>main.c</code> 里注册了哪些回调，再看中断向量里有没有对应的入口函数。</p>
+<p>两个条件缺一不可。中断向量存在而回调没注册，中断会进入 HAL 的默认处理路径，数据不会落到业务全局量里；回调注册了而向量被别处覆盖，回调不会被调用。云台板 USART6 属于第一种情形，中断入口是空的，即使未来接上裁判接收机也收不到数据。</p>
+<h2 id="4-同名-controltarget-各写一半字段">4. 同名 ControlTarget 各写一半字段</h2>
+<p>ControlTarget 这个结构体两板都定义，但字段的实际写入者不同。云台板写 <code>gimbal_yaw_angle</code>、<code>gimbal_pitch_angle</code>、<code>friction_ready</code>、<code>feeder_ready</code>；底盘板写 <code>chassis_vx</code>、<code>chassis_vy</code>、<code>chassis_wz</code>。云台板把 <code>chassis_vx/vy/wz</code> 初始化后不再更新（<code>Task/Src/ControlCenterTask.cpp:31-33</code>），底盘板把 <code>gimbal_yaw_angle</code> 初始化后同样不再更新（<code>Task/Src/ControlCenterTask.cpp:43</code>）。同名结构体在两块板上只各用一半字段。</p>
+<p>结构体定义放在共享头文件里，编译期两板看到同一份字段列表；运行期两个实例各在自己的内存里，互不可见。读代码时看到 <code>control_target.gimbal_pitch_angle</code>，要先确认当前文件出自哪块板，才能判断这个字段有没有被写过。</p>
+<h2 id="5-板间只有三帧">5. 板间只有三帧</h2>
+<p>板间数据只走 CAN1 的 0x301、0x302、0x303 三帧，没有第二路串口或共享内存。云台板发 0x301 与 0x302 的位置是 <code>Task/Src/ControlCenterTask.cpp:109-110</code>，底盘板收 0x301 与 0x302 的位置是 <code>BSP/Src/bsp_can.cpp:608-632</code>；底盘板发 0x303 的位置是 <code>Task/Src/ControlCenterTask.cpp:127</code>，云台板收 0x303 的位置是 <code>BSP/Src/bsp_can.cpp:673-681</code>。这三帧的具体载荷在后一篇展开。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  subgraph TASK["任务与数据写点"]
+    A["云台板 ControlCenterTask"] --> B["0x301 遥控通道&#x3C;br/>0x302 yaw 角度"]
+    C["底盘板 ControlCenterTask"] --> D["0x303 弹量与弹速"]
+  end
+  subgraph CONSUMER["跨板消费者"]
+    B --> E["底盘板 dbus&#x3C;br/>gimbal_yaw_angle"]
+    D --> F["云台板 AmmoSpeed&#x3C;br/>TotalAmmoShooted"]
+  end
+  E --> G["底盘板 ChassisTask&#x3C;br/>与导航速度"]
+  F --> H["云台板 UsbConnectTask&#x3C;br/>转发给视觉"]</pre></div>
+<p>三帧都在共享段上，与 yaw、拨弹盘、pitch 电机的反馈帧混在一起。目标量没有独立的优先级或专用段，总线负载增加时它和电机帧一样排队。</p>
+<p>三帧的接收侧都落在中断里，写入的全局量随后被本板任务读取。分工边界上没有引入队列或双缓冲，跨板数据与本板数据在访问方式上没有区别，区别只在数据来源是哪个节点发出。</p>
+<h2 id="6-两套-usb-链路互不兼容">6. 两套 USB 链路互不兼容</h2>
+<p>云台板的 USB 走云台串口协议，帧头为 0x53 0x50，视觉到云台 29 字节、云台到视觉 43 字节（<code>Task/Inc/UsbConnectTask.h:18-23</code>），解析器是 <code>usb_decode</code>，字节经由 <code>usbRxQueue</code> 送进任务（<code>Task/Src/UsbConnectTask.cpp:82-99</code>）。底盘板走另一套，帧头 0x5A，包 ID 0x01 的 RobotCmd 经 <code>memcpy</code> 直接落进 <code>cmd</code>（<code>Task/Src/UsbConnectTask.cpp:82-93</code>）。两套协议结构、长度与包 ID 都不同，USB 端口对端也不同，不能互换。</p>
+<p>各数据对象的写者与消费者可按板归类：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数据对象</th><th>写入者</th><th>读点</th><th>是否跨板</th></tr></thead><tbody><tr><td><code>imu_data</code></td><td>云台板 ImuTask</td><td>云台板 GimbalTask、UsbConnectTask</td><td>否</td></tr><tr><td><code>control_target</code></td><td>两板各自的 ControlCenterTask</td><td>本板任务</td><td>否，同名不同实例</td></tr><tr><td><code>dbus</code></td><td>云台板 USART3 中断；底盘板 USART3 中断与 0x301 中断</td><td>本板 ControlCenterTask</td><td>是，0x301 的落点之一</td></tr><tr><td><code>AmmoSpeed</code></td><td>云台板 CAN 中断解 0x303</td><td>云台板 UsbConnectTask</td><td>是，底盘板到云台板</td></tr><tr><td><code>gimbal_yaw_angle</code></td><td>底盘板 CAN 中断解 0x302</td><td>底盘板 ControlCenterTask</td><td>是，云台板到底盘板</td></tr><tr><td><code>cmd</code></td><td>底盘板 UsbConnectTask</td><td>底盘板 ControlCenterTask</td><td>否</td></tr><tr><td><code>vision_data</code></td><td>云台板 UsbConnectTask</td><td>云台板 ControlCenterTask</td><td>否</td></tr></tbody></table>
+<p>表里标跨板的两行是分工边界的实际载体：<code>dbus</code> 被 0x301 与本地 USART3 两路中断写，<code>AmmoSpeed</code> 与 <code>gimbal_yaw_angle</code> 各只由一帧更新。</p>
+<p>两套 USB 链路的差异不止协议本身，还包括接收路径：云台板把 USB 字节送进 <code>usbRxQueue</code> 由任务逐字节取出，底盘板在中断回调里直接把整包 <code>memcpy</code> 进 <code>cmd</code>。同一条“USB 收包”描述在两块板上对应两种并发模型，排查丢包时要按板分别看。</p>
+<h2 id="7-分工相关的常见误判">7. 分工相关的常见误判</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>误判</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>以为两板都跑 IMU</td><td>在底盘板找姿态解算的写点，找不到</td><td><code>Core/Src/freertos.c:100</code> 注释了启动</td></tr><tr><td>以为两块板的任务集相同</td><td>按云台板的 5 个任务去核对底盘板调度</td><td>底盘板注册 3 个，见 <code>freertos.c:100-104</code></td></tr><tr><td>把 <code>control_target</code> 当两板共享</td><td>在一块板上读另一块板从未写的字段</td><td>两板各自定义实例，见 <code>Message_Bus/message_bus.cpp:11</code></td></tr><tr><td>以为裁判系统两板都有</td><td>在云台板上等 <code>g_referee_info</code> 更新</td><td>云台板 <code>stm32f4xx_it.c:359</code> 中断体为空</td></tr><tr><td>忽略底盘板也注册了 DBUS</td><td>认为底盘板的遥控通道全部来自 0x301</td><td>底盘板 <code>Core/Src/main.c:131</code> 注册了 huart3</td></tr><tr><td>把 USB 对象当共用</td><td>用 <code>cmd</code> 去读云台板的视觉数据</td><td>云台板用 <code>vision_data</code>，底盘板用 <code>cmd</code></td></tr></tbody></table>
+<p>表里六条误判的共同来源是把源码树当成运行状态。判断职责时以上电后的注册与中断体为准，源码注释与目录名只作线索。</p>
+<h2 id="8-小结">8. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>分工按执行器挂载位置切，云台执行器归云台板，底盘执行器归底盘板。</li>
+<li>两板任务集不同：云台板 5 个，底盘板 3 个，底盘板 ImuTask 启动被注释。</li>
+<li>裁判系统只在底盘板，云台板无接收通路。</li>
+<li>同名 ControlTarget 在两块板上各写一半字段，实例不共享。</li>
+<li>板间唯一通道是 CAN1 上的 0x301、0x302、0x303。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>主控数量</td><td>两块 F407</td><td>云台与底盘解耦，各自实时性独立</td><td>需要一套板间协议与两套固件维护</td></tr><tr><td>反馈归属</td><td>各板用本板传感器</td><td>板上闭环，不依赖总线时延</td><td>两板无法互知对方的姿态与轮速</td></tr><tr><td>目标传递</td><td>复用 CAN1 三帧</td><td>不增加线束与收发器</td><td>目标量带宽与电机帧共享</td></tr><tr><td>结构体复用</td><td>两板共享头文件布局</td><td>一份定义两处编译</td><td>字段语义按板不同，读代码易误判</td></tr></tbody></table>
+<h2 id="9-练习">9. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>分别数出两板在 <code>MX_FREERTOS_Init</code> 里注册的任务数量与任务名，指出哪一个是未启动的。</li>
+<li>说明云台板为什么收不到裁判系统的数据，给出一条源码证据。</li>
+<li>写出 0x301、0x302、0x303 三帧的方向与各自的组装函数名。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>设计一个板间心跳，使两板都能判断对方是否在运行。给出帧标识符、发送周期、接收侧判据与失效后的降级动作，并说明为什么不复用现有的三帧。</li>
+</ol>
+<hr>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/freertos.c</code></td><td>云台板 5 个任务的注册（:129-134）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/freertos.c</code></td><td>底盘板任务注册与 ImuTask 注释（:100-104）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>云台板串口回调注册（:125）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘板串口回调注册（:131-132）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>云台板意图解析与板间发送（:109-110）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>底盘板运动学与板间发送（:127）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>底盘板接收 0x301 与 0x302（:608-632）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>云台板接收 0x303（:673-681）、发送 0x301（:496-520）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-0x301数据流"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-0x301数据流</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/03-上下板分工与CAN拓扑/02-0x301数据流.md</span></div><div class="dfile__body"><h1 id="0x301-遥控帧与跨板数据流">0x301 遥控帧与跨板数据流</h1>
+<p>两块板之间的业务数据只有三帧标准帧，其中 0x301 承担遥控通道的搬运。三帧的字节布局、发送与接收的源码位置、数据落到哪个全局量，以及底盘板接收分支里的落穿问题，都在下面。</p>
+<blockquote>
+<p>路径与行号取自云台板 <code>2026OmniSentryGimbal</code> 与底盘板 <code>2026OmniSentryChassis</code> 两棵源码树。CAN 外设配置与过滤器已由 <code>docs/03-CAN 与电机/01-CAN外设与过滤器/</code> 覆盖，这里不重复。</p>
+</blockquote>
+<h2 id="1-三帧的分工与载荷">1. 三帧的分工与载荷</h2>
+<p>板间报文的划分依据是数据流向与载荷类型，与 CAN 标识符段无关。三帧都是标准帧、DLC 8、数据区最多用到 7 字节。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>帧</th><th>方向</th><th>载荷</th><th>组装者</th><th>解析者</th></tr></thead><tbody><tr><td>0x301</td><td>云台板到底盘板</td><td>三个遥控通道与 s1</td><td>云台板 <code>BSP_CAN1_SendRemoteControlCmd</code></td><td>底盘板 <code>case 0x301</code></td></tr><tr><td>0x302</td><td>云台板到底盘板</td><td>imu_data.yaw 一个 float</td><td>云台板 <code>BSP_CAN1_SendImuData</code></td><td>底盘板 <code>case 0x302</code></td></tr><tr><td>0x303</td><td>底盘板到云台板</td><td>累计弹量与弹速</td><td>底盘板 <code>BSP_CAN1_SendReferee</code></td><td>云台板 <code>case 0x303</code></td></tr></tbody></table>
+<p>0x301 与 0x302 都在云台板 ControlCenterTask 的同一个 1 ms 循环里发出，底盘板在 CAN 中断里解析。0x303 反向，底盘板 ControlCenterTask 发出，云台板 CAN 中断解析。三条帧的接收侧都在中断里，写全局量之后由本板任务读取，中间没有队列。</p>
+<h2 id="2-0x301-的字节布局与编码">2. 0x301 的字节布局与编码</h2>
+<p>0x301 用大端序装三个有符号 16 位通道，第 7 字节放开关，第 8 字节没有赋值。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字节</th><th>内容</th><th>编码</th></tr></thead><tbody><tr><td>0 到 1</td><td>X，来自 <code>dbus.ch[2]</code></td><td>高字节在前，有符号 16 位</td></tr><tr><td>2 到 3</td><td>Y，来自 <code>dbus.ch[3]</code></td><td>高字节在前，有符号 16 位</td></tr><tr><td>4 到 5</td><td>Z，来自 <code>dbus.ch[4]</code></td><td>高字节在前，有符号 16 位</td></tr><tr><td>6</td><td>s1</td><td>原始 8 位</td></tr><tr><td>7</td><td>未赋值</td><td>未定义，接收侧不解析</td></tr></tbody></table>
+<p>大端序的写法是先把高字节写在前面，接收侧按同样顺序拼回：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi><mo>=</mo><mo stretchy="false">(</mo><mi>R</mi><mi>x</mi><mi>D</mi><mi>a</mi><mi>t</mi><mi>a</mi><mo stretchy="false">[</mo><mn>0</mn><mo stretchy="false">]</mo><mo>≪</mo><mn>8</mn><mo stretchy="false">)</mo><mtext> </mtext><mi mathvariant="normal">∣</mi><mtext> </mtext><mi>R</mi><mi>x</mi><mi>D</mi><mi>a</mi><mi>t</mi><mi>a</mi><mo stretchy="false">[</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">X = (RxData[0] \ll 8)\ \vert\ RxData[1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal">x</span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal">a</span><span class="mopen">[</span><span class="mord">0</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≪</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">8</span><span class="mclose">)</span><span class="mspace"> </span><span class="mord">∣</span><span class="mspace"> </span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal">x</span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal">a</span><span class="mopen">[</span><span class="mord">1</span><span class="mclose">]</span></span></span></span></p>
+<p>有符号 16 位的范围是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>32768</mn></mrow><annotation encoding="application/x-tex">-32768</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">32768</span></span></span></span> 到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>32767</mn></mrow><annotation encoding="application/x-tex">32767</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">32767</span></span></span></span>，遥控通道的原始摇杆量落在该范围内，不会溢出。发送侧的填充语句，云台板与底盘板两份实现完全相同：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#24292E">TxHeader.StdId </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">301</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">TxHeader.DLC </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> X </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> X;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Y </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">3</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Y;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">4</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Z </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">5</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Z;</span></span>
+<span class="line"><span style="color:#24292E">TxData[</span><span style="color:#005CC5">6</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> s2;</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#6F42C1"> HAL_CAN_AddTxMessage</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">hcan1, </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">TxHeader, TxData, </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">TxMailbox);</span></span></code></pre>
+<p><code>TxData[6]</code> 在函数里由参数 <code>s2</code> 赋值，调用点传的是 <code>dbus.s1</code>。第 8 字节没有出现在代码里，DLC 仍写 8，接收侧不读它，因此不构成数据问题，只是载荷实际只用了 7 字节。</p>
+<p>底盘板只有一份 0x301 的发送实现，位于 <code>BSP/Src/bsp_can.cpp:462-485</code>，但仓内没有调用点；实际发送者是云台板 <code>BSP/Src/bsp_can.cpp:497-520</code>。</p>
+<h2 id="3-强制-s1-与两路-dbus-的竞争">3. 强制 s1 与两路 dbus 的竞争</h2>
+<p>云台板在发 0x301 之前把 <code>dbus.s1</code> 写成 3（<code>Task/Src/ControlCenterTask.cpp:108</code>），发送语句紧接着取这个值（<code>:109</code>）。底盘板收到后写进 <code>dbus.s1</code>（<code>BSP/Src/bsp_can.cpp:612</code>），于是底盘板读到的 s1 恒为 3，对应 <code>ControlTarget::MODE_AI</code>。</p>
+<p>底盘板自身也在 USART3 上解 DBUS（<code>Core/Src/main.c:131</code>），<code>dbus_decode</code> 会把 18 字节帧里的真实 s1 写进同一个 <code>dbus.s1</code>（<code>Communication/Src/dbus.cpp:22</code>）。两个写者一个在 USART3 中断、一个在 CAN1 中断，中断优先级都是 5（<code>Core/Src/usart.c:198</code>、<code>Core/Src/can.c:125</code>），同优先级不能互相抢占，所以两次写整字节不会撕裂，但最终值取决于最后一个到达的中断。若底盘板接有接收机，实际开关值由接收机的帧决定；若没有，s1 恒为 3。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant GT as 云台板 ControlCenterTask 1 ms
+  participant CAN as CAN1 共享段
+  participant CI as 底盘板 CAN1 RX 中断 优先级 5
+  participant CD as 底盘板 dbus 全局
+  participant DB as 底盘板 USART3 DBUS 中断 优先级 5
+  GT->>GT: dbus.s1 置 3
+  GT->>CAN: 0x301 X Y Z s1
+  CAN->>CI: FIFO0 触发
+  CI->>CD: 写 ch2 ch3 ch4 s1
+  DB->>CD: 写 ch0 ch1 s1 s2
+  Note over CD: s1 的最终值由后到的中断决定</pre></div>
+<p>这张图说明的是分工边界上的一处语义重叠：开关值有两个来源，云台板强制为 3，本板接收机给真实值。判断底盘当前模式时不能只看 s1 的数值，要确认接收机是否在线。</p>
+<h2 id="4-底盘板-0x301-分支的落穿">4. 底盘板 0x301 分支的落穿</h2>
+<p>底盘板的 0x301 分支没有 <code>break</code>，执行完会直接进入下一个 <code>case 0x302</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">case</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">301</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#24292E">    dbus.ch[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ((RxData[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">|</span><span style="color:#24292E"> RxData[</span><span style="color:#005CC5">1</span><span style="color:#24292E">]);</span></span>
+<span class="line"><span style="color:#24292E">    dbus.ch[</span><span style="color:#005CC5">3</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ((RxData[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">|</span><span style="color:#24292E"> RxData[</span><span style="color:#005CC5">3</span><span style="color:#24292E">]);</span></span>
+<span class="line"><span style="color:#24292E">    dbus.ch[</span><span style="color:#005CC5">4</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ((RxData[</span><span style="color:#005CC5">4</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">|</span><span style="color:#24292E"> RxData[</span><span style="color:#005CC5">5</span><span style="color:#24292E">]);</span></span>
+<span class="line"><span style="color:#24292E">    dbus.s1    </span><span style="color:#D73A49">=</span><span style="color:#24292E">   RxData[</span><span style="color:#005CC5">6</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">case</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">302</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#6A737D">    // 把 RxData[0..3] 当 float 还原</span></span>
+<span class="line"><span style="color:#24292E">    gimbal_yaw_angle </span><span style="color:#D73A49">=</span><span style="color:#24292E"> temp;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>于是每收到一帧 0x301，接收中断都会额外把它的前 4 字节按 float 解释并写进 <code>gimbal_yaw_angle</code>，得到一个无意义的数。云台板随后发出的 0x302 帧会覆盖这个值；若 0x302 丢帧，污染值保留到下一帧。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["case 0x301 命中"] --> B["写 dbus.ch2 ch3 ch4 与 s1"]
+  B --> C{"有 break"}
+  C -->|无| D["落入 case 0x302"]
+  D --> E["RxData 0 到 3 当 float"]
+  E --> F["写 gimbal_yaw_angle"]
+  F --> G["底盘板后续只转成 gimbal_yaw_radians"]
+  G --> H["该变量在任务内无读点"]</pre></div>
+<p>落穿与丢帧的叠加效应是排查时容易误判的地方：断点停在接收回调里看到的 <code>gimbal_yaw_angle</code> 跳变，来源可能是 0x301 落穿，也可能是 0x302 解码错误，要按帧计数分开确认。</p>
+<h2 id="5-0x302-的落点与下游">5. 0x302 的落点与下游</h2>
+<p>底盘板 <code>gimbal_yaw_angle</code> 定义在 <code>BSP/Src/bsp_can.cpp:22</code>，在 CAN 中断里被写。底盘板唯一的下游使用点是 <code>Task/Src/ControlCenterTask.cpp:104</code>，把角度转成弧度存进 <code>gimbal_yaw_radians</code>；该变量在任务内没有后续读点，0x302 的数据实际不参与底盘控制。</p>
+<p>云台板的 0x302 组装位置是 <code>BSP/Src/bsp_can.cpp:521-555</code>，调用点在 <code>Task/Src/ControlCenterTask.cpp:110</code>，传入 <code>imu_data.yaw</code> 与一个常量。float 按大端装 4 字节，接收侧按同样顺序拼回。由于下游无读点，这一帧目前只起到覆盖落穿污染值的作用。</p>
+<h2 id="6-0x303-的字节序与落点">6. 0x303 的字节序与落点</h2>
+<p>底盘板把 <code>TotalAmmoShooted</code> 与 <code>g_referee_info.bullet_speed</code> 装进 0x303（<code>BSP/Src/bsp_can.cpp:488-518</code>），弹量用大端 16 位、弹速用本机字节序 32 位，第 6 到 7 字节补 0。云台板解析后写 <code>TotalAmmoShooted</code> 与 <code>AmmoSpeed</code>（<code>BSP/Src/bsp_can.cpp:673-681</code>），再由 UsbConnectTask 转发给视觉（<code>Task/Src/UsbConnectTask.cpp:138-139</code>）。弹速的字节序两端一致，弹量按大端装、按大端收。</p>
+<p>同一帧里两种字节序并存，是按字段逐个定的：弹量有明确的高低位语义，弹速直接按内存布局拷贝。核对数据时要把每个字段的编码单独记，不能按帧统一假设。</p>
+<h2 id="7-三个环节的源码位置">7. 三个环节的源码位置</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>位置</th><th>说明</th></tr></thead><tbody><tr><td>0x301 组装</td><td>云台板 <code>BSP/Src/bsp_can.cpp:497-520</code></td><td>只写 7 字节，DLC 8</td></tr><tr><td>0x301 调用</td><td>云台板 <code>Task/Src/ControlCenterTask.cpp:108-109</code></td><td>先改 s1 再发</td></tr><tr><td>0x301 解析</td><td>底盘板 <code>BSP/Src/bsp_can.cpp:608-613</code></td><td>缺 break</td></tr><tr><td>0x302 组装</td><td>云台板 <code>BSP/Src/bsp_can.cpp:521-555</code></td><td>float 大端</td></tr><tr><td>0x302 调用</td><td>云台板 <code>Task/Src/ControlCenterTask.cpp:110</code></td><td>传 imu_data.yaw 与 0</td></tr><tr><td>0x302 解析</td><td>底盘板 <code>BSP/Src/bsp_can.cpp:614-632</code></td><td>写 gimbal_yaw_angle</td></tr><tr><td>0x303 组装</td><td>底盘板 <code>BSP/Src/bsp_can.cpp:488-518</code></td><td>弹量大端、弹速本机序</td></tr><tr><td>0x303 调用</td><td>底盘板 <code>Task/Src/ControlCenterTask.cpp:127</code></td><td>传弹量与 <code>g_referee_info.bullet_speed</code></td></tr><tr><td>0x303 解析</td><td>云台板 <code>BSP/Src/bsp_can.cpp:673-681</code></td><td>写 AmmoSpeed 与 TotalAmmoShooted</td></tr><tr><td>发送返回</td><td>两个调用点都未检查</td><td>mailbox 满时丢帧无记录</td></tr></tbody></table>
+<p>两板的发送函数返回 <code>HAL_CAN_AddTxMessage</code> 的状态，但调用点都按语句直接调用，没有记录返回值。mailbox 满或总线错误导致的丢帧不会留下任何计数，只能靠外部手段观察。三帧中 0x301 与 0x302 相邻发送，mailbox 只有三个，正常负载下够用；总线错误时先丢的也是这两帧。</p>
+<h2 id="8-三帧相关的易错点">8. 三帧相关的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>认为 0x301 有完整 8 字节载荷</td><td>把第 8 字节当有效数据去解</td><td>组装处只写 <code>TxData[0..6]</code>，见 <code>bsp_can.cpp:510-516</code></td></tr><tr><td>忽略底盘板的落穿</td><td>排查 gimbal_yaw_angle 跳变时找不到来源</td><td><code>case 0x301</code> 到 <code>case 0x302</code> 之间无 <code>break</code>，<code>bsp_can.cpp:608-614</code></td></tr><tr><td>认为 s1 来自云台板遥控器</td><td>在云台板上找真实开关值</td><td>云台板 <code>:108</code> 先把它改成 3</td></tr><tr><td>认为底盘板遥控通道全来自 0x301</td><td>解释不了 ch0 与 ch1 的值</td><td>0x301 只带 ch2、ch3、ch4，见 <code>bsp_can.cpp:609-611</code></td></tr><tr><td>把 0x302 当底盘控制输入</td><td>在底盘板上找角度闭环</td><td>gimbal_yaw_radians 无读点，见 <code>ControlCenterTask.cpp:104</code></td></tr><tr><td>认为两板各有各的 0x301 发送者</td><td>找底盘板的调用点找不到</td><td>底盘板实现无调用点，只有云台板在用</td></tr><tr><td>忽略弹速的字节序</td><td>按大端还原 0x303 的 float</td><td>组装用本机序，见 <code>bsp_can.cpp:505-510</code></td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>板间业务帧三条：0x301 与 0x302 由云台板发往底盘板，0x303 反向。</li>
+<li>0x301 大端装 ch2、ch3、ch4 与 s1，第 7 字节不赋值。</li>
+<li>云台板发送前把 s1 改成 3，底盘板默认进入 MODE_AI。</li>
+<li>底盘板 0x301 分支缺少 break，会落穿到 0x302 污染 gimbal_yaw_angle。</li>
+<li>底盘板 gimbal_yaw_angle 的下游只有一个无读点的 gimbal_yaw_radians。</li>
+<li>发送状态无人检查，丢帧不可见。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>遥控搬运</td><td>用 CAN 复传三个通道</td><td>底盘板无需接收机</td><td>通道数固定，扩展要改协议</td></tr><tr><td>开关语义</td><td>云台板强制 s1 为 3</td><td>底盘板默认走 AI 模式</td><td>与真实遥控器值冲突，依赖中断到达顺序</td></tr><tr><td>角度传递</td><td>单独一帧 0x302</td><td>载荷类型清晰</td><td>增加一帧负载，且下游未使用</td></tr><tr><td>弹速编码</td><td>本机字节序直传</td><td>组装简单</td><td>与 0x301 的大端风格不一致</td></tr></tbody></table>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 0x301 第 0 到 6 字节各放什么，说明第 7 字节为什么可以是任意值。</li>
+<li>底盘板收到一帧 0x301 时 <code>gimbal_yaw_angle</code> 会怎样变化，为什么。</li>
+<li>写出 0x303 里弹量与弹速各自的字节序，并指出组装与解析的行号。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为 0x301 与 0x302 的发送点补上返回值检查，设计一个不阻塞发送路径的丢帧计数方案，说明计数放在哪个上下文里、由哪个任务上报。</li>
+</ol>
+<hr>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>0x301 与 0x302 组装（:496-555）、0x303 解析（:673-681）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>s1 置 3 与三帧调用点（:108-110）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>0x301 与 0x302 解析（:608-632）、0x303 组装（:488-518）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>0x303 调用点与 gimbal_yaw_radians（:104、:127）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Communication/Src/dbus.cpp</code></td><td>DBUS 解码写 dbus（:22）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>0x303 数据转发给视觉（:138-139）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp</code></td><td>底盘板 USB 接收 cmd（:82-93）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-跨板时序"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-跨板时序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/03-上下板分工与CAN拓扑/03-跨板时序.md</span></div><div class="dfile__body"><h1 id="跨板控制时序">跨板控制时序</h1>
+<p>两块板各有一个独立调度器，没有共享时基。跨板目标量从写出到被另一方读到，要经过任务循环、CAN 仲裁传输与接收中断三段。这三段的时间量级、相位关系与已知的 dt 不一致如下。</p>
+<blockquote>
+<p>两板 CAN1 都配置为 1 Mbit/s，位时间与采样点的推导见 <code>docs/03-CAN 与电机/05-拓扑与波特率/</code>。路径与行号取自 <code>2026OmniSentryGimbal</code> 与 <code>2026OmniSentryChassis</code> 两棵源码树。</p>
+</blockquote>
+<h2 id="1-端到端时序由三段合成">1. 端到端时序由三段合成</h2>
+<p>跨板时序由三部分合成：生产者的循环周期决定它多久写一次，CAN 传输决定一帧在线上占多久，消费者的循环周期决定它多久取一次。三者相乘才是一次端到端延迟的量级。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>典型耗时</th><th>决定因素</th></tr></thead><tbody><tr><td>生产者在循环里执行到发送语句</td><td>0 到 1 个循环周期</td><td>任务周期与循环内位置</td></tr><tr><td>CAN 仲裁与传输</td><td>约 111 到 135 us</td><td>帧位数与 1 Mbit/s 位速率</td></tr><tr><td>接收中断写入全局量</td><td>数微秒</td><td>中断优先级与帧长度</td></tr><tr><td>消费者执行到读取语句</td><td>0 到 1 个循环周期</td><td>任务周期与循环内位置</td></tr></tbody></table>
+<p>没有时间戳，接收侧无法判断拿到的值是哪一拍写的。跨板延迟的上界等于两个任务周期之和再加一帧传输时间。三段里只有 CAN 传输是确定量，另外两段由调度相位决定，实际延迟在上下界之间波动。</p>
+<p>拆成三段的好处是每段都有独立的判据。生产段看发送语句在循环里的位置，传输段看帧位数与位速率，消费段看读取语句与循环末尾的距离。三段里任何一段出现额外等待，都要单独定位，不能只看端到端时间。</p>
+<p>每段的核对顺序可以固定下来：</p>
+<ol>
+<li>生产段：找发送语句在任务函数里的行号，与循环末尾比较。</li>
+<li>传输段：用分析仪量同一标识符两帧之间的间隔。</li>
+<li>消费段：在接收中断与读取语句之间下断点，量时间差。</li>
+</ol>
+<h2 id="2-任务周期与定节奏语句">2. 任务周期与定节奏语句</h2>
+<p>两板的业务任务都由 <code>osDelay</code> 或 <code>DWT_Delay_ms</code> 定节奏，节拍是 1 ms（<code>Core/Inc/FreeRTOSConfig.h:64</code>）。任务优先级都取 <code>osPriorityNormal</code>，抢占打开、时间片未关闭，同优先级任务在每一个 tick 轮转。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>板</th><th>任务</th><th>周期</th><th>定节奏语句</th><th>源码</th></tr></thead><tbody><tr><td>云台板</td><td>ImuTask</td><td>1 ms</td><td><code>DWT_Delay_ms(1)</code></td><td><code>Task/Src/ImuTask.cpp:111</code></td></tr><tr><td>云台板</td><td>FireTask</td><td>1 ms</td><td><code>osDelay(1)</code></td><td><code>Task/Src/FireTask.cpp:70</code></td></tr><tr><td>云台板</td><td>GimbalTask</td><td>2 ms</td><td><code>osDelay(2)</code></td><td><code>Task/Src/GimbalTask.cpp:100</code></td></tr><tr><td>云台板</td><td>ControlCenterTask</td><td>1 ms</td><td><code>osDelay(1)</code></td><td><code>Task/Src/ControlCenterTask.cpp:111</code></td></tr><tr><td>云台板</td><td>UsbConnectTask</td><td>10 ms</td><td><code>osDelay(10)</code></td><td><code>Task/Src/UsbConnectTask.cpp:154</code></td></tr><tr><td>底盘板</td><td>ControlCenterTask</td><td>1 ms</td><td><code>osDelay(1)</code></td><td><code>Task/Src/ControlCenterTask.cpp:128</code></td></tr><tr><td>底盘板</td><td>ChassisTask</td><td>1 ms</td><td><code>osDelay(1)</code></td><td><code>Task/Src/ChassisTask.cpp:94</code></td></tr><tr><td>底盘板</td><td>UsbConnectTask</td><td>10 ms</td><td><code>osDelay(10)</code></td><td><code>Task/Src/UsbConnectTask.cpp:174</code></td></tr></tbody></table>
+<p><code>osDelay</code> 的实参是 tick 数，1 ms 节拍下即毫秒。云台板 ControlCenterTask 在同一循环里发 0x301 与 0x302（<code>Task/Src/ControlCenterTask.cpp:109-110</code>），两条语句相邻，所以两帧在同一拍产生，0x301 先入 mailbox。</p>
+<p>云台板 ImuTask 用忙等而不是阻塞延时，它在自己的 1 ms 周期里一直占着 CPU，只有 tick 中断与更高优先级中断能让它停下。这一点对时序的影响是：ImuTask 的循环边界不落在阻塞点，采样相位与其它任务不同步。</p>
+<p><code>osDelay</code> 的实参在 1 ms 节拍下就是毫秒数，但延时长度只保证“不少于”这个时间，实际唤醒点落在下一个 tick 边界上，误差为 0 到 1 个 tick。写 2 ms 的任务平均周期是 2 ms，单次抖动仍可达 1 ms。</p>
+<h2 id="3-中断优先级与抢占关系">3. 中断优先级与抢占关系</h2>
+<p>接收侧的处理都在中断里。CAN1 RX0 优先级为 5（<code>Core/Src/can.c:125</code>），USART3 的 DBUS 接收同为 5（<code>Core/Src/usart.c:198</code>），DMA 流也配 5（<code>Core/Src/dma.c:48</code>）。FreeRTOS 允许调用中断安全 API 的优先级门槛也是 5（<code>Core/Inc/FreeRTOSConfig.h:110</code>）。</p>
+<p>同优先级的这几个中断不能互相抢占：CAN1 中断执行期间到达的 USART3 中断会挂起等待，反之亦然。任务线程模式下任何中断都能抢占任务，所以 CAN 中断写全局量的时刻不受任务调度影响。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant GT as 云台板 ControlCenterTask
+  participant BUS as CAN1 1 Mbit/s
+  participant CI as 底盘板 CAN1 RX 中断 优先级 5
+  participant CT as 底盘板 ControlCenterTask
+  GT->>GT: 循环执行到第 109 行 写 s1
+  GT->>BUS: 0x301 入 mailbox 约 111 us
+  BUS->>CI: 帧结束触发 FIFO0
+  CI->>CI: 写 dbus.ch2 ch3 ch4 s1
+  GT->>BUS: 0x302 入 mailbox 约 128 us
+  BUS->>CI: 写 gimbal_yaw_angle
+  Note over CI,CT: 中断完成前任务无法取到新值
+  CT->>CT: 本循环读 dbus 与 gimbal_yaw_angle</pre></div>
+<p>图里 0x301 与 0x302 的线上时间不同，原因在数据场内容导致的填充位差异，两者都在百微秒量级。中断把值写进全局量之后，消费者任务要等下一次被调度才能读到，这段时间由底盘板自己的节拍决定。</p>
+<p>中断与任务的关系是单向的：中断能随时打断任务，任务只能在中断返回后继续。所以接收侧数据更新的时间点由帧到达决定，而消费侧读取的时间点由任务节拍决定，两者之间没有握手。</p>
+<h2 id="4-帧线上时间与延迟上界">4. 帧线上时间与延迟上界</h2>
+<p>标准帧在 1 Mbit/s 上的传输时间由帧位数除以位速率得到。帧位数包括帧起始、仲裁场、控制场、数据场、CRC 场、应答场与帧结束，数据场 8 字节时总位数在 111 到 135 位之间（按填充位数量变化）：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>f</mi></msub><mo>=</mo><mfrac><msub><mi>N</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mrow><mn>1</mn><mtext> Mbit/s</mtext></mrow></mfrac><mo separator="true">,</mo><mspace width="2em"></mspace><mn>111</mn><mo>≤</mo><msub><mi>N</mi><mrow><mi>b</mi><mi>i</mi><mi>t</mi></mrow></msub><mo>≤</mo><mn>135</mn></mrow><annotation encoding="application/x-tex">T_f = \frac{N_{bit}}{1\ \text{Mbit/s}}, \qquad 111 \le N_{bit} \le 135</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4142em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8942em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">Mbit/s</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4159em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.109em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">111</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">bi</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">135</span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mrow><mi>f</mi><mo separator="true">,</mo><mi>min</mi><mo>⁡</mo></mrow></msub><mo>=</mo><mfrac><mn>111</mn><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>0.111</mn><mtext> ms</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>T</mi><mrow><mi>f</mi><mo separator="true">,</mo><mi>max</mi><mo>⁡</mo></mrow></msub><mo>=</mo><mfrac><mn>135</mn><msup><mn>10</mn><mn>6</mn></msup></mfrac><mo>=</mo><mn>0.135</mn><mtext> ms</mtext></mrow><annotation encoding="application/x-tex">T_{f,\min} = \frac{111}{10^6} = 0.111\ \text{ms}, \qquad T_{f,\max} = \frac{135}{10^6} = 0.135\ \text{ms}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mpunct mtight">,</span><span class="mop mtight"><span class="mtight">m</span><span class="mtight">i</span><span class="mtight">n</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">111</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord">0.111</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="mpunct mtight">,</span><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight"><span class="mord mtight">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">135</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.135</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span></span></span></span></p>
+<p>设生产者周期为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>w</mi></msub></mrow><annotation encoding="application/x-tex">T_w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、消费者周期为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>r</mi></msub></mrow><annotation encoding="application/x-tex">T_r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、一帧线上时间为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>f</mi></msub></mrow><annotation encoding="application/x-tex">T_f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>。从生产者在某一拍写完载荷，到消费者把它取走，延迟 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 落在</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mo>&#x3C;</mo><mi>d</mi><mo>&#x3C;</mo><msub><mi>T</mi><mi>w</mi></msub><mo>+</mo><msub><mi>T</mi><mi>f</mi></msub><mo>+</mo><msub><mi>T</mi><mi>r</mi></msub></mrow><annotation encoding="application/x-tex">0 &#x3C; d &#x3C; T_w + T_f + T_r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6835em;vertical-align:-0.0391em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.0391em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>取云台板与底盘板都是 1 ms、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>f</mi></msub><mo>≈</mo><mn>0.111</mn><mtext> ms</mtext></mrow><annotation encoding="application/x-tex">T_f \approx 0.111\ \text{ms}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.111</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span></span></span></span>，上界约 2.1 ms，下界接近 0.14 ms。实际值取决于两个独立调度器的相位，相位差每拍漂移，延迟随相位变化。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["云台板任务周期 Tw 1 ms"] --> B["0x301 线上时间 Tf 约 0.111 ms"]
+  B --> C["底盘板 RX 中断 数微秒"]
+  C --> D["底盘板任务周期 Tr 1 ms"]
+  D --> E["端到端上界 约 2.1 ms"]
+  F["两板无共享时基"] --> G["相位每拍漂移"]
+  G --> E</pre></div>
+<p>两个独立调度器的相位漂移不会收敛。两板的 tick 由各自的晶振产生，频率偏差在百万分之几十的量级，运行几分钟后两板任务相位差可以差出任意值。按一个固定延迟做相位补偿，只在短时间内近似成立。</p>
+<p>总线负载还会给传输段加一项等待时间。mailbox 只有三个，若同一拍内要发的帧多于它，后到的帧要等前面发完；仲裁失败时同样要重试。0x301 与 0x302 在同一拍发出，正常情况下两个 mailbox 够用，总线拥塞时这一项会显著大于 0.111 ms。</p>
+<h2 id="5-dt-与实际周期不一致">5. dt 与实际周期不一致</h2>
+<p>PID 的微分与积分项都按调用者传入的 dt 计算，dt 与真实周期不一致会改变等效增益。三处已知不一致：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>任务</th><th>传入 dt</th><th>实际周期</th><th>后果</th></tr></thead><tbody><tr><td>底盘板 ChassisTask</td><td>0.01 s</td><td>1 ms</td><td>积分与微分按 10 倍时间尺度计算</td></tr><tr><td>云台板 GimbalTask</td><td>0.001 s</td><td>2 ms</td><td>积分与微分按半速计算</td></tr><tr><td>云台板 FireTask</td><td>0.01 s</td><td>1 ms</td><td>积分与微分按 10 倍时间尺度计算</td></tr></tbody></table>
+<p>底盘板 ChassisTask 的 dt 在 <code>Task/Src/ChassisTask.cpp:20</code>，循环在 <code>:94</code>；云台板 GimbalTask 的 dt 在 <code>Task/Src/GimbalTask.cpp:37</code>，循环在 <code>:100</code>。这两处是代码事实，对控制效果的影响属按控制原理的推断，需在整定参数时一并核对。</p>
+<p>dt 偏大 10 倍时，积分项的等效增益放大 10 倍，阶跃响应会更快也更容易超调；dt 偏小一半时，积分增益减半，同样的参数下响应变慢。改动任务周期时要同时改 dt，两者是绑定的两个数。</p>
+<p>三处不一致里有两处是 10 倍关系，一处在控制中心任务里读起来像是从 10 ms 周期改到 1 ms 时漏改的。核对流程可以固定成：先确认循环的 <code>osDelay</code> 实参，再找构造 PID 时传入的 dt，两者不一致就记一条。</p>
+<h2 id="6-两帧的发送顺序与启动相位">6. 两帧的发送顺序与启动相位</h2>
+<p>云台板先发 0x301 再发 0x302，两条语句相邻。同一条总线上的仲裁按标识符数值决胜，0x301 小于 0x302，即使两帧同时待发也是 0x301 先上总线。接收侧因此总是先处理 0x301 再处理 0x302，落穿污染发生在覆盖之前。</p>
+<p>底盘板 ControlCenterTask 在进入循环前先延时 100 ms（<code>Task/Src/ControlCenterTask.cpp:49</code>），随后用 <code>yaw_motor_5.total_angle</code> 记录初值（<code>:50-51</code>）。该结构体由 0x205 的接收中断填充，若 100 ms 内没有收到 yaw 电机的反馈帧，初值取到的是零初始化值。这属于启动相位的推断，是否实际发生取决于上电时电机反馈的到达时刻，待现场确认。</p>
+<p>启动相位问题只在第一次进入循环时出现，进入稳态后初值被真实反馈覆盖，所以排查时要看第一拍。</p>
+<h2 id="7-usb-时基不会成为瓶颈">7. USB 时基不会成为瓶颈</h2>
+<p>云台板 UsbConnectTask 用 <code>HAL_GetTick()</code> 判断 10 ms 发送间隔（<code>Task/Src/UsbConnectTask.cpp:107-110</code>），底盘板 UsbConnectTask 直接 <code>osDelay(10)</code>（<code>Task/Src/UsbConnectTask.cpp:174</code>）。两条 USB 链路的节拍都远慢于板间 CAN，不会成为跨板目标量的瓶颈。</p>
+<p>需要注意的地方是两条 USB 链路都承载着间接观测跨板数据的能力：云台板把 0x303 的弹速与弹量转发给视觉，底盘板把 yaw 电机角度回传。它们的 10 ms 节拍会限制观测分辨率，判断板间帧是否按 1 ms 到达时不能只看 USB 通路。</p>
+<p>两条 USB 通路的对端也是不同的小电脑：云台板对视觉，底盘板对导航。观测跨板数据时优先用 CAN 分析仪直接看共享段，USB 通路只作为业务侧是否收到数据的旁证。</p>
+<h2 id="8-时序相关的易错点">8. 时序相关的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把跨板延迟当固定值</td><td>按 2 ms 补偿相位，现场对不上</td><td>两个独立调度器，无共享时基</td></tr><tr><td>按 1 ms 估计所有任务</td><td>漏掉 GimbalTask 的 2 ms 与 USB 的 10 ms</td><td><code>GimbalTask.cpp:100</code>、<code>UsbConnectTask.cpp:154</code></td></tr><tr><td>认为中断会被任务延迟</td><td>担心任务长时占 CPU 时收不到帧</td><td>中断优先级 5，可抢占任务</td></tr><tr><td>忽略同优先级中断的串行化</td><td>以为 CAN 与 DBUS 中断能互相抢占</td><td>两者优先级都是 5</td></tr><tr><td>用循环注释判断周期</td><td>把 <code>1ms控制周期</code> 的注释当事实</td><td>以 <code>osDelay</code> 实参为准</td></tr><tr><td>忽略 dt 与周期不一致</td><td>PID 整定后现场行为不同</td><td><code>ChassisTask.cpp:20</code>、<code>GimbalTask.cpp:37</code></td></tr><tr><td>认为 0x301 与 0x302 可能乱序</td><td>分析落穿与覆盖的先后关系时假设错</td><td>同节点顺序发送，0x301 标识符更小</td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>跨板延迟由生产周期、帧传输时间与消费周期三段叠加，无共享时基。</li>
+<li>两板 CAN1 为 1 Mbit/s，8 字节标准帧线上时间约 111 到 135 us。</li>
+<li>业务任务周期为 1 ms 或 2 ms，USB 任务 10 ms。</li>
+<li>CAN 与 USART 中断优先级都是 5，互相不可抢占，都能抢占任务。</li>
+<li>端到端延迟上界约 2.1 ms，实际值随相位漂移。</li>
+<li>三处 PID 传入的 dt 与真实循环周期不一致。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>板间同步</td><td>不做时间同步</td><td>实现简单</td><td>接收侧无法判断数据新鲜度</td></tr><tr><td>周期选择</td><td>业务任务统一 1 ms</td><td>相位简单</td><td>与 10 ms 的 USB 任务无整数倍对齐</td></tr><tr><td>中断优先级</td><td>接收类中断统一为 5</td><td>无嵌套，行为可预测</td><td>高负载时 DBUS 与 CAN 互相排队</td></tr><tr><td>PID 时基</td><td>由调用者传 dt</td><td>任务与算法解耦</td><td>周期改动时容易漏改 dt</td></tr></tbody></table>
+<p>时序问题定位完成后，把结论写成三个数：生产段位置、传输段实测间隔、消费段位置。三个数对应三段，缺一个说明还有一段没有核对。</p>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>给定标准帧 120 位、位速率 1 Mbit/s，计算线上时间。</li>
+<li>写出跨板延迟的上界表达式，并代入两板 1 ms 周期与 0x301 的线上时间求数值。</li>
+<li>找出三处 dt 与周期不一致的位置，写出各自的实际周期。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为 0x301 增加一个 1 字节的发送序号，设计接收侧的收包间隔统计与断流判据，说明序号会如何影响 0x301 的载荷布局与底盘板解析代码。</li>
+</ol>
+<hr>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>1 ms 循环与两帧发送（:109-111）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp</code></td><td>2 ms 循环与 dt（:37、:100）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/FireTask.cpp</code></td><td>1 ms 循环与 dt（:47、:70）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>1 ms 循环与启动延时（:49-51、:128）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ChassisTask.cpp</code></td><td>1 ms 循环与 dt（:20、:94）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>CAN1 RX0 中断优先级 5（:125）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Inc/FreeRTOSConfig.h</code></td><td>节拍 1000 Hz 与中断门槛 5（:64、:110）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-单板失效与降级"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-单板失效与降级</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/03-上下板分工与CAN拓扑/04-单板失效与降级.md</span></div><div class="dfile__body"><h1 id="单板失效与降级">单板失效与降级</h1>
+<p>两块板通过一段共享 CAN1 交换目标量，任何一侧停摆都会让对方读到不再更新的旧值。按失效对象分类之后，每类失效下的数据残留、执行器行为与固件里缺的检测点如下。</p>
+<blockquote>
+<p>路径与行号取自 <code>2026OmniSentryGimbal</code> 与 <code>2026OmniSentryChassis</code> 两棵源码树。总线分段见 <code>docs/03-CAN 与电机/05-拓扑与波特率/</code>。</p>
+</blockquote>
+<h2 id="1-三类失效的边界">1. 三类失效的边界</h2>
+<p>失效的表现取决于失效点是哪一块板还是整段总线。三类的边界很清晰：单板失效只影响它发出的帧，共享段失效同时切断电机反馈与板间报文。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>失效对象</th><th>丢失的帧</th><th>仍然可用的数据</th><th>是否有检测</th></tr></thead><tbody><tr><td>云台板停摆</td><td>0x301、0x302</td><td>底盘板本地 DBUS、CAN2 轮速、yaw 电机反馈</td><td>无</td></tr><tr><td>底盘板停摆</td><td>0x303</td><td>云台板本地 IMU、CAN1 电机反馈</td><td>无</td></tr><tr><td>CAN1 共享段断开</td><td>0x205、0x206、0x181、板间三帧</td><td>两条 CAN2 各自独立</td><td>无</td></tr><tr><td>CAN 控制器 bus-off</td><td>本控制器的全部收发</td><td>另一路 CAN 与串口</td><td>无错误回调</td></tr></tbody></table>
+<p>没有任何一帧携带序号或时间戳，接收侧拿到的值与它写入的时刻之间没有可比较的信息。因此固件无法区分数据新鲜与陈旧。三类失效在代码层的共同点是：接收分支只做覆盖写，没有到达计数，也没有最后到达时刻。</p>
+<p>按失效对象分类而不是按现象分类，是因为同一个现象可能来自不同失效点。底盘不动既可能是云台板停发 0x301，也可能是 CAN1 断开，还可能是底盘板自身任务卡死；先定失效对象，再沿该对象的帧与写点查下去。</p>
+<h2 id="2-云台板停摆后底盘读到什么">2. 云台板停摆后底盘读到什么</h2>
+<p>云台板是 0x301 与 0x302 的唯一发送者。它停摆后，底盘板的接收分支不再被触发，四个字段保持最后一次写入的值：<code>dbus.ch[2]</code>、<code>dbus.ch[3]</code>、<code>dbus.ch[4]</code>、<code>dbus.s1</code>，以及被落穿的 <code>gimbal_yaw_angle</code>。</p>
+<p>底盘板任务继续以 1 ms 循环读这些旧值，速度指令不会归零。若底盘板接有接收机，它的 USART3 中断会继续用真实遥控值覆盖 <code>dbus</code> 的同一批字段，此时降级表现为遥控直控；若没有接收机，<code>dbus.s1</code> 停在 3，底盘板停在 MODE_AI，改由 USB 的 <code>cmd.speed</code> 决定速度。</p>
+<p>云台板自身停摆的原因不同，表现也不同：任务卡死时 USB 设备仍可能处于配置状态，视觉侧看不出异常；整板掉电时 USB 会断开，视觉侧能通过枚举状态发现。两种情形在底盘板侧都没有区别，都是 0x301 与 0x302 停止到达。</p>
+<p>云台板停摆后仍在本板运行的部分是它的执行器：yaw、pitch、摩擦轮、拨弹盘继续按最后写入的电流指令工作，直到电调自己的超时保护动作。这段时间内底盘板读到的是旧目标，两侧都在按旧值运行。</p>
+<p><code>vision_data</code> 在云台板上同样只增不减，视觉断流后 <code>control_target.gimbal_yaw_angle</code> 保持最后目标，云台继续指向旧方向。</p>
+<h2 id="3-底盘板停摆后云台读到什么">3. 底盘板停摆后云台读到什么</h2>
+<p>底盘板是 0x303 的唯一发送者。它停摆后云台板的 <code>TotalAmmoShooted</code> 与 <code>AmmoSpeed</code> 停在最后一次解析值，UsbConnectTask 仍以 10 ms 周期把这两个旧值转发给视觉。</p>
+<p>底盘板的停摆不把 yaw 电机从总线上移除，所以云台板侧的 0x205、0x206、0x181 与底盘板侧的 0x205 都照常收发。云台的 yaw、pitch、摩擦轮闭环不受影响，只有弹道相关的反馈变旧。</p>
+<p>这里有一处容易混淆的地方：底盘板停摆会让它自己的 0x303 停止，但共享 CAN1 上的电机帧仍由电调发出，与底盘板是否运行无关。判断“底盘板是否活着”不能只看总线上有没有 0x205，要看有没有 0x303，而 0x303 的接收侧在云台板。</p>
+<h2 id="4-can1-共享段断开的范围">4. CAN1 共享段断开的范围</h2>
+<p>CAN1 是两块板与 yaw、拨弹盘、pitch 电机共用的一段。这一段断开后，两端都收不到任何 CAN1 帧：云台板失去 yaw 与拨弹盘的转子反馈，底盘板失去 <code>yaw_motor_5</code> 的更新，底盘跟随时用的 <code>delta_angel</code> 停在旧值。两条 CAN2 各自独立，四轮速度环与摩擦轮速度环仍能拿到本段反馈。</p>
+<p>共享段断开的症状比单板停摆严重，因为它同时切断反馈与目标：云台板的 yaw 闭环失去反馈但仍按旧目标发电流，底盘板的跟随角停在旧值。排查时先看两条 CAN2 是否正常，若 CAN2 正常而 CAN1 无帧，问题在共享段或它的终端电阻。</p>
+<p>共享段断开还会让两块板都失去 yaw 电机反馈，这会同时影响云台 yaw 闭环与底盘跟随角。同一条反馈被两个控制器使用，是这段总线被共享的代价。</p>
+<h2 id="5-bus-off-与错误回调缺失">5. bus-off 与错误回调缺失</h2>
+<p>两颗 bxCAN 的接收完成靠 FIFO0 中断，错误状态没有注册回调。仓内没有 <code>HAL_CAN_ErrorCallback</code> 实现（全仓检索无匹配），所以错误计数溢出、进入 error passive 或 bus-off 都不会留下记录。发送侧 <code>HAL_CAN_AddTxMessage</code> 的返回值在调用点未检查，mailbox 满时静默丢帧。</p>
+<p>bus-off 与普通丢帧的区别在于恢复方式：普通丢帧随下一帧恢复，bus-off 后控制器退出总线，要按手册要求重新初始化才会参加通信。固件里没有恢复路径，所以 bus-off 表现为该控制器此后一直不收发，而外部只能看到“再也没有帧”。</p>
+<p>错误回调除了记录还能承担恢复逻辑：在回调里判断错误码是否包含 bus-off，若是则按手册流程重新初始化控制器。当前实现把这一步省掉了，现场只能靠复位整板恢复。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  F1["云台板停摆"] --> A1["0x301 0x302 停发"]
+  A1 --> A2["底盘板 dbus 四字段与 gimbal_yaw_angle 变旧"]
+  A2 --> A3["底盘板保持旧速度指令"]
+  F2["底盘板停摆"] --> B1["0x303 停发"]
+  B1 --> B2["云台板 AmmoSpeed 与 TotalAmmoShooted 变旧"]
+  B2 --> B3["视觉每 10 ms 收到旧弹速"]
+  F3["CAN1 共享段断开"] --> C1["两端都收不到 0x205 0x206 0x181"]
+  C1 --> C2["云台 yaw 与 pitch 闭环失去反馈"]
+  C1 --> C3["底盘跟随角停在旧值"]
+  C2 --> C4["两条 CAN2 仍可用"]
+  C3 --> C4
+  F4["CAN bus-off"] --> D1["无错误回调记录"]
+  D1 --> D2["发送失败无计数"]</pre></div>
+<h2 id="6-陈旧与新鲜的状态划分">6. 陈旧与新鲜的状态划分</h2>
+<p>固件不区分新鲜与陈旧，下面这张状态图按数据是否仍在更新来划分，用于给排查建立语言，不代表固件实现。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 新鲜
+  新鲜 --> 陈旧: 对端停发或总线断开
+  陈旧 --> 新鲜: 对端恢复且帧重新到达
+  陈旧 --> 陈旧: 无超时判据，状态不会自动转移
+  note right of 陈旧
+    固件不检测，读到的值无法与新鲜区分
+  end note</pre></div>
+<p>状态图里“陈旧到新鲜”的转移只发生在帧重新到达时，因为判据就是帧本身。要让它自动发生，需要在接收中断里记录到达时刻，再由任务比较时间差，这就是第 7 节列出的检测缺口。</p>
+<h2 id="7-固件里缺的检测点">7. 固件里缺的检测点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>失效点</th><th>关键写点</th><th>是否有超时或标志</th></tr></thead><tbody><tr><td>0x301 与 0x302 到达</td><td>底盘板 <code>BSP/Src/bsp_can.cpp:608-632</code></td><td>无计数、无时间戳</td></tr><tr><td>0x303 到达</td><td>云台板 <code>BSP/Src/bsp_can.cpp:673-681</code></td><td>无计数、无时间戳</td></tr><tr><td>云台板 USB 在线</td><td><code>Task/Src/UsbConnectTask.cpp:105</code></td><td>仅看 <code>USBD_STATE_CONFIGURED</code></td></tr><tr><td>底盘板 USB 接收时间</td><td><code>Task/Src/UsbConnectTask.cpp:134</code></td><td>记录 <code>last_receive_time</code>，无读取点</td></tr><tr><td>云台板 USB 断连检查</td><td><code>Task/Src/ControlCenterTask.cpp:54-57</code></td><td>空 if 块，无处理</td></tr><tr><td>CAN 错误</td><td>无 <code>HAL_CAN_ErrorCallback</code></td><td>全仓无实现</td></tr><tr><td>电机超时停转</td><td>由电调固件决定</td><td>按手册，未实测</td></tr></tbody></table>
+<p>底盘板 UsbConnectTask 在收到有效帧时更新 <code>last_receive_time</code>（<code>Task/Src/UsbConnectTask.cpp:134</code>），但该成员没有任何读取点，所以 USB 断流后 <code>cmd</code> 保持最后一份数据包。云台板 ControlCenterTask 里有一段以“检查 usb 是否断连”为注释的空分支（<code>Task/Src/ControlCenterTask.cpp:54-57</code>），没有实现。</p>
+<p>电机侧的行为属于电调固件范畴，本工程只负责不再发新指令。M3508 与 GM6020 在失去控制帧后的停止时间按厂商手册，具体数值待实测。</p>
+<p>检测点缺失的位置与可补的判据：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>缺口</th><th>可用的原始信息</th><th>可能的判据</th></tr></thead><tbody><tr><td>板间帧无新鲜度</td><td>0x301、0x302、0x303 的到达时刻</td><td>记录最后到达 tick，超时后置无效</td></tr><tr><td>云台板 USB 无断流判据</td><td><code>hUsbDeviceFS.dev_state</code></td><td>结合最后一帧解析时刻判断程序是否存活</td></tr><tr><td>底盘板 USB 无断流判据</td><td><code>last_receive_time</code> 已记录</td><td>在任务里读该成员并与 <code>HAL_GetTick()</code> 比较</td></tr><tr><td>CAN 错误无记录</td><td>无回调</td><td>注册 <code>HAL_CAN_ErrorCallback</code> 并累计错误码</td></tr></tbody></table>
+<p>这些判据在固件里都没有实现。加上以后，接收侧才能把旧值与新值区分开，进而做限速、归零或切回本地遥控。</p>
+<h2 id="8-降级动作的可选范围">8. 降级动作的可选范围</h2>
+<p>检测到失效之后，两块板可做的动作受各自职责限制。底盘板能改的是目标速度：把它归零、限速或切回本地遥控。云台板能改的是目标角度与发射相关标志：把目标角保持当前值或回到中位，把 <code>friction_ready</code> 与 <code>feeder_ready</code> 置零。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检测方</th><th>失效对象</th><th>可执行动作</th><th>不能做的事</th></tr></thead><tbody><tr><td>底盘板</td><td>云台板停发</td><td>目标速度归零或切本地遥控</td><td>不能停云台电机</td></tr><tr><td>底盘板</td><td>CAN1 断开</td><td>停止跟随，速度归零</td><td>不能恢复总线</td></tr><tr><td>云台板</td><td>底盘板停发</td><td>停止转发弹道数据</td><td>不能停四轮</td></tr><tr><td>云台板</td><td>视觉断流</td><td>目标角保持或回中</td><td>不能确认视觉是否恢复</td></tr></tbody></table>
+<p>表里“不能做的事”说明降级动作只能在本板职责范围内生效。跨板停摆的完整处理需要两侧都做检测，只在一边做会留下另一侧继续按旧值运行。</p>
+<p>降级动作还要与状态恢复衔接：对端恢复后，本板需要从安全状态回到正常控制。若没有恢复判据，安全状态会一直保持到复位。设计时把检测与恢复成对考虑，两个判据用的是同一份到达时刻信息。</p>
+<h2 id="9-失效相关的易错点">9. 失效相关的易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>认为停板会自动失能</td><td>断开一块板后执行器仍保持旧输出</td><td>无使能握手，发送返回无人检查</td></tr><tr><td>认为底盘板停摆会丢 yaw 反馈</td><td>排查时以为云台 yaw 闭环失效</td><td>yaw 电机在共享 CAN1 上，与底盘板无关</td></tr><tr><td>认为共享段断开只影响板间报文</td><td>忽略电机反馈也在同一段</td><td><code>case 0x205</code>、<code>case 0x206</code> 都在 CAN1 分支</td></tr><tr><td>依赖 <code>USBD_STATE_CONFIGURED</code> 判断视觉存活</td><td>视觉程序崩了但 USB 仍枚举</td><td>状态位只表示设备配置完成</td></tr><tr><td>以为 USB 有超时</td><td>视觉断流后仍按旧目标运动</td><td><code>last_receive_time</code> 无读取点</td></tr><tr><td>把 bus-off 当普通丢帧</td><td>总线恢复前一直等新帧</td><td>无错误回调，控制器不自恢复</td></tr><tr><td>用 <code>dbus.s1</code> 判断遥控是否在线</td><td>s1 被云台板强制为 3</td><td>云台板 <code>ControlCenterTask.cpp:108</code></td></tr></tbody></table>
+<p>三类失效里，单板停摆可以靠帧到达时刻发现，共享段断开要靠两条 CAN 的对比发现，bus-off 只能靠错误回调发现。三种判据来源不同，不能互相替代。</p>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>三类失效：单板停摆、CAN1 共享段断开、控制器 bus-off。</li>
+<li>单板停摆表现为对端读到旧值，执行器保持最后指令。</li>
+<li>云台板停摆切断 0x301 与 0x302；底盘板停摆切断 0x303。</li>
+<li>共享段断开同时切断电机反馈与板间报文。</li>
+<li>固件无超时、无计数、无错误回调，新鲜度不可判。</li>
+<li>电机超时停转由电调决定，属手册范畴。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>失效检测</td><td>不实现</td><td>代码简单，无额外周期</td><td>单板失效后无法判新旧</td></tr><tr><td>使能握手</td><td>无</td><td>无额外状态机</td><td>停板不自动失能</td></tr><tr><td>CAN 错误处理</td><td>无回调</td><td>不使用中断资源</td><td>bus-off 无记录，恢复靠复位</td></tr><tr><td>USB 在线判据</td><td>只看设备状态位</td><td>一行实现</td><td>分不清设备在线与程序存活</td></tr></tbody></table>
+<p>失效分析的产出是一份对照表：失效对象、对端读到的量、本板可做的动作、恢复判据。四项齐了才算分析完整。</p>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>分别写出云台板停摆与底盘板停摆后，对端会读到哪些不再更新的全局量。</li>
+<li>说明 CAN1 共享段断开后两条 CAN2 为什么仍可用。</li>
+<li>找出固件里记录 USB 接收时间的成员，说明它为什么不能用于判断断流。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为两块板各设计一套降级策略：检测到对端停发后在 50 ms 内把本板相关执行器置为安全状态。给出检测点、阈值、动作与需要修改的文件，并说明策略在两板同时失效时的行为。</li>
+</ol>
+<hr>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>0x301 与 0x302 落点（:608-632）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>0x303 落点与 CAN1 电机反馈（:673-681、:629-671）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>USB 断连空检查与 s1 置 3（:54-57、:108）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>USB 设备状态判据（:105）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp</code></td><td>last_receive_time 仅写不读（:134）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp</code></td><td>跟随角使用旧值（:93-94、:104）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/09-嵌入式软件架构/03-上下板分工与CAN拓扑/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<p>跨板问题的定位要按层隔离：先确认帧是否存在，再确认载荷是否解对，最后确认消费者是否读到。这条顺序、工程内可用的观测手段及其实际可用状态如下，最后把本单元的易错点集中成一张表。</p>
+<blockquote>
+<p>路径与行号取自 <code>2026OmniSentryGimbal</code> 与 <code>2026OmniSentryChassis</code> 两棵源码树。CAN 抓包与示波器类手段属硬件操作，本文只给判据，未实测。</p>
+</blockquote>
+<h2 id="1-三层观测点与判据">1. 三层观测点与判据</h2>
+<p>跨板故障的观测点分布在三层，从下到上是物理段、帧层与数据层。层与层的判据互相独立，先确定哪一层出问题再往下看。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层</th><th>观测对象</th><th>可用的手段</th><th>能排除什么</th></tr></thead><tbody><tr><td>物理段</td><td>差分电平与终端电阻</td><td>示波器、万用表</td><td>接线断开、短路、终端缺失</td></tr><tr><td>帧层</td><td>0x301、0x302、0x303 是否在线上</td><td>CAN 分析仪、接收回调计数</td><td>发送点未执行、mailbox 丢帧</td></tr><tr><td>数据层</td><td><code>dbus</code>、<code>gimbal_yaw_angle</code>、<code>AmmoSpeed</code></td><td>调试器监视、转发到上位机</td><td>解码错位、落穿、消费者未读</td></tr></tbody></table>
+<p>工程内没有帧计数器，也没有错误回调，帧层的判据只能靠外部分析仪或临时加的计数变量。三层里物理段和数据层的判据在工程内可以直接取到，帧层是缺口最大的一层。</p>
+<p>三层判据的作用范围不同：物理段只能排除接线与电平问题，帧层只能确认标识符是否出现，数据层才能确认载荷是否落到正确的全局量。用错层的判据会得到“看起来正常但行为不对”的结论。</p>
+<h2 id="2-从下到上的隔离顺序">2. 从下到上的隔离顺序</h2>
+<p>按单向依赖走：如果帧层收不到，数据层的判断没有意义。顺序如下。</p>
+<ol>
+<li>确认对端板在上电且未复位，观察它的心跳表现（本工程无心跳，只能看它发出的电机帧是否还在）。</li>
+<li>在共享 CAN1 上抓包，确认 0x301、0x302、0x303 是否出现，以及出现的周期。</li>
+<li>帧在线上但数据不对，进接收回调比对字节与全局量。</li>
+<li>数据在全局量里正确但行为不对，查消费者任务是否读到、读的是哪个字段。</li>
+</ol>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["现象 底盘不动或云台不指"] --> B{"共享 CAN1 上有 0x301 与 0x302 吗"}
+  B -->|没有| C["查云台板发送点与 mailbox 状态"]
+  B -->|有| D{"字节布局对吗"}
+  D -->|不对| E["比对 0x301 组装与底盘解析"]
+  D -->|对| F{"全局量更新了吗"}
+  F -->|没更新| G["查接收分支是否命中 中断是否使能"]
+  F -->|更新了| H["查消费者任务读的字段与执行器侧"]
+  C --> I["查云台板任务是否在跑 板间接线"]</pre></div>
+<p>四步的顺序不能颠倒。先查数据层会看到旧值与正确值混在一起，无法判断是哪一端的问题；先查帧层只要确认帧在不在，判据是二值的。</p>
+<h2 id="3-现象到层的对应">3. 现象到层的对应</h2>
+<p>把常见现象与最可能的层对应，减少无效抓包：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>优先怀疑的层</th><th>首个检查点</th></tr></thead><tbody><tr><td>底盘速度指令不随遥控变化</td><td>数据层或帧层</td><td>底盘板 <code>dbus.ch[2..4]</code> 是否更新</td></tr><tr><td>底盘 s1 恒为 3</td><td>数据层</td><td>云台板 <code>ControlCenterTask.cpp:108</code></td></tr><tr><td>云台角度在底盘侧跳变</td><td>数据层</td><td>底盘板 <code>case 0x301</code> 落穿</td></tr><tr><td>底盘跟随方向错</td><td>帧层到数据层</td><td>0x302 的 <code>gimbal_yaw_angle</code> 与 <code>gimbal_yaw_radians</code></td></tr><tr><td>视觉收到的弹速不变</td><td>数据层</td><td>云台板 <code>AmmoSpeed</code> 与 0x303</td></tr><tr><td>一块板上电后另一块无反馈</td><td>物理段</td><td>该板 CAN1 接线与终端</td></tr></tbody></table>
+<p>表里六条现象都指向具体的全局量或分支，排查时可以直接在调试器里看这些量，不需要先接分析仪。只有最后一条必须从物理段开始。</p>
+<p>现象与层的对应关系不是一一映射，一条现象可能同时涉及两层。以“云台角度在底盘侧跳变”为例，落穿属于数据层，但若 0x302 根本没到，跳变就来自帧层，两者要在同一轮排查里分别确认。</p>
+<h2 id="4-临时观测的加计数方法">4. 临时观测的加计数方法</h2>
+<p>在接收回调里对每个标识符加一个 32 位计数，是最省事且不改变数据通路的观测方式。本工程 <code>HAL_CAN_RxFifo0MsgPendingCallback</code> 的 <code>switch</code> 里没有计数变量，需要临时添加；计数变量建议用 <code>volatile</code> 并放在 <code>Debug_vars</code> 里，便于调试器直接读。</p>
+<p>加计数时的两个注意点：计数在中断里自增，调试器读取不受 <code>volatile</code> 约束；计数只回答“帧有没有来”，不回答“值对不对”，值仍要在接收分支里逐个字段核对。计数与时间戳可以同时记，时间戳用 <code>HAL_GetTick()</code>。</p>
+<p>加计数的落地步骤：</p>
+<ol>
+<li>在 <code>Debug_vars</code> 头文件里补上 <code>extern volatile uint32_t</code> 声明。</li>
+<li>在接收回调的每个 <code>case</code> 里自增对应计数。</li>
+<li>在任务里按阈值比较计数变化，判断某帧是否断流。</li>
+</ol>
+<h2 id="5-debug_vars-的实际状态">5. Debug_vars 的实际状态</h2>
+<p><code>Debug_vars/debug_vars.cpp</code> 定义了 9 个 <code>volatile</code> 变量，头文件里的声明全部被注释，代码里唯一的引用是 <code>BSP/Src/bsp_can.cpp:650</code> 的一句注释。这些变量既没有写点也没有读点，直接拿来做观测点会一直显示初值。</p>
+<p>头文件声明被注释还有一层影响：源文件里定义的变量没有对外声明，其它翻译单元即使写了 <code>extern</code> 也拿不到类型。要临时使用，先把声明放回头文件，再在接收分支里加写点。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>变量</th><th>定义点</th><th>写点</th><th>读点</th></tr></thead><tbody><tr><td><code>debug_roll</code></td><td><code>Debug_vars/debug_vars.cpp:11</code></td><td>无</td><td>无</td></tr><tr><td><code>debug_pitch</code></td><td><code>:12</code></td><td>无</td><td>无</td></tr><tr><td><code>debug_yaw</code></td><td><code>:13</code></td><td>无</td><td>无</td></tr><tr><td><code>debug_actual_speed</code></td><td><code>:14</code></td><td>无</td><td>无</td></tr><tr><td><code>debug_angle1</code> 到 <code>debug_angle4</code></td><td><code>:15-18</code></td><td>无</td><td>无</td></tr><tr><td><code>debug_st</code></td><td><code>:19</code></td><td>无</td><td>无</td></tr></tbody></table>
+<h2 id="6-调试串口的可用状态">6. 调试串口的可用状态</h2>
+<p><code>BSP/Src/debug.cpp:11</code> 的 <code>DebugUART_Init</code> 只保存句柄，<code>SendDebugData</code> 按格式字符串把混合类型打成一个字节流。全工程只有云台板 <code>Task/Src/ImuTask.cpp:34</code> 初始化了这个串口到 <code>huart1</code>；底盘板 <code>Task/Src/ImuTask.cpp:33</code> 也有同样一句，但该任务未启动（<code>Core/Src/freertos.c:100</code>），所以底盘板的调试串口句柄保持为空，<code>SendDebugData</code> 会直接返回。</p>
+<p><code>SendDebugData</code> 在仓内没有调用点，输出内容需要临时补。它的格式字符含义见 <code>BSP/Inc/debug.h:29-41</code>。补调用点时注意它按阻塞方式发送，放到 1 ms 任务里会拉长循环。</p>
+<h2 id="7-现成的上位机观测通路">7. 现成的上位机观测通路</h2>
+<p>云台板 UsbConnectTask 每 10 ms 把 <code>AmmoSpeed</code> 与 <code>TotalAmmoShooted</code> 打包发给视觉（<code>Task/Src/UsbConnectTask.cpp:130-140</code>），这两项可以作为 0x303 是否到达的间接证据。底盘板 UsbConnectTask 每 10 ms 发一帧云台角度（<code>Task/Src/UsbConnectTask.cpp:171-172</code>），其值是 <code>yaw_motor_5.rotor_angle</code> 换算而来，可作为 0x205 是否到达的间接证据。两条通路都不能反映 0x301 与 0x302。</p>
+<p>两条通路的采样周期都是 10 ms，而板间帧周期是 1 ms，所以它们只能判断“数据还在变”，判断不了帧的到达间隔。用它们做断流初判可以，做时序测量不行。</p>
+<p>两条通路的另一处差异是对端不同：云台板对视觉，底盘板对导航。观测某块板的板间收发时，要选对端正确的那条 USB 链路，把云台板的转发当成底盘板的证据属于跨错对端。</p>
+<h2 id="8-可直接监视的全局量">8. 可直接监视的全局量</h2>
+<p>用调试器实时监视下列全局量比用 Debug_vars 更有效，它们本来就在数据通路里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>观测点</th><th>板</th><th>含义</th></tr></thead><tbody><tr><td><code>dbus.ch[2..4]</code></td><td>底盘板</td><td>0x301 是否更新</td></tr><tr><td><code>dbus.s1</code></td><td>底盘板</td><td>0x301 或本地 DBUS 的最后写入</td></tr><tr><td><code>gimbal_yaw_angle</code></td><td>底盘板</td><td>0x302 与落穿污染的结果</td></tr><tr><td><code>TotalAmmoShooted</code></td><td>云台板</td><td>0x303 是否到达</td></tr><tr><td><code>AmmoSpeed</code></td><td>云台板</td><td>0x303 的弹速字段</td></tr><tr><td><code>control_target.control_mode</code></td><td>底盘板</td><td>由 s1 推出的模式</td></tr></tbody></table>
+<p>这些量由中断写、任务读，调试器通过内存读取不受 <code>volatile</code> 影响。注意断点停在任务里时中断仍在跑，全局量会继续变化。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant DEV as 调试器
+  participant CH as 底盘板
+  participant BUS as CAN1 分析仪
+  DEV->>CH: 监视 dbus 与 gimbal_yaw_angle
+  BUS->>BUS: 记录 0x301 与 0x302 周期
+  Note over DEV,BUS: 帧层与数据层判据同时取
+  DEV->>CH: 在 case 0x301 处下断点核对字节
+  BUS->>BUS: 对照 0x301 的 X Y Z s1</pre></div>
+<p>同时取帧层与数据层的判据，可以在一次抓包里完成定位：分析仪给出帧周期，调试器给出全局量，两者对不上就能直接指到接收分支或消费者。</p>
+<p>下断点核对字节时要避开 1 ms 任务的正中间，否则断点命中后系统停留在暂停状态，中断不再更新全局量，读到的值会误导判断。断点更适合核对载荷，实时监视更适合看变化。</p>
+<h2 id="9-本单元易错点汇总">9. 本单元易错点汇总</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>拿 Debug_vars 当现成观测点</td><td>变量一直是初值</td><td><code>Debug_vars/debug_vars.cpp:11-19</code></td></tr><tr><td>以为底盘板有调试串口输出</td><td><code>SendDebugData</code> 无输出</td><td>底盘板 ImuTask 未启动，<code>freertos.c:100</code></td></tr><tr><td>只用 USB 通路判断板间帧</td><td>0x301 与 0x302 的状态看不到</td><td>USB 只带弹速、弹量与云台角度</td></tr><tr><td>忽略落穿对 gimbal_yaw_angle 的污染</td><td>断点看到跳变值，误判 0x302 解码错</td><td><code>BSP/Src/bsp_can.cpp:608-614</code></td></tr><tr><td>在任务断点处判断中断数据</td><td>单步时全局量继续被中断改写</td><td>CAN1 中断优先级 5</td></tr><tr><td>把 s1 当遥控在线指示</td><td>底盘板 s1 恒为 3</td><td>云台板 <code>ControlCenterTask.cpp:108</code></td></tr><tr><td>抓包只接一端</td><td>只看到本板发送，看不到对端</td><td>0x301 与 0x303 方向相反</td></tr><tr><td>把落穿当 0x302 解码错误</td><td>改 0x302 解析代码后现象不变</td><td>污染来自 <code>case 0x301</code> 落穿</td></tr></tbody></table>
+<h2 id="10-小结">10. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>跨板问题按物理段、帧层、数据层三层隔离，顺序从下到上。</li>
+<li>工程内没有帧计数与 CAN 错误回调，帧层判据要靠外部分析仪或临时计数。</li>
+<li>Debug_vars 的 9 个变量无读写点，不能直接当观测点。</li>
+<li>调试串口只在云台板 ImuTask 初始化，且 <code>SendDebugData</code> 无调用点。</li>
+<li>USB 通路只能间接反映 0x303 与 0x205，反映不了 0x301 与 0x302。</li>
+<li>直接监视 <code>dbus</code>、<code>gimbal_yaw_angle</code>、<code>AmmoSpeed</code> 更贴近数据通路。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>调试观测点</td><td>预留 Debug_vars 但不用</td><td>调试器里随取随用</td><td>变量无写点，容易误读</td></tr><tr><td>调试串口</td><td>保留实现，不调用</td><td>不占带宽</td><td>现场要临时补调用</td></tr><tr><td>帧计数</td><td>不实现</td><td>中断里少几条指令</td><td>丢帧不可见</td></tr><tr><td>上位机通路</td><td>复用视觉与导航 USB</td><td>不改协议</td><td>只能观测部分量</td></tr></tbody></table>
+<p>本单元排查动作可以归成四步：接对端、抓共享段、看全局量、核消费者。四步做完还没定位到，再考虑物理段与终端电阻。</p>
+<h2 id="11-练习">11. 练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 0x301 的 8 个字节各放什么，指出哪个字节未被赋值，并给出组装与解析两处的源码位置。</li>
+<li>底盘板收到一帧 0x301 后 <code>dbus.s1</code> 的值是多少，这个值由哪些写者决定，最终值取决于什么？</li>
+<li>列出判断 0x303 是否仍在到达云台板所需的最少观测点，并说明每个观测点的源码位置。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为板间断流设计一个最小改动方案：在底盘板 CAN 中断里为 0x301 与 0x302 各记录到达计数与最后到达 tick，在 ControlCenterTask 里按阈值判定断流，并把底盘切回本地遥控或把目标速度归零。给出改动文件、判据阈值、切换动作，并说明该方案与 <code>case 0x301</code> 落穿缺陷的交互。</li>
+</ol>
+<hr>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp</code></td><td>接收回调与落穿（:588-704、:650）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp</code></td><td>0x301 与 0x302 解析（:608-632）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Debug_vars/debug_vars.cpp</code></td><td>调试变量定义（:11-19）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp</code></td><td>调试串口实现（:11、:54）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>调试串口初始化（:34）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ImuTask.cpp</code></td><td>未启动任务里的调试串口初始化（:33）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>弹速与弹量转发（:130-140）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp</code></td><td>云台角度回传（:171-172）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/09-%E5%B5%8C%E5%85%A5%E5%BC%8F%E8%BD%AF%E4%BB%B6%E6%9E%B6%E6%9E%84/02-Message_Bus/"><span class="k">← 上一篇</span><span class="t">Message_Bus</span><span class="d">嵌入式软件架构 · 3 个文件</span></a><a class="next" href="/tc63/docs/10-%E5%B5%8C%E5%85%A5%E5%BC%8F%E6%9E%84%E5%BB%BA%E4%B8%8E%E8%B0%83%E8%AF%95/01-CMake%E4%B8%8E%E5%8F%8C%E4%BA%A4%E5%8F%89%E5%B7%A5%E5%85%B7%E9%93%BE/"><span class="k">下一篇 →</span><span class="t">CMake与双交叉工具链</span><span class="d">嵌入式构建与调试 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

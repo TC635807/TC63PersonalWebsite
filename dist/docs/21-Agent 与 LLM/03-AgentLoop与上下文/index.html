@@ -1,0 +1,1180 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>AgentLoop与上下文 · Agent 与 LLM · 王宇翔</title><meta name="description" content="普通模式与自迭代模式的回合结构、两档工具超时、每会话互斥锁、实验模式对工具与树注入的裁剪，以及达到卡数上下限时的强制行为"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/21-Agent%20%E4%B8%8E%20LLM/03-AgentLoop%E4%B8%8E%E4%B8%8A%E4%B8%8B%E6%96%87/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="AgentLoop与上下文 · Agent 与 LLM · 王宇翔"><meta property="og:description" content="普通模式与自迭代模式的回合结构、两档工具超时、每会话互斥锁、实验模式对工具与树注入的裁剪，以及达到卡数上下限时的强制行为"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/21-Agent%20%E4%B8%8E%20LLM/03-AgentLoop%E4%B8%8E%E4%B8%8A%E4%B8%8B%E6%96%87/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/21-Agent%20%E4%B8%8E%20LLM/">Agent 与 LLM</a><span class="sep" aria-hidden="true">/</span><span class="now">AgentLoop与上下文</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>AgentLoop与上下文</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>循环骨架与迭代预算</span></a><ul class="toc__heads"><li><a href="#两种模式的回合结构" data-depth="2" data-heading-j="0">两种模式的回合结构</a></li><li><a href="#每会话互斥" data-depth="2" data-heading-j="1">每会话互斥</a></li><li><a href="#实验模式裁剪工具与注入" data-depth="2" data-heading-j="2">实验模式裁剪工具与注入</a></li><li><a href="#卡数上下限的强制行为" data-depth="2" data-heading-j="3">卡数上下限的强制行为</a></li><li><a href="#循环的出口" data-depth="2" data-heading-j="4">循环的出口</a></li><li><a href="#一处静默回退" data-depth="2" data-heading-j="5">一处静默回退</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>决策消息与动态注入</span></a><ul class="toc__heads"><li><a href="#前缀缓存的排布规则" data-depth="2" data-heading-j="0">前缀缓存的排布规则</a></li><li><a href="#树摘要的产生与缓存" data-depth="2" data-heading-j="1">树摘要的产生与缓存</a></li><li><a href="#工具失败后的纠正引导" data-depth="2" data-heading-j="2">工具失败后的纠正引导</a></li><li><a href="#挂载检查提示" data-depth="2" data-heading-j="3">挂载检查提示</a></li><li><a href="#消息末尾的其它注入" data-depth="2" data-heading-j="4">消息末尾的其它注入</a></li><li><a href="#剥离模拟工具调用" data-depth="2" data-heading-j="5">剥离模拟工具调用</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>会话上下文与持久化</span></a><ul class="toc__heads"><li><a href="#历史放在哪" data-depth="2" data-heading-j="0">历史放在哪</a></li><li><a href="#加载时的两处处理" data-depth="2" data-heading-j="1">加载时的两处处理</a></li><li><a href="#热路径与落盘" data-depth="2" data-heading-j="2">热路径与落盘</a></li><li><a href="#裁剪与工具配对" data-depth="2" data-heading-j="3">裁剪与工具配对</a></li><li><a href="#内存会话与淘汰" data-depth="2" data-heading-j="4">内存会话与淘汰</a></li><li><a href="#系统提示里有什么" data-depth="2" data-heading-j="5">系统提示里有什么</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>后台循环与消息通道</span></a><ul class="toc__heads"><li><a href="#后台任务与事件队列" data-depth="2" data-heading-j="0">后台任务与事件队列</a></li><li><a href="#订阅与心跳" data-depth="2" data-heading-j="1">订阅与心跳</a></li><li><a href="#中途消息的注入通道" data-depth="2" data-heading-j="2">中途消息的注入通道</a></li><li><a href="#四个接口" data-depth="2" data-heading-j="3">四个接口</a></li><li><a href="#易错点" data-depth="2" data-heading-j="4">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="5">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="6">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="7">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="9">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="10">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="11">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">Agent 与 LLM</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>AgentLoop / 迭代预算 / 超时 / 实验模式 / 决策消息 / 前缀缓存 / 纠正引导 / 挂载提示</span></div><h1 class="docs__title">AgentLoop与上下文</h1><p class="docs__lead">普通模式与自迭代模式的回合结构、两档工具超时、每会话互斥锁、实验模式对工具与树注入的裁剪，以及达到卡数上下限时的强制行为</p></header><section class="dfile" id="file-1" data-file="01-循环骨架与迭代预算"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-循环骨架与迭代预算</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/21-Agent 与 LLM/03-AgentLoop与上下文/01-循环骨架与迭代预算.md</span></div><div class="dfile__body"><h1 id="循环骨架与迭代预算">循环骨架与迭代预算</h1>
+<p>Agent 的运行是一个循环：把消息交给模型，模型要么给文本，要么给工具调用，执行工具后再把结果交回去，直到模型不再要工具。这听起来简单，但工程上有两个必须钉死的上限——否则一次错误决策可能让循环转几十圈、烧掉大量调用。</p>
+<p>仓库里有两种循环形态。普通模式按轮次走，适合对话；以特定前缀开头的消息进入自主迭代模式，允许连续改进知识库。两者的 SSE 事件序列不同，但共用同一套决策、执行与持久化组件。</p>
+<h2 id="两种模式的回合结构">两种模式的回合结构</h2>
+<p>模块开头写明了事件序列（<code>backend/agent/loop.py:1-5</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th>事件序列</th></tr></thead><tbody><tr><td>普通</td><td>工具调用、工具结果若干轮，然后文本，最后完成</td></tr><tr><td>自迭代</td><td>每轮工具调用、工具结果、文本，重复 N 轮，最后完成</td></tr></tbody></table>
+<p>自迭代模式由消息前缀触发，前缀后的内容作为本轮目标，为空时用默认目标“持续改进知识库质量”（<code>:348-350</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>常量</th><th>取值</th><th>说明</th></tr></thead><tbody><tr><td>最大迭代轮数</td><td>50</td><td><code>:29</code></td></tr><tr><td>总超时</td><td>1800 秒</td><td>注释按每轮 30 到 60 秒估算（<code>:30</code>）</td></tr><tr><td>普通工具超时</td><td>300 秒</td><td>与全局 Agent 超时一致（<code>:55</code>）</td></tr><tr><td>延申工具超时</td><td>600 秒</td><td>多子主题搜索抓取生成（<code>:56</code>）</td></tr><tr><td>心跳间隔</td><td>15 秒</td><td>工具执行期间保持 SSE 有数据（<code>:57</code>）</td></tr></tbody></table>
+<p>超时被拆成两档，注释给出了理由：延申要跑多个子主题的“搜索加抓取加生成”，三个主题就能把 300 秒打满，误杀会让整轮失败（<code>:53-54</code>）。</p>
+<h2 id="每会话互斥">每会话互斥</h2>
+<p>进入循环前先取该会话的锁（<code>:352-355</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">ctx </span><span style="color:#D73A49">=</span><span style="color:#24292E"> AgentContext.get()</span></span>
+<span class="line"><span style="color:#24292E">lock </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ctx.lock(username, session_id)</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> with</span><span style="color:#24292E"> lock:</span></span>
+<span class="line"><span style="color:#005CC5">    ...</span></span></code></pre>
+<p>锁的粒度是“用户加会话”，同一会话同时只能有一个循环。这样后台循环与用户新消息不会并发改写同一份历史。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["收到用户消息"] --> B["取会话锁"]
+  B --> C{"拿到锁了吗"}
+  C -- 否 --> D["等待前一个循环结束"]
+  C -- 是 --> E{"消息以 /loop 开头吗"}
+  E -- 是 --> F["自迭代模式"]
+  E -- 否 --> G["普通回合模式"]
+  F --> H["逐轮决策与执行"]
+  G --> H
+  H --> I["模型还要工具吗"]
+  I -- 是 --> H
+  I -- 否 --> J["收尾总结与完成事件"]</pre></div>
+<h2 id="实验模式裁剪工具与注入">实验模式裁剪工具与注入</h2>
+<p>实验模式来自配置，默认全量（<code>:356-370</code>）。两种取值：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模式</th><th>工具 schema</th><th>树摘要注入</th></tr></thead><tbody><tr><td>full</td><td>全部十三个</td><td>开启</td></tr><tr><td>no_quality</td><td>去掉四个质量类工具</td><td>关闭</td></tr><tr><td>未知值</td><td>回退全量并记警告</td><td>开启</td></tr></tbody></table>
+<p>被移除的四个工具是卡片质量评估、库评估、探索评估、缺口盘点（<code>:34-47</code>）。这样消融实验比较的是“有质量信号与无质量信号”的差异。</p>
+<p>权限收紧时还会二次裁剪：把被禁用层级对应的 schema 直接从列表里去掉（<code>:358-365</code>）。注释说明了动机——避免模型反复调用必然被拒的工具，既浪费轮次也污染历史。</p>
+<h2 id="卡数上下限的强制行为">卡数上下限的强制行为</h2>
+<p>两个配置项给实验设定了卡片数量边界（<code>:367-368</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>配置</th><th>触发条件</th><th>行为</th></tr></thead><tbody><tr><td>上限</td><td>当前卡数达到上限</td><td>schema 裁成只读，禁止新建</td></tr><tr><td>下限</td><td>当前卡数低于下限</td><td>禁止停止，必须继续扩展</td></tr></tbody></table>
+<p>上限通过每次决策前重算 schema 实现：达到上限后只剩读工具，模型无法再搜索（<code>:380-390</code>）。同时注入一条提示，说明达到实验上限并要求检查结构与收尾（<code>:426-433</code>）。</p>
+<p>下限通过“即使模型给出总结文本也不结束”实现：检查卡数不足就继续下一轮（<code>:529-530</code>、<code>:537-538</code>），并注入一条禁止停止的提示，给出优先延申叶子卡、延申为空再搜索的替代路径（<code>:434-442</code>）。</p>
+<h2 id="循环的出口">循环的出口</h2>
+<p>出口有五类：</p>
+<ol>
+<li>模型给出文本且没有工具调用（正常停止）；</li>
+<li>工具连续失败达到三次，注入系统消息并强制总结（<code>:509-519</code>）；</li>
+<li>达到最大迭代轮数，强制流式总结（<code>:546-553</code>）；</li>
+<li>总超时，输出超时文本并跳出（<code>:471-473</code>）；</li>
+<li>循环过程中被取消或抛异常。</li>
+</ol>
+<p>普通模式的出口类似，以最大回合数与全局超时约束（<code>:557-561</code>），并在轮数耗尽时补一次收尾总结（<code>:630-635</code>）。</p>
+<p>每一次出口前都会调用裁剪，把历史压到配置的消息上限内（<code>:517</code>、<code>:531</code>、<code>:539</code>、<code>:551</code>）。自迭代模式还会每五轮额外裁剪一次，上限翻倍（<code>:543-544</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["每轮决策"] --> B{"模型有工具调用吗"}
+  B -- 是 --> C["执行工具"]
+  C --> D{"连续失败达到 3 次吗"}
+  D -- 是 --> E["注入系统消息并强制总结"]
+  D -- 否 --> F{"达到迭代上限吗"}
+  F -- 是 --> G["强制流式总结"]
+  F -- 否 --> H{"超过总时长吗"}
+  H -- 是 --> I["输出超时文本并跳出"]
+  H -- 否 --> A
+  B -- 否 --> J["正常结束并给出完成事件"]</pre></div>
+<h2 id="一处静默回退">一处静默回退</h2>
+<p>自迭代分支整体包在异常处理里，异常被直接忽略（<code>:554-555</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> is_loop:</span></span>
+<span class="line"><span style="color:#005CC5">        ...</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#005CC5"> Exception</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    pass</span></span></code></pre>
+<p>异常不记录日志、不返回错误事件。更需要注意的结果是：如果自迭代分支中途抛错，控制流不会结束生成器，而是继续进入下面的普通回合循环。也就是说，一次自迭代运行在出错后可能以普通模式继续，上层从事件流上不容易分辨。这是从代码读出的行为，未构造异常复现。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为自迭代没有上限。轮数与总时长都有上限。</li>
+<li>忽略工具超时有两档。延申是 600 秒。</li>
+<li>认为实验模式只是少几个工具。树注入也一起关。</li>
+<li>认为卡数上限只靠提示。schema 本身被裁成只读。</li>
+<li>低估每五轮一次的双倍裁剪。历史会被更激进地压缩。</li>
+<li>忽略自迭代分支的静默异常回退。出错可能转入普通模式。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>触发前缀</td><td><code>/loop</code></td><td><code>backend/agent/loop.py:31</code></td></tr><tr><td>迭代上限</td><td>50 轮</td><td><code>:29</code></td></tr><tr><td>总超时</td><td>1800 秒</td><td><code>:30</code></td></tr><tr><td>工具超时</td><td>普通 300、延申 600 秒</td><td><code>:55-56</code></td></tr><tr><td>心跳</td><td>15 秒</td><td><code>:57</code></td></tr><tr><td>互斥</td><td>每用户每会话锁</td><td><code>:352-355</code></td></tr><tr><td>实验模式</td><td>full 与 no_quality</td><td><code>:40-51</code></td></tr><tr><td>卡数上限</td><td>schema 裁成只读</td><td><code>:380-390</code></td></tr><tr><td>卡数下限</td><td>禁止停止</td><td><code>:434-442</code>、<code>:529-530</code></td></tr><tr><td>失败熔断</td><td>连续三次工具失败</td><td><code>:509-512</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>双循环形态</td><td>对话与自主改进各得其所</td><td>两套出口逻辑需同步维护</td></tr><tr><td>延申单独超时</td><td>不误杀长任务</td><td>单轮可占用十分钟</td></tr><tr><td>权限层裁剪 schema</td><td>模型不会试必然失败的调用</td><td>工具列表随配置变化</td></tr><tr><td>卡数上限裁只读</td><td>硬性限流</td><td>模型可能仍尝试旧计划</td></tr><tr><td>自迭代异常静默</td><td>不向用户抛栈</td><td>回退路径不可见</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出两种模式的 SSE 事件序列与触发条件。</li>
+<li>列出五个循环出口与各自的收尾动作。</li>
+<li>说明实验模式对工具与树注入的影响。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为自迭代分支的异常增加日志与错误事件，说明对上层协议的影响。</li>
+<li>设计按“质量提升幅度”提前停止的策略，给出信号与阈值来源。</li>
+<li>让卡数上限与下限可同时生效，说明冲突时的优先级设计。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/agent/loop.py</code></td><td>双模式循环、预算与出口</td></tr><tr><td><code>backend/agent/context.py</code></td><td>会话锁与历史</td></tr><tr><td><code>backend/agent/tools.py</code></td><td>工具执行器</td></tr><tr><td><code>backend/agent/tool_registry.py</code></td><td>层级与权限裁剪</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-决策消息与动态注入"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-决策消息与动态注入</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/21-Agent 与 LLM/03-AgentLoop与上下文/02-决策消息与动态注入.md</span></div><div class="dfile__body"><h1 id="决策消息与动态注入">决策消息与动态注入</h1>
+<p>每轮决策都要把一份消息列表交给模型。这份列表里既有持久化的会话历史，也有只在这一轮有效的动态内容：当前知识库树、用户最新指令、上一轮工具失败的纠正建议、新卡生成后的挂载待办。动态内容如果随手插在历史中间，会破坏跨轮稳定的前缀，让提供方的缓存失效，成本上升。</p>
+<p>实现的做法是纪律性的：历史保持只追加，所有动态内容合并成一条消息放在最末尾。这样每一轮的“系统提示加历史”构成连续前缀，只有尾部在变。</p>
+<h2 id="前缀缓存的排布规则">前缀缓存的排布规则</h2>
+<p>构建决策消息的函数注释写得很清楚（<code>backend/agent/loop.py:139-164</code>）：系统提示加追加式历史是跨轮稳定的连续前缀；树摘要、用户最新指令等动态内容全部合并为一条 user 消息追加到最末尾，绝不插在历史中间。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>内容</th><th>是否持久化</th></tr></thead><tbody><tr><td>开头</td><td>系统提示</td><td>是</td></tr><tr><td>中间</td><td>对话与工具结果，只追加</td><td>是</td></tr><tr><td>末尾</td><td>树摘要加决策要求、用户最新指令</td><td>否</td></tr><tr><td>末尾</td><td>纠正引导、挂载待办、卡数上下限提示</td><td>否</td></tr></tbody></table>
+<p>末尾的动态消息会把多段内容用空行连接成一条（<code>:162-163</code>）。树摘要后面固定跟一段决策要求：新卡必须挂到最相关节点下，可以传源卡 ID 或事后建链；不得平铺成并列根卡；优先在已有节点下延申（<code>:154-159</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["系统提示"] --> B["历史消息，只追加"]
+  B --> C["树摘要与决策要求"]
+  C --> D["用户最新指令"]
+  D --> E["纠正引导"]
+  E --> F["挂载待办"]
+  F --> G["卡数上下限提示"]
+  G --> H["发给模型"]</pre></div>
+<h2 id="树摘要的产生与缓存">树摘要的产生与缓存</h2>
+<p>树摘要取自卡片树，递归转成缩进文本，每个节点标出子卡数与正文字符数，最多 60 行，超出时提示可用树工具看完整结构（<code>:98-130</code>）。为空时返回空字符串，不注入。</p>
+<p>摘要走增量缓存：键是用户与会话，写层工具成功后失效，新一轮用户消息也失效（<code>:133-136</code>）。只读轮次直接命中缓存，不再查询数据库。工具侧在每次成功写库后调用失效（<code>backend/agent/tools.py:143-145</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>事件</th><th>树摘要缓存</th></tr></thead><tbody><tr><td>进入新一轮会话</td><td>失效</td></tr><tr><td>收到中途用户消息</td><td>失效</td></tr><tr><td>写层工具成功</td><td>失效</td></tr><tr><td>只读工具</td><td>不失效</td></tr></tbody></table>
+<h2 id="工具失败后的纠正引导">工具失败后的纠正引导</h2>
+<p>失败引导由回调触发，内容是动态的、不进历史（<code>:447-449</code>）。<code>_build_correction</code> 按失败摘要里的关键词分派五种建议（<code>:288-305</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>摘要特征</th><th>纠正建议</th></tr></thead><tbody><tr><td>缺口盘点或含 <code>cluster_id</code></td><td>参数是整数簇号，先调库评估拿到簇号</td></tr><tr><td>含“未知工具”</td><td>工具名拼错，从工具描述里选</td></tr><tr><td>含“不存在”或 <code>not found</code></td><td>先获取真实卡片 ID 或精确标题</td></tr><tr><td>含“参数”</td><td>按描述核对参数名与类型</td></tr><tr><td>其它</td><td>按原因修正后重试，仍失败先看库里现状</td></tr></tbody></table>
+<p>这段映射的关键在于“失败摘要本身就是分派键”。它依赖摘要文本的措辞，属于隐式契约：改摘要文案可能让引导落空。</p>
+<p>约束性反馈不算失败。返回里带“被拦”或“本地命中”标记的结果属于系统主动引导，不触发纠正（<code>:253-257</code>）。这类结果的成功标志是假，但语义上不是错误。</p>
+<p>引导提示有一个容易忽略的行为：它在成功轮次不会被清除，只在下一次失败时被覆盖（<code>:447-449</code>）。也就是说一次失败之后，后续每一轮决策都会带上同一条建议，直到再次失败改写它。</p>
+<h2 id="挂载检查提示">挂载检查提示</h2>
+<p>新卡生成后的挂载待办由结果回调设置（<code>:451-459</code>）。触发条件是工具成功且名字是关键词搜索或延申，并且返回数据里有标题列表。提示内容要求紧接着做挂载检查：相关就立即建链并传父卡方向；新卡应作根卡则检查有无卡应挂到它下面；确实独立就说明原因（<code>:308-324</code>）。</p>
+<p>这条提示的由来写在注释里：实测发现 Agent 生成新卡后从不建链，新卡全部平铺成孤立根卡，长提示词里的规则模型不遵守，于是改成在生卡后的下一轮直接下指令（<code>:311-313</code>）。</p>
+<p>生命周期是三条：设置、一次性消费、被成功建链清除。消费发生在构建决策消息时，用过即清（<code>:424-425</code>）；而建链成功后直接清除，表示待办完成（<code>:453-455</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 无待办
+  无待办 --> 有待办: 搜索或延申成功且返回标题
+  有待办 --> 已消费: 下一轮决策注入后清空
+  有待办 --> 无待办: 建链成功
+  已消费 --> 有待办: 再次生成新卡
+  已消费 --> 无待办: 不再生卡</pre></div>
+<h2 id="消息末尾的其它注入">消息末尾的其它注入</h2>
+<p>除纠正与挂载，末尾还会按卡数上下限追加提示（<code>:426-442</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>条件</th><th>注入内容</th></tr></thead><tbody><tr><td>卡数达到上限</td><td>不要再建卡，检查结构并收尾</td></tr><tr><td>卡数低于下限</td><td>禁止停止，优先延申叶子卡，为空再搜索</td></tr></tbody></table>
+<p>下限提示给出的替代路径很有信息量：先延申，延申返回零张再改用关键词搜索。它把“如何凑够卡数”的方法写进了运行时指令。</p>
+<h2 id="剥离模拟工具调用">剥离模拟工具调用</h2>
+<p>模型有时会在文本里写工具调用的样子，例如尖括号包起来的工具名，或者带扳手表情的“调用工具”行。这类文本如果进入历史，下一轮模型会模仿，形成表演工具调用的循环。剥离函数处理三种形态（<code>:267-285</code>）：</p>
+<ol>
+<li>markdown 代码块包裹的 XML；</li>
+<li>未包裹的 XML 块，含自闭合形式；</li>
+<li>带扳手表情的工具行。</li>
+</ol>
+<p>剥离发生在两处：流式文本收集完成、写进历史之前（<code>:327-340</code>）；以及决策文本带工具调用时写入历史之前（<code>:497-501</code>、<code>:586-590</code>）。注意流式发出的 token 不做剥离——用户仍可能看到这些文本，剥离只保证历史干净。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>把动态内容插进历史中间。会破坏前缀缓存。</li>
+<li>认为树摘要每轮都查询。只读轮次命中缓存。</li>
+<li>认为纠正引导是持久对话。它只在决策时追加。</li>
+<li>认为引导用完即清。它持续到下一次失败覆盖。</li>
+<li>认为流式输出已被剥离。剥离只作用于历史。</li>
+<li>认为约束性反馈会触发纠正。被明确排除。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>消息排布</td><td>历史在前，动态内容合并到末尾</td><td><code>backend/agent/loop.py:139-164</code></td></tr><tr><td>树摘要</td><td>最多 60 行，带子卡数与字数</td><td><code>:98-130</code></td></tr><tr><td>摘要缓存</td><td>写库与新一轮消息时失效</td><td><code>:133-136</code></td></tr><tr><td>纠正分派</td><td>五种摘要特征</td><td><code>:288-305</code></td></tr><tr><td>引导生命周期</td><td>不随成功清除</td><td><code>:447-449</code></td></tr><tr><td>挂载提示</td><td>生卡后设置，消费或建链后清除</td><td><code>:308-324</code>、<code>:451-459</code></td></tr><tr><td>卡数注入</td><td>上限禁建、下限禁停</td><td><code>:426-442</code></td></tr><tr><td>XML 剥离</td><td>三种形态，只作用于历史</td><td><code>:267-285</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>动态内容放末尾</td><td>前缀缓存命中</td><td>模型要靠末尾指令保持注意</td></tr><tr><td>树摘要缓存</td><td>只读轮次零查询</td><td>缓存失效点需覆盖写路径</td></tr><tr><td>纠正按摘要分派</td><td>失败能转成学习</td><td>依赖摘要措辞</td></tr><tr><td>挂载提示一次性</td><td>不反复唠叨</td><td>模型未挂载时不再提醒</td></tr><tr><td>剥离只作用历史</td><td>用户可见原始输出</td><td>界面可能显示无效文本</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明决策消息的排布规则与原因。</li>
+<li>列出纠正引导的五种分派特征。</li>
+<li>描述挂载提示的三个生命周期节点。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>用结构化错误码替代摘要文本分派，给出改造方案。</li>
+<li>让纠正引导在成功轮次后自动衰减或清除，说明判据。</li>
+<li>评估在流式输出阶段也剥离模拟调用的影响与风险。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/agent/loop.py</code></td><td>决策消息、摘要缓存与提示注入</td></tr><tr><td><code>backend/agent/tools.py</code></td><td>树缓存失效入口</td></tr><tr><td><code>backend/agent/tree_cache.py</code></td><td>树摘要增量缓存</td></tr><tr><td><code>backend/agent/context.py</code></td><td>系统提示与历史</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-会话上下文与持久化"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-会话上下文与持久化</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/21-Agent 与 LLM/03-AgentLoop与上下文/03-会话上下文与持久化.md</span></div><div class="dfile__body"><h1 id="会话上下文与持久化">会话上下文与持久化</h1>
+<p>Agent 的会话历史需要跨请求存活，因为用户可能刷新页面、换设备继续，或者让后台循环跑上半小时。历史如果只放在内存，进程重启就丢；如果每个消息都同步写盘，又会在热路径上阻塞事件循环。实现选择中间路线：内存为准，磁盘异步投影，关键边界强制落盘。</p>
+<p>历史还必须在交给模型前做一次核对。模型接口对工具消息的配对要求很严：工具结果必须紧跟在带工具调用的助手消息之后。中途取消、超时或裁剪都可能留下半截配对，直接发出去会被服务拒绝。上下文模块专门有一段清洗逻辑处理这件事。</p>
+<h2 id="历史放在哪">历史放在哪</h2>
+<p>会话文件按“用户加会话号”存放（<code>backend/agent/context.py:80-85</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _session_dir</span><span style="color:#24292E">(username): </span><span style="color:#D73A49">return</span><span style="color:#24292E"> Path(</span><span style="color:#032F62">"data/agent"</span><span style="color:#24292E">) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> username</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _session_path</span><span style="color:#24292E">(username, session_id): </span><span style="color:#D73A49">return</span><span style="color:#24292E"> _session_dir(username) </span><span style="color:#D73A49">/</span><span style="color:#D73A49"> f</span><span style="color:#032F62">"</span><span style="color:#005CC5">{</span><span style="color:#24292E">session_id</span><span style="color:#005CC5">}</span><span style="color:#032F62">.json"</span></span></code></pre>
+<p>写入用“临时文件加替换”的原子方式（<code>:99-105</code>）：先写到同名的临时文件，再替换目标。这样即使写一半进程退出，也不会留下半个 JSON 文件。读取失败时返回空值而不是抛错（<code>:88-96</code>），调用方按“没有历史”处理。</p>
+<h2 id="加载时的两处处理">加载时的两处处理</h2>
+<p>构造会话时读文件，然后做两件事（<code>:164-169</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>处理</th></tr></thead><tbody><tr><td>有历史且首条是系统消息</td><td>用当前系统提示覆盖首条内容，再清洗</td></tr><tr><td>其它</td><td>全新历史，只放系统提示</td></tr></tbody></table>
+<p>覆盖首条系统消息意味着系统提示的更新会立即应用到旧会话，不需要清空历史。清洗函数负责修复半截的工具配对（<code>:115-154</code>），它处理三种畸变：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>畸变</th><th>处理</th></tr></thead><tbody><tr><td>孤悬工具消息，前面没有工具调用</td><td>跳过</td></tr><tr><td>工具调用后跟的结果数量不足</td><td>移除该助手消息</td></tr><tr><td>末尾工具调用没有任何结果</td><td>移除</td></tr></tbody></table>
+<p>清洗是流式的：顺序扫描，用“待配对数量”和“最近一次工具调用在结果列表里的位置”两个状态判断是否完整（<code>:126-150</code>）。新的工具调用打断旧的未完成调用时，旧的会被删掉（<code>:131-134</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["历史消息序列"] --> B{"是助手且带工具调用吗"}
+  B -- 是 --> C["记录待配对数量与位置"]
+  B -- 否 --> D{"是工具结果吗"}
+  D -- 是 --> E{"有待配对调用吗"}
+  E -- 是 --> F["配对成功，计数减一"]
+  E -- 否 --> G["孤悬，跳过"]
+  D -- 否 --> H{"仍有未完成调用吗"}
+  H -- 是 --> I["移除那条助手消息"]
+  H -- 否 --> J["保留"]
+  C --> K["继续扫描"]
+  F --> K
+  G --> K
+  I --> K
+  J --> K</pre></div>
+<h2 id="热路径与落盘">热路径与落盘</h2>
+<p>消息追加只改内存并标脏（<code>:237-273</code>），然后调度一个去抖任务：等半秒再写盘（<code>:195-207</code>）。同一轮里连续追加多条消息，会被合并成一次写盘。写盘本身放进线程池，不阻塞事件循环（<code>:209-215</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>行为</th><th>是否碰磁盘</th></tr></thead><tbody><tr><td>追加消息</td><td>改内存、标脏、调度任务</td><td>否</td></tr><tr><td>去抖等待</td><td>半秒内继续合并</td><td>否</td></tr><tr><td>异步落盘</td><td>线程池写文件</td><td>是</td></tr><tr><td>检查点落盘</td><td>取消等待，立即写并等完成</td><td>是</td></tr></tbody></table>
+<p>检查点由循环在每次模型请求前调用（<code>:217-233</code>）。它的语义是“模型看到的都必须已经落盘”：先取消还没触发的去抖任务，再立即持久化并等待完成。失败只记日志，不打断本轮（<code>:232-233</code>）。</p>
+<p>还有一个细节：没有事件循环的同步调用路径会退化为直接同步保存（<code>:185-191</code>），保持旧行为可用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant L as 循环
+  participant S as 会话对象
+  participant T as 线程池
+  participant F as 会话文件
+  L->>S: 追加消息
+  S->>S: 标脏并调度去抖任务
+  L->>S: flush 检查点
+  S->>S: 取消去抖任务
+  S->>T: 提交写盘
+  T->>F: 临时文件写入
+  T->>F: 替换目标文件
+  T-->>S: 完成
+  S-->>L: 继续请求模型</pre></div>
+<h2 id="裁剪与工具配对">裁剪与工具配对</h2>
+<p>裁剪保留全部系统消息，只对非系统消息设上限（<code>:278-289</code>）。裁切点如果落在工具消息上，会向前回溯到对应的助手工具调用消息，避免产生孤悬工具（<code>:284-287</code>）。</p>
+<p>循环在每次出口前裁剪一次，自迭代模式每五轮再额外裁剪一次、上限翻倍（<code>backend/agent/loop.py:543-544</code>）。额外裁剪的意义是长循环下主动回收上下文。</p>
+<h2 id="内存会话与淘汰">内存会话与淘汰</h2>
+<p>会话对象按“用户与会话号”的键保存在单例里（<code>:312-352</code>）。上限 50 个，超出时淘汰最久未活跃的那个，同时清理它的锁（<code>:330-339</code>）。</p>
+<p>锁是每键一把，循环进入时获取（<code>:348-352</code>）。淘汰与清空都会同时移除锁与历史，避免锁留在字典里泄漏。</p>
+<h2 id="系统提示里有什么">系统提示里有什么</h2>
+<p>系统提示是一个长字符串（<code>context.py:24-77</code>），内容分四块：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>块</th><th>内容</th></tr></thead><tbody><tr><td>质量分数解释</td><td>各字段含义与判读阈值</td></tr><tr><td>工作流</td><td>先本地检索，联网前先评估，刷新是最后手段</td></tr><tr><td>知识库构建规范</td><td>概念命名、领域限定、禁止孤立卡、搜索节奏</td></tr><tr><td>规则</td><td>中文回答、如实报告失败、禁止模拟工具调用</td></tr></tbody></table>
+<p>质量字段的解释需要单独记住：它写明各维度默认值 0.5 表示“无法评估”而不是“质量中等”（<code>:37</code>）；语义分缺少向量或没有可比邻居时取 0.5（<code>:32</code>）；<code>gap_percentile</code> 是会话内相对位置，1.0 表示本会话最弱，不等同绝对质量（<code>:38</code>）。这几句直接决定模型如何解读评分，写错会系统性误导判断。</p>
+<p>工作流部分还写入了搜索节奏的硬性要求：两次关键词搜索之间必须至少调用一次读层工具；返回被拦或本地命中时必须停下来读本地卡（<code>:64</code>）。这条规则与执行器的搜索熔断是同一意图的两个层次：一个在提示层劝导，一个在代码层强制。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为追加消息会立即写盘。它只标脏。</li>
+<li>忽略检查点的取消语义。它会打断去抖等待。</li>
+<li>认为清洗只处理孤立工具消息。还处理结果不足与末尾悬空。</li>
+<li>认为裁剪只按条数。它还会回溯保证配对。</li>
+<li>忽略会话上限 50 与淘汰策略。</li>
+<li>把 0.5 当作质量中等。提示里写明是无法评估。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>存储位置</td><td><code>data/agent/用户/会话.json</code></td><td><code>backend/agent/context.py:80-85</code></td></tr><tr><td>写盘方式</td><td>临时文件加替换</td><td><code>:99-105</code></td></tr><tr><td>加载处理</td><td>覆盖系统提示并清洗</td><td><code>:164-169</code></td></tr><tr><td>清洗畸变</td><td>孤悬工具、结果不足、末尾悬空</td><td><code>:115-154</code></td></tr><tr><td>去抖间隔</td><td>0.5 秒</td><td><code>:22</code></td></tr><tr><td>检查点</td><td>取消去抖后立即落盘</td><td><code>:217-233</code></td></tr><tr><td>裁剪</td><td>保留系统消息，回溯配对</td><td><code>:278-289</code></td></tr><tr><td>会话上限</td><td>50，淘汰最久未活跃</td><td><code>:330-339</code></td></tr><tr><td>默认值语义</td><td>0.5 表示无法评估</td><td><code>:37</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>内存为准、磁盘异步</td><td>热路径不阻塞</td><td>崩溃可能丢半秒内更新</td></tr><tr><td>检查点强制落盘</td><td>模型所见已持久化</td><td>每轮多一次写盘等待</td></tr><tr><td>清洗替代报错</td><td>旧历史可继续使用</td><td>静默删除部分消息</td></tr><tr><td>裁剪回溯配对</td><td>不产生非法请求</td><td>实际保留条数略多于上限</td></tr><tr><td>内存会话上限 50</td><td>防止无界增长</td><td>高并发下会淘汰活跃会话</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出会话文件的路径规则与写盘方式。</li>
+<li>说明三种需要清洗的畸变及处理。</li>
+<li>对比去抖落盘与检查点落盘的差别。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给清洗过程加统计日志，说明需要的字段与用途。</li>
+<li>设计会话淘汰的可配置策略（按活跃时间或按内存占用）。</li>
+<li>把系统提示拆成版本化文件并记录每轮使用的版本，说明收益。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/agent/context.py</code></td><td>会话历史、持久化与系统提示</td></tr><tr><td><code>backend/agent/loop.py</code></td><td>检查点与裁剪调用点</td></tr><tr><td><code>backend/agent/routes/agent.py</code></td><td>历史读取与清空接口</td></tr><tr><td><code>backend/agent/tree_cache.py</code></td><td>树摘要缓存</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-后台循环与消息通道"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-后台循环与消息通道</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/21-Agent 与 LLM/03-AgentLoop与上下文/04-后台循环与消息通道.md</span></div><div class="dfile__body"><h1 id="后台循环与消息通道">后台循环与消息通道</h1>
+<p>如果让 SSE 响应直接消费循环生成器，前端一断开，生成器就被取消，正在跑的工具和后台流水线任务也跟着被取消。用户刷新一次页面，半小时的工作可能白做。这个模块存在的理由就是解决这一件事：把循环放到后台任务里跑，SSE 只是订阅者。</p>
+<p>解耦之后，循环的生命周期与连接生命周期分开。断开只结束订阅；重新连接后订阅同一个事件队列，还能看到断开期间积压的事件。用户中途发消息也不再需要新开一轮，而是通过一个通道注入正在运行的循环。</p>
+<h2 id="后台任务与事件队列">后台任务与事件队列</h2>
+<p>管理器是单例，内部按“用户与会话”维护两张表：任务与队列（<code>backend/agent/manager.py:26-43</code>）。启动逻辑很短（<code>:49-71</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> start</span><span style="color:#24292E">(self, key: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, generator) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.is_running(key):</span></span>
+<span class="line"><span style="color:#D73A49">        return</span></span>
+<span class="line"><span style="color:#24292E">    q: asyncio.Queue </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.Queue()</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._queues[key] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> q</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> _consume</span><span style="color:#24292E">() -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">            async</span><span style="color:#D73A49"> for</span><span style="color:#24292E"> event </span><span style="color:#D73A49">in</span><span style="color:#24292E"> generator:</span></span>
+<span class="line"><span style="color:#D73A49">                await</span><span style="color:#24292E"> q.put(event)</span></span>
+<span class="line"><span style="color:#005CC5">        ...</span></span>
+<span class="line"><span style="color:#D73A49">        finally</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">            await</span><span style="color:#24292E"> q.put(_sse(</span><span style="color:#032F62">"complete"</span><span style="color:#24292E">, {</span><span style="color:#032F62">"turns"</span><span style="color:#24292E">: </span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#032F62">"tools_used"</span><span style="color:#24292E">: [], </span><span style="color:#032F62">"interrupted"</span><span style="color:#24292E">: </span><span style="color:#005CC5">True</span><span style="color:#24292E">}))</span></span>
+<span class="line"><span style="color:#D73A49">            await</span><span style="color:#24292E"> asyncio.sleep(</span><span style="color:#005CC5">0.2</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">            self</span><span style="color:#24292E">._queues.pop(key, </span><span style="color:#005CC5">None</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">            self</span><span style="color:#24292E">._tasks.pop(key, </span><span style="color:#005CC5">None</span><span style="color:#24292E">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._tasks[key] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.create_task(_consume())</span></span></code></pre>
+<p>同一个键已有运行中的循环时，启动请求被忽略（<code>:50-52</code>），不会出现两个循环抢同一份历史。</p>
+<p>消费任务的三种结束路径都会写入队列：正常结束不额外写；被取消写一条取消错误；异常写一条错误消息（<code>:56-64</code>）。无论哪种路径，收尾都会补一条“完成”事件并标记为已中断（<code>:65-69</code>）。清理队列与任务前等待 0.2 秒，给订阅者一点时间把最后的事件读走。</p>
+<h2 id="订阅与心跳">订阅与心跳</h2>
+<p>订阅逻辑处理三种情况（<code>:73-91</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>行为</th></tr></thead><tbody><tr><td>没有队列或循环不在跑</td><td>返回一条错误事件后结束</td></tr><tr><td>15 秒内收到事件</td><td>立即转发</td></tr><tr><td>15 秒无事件且循环仍在跑</td><td>发送心跳注释行</td></tr></tbody></table>
+<p>心跳用的是 SSE 注释行，前端不展示内容但能据此判断连接存活（<code>:89</code>）。注释说明前端只看“有没有数据”。</p>
+<p>结束判定用的是字符串包含：事件里出现完成标记就返回（<code>:84-85</code>）。这是从代码读出的一个粗糙点——它不解析 JSON，只做子串匹配，语义上依赖事件格式保持稳定。</p>
+<p>需要注意完成事件可能出现两次：生成器自身在出口处会发一条完成事件，管理器的收尾也会补一条标记中断的完成事件。订阅者在第一条处就返回，因此第二条通常不会被读到，但队列里确实存在。这是从代码读出的顺序，未实际观测双事件。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["POST 聊天"] --> B{"该会话循环在跑吗"}
+  B -- 是 --> C["注入消息到通道"]
+  C --> D["订阅事件队列"]
+  B -- 否 --> E["启动后台任务"]
+  E --> D
+  D --> F{"队列里有事件吗"}
+  F -- 有 --> G["转发事件"]
+  G --> H{"含完成标记吗"}
+  H -- 是 --> I["结束订阅"]
+  H -- 否 --> F
+  F -- 15 秒无事件 --> J{"循环还在跑吗"}
+  J -- 是 --> K["发送心跳"]
+  K --> F
+  J -- 否 --> I</pre></div>
+<h2 id="中途消息的注入通道">中途消息的注入通道</h2>
+<p>通道模块只做一件事：接收外部消息、交给循环（<code>backend/agent/bridge.py:1-38</code>）。结构是按键维护的队列，注册时创建，注销时删除，发送时若没有队列就静默丢弃（<code>:24-28</code>），接收是非阻塞的，队列为空返回空值（<code>:30-37</code>）。</p>
+<p>循环在两处读取通道：自迭代模式在每轮开头（<code>backend/agent/loop.py:476-480</code>），普通模式在每个回合开头（<code>:563-568</code>）。读到消息后做三件事：加入历史、失效树摘要缓存、向界面回显一条“收到用户消息”的文本事件。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>目的</th></tr></thead><tbody><tr><td>加入历史</td><td>让模型在下一轮看到指令</td></tr><tr><td>失效树缓存</td><td>外部可能已改库</td></tr><tr><td>回显事件</td><td>让用户知道消息已送达</td></tr></tbody></table>
+<p>普通模式还会把它记为“用户最新指令”，在决策消息末尾再强调一次（<code>:563-565</code>），因为普通模式一轮可能包含多次模型调用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant U as 前端
+  participant R as 聊天接口
+  participant M as 后台管理器
+  participant B as 消息通道
+  participant L as 循环
+  U->>R: POST 聊天（循环已在跑）
+  R->>B: 发送消息
+  R->>M: 订阅队列
+  L->>B: 轮首读取
+  B-->>L: 返回消息
+  L->>L: 加入历史并失效树缓存
+  L-->>M: 回显事件
+  M-->>U: 转发事件
+  U->>U: 页面刷新后重新订阅
+  M-->>U: 回放积压事件</pre></div>
+<h2 id="四个接口">四个接口</h2>
+<p>路由模块提供四个端点（<code>backend/agent/routes/agent.py</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方法与路径</th><th>作用</th><th>关键行为</th></tr></thead><tbody><tr><td><code>GET /api/agent/history</code></td><td>读历史</td><td>取或建会话后返回消息列表</td></tr><tr><td><code>POST /api/agent/chat</code></td><td>发消息</td><td>循环在跑则注入，否则启动</td></tr><tr><td><code>GET /api/agent/stream</code></td><td>重连订阅</td><td>无循环时返回错误事件</td></tr><tr><td><code>POST /api/agent/clear</code></td><td>清空</td><td>删会话与锁</td></tr></tbody></table>
+<p>聊天接口的分支逻辑体现了整体设计（<code>:36-66</code>）：先算键，若循环在跑，就把消息发进通道再订阅；否则用消息启动新循环再订阅。两条路径返回的响应头一致，都关闭缓冲并禁用缓存（<code>:45-48</code>），保证事件及时到达。</p>
+<p>重连端点注释写明用途是刷新页面后回连，并强调断开订阅不影响循环继续运行（<code>:74-76</code>）。历史端点直接用会话对象的转模型消息方法，返回完整消息列表（<code>:22-24</code>），前端可据此恢复界面。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为断开 SSE 会取消循环。循环在后台任务里。</li>
+<li>认为刷新会丢失进度。重连可订阅同一队列回放积压。</li>
+<li>忽略 15 秒无事件发心跳。这是连接存活的判据。</li>
+<li>认为完成事件只有一条。管理器收尾还会补一条。</li>
+<li>认为通道会缓存未送达消息。没有队列时静默丢弃。</li>
+<li>认为重复启动会开两个循环。已运行时直接忽略。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>解耦方式</td><td>后台任务加事件队列</td><td><code>backend/agent/manager.py:1-9</code></td></tr><tr><td>重复启动</td><td>直接忽略</td><td><code>:49-52</code></td></tr><tr><td>收尾事件</td><td>完成并标记中断</td><td><code>:65-69</code></td></tr><tr><td>心跳</td><td>15 秒超时发注释行</td><td><code>:82-89</code></td></tr><tr><td>结束判定</td><td>事件字符串含完成标记</td><td><code>:84-85</code></td></tr><tr><td>通道</td><td>每键队列，非阻塞收发</td><td><code>backend/agent/bridge.py:12-37</code></td></tr><tr><td>通道读取点</td><td>每轮或每回合开头</td><td><code>backend/agent/loop.py:476</code>、<code>:563</code></td></tr><tr><td>接口数</td><td>四个</td><td><code>backend/agent/routes/agent.py:15-101</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>循环后台运行</td><td>断连不丢工作</td><td>需要额外的生命周期管理</td></tr><tr><td>队列订阅与回放</td><td>刷新后接着看</td><td>队列在内存，进程重启即失</td></tr><tr><td>心跳注释行</td><td>连接存活可观测</td><td>15 秒粒度较粗</td></tr><tr><td>子串判定完成</td><td>实现简单</td><td>依赖事件格式稳定</td></tr><tr><td>通道无队列即丢弃</td><td>不会堆积消息</td><td>循环结束后消息静默丢失</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明循环与 SSE 解耦要解决的具体问题。</li>
+<li>写出订阅的三种情况与处理。</li>
+<li>列出四个接口的作用与关键行为。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把完成判定改为解析 JSON 事件类型，说明兼容与回归方案。</li>
+<li>为通道增加投递确认或离线缓冲，说明对交互体验的影响。</li>
+<li>设计循环状态的查询接口（运行中、已用轮数、最近事件序号）。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/agent/manager.py</code></td><td>后台任务、队列与订阅</td></tr><tr><td><code>backend/agent/bridge.py</code></td><td>中途消息通道</td></tr><tr><td><code>backend/agent/routes/agent.py</code></td><td>四个 Agent 接口</td></tr><tr><td><code>backend/agent/loop.py</code></td><td>通道读取点与事件产出</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/21-Agent%20%E4%B8%8E%20LLM/02-%E5%B7%A5%E5%85%B7%E6%B3%A8%E5%86%8C%E4%B8%8E%E8%B0%83%E7%94%A8/"><span class="k">← 上一篇</span><span class="t">工具注册与调用</span><span class="d">Agent 与 LLM · 4 个文件</span></a><a class="next" href="/tc63/docs/21-Agent%20%E4%B8%8E%20LLM/04-%E6%8F%90%E7%A4%BA%E6%B3%A8%E5%85%A5%E9%98%B2%E6%8A%A4/"><span class="k">下一篇 →</span><span class="t">提示注入防护</span><span class="d">Agent 与 LLM · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

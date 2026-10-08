@@ -1,0 +1,1904 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>鉴权 · FastAPI 后端 · 王宇翔</title><meta name="description" content="access token 的字段构成、HS256 签名与密钥来源、解码失败与载荷缺失的处理路径，以及前端如何保存与携带令牌"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/03-%E9%89%B4%E6%9D%83/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="鉴权 · FastAPI 后端 · 王宇翔"><meta property="og:description" content="access token 的字段构成、HS256 签名与密钥来源、解码失败与载荷缺失的处理路径，以及前端如何保存与携带令牌"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/03-%E9%89%B4%E6%9D%83/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/">FastAPI 后端</a><span class="sep" aria-hidden="true">/</span><span class="now">鉴权</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>鉴权</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>JWT 的签发与校验</span></a><ul class="toc__heads"><li><a href="#1-令牌的载荷与签名" data-depth="2" data-heading-j="0">1. 令牌的载荷与签名</a></li><li><a href="#2-有效期与配置来源" data-depth="2" data-heading-j="1">2. 有效期与配置来源</a></li><li><a href="#3-解码与失败处理" data-depth="2" data-heading-j="2">3. 解码与失败处理</a></li><li><a href="#4-令牌与用户对象的对应" data-depth="2" data-heading-j="3">4. 令牌与用户对象的对应</a></li><li><a href="#5-模型层对令牌的声明" data-depth="2" data-heading-j="4">5. 模型层对令牌的声明</a></li><li><a href="#6-前端侧的保存与携带" data-depth="2" data-heading-j="5">6. 前端侧的保存与携带</a></li><li><a href="#7-无状态带来的边界" data-depth="2" data-heading-j="6">7. 无状态带来的边界</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>密码哈希与截断</span></a><ul class="toc__heads"><li><a href="#1-三个函数的职责" data-depth="2" data-heading-j="0">1. 三个函数的职责</a></li><li><a href="#2-72-字节截断的字节级处理" data-depth="2" data-heading-j="1">2. 72 字节截断的字节级处理</a></li><li><a href="#3-哈希与校验的调用链" data-depth="2" data-heading-j="2">3. 哈希与校验的调用链</a></li><li><a href="#4-请求模型的长度约束与截断的关系" data-depth="2" data-heading-j="3">4. 请求模型的长度约束与截断的关系</a></li><li><a href="#5-校验失败时的统一返回" data-depth="2" data-heading-j="4">5. 校验失败时的统一返回</a></li><li><a href="#6-注册路径的重复用户名" data-depth="2" data-heading-j="5">6. 注册路径的重复用户名</a></li><li><a href="#7-与积分初始化的衔接" data-depth="2" data-heading-j="6">7. 与积分初始化的衔接</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>用户存储与凭据校验</span></a><ul class="toc__heads"><li><a href="#1-八个方法的分工" data-depth="2" data-heading-j="0">1. 八个方法的分工</a></li><li><a href="#2-建表语句里的默认值" data-depth="2" data-heading-j="1">2. 建表语句里的默认值</a></li><li><a href="#3-创建用户的流程" data-depth="2" data-heading-j="2">3. 创建用户的流程</a></li><li><a href="#4-凭据校验的流程" data-depth="2" data-heading-j="3">4. 凭据校验的流程</a></li><li><a href="#5-模型与行的双向转换" data-depth="2" data-heading-j="4">5. 模型与行的双向转换</a></li><li><a href="#6-更新接口的写法" data-depth="2" data-heading-j="5">6. 更新接口的写法</a></li><li><a href="#7-原始字典接口的用途" data-depth="2" data-heading-j="6">7. 原始字典接口的用途</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>受保护端点的鉴权面</span></a><ul class="toc__heads"><li><a href="#1-httpbearer-的接入" data-depth="2" data-heading-j="0">1. HTTPBearer 的接入</a></li><li><a href="#2-十一个模块的保护面" data-depth="2" data-heading-j="1">2. 十一个模块的保护面</a></li><li><a href="#3-公开端点清单" data-depth="2" data-heading-j="2">3. 公开端点清单</a></li><li><a href="#4-受保护请求的完整路径" data-depth="2" data-heading-j="3">4. 受保护请求的完整路径</a></li><li><a href="#5-缺凭证与凭证无效的状态码差异" data-depth="2" data-heading-j="4">5. 缺凭证与凭证无效的状态码差异</a></li><li><a href="#6-端点签名的两种保护写法" data-depth="2" data-heading-j="5">6. 端点签名的两种保护写法</a></li><li><a href="#7-前端侧的携带一致性" data-depth="2" data-heading-j="6">7. 前端侧的携带一致性</a></li><li><a href="#8-易错点" data-depth="2" data-heading-j="7">8. 易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="10">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-风险清单" data-depth="2" data-heading-j="0">1. 风险清单</a></li><li><a href="#2-启动期密钥与配置" data-depth="2" data-heading-j="1">2. 启动期：密钥与配置</a></li><li><a href="#3-请求期状态码的含义" data-depth="2" data-heading-j="2">3. 请求期：状态码的含义</a></li><li><a href="#4-请求期令牌与前端携带" data-depth="2" data-heading-j="3">4. 请求期：令牌与前端携带</a></li><li><a href="#5-请求期密码与哈希" data-depth="2" data-heading-j="4">5. 请求期：密码与哈希</a></li><li><a href="#6-访问面公开端点与重复常量" data-depth="2" data-heading-j="5">6. 访问面：公开端点与重复常量</a></li><li><a href="#7-容易走错的方向" data-depth="2" data-heading-j="6">7. 容易走错的方向</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#练习" data-depth="2" data-heading-j="8">练习</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="9">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">FastAPI 后端</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>鉴权 / JWT / HS256 / access token / 无状态 / bcrypt / 密码哈希 / UTF-8</span></div><h1 class="docs__title">鉴权</h1><p class="docs__lead">access token 的字段构成、HS256 签名与密钥来源、解码失败与载荷缺失的处理路径，以及前端如何保存与携带令牌</p></header><section class="dfile" id="file-1" data-file="01-JWT的签发与校验"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-JWT的签发与校验</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/03-鉴权/01-JWT的签发与校验.md</span></div><div class="dfile__body"><h1 id="jwt-的签发与校验">JWT 的签发与校验</h1>
+<p>鉴权的凭据是一枚无状态 JWT：登录成功后服务端签发，后续请求把它放进 <code>Authorization: Bearer</code> 头。签发与解析都在 <code>backend/auth/jwt.py</code>，共 51 行；解码结果直接给 <code>get_current_user</code> 使用（<code>backend/routes/auth.py:28-55</code>）。</p>
+<p>令牌本身的构成与生命周期在这里展开。密码一侧在 <code>02-密码哈希与截断.md</code>，用户存储在 <code>03-用户存储与凭据校验.md</code>，端点上的鉴权面在 <code>04-受保护端点的鉴权面.md</code>。</p>
+<h2 id="1-令牌的载荷与签名">1. 令牌的载荷与签名</h2>
+<p><code>create_access_token</code> 接收一个字典，复制后补上过期时间再编码（<code>backend/auth/jwt.py:18-35</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">to_encode </span><span style="color:#D73A49">=</span><span style="color:#24292E"> data.copy()</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> expires_delta:</span></span>
+<span class="line"><span style="color:#24292E">    expire </span><span style="color:#D73A49">=</span><span style="color:#24292E"> datetime.utcnow() </span><span style="color:#D73A49">+</span><span style="color:#24292E"> expires_delta</span></span>
+<span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    expire </span><span style="color:#D73A49">=</span><span style="color:#24292E"> datetime.utcnow() </span><span style="color:#D73A49">+</span><span style="color:#24292E"> timedelta(</span><span style="color:#E36209">minutes</span><span style="color:#D73A49">=</span><span style="color:#005CC5">ACCESS_TOKEN_EXPIRE_MINUTES</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">to_encode.update({</span><span style="color:#032F62">"exp"</span><span style="color:#24292E">: expire})</span></span>
+<span class="line"><span style="color:#24292E">encoded_jwt </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jwt.encode(to_encode, </span><span style="color:#005CC5">JWT_SECRET</span><span style="color:#24292E">, </span><span style="color:#E36209">algorithm</span><span style="color:#D73A49">=</span><span style="color:#005CC5">ALGORITHM</span><span style="color:#24292E">)</span></span></code></pre>
+<p>载荷只有两个声明：调用方传入的 <code>sub</code> 与内部写入的 <code>exp</code>。没有 <code>iss</code>、<code>aud</code>、<code>jti</code>，也没有自定义的角色声明。签名算法来自配置（<code>:14</code> 的 <code>ALGORITHM = JWT_ALGORITHM</code>），密钥同样来自配置（<code>backend/config.py:168-171</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>声明</th><th>来源</th><th>用途</th></tr></thead><tbody><tr><td><code>sub</code></td><td>调用方传入的用户名</td><td>解析后定位用户</td></tr><tr><td><code>exp</code></td><td><code>utcnow</code> 加有效期</td><td>过期校验由库完成</td></tr></tbody></table>
+<p>两个调用点都在 <code>backend/routes/auth.py</code>，注册与登录成功各一次（<code>:70</code>、<code>:89</code>），传入的都是 <code>{"sub": user.username}</code>。</p>
+<h2 id="2-有效期与配置来源">2. 有效期与配置来源</h2>
+<p>有效期的计算是 <code>60 * JWT_EXPIRATION_HOURS</code> 分钟（<code>backend/auth/jwt.py:15</code>），<code>JWT_EXPIRATION_HOURS</code> 默认 4（<code>backend/config.py:172</code>），所以默认有效期是 240 分钟。</p>
+<p><code>backend/auth/jwt.py:5</code> 的模块注释写「默认有效期 24 小时」，与默认配置不一致。注释没有随配置变化更新，读文档不如读配置。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>来源</th><th>值</th><th>位置</th></tr></thead><tbody><tr><td>模块注释</td><td>24 小时</td><td><code>auth/jwt.py:5</code></td></tr><tr><td>配置默认值</td><td>4 小时</td><td><code>backend/config.py:172</code></td></tr><tr><td>实际计算</td><td>240 分钟</td><td><code>auth/jwt.py:15</code></td></tr></tbody></table>
+<h2 id="3-解码与失败处理">3. 解码与失败处理</h2>
+<p><code>decode_access_token</code> 用同一密钥与算法解码，捕获 <code>JWTError</code> 后返回 <code>None</code>（<code>backend/auth/jwt.py:38-51</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    payload </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jwt.decode(token, </span><span style="color:#005CC5">JWT_SECRET</span><span style="color:#24292E">, </span><span style="color:#E36209">algorithms</span><span style="color:#D73A49">=</span><span style="color:#24292E">[</span><span style="color:#005CC5">ALGORITHM</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> payload</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#24292E"> JWTError:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> None</span></span></code></pre>
+<p>过期、签名不符、结构损坏都会落进 <code>JWTError</code>，统一返回 <code>None</code>。调用方拿到的只是一个空值，无法区分过期与其他原因；若需要区分，要在这一层保留异常信息。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["Authorization Bearer 令牌"] --> B["jwt.decode"]
+  B -->|JWTError| C["返回 None"]
+  B -->|通过| D["返回 payload 字典"]
+  C --> E["get_current_user 抛 401 认证凭据无效"]
+  D --> F{"payload.get sub"}
+  F -->|None| E
+  F -->|username| G["查用户并返回 User"]</pre></div>
+<h2 id="4-令牌与用户对象的对应">4. 令牌与用户对象的对应</h2>
+<p><code>get_current_user</code> 用 <code>payload.get("sub")</code> 取用户名（<code>backend/routes/auth.py:40</code>），再查库返回 <code>User</code>。签名与有效期由库校验，用户是否仍然存在由这一层校验：令牌未过期但用户被删除时，返回 401 <code>用户不存在</code>（<code>:49-54</code>）。</p>
+<p>令牌本身不携带权限信息，权限判断依赖查到的用户记录（会员等级、积分等）。这一设计让权限变更立即生效，不需要等令牌过期。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>校验项</th><th>执行者</th><th>失败响应</th></tr></thead><tbody><tr><td>签名与有效期</td><td><code>jwt.decode</code></td><td>401 <code>认证凭据无效</code></td></tr><tr><td><code>sub</code> 存在性</td><td><code>get_current_user</code></td><td>401 <code>认证凭据无效</code></td></tr><tr><td>用户存在性</td><td><code>get_current_user</code></td><td>401 <code>用户不存在</code></td></tr></tbody></table>
+<h2 id="5-模型层对令牌的声明">5. 模型层对令牌的声明</h2>
+<p><code>backend/models/user.py</code> 定义了两个与令牌相关的模型：<code>Token</code>（<code>:56-59</code>）是登录与注册的响应模型，两个字段中 <code>token_type</code> 默认 <code>"bearer"</code>；<code>TokenData</code>（<code>:62-64</code>）是解码后载荷的声明，字段为可选的 <code>username</code>。</p>
+<p><code>TokenData</code> 在仓库里没有任何引用点。<code>decode_access_token</code> 的返回类型标注是 <code>Optional[dict]</code>（<code>auth/jwt.py:38</code>），调用方按字典取值，不构造 <code>TokenData</code>。这个模型目前是一条未接线的声明。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph LR
+  A["routes/auth.py 注册与登录"] --> B["create_access_token sub 加 exp"]
+  B --> C["JWT 字符串"]
+  C --> D["响应模型 Token"]
+  D --> E["前端 localStorage"]
+  E --> F["请求头 Authorization"]
+  F --> G["get_current_user"]
+  G --> H["decode_access_token"]
+  H -->|失败| I["401 认证凭据无效"]
+  H -->|成功| J["查库返回 User"]</pre></div>
+<h2 id="6-前端侧的保存与携带">6. 前端侧的保存与携带</h2>
+<p>前端把令牌存在 <code>localStorage</code>，键名是 <code>knowledgeDiver.token</code>（<code>frontend/src/api/auth.ts:3-15</code>）。登录成功立即写入（<code>:55</code>），请求时若存在就补上 <code>Authorization</code> 头（<code>:23-25</code>）。这套写法集中在 <code>api/auth.ts</code> 的 <code>authFetch</code> 里，Agent 模块另有自己的取令牌逻辑（<code>frontend/src/api/agent.ts:50-54</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>位置</th><th>行为</th></tr></thead><tbody><tr><td>存储键</td><td><code>api/auth.ts:3</code></td><td><code>knowledgeDiver.token</code></td></tr><tr><td>写入</td><td><code>:55</code></td><td>登录成功后 <code>setToken</code></td></tr><tr><td>携带</td><td><code>:23-25</code></td><td>有令牌才加 <code>Authorization</code></td></tr><tr><td>清除</td><td><code>:13-15</code></td><td><code>clearToken</code> 移除键</td></tr></tbody></table>
+<p>存放在 <code>localStorage</code> 意味着同源脚本可以读取，页面出现脚本注入时令牌可被外带。换成 <code>HttpOnly</code> Cookie 需要后端改造认证入口，属另一种权衡。</p>
+<h2 id="7-无状态带来的边界">7. 无状态带来的边界</h2>
+<p>服务端不记录已签发的令牌，因此没有主动吊销接口，也没有刷新令牌。要让一枚令牌提前失效，只能更换 <code>JWT_SECRET</code>，这会同时使所有已签发令牌失效，代价是所有人重新登录。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>能力</th><th>是否具备</th><th>说明</th></tr></thead><tbody><tr><td>过期校验</td><td>有</td><td><code>exp</code> 声明</td></tr><tr><td>主动吊销</td><td>无</td><td>无签发记录</td></tr><tr><td>刷新令牌</td><td>无</td><td>到期后重新登录</td></tr><tr><td>权限即时生效</td><td>有</td><td>每次请求查库取用户</td></tr></tbody></table>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>按注释判断有效期</td><td>注释 24 小时，实际默认 4 小时</td><td><code>auth/jwt.py:5</code> 与 <code>backend/config.py:172</code></td></tr><tr><td>期望解码失败有具体原因</td><td>统一返回 <code>None</code></td><td><code>auth/jwt.py:50-51</code></td></tr><tr><td>认为 <code>TokenData</code> 在用</td><td>无引用点</td><td><code>models/user.py:62-64</code></td></tr><tr><td>以为可以吊销单个令牌</td><td>无记录，只能换密钥</td><td><code>auth/jwt.py:18-51</code></td></tr><tr><td>依赖令牌携带权限</td><td>权限从库里的用户记录读取</td><td><code>routes/auth.py:47-55</code></td></tr><tr><td>忘记登录后写入令牌</td><td>请求缺少 <code>Authorization</code> 头</td><td><code>frontend/src/api/auth.ts:55</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>载荷构成</td><td>只有 <code>sub</code> 与 <code>exp</code> 两个声明</td></tr><tr><td>签名</td><td>HS256，密钥与算法都来自配置</td></tr><tr><td>有效期</td><td>默认 4 小时，模块注释写的 24 小时已过期</td></tr><tr><td>解码失败</td><td>统一返回 <code>None</code>，由调用方转成 401</td></tr><tr><td>前端保存</td><td><code>localStorage</code> 键 <code>knowledgeDiver.token</code>，请求头携带</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>无状态令牌</td><td>不记录签发</td><td>服务端无需会话存储</td><td>无法吊销单个令牌</td></tr><tr><td>载荷精简</td><td>只放用户名</td><td>令牌小，权限实时</td><td>每次请求多一次查库</td></tr><tr><td>失败统一</td><td><code>None</code></td><td>调用方处理简单</td><td>丢失失败原因</td></tr><tr><td>存储位置</td><td><code>localStorage</code></td><td>前端实现简单</td><td>存在脚本读取风险</td></tr><tr><td>默认有效期</td><td>4 小时</td><td>暴露窗口较短</td><td>用户需要更频繁登录</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>写出令牌载荷的两个声明与各自的来源。</li>
+<li>默认有效期是多少分钟？模块注释与配置是否一致？</li>
+<li><code>decode_access_token</code> 在哪些情况下返回 <code>None</code>？</li>
+<li>前端把令牌存在哪里？请求时怎么携带？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>为解码失败增加原因区分（过期、签名错误、结构损坏），说明需要保留的异常信息与调用方的改动。</li>
+<li>设计一个支持吊销的方案，要求保留无状态校验路径并能定位到单枚令牌，说明需要新增的存储与请求开销。</li>
+<li>把令牌改为 <code>HttpOnly</code> Cookie 保存，列出后端与前端各自的改动点及对现有脚本调用方的影响。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/auth/jwt.py</code></td><td>模块注释（:5）、有效期计算（:15）、签发（:18-35）、解析（:38-51）</td></tr><tr><td><code>backend/config.py</code></td><td><code>JWT_*</code> 配置与校验（:168-172）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>签发调用（:70、:89）、<code>get_current_user</code>（:28-55）</td></tr><tr><td><code>backend/models/user.py</code></td><td><code>Token</code> 与 <code>TokenData</code>（:56-64）</td></tr><tr><td><code>frontend/src/api/auth.ts</code></td><td>令牌键与读写（:3-15）、登录写入（:55）、请求头（:23-25）</td></tr><tr><td><code>frontend/src/api/agent.ts</code></td><td>Agent 模块的取令牌与携带（:50-54）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-密码哈希与截断"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-密码哈希与截断</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/03-鉴权/02-密码哈希与截断.md</span></div><div class="dfile__body"><h1 id="密码哈希与截断">密码哈希与截断</h1>
+<p>密码在仓库里只以 bcrypt 哈希的形式出现：注册时哈希入库，登录时比对。<code>backend/auth/password.py</code> 共 63 行，除两个公开函数外还有一个处理 72 字节边界的截断函数，它解决的问题是多字节字符被切在中间。</p>
+<p>哈希与截断的实现是这里的重点。令牌一侧在 <code>01-JWT的签发与校验.md</code>，用户存储与凭据查询在 <code>03-用户存储与凭据校验.md</code>。</p>
+<h2 id="1-三个函数的职责">1. 三个函数的职责</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>函数</th><th>输入</th><th>输出</th><th>位置</th></tr></thead><tbody><tr><td><code>_truncate_utf8</code></td><td>字符串与上限字节数</td><td>UTF-8 字节串</td><td><code>backend/auth/password.py:11-33</code></td></tr><tr><td><code>verify_password</code></td><td>明文与哈希字符串</td><td>布尔值</td><td><code>:36-48</code></td></tr><tr><td><code>get_password_hash</code></td><td>明文</td><td>哈希字符串</td><td><code>:51-63</code></td></tr></tbody></table>
+<p>模块注释直接写明约束来源：bcrypt 内部按 C 字符串处理，超过 72 字节的部分会被静默忽略（<code>:4</code>、<code>:14</code>）。截断函数的存在是为了在这个限制下保持确定性：同一段明文截断后再哈希，结果稳定；若让库自己截断，边界行为依赖实现。</p>
+<h2 id="2-72-字节截断的字节级处理">2. 72 字节截断的字节级处理</h2>
+<p><code>_truncate_utf8</code> 的处理分四步（<code>backend/auth/password.py:24-33</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">encoded </span><span style="color:#D73A49">=</span><span style="color:#24292E"> text.encode(</span><span style="color:#032F62">'utf-8'</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> len</span><span style="color:#24292E">(encoded) </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#24292E"> max_bytes:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> encoded</span></span>
+<span class="line"><span style="color:#24292E">truncated </span><span style="color:#D73A49">=</span><span style="color:#24292E"> encoded[:max_bytes]</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E"> truncated </span><span style="color:#D73A49">and</span><span style="color:#24292E"> (truncated[</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">C0</span><span style="color:#24292E">) </span><span style="color:#D73A49">==</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">80</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    truncated </span><span style="color:#D73A49">=</span><span style="color:#24292E"> truncated[:</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> truncated</span></span></code></pre>
+<p>先编码为 UTF-8，未超限直接返回；超限则先按字节数切，再从尾部逐个移除延续字节。UTF-8 的延续字节以 <code>10</code> 开头，用 <code>&#x26; 0xC0 == 0x80</code> 判断，去掉它们就能保证剩下的字节序列以某个字符的首字节收尾。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>判定</th><th>结果</th></tr></thead><tbody><tr><td>编码</td><td><code>text.encode('utf-8')</code></td><td>字节串</td></tr><tr><td>早退</td><td>长度不超过上限</td><td>原样返回</td></tr><tr><td>切分</td><td>取前 <code>max_bytes</code> 字节</td><td>可能切在多字节字符中间</td></tr><tr><td>回退</td><td>尾部是延续字节就去掉</td><td>停在完整字符边界</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["输入字符串"] --> B["encode utf-8"]
+  B --> C{"字节数不超过 72"}
+  C -->|是| D["原样返回字节串"]
+  C -->|否| E["取前 72 字节"]
+  E --> F{"末字节是延续字节"}
+  F -->|是| G["去掉末字节"]
+  G --> F
+  F -->|否| H["返回完整字符边界的字节串"]</pre></div>
+<h2 id="3-哈希与校验的调用链">3. 哈希与校验的调用链</h2>
+<p><code>get_password_hash</code> 先截断再取盐、哈希、解码成字符串（<code>backend/auth/password.py:60-63</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">password_bytes </span><span style="color:#D73A49">=</span><span style="color:#24292E"> _truncate_utf8(password, </span><span style="color:#005CC5">72</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">salt </span><span style="color:#D73A49">=</span><span style="color:#24292E"> bcrypt.gensalt()</span></span>
+<span class="line"><span style="color:#24292E">hashed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> bcrypt.hashpw(password_bytes, salt)</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> hashed.decode(</span><span style="color:#032F62">'utf-8'</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>verify_password</code> 对明文做同样截断，再把哈希字符串编码回字节后比对（<code>:46-48</code>）。两侧截断规则一致是比对成功的前提：若只在哈希侧截断，超长密码会永远验证不通过。</p>
+<p><code>gensalt()</code> 没有传成本参数，使用库的默认值。bcrypt 的默认轮数是 12，哈希一次需要可观的 CPU 时间；注册与登录端点是 <code>async def</code>，这段计算在事件循环里同步执行，并发登录时会互相排队。这一条属实现观察，具体耗时依机器与库版本而定。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant R as 注册或登录端点
+  participant P as password 模块
+  participant D as users 表
+  C->>R: 明文密码
+  alt 注册
+    R->>P: get_password_hash
+    P->>P: 截断到 72 字节
+    P->>P: bcrypt 取盐并哈希
+    P-->>R: 哈希字符串
+    R->>D: INSERT users
+  else 登录
+    R->>D: SELECT hashed_password
+    D-->>R: 哈希字符串
+    R->>P: verify_password
+    P->>P: 同样截断后 checkpw
+    P-->>R: 布尔值
+  end</pre></div>
+<h2 id="4-请求模型的长度约束与截断的关系">4. 请求模型的长度约束与截断的关系</h2>
+<p><code>UserCreate</code> 给密码设了长度上限 20（<code>backend/models/user.py:29</code>），并有一条只允许可见 ASCII 的校验器（<code>:45-46</code>）。两个约束叠加后，经过接口的密码最多 20 字节，离 72 字节的截断线很远。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>约束</th><th>位置</th><th>作用</th></tr></thead><tbody><tr><td>长度 1 到 20</td><td><code>models/user.py:29</code></td><td>限制字符数</td></tr><tr><td>仅 ASCII 可见字符</td><td><code>:45-46</code></td><td>每个字符 1 字节</td></tr><tr><td>72 字节截断</td><td><code>auth/password.py:11-33</code></td><td>防御性处理</td></tr></tbody></table>
+<p>因此截断函数对接口路径几乎不触发，它保护的是绕过接口直接调用 <code>get_password_hash</code> 或 <code>create_user</code> 的代码路径。</p>
+<h2 id="5-校验失败时的统一返回">5. 校验失败时的统一返回</h2>
+<p>登录端点在凭据不匹配时抛 401，文案是 <code>用户名或密码错误</code>（<code>backend/routes/auth.py:80-86</code>）。存储层的 <code>verify_user</code> 在用户不存在与密码错误两种情况下都返回 <code>None</code>（<code>backend/storage/sqlite_user_store.py:78-82</code>），端点无法区分，也就不会把差异暴露给客户端。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>存储层返回</th><th>端点响应</th></tr></thead><tbody><tr><td>用户不存在</td><td><code>None</code></td><td>401 <code>用户名或密码错误</code></td></tr><tr><td>密码错误</td><td><code>None</code></td><td>同上</td></tr><tr><td>哈希字符串损坏</td><td><code>checkpw</code> 抛异常</td><td>由全局处理器转 500</td></tr></tbody></table>
+<p>第三行是一条边界：<code>verify_password</code> 只捕获不到异常，损坏的哈希会让请求以 500 结束，而不是 401。这一行为来自实现路径，未做专门的兼容处理。</p>
+<h2 id="6-注册路径的重复用户名">6. 注册路径的重复用户名</h2>
+<p>注册端点把 <code>create_user</code> 的 <code>ValueError</code> 转成 400（<code>backend/routes/auth.py:64-68</code>），重复用户名的判断在存储层完成（<code>backend/storage/sqlite_user_store.py:58-59</code>）。错误信息里带用户名（<code>用户名「x」已存在</code>），与登录侧的不区分策略不同：注册场景需要告诉用户换个名字，登录场景需要避免账号枚举。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>是否区分原因</th><th>文案</th></tr></thead><tbody><tr><td>注册重名</td><td>区分</td><td>用户名「x」已存在</td></tr><tr><td>登录失败</td><td>不区分</td><td>用户名或密码错误</td></tr></tbody></table>
+<h2 id="7-与积分初始化的衔接">7. 与积分初始化的衔接</h2>
+<p>登录成功后端点还会读取原始用户记录、补齐积分字段再写回（<code>backend/routes/auth.py:88-91</code>）。这一步用的是 <code>get_user_raw</code> 与 <code>save_user_raw</code>（<code>backend/storage/sqlite_user_store.py:92-107</code>），不涉及密码。把积分初始化放在登录路径上，保证老账号在首次登录时获得积分字段，代价是每次登录都会走一次读加写。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>只在一侧截断</td><td>超长密码永远验证失败</td><td><code>auth/password.py:46</code> 与 <code>:60</code> 都要截断</td></tr><tr><td>以为接口能传 72 字节密码</td><td>请求模型限制 20 字符且仅 ASCII</td><td><code>models/user.py:29</code>、<code>:45-46</code></td></tr><tr><td>认为登录失败能区分原因</td><td>存储层统一返回 <code>None</code></td><td><code>sqlite_user_store.py:78-82</code></td></tr><tr><td>依赖 bcrypt 自动截断</td><td>库会静默忽略超出部分，行为不确定</td><td><code>auth/password.py:14</code></td></tr><tr><td>忽略哈希的 CPU 开销</td><td><code>async def</code> 里同步计算会阻塞事件循环</td><td><code>routes/auth.py:76</code></td></tr><tr><td>把损坏哈希当成密码错误</td><td>会返回 500 而不是 401</td><td><code>auth/password.py:48</code> 未捕获异常</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>哈希算法</td><td>bcrypt，输出字符串直接入库</td></tr><tr><td>截断规则</td><td>UTF-8 编码后取前 72 字节，再回退到完整字符边界</td></tr><tr><td>双侧一致</td><td>哈希与校验都调用同一个截断函数</td></tr><tr><td>长度约束</td><td>请求模型限制 20 字符且仅 ASCII，截断属防御</td></tr><tr><td>失败口径</td><td>登录不区分用户不存在与密码错误</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>截断实现</td><td>自己处理字节边界</td><td>行为确定，可跨版本复现</td><td>多一个需要同步维护的函数</td></tr><tr><td>哈希成本</td><td>库默认轮数</td><td>无需调参</td><td>单次哈希耗时较高</td></tr><tr><td>执行位置</td><td>端点内同步调用</td><td>代码路径短</td><td>并发登录时事件循环被占用</td></tr><tr><td>登录口径</td><td>统一文案</td><td>防止账号枚举</td><td>排查登录问题时缺少线索</td></tr><tr><td>注册口径</td><td>区分重名</td><td>用户可自助改名</td><td>暴露用户名是否已存在</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>写出 <code>_truncate_utf8</code> 的四步处理。</li>
+<li>为什么哈希与校验两侧都要截断？</li>
+<li>请求模型对密码的两条约束是什么？它们与 72 字节限制的关系如何？</li>
+<li>登录失败时存储层返回什么？端点如何响应？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把 bcrypt 哈希移出事件循环，说明可选方案与对现有端点签名的改动。</li>
+<li>设计一套密码强度规则（含长度、字符集与重复字符），说明放在 <code>Field</code> 与校验器两侧的分工。</li>
+<li>为损坏哈希设计降级路径，要求返回 401 而不是 500，并说明日志中应记录哪些信息。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/auth/password.py</code></td><td>截断（:11-33）、校验（:36-48）、哈希（:51-63）</td></tr><tr><td><code>backend/models/user.py</code></td><td>密码长度与字符集约束（:29、:45-46）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>注册错误转换（:64-68）、登录失败（:80-86）、积分初始化（:88-91）</td></tr><tr><td><code>backend/storage/sqlite_user_store.py</code></td><td><code>verify_user</code>（:78-82）、<code>get_user_raw</code> / <code>save_user_raw</code>（:92-107）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-用户存储与凭据校验"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-用户存储与凭据校验</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/03-鉴权/03-用户存储与凭据校验.md</span></div><div class="dfile__body"><h1 id="用户存储与凭据校验">用户存储与凭据校验</h1>
+<p>凭据校验分两层：密码比对在 <code>backend/auth/password.py</code>，用户记录读写在 <code>backend/storage/sqlite_user_store.py</code>。存储层实现 <code>BaseUserStore</code> 的八个方法，其中与鉴权直接相关的是 <code>create_user</code>、<code>get_user</code> 与 <code>verify_user</code>。</p>
+<p>存储层的接口与数据流在这里展开。哈希实现在 <code>02-密码哈希与截断.md</code>，端点如何调用这些方法在 <code>04-受保护端点的鉴权面.md</code>。</p>
+<h2 id="1-八个方法的分工">1. 八个方法的分工</h2>
+<p><code>BaseUserStore</code> 定义了八个抽象方法（<code>backend/storage/base.py:125-167</code>），SQLite 实现逐一落地：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方法</th><th>用途</th><th>实现位置</th></tr></thead><tbody><tr><td><code>user_exists</code></td><td>判断用户名是否占用</td><td><code>sqlite_user_store.py:51-55</code></td></tr><tr><td><code>create_user</code></td><td>建用户并返回模型</td><td><code>:57-70</code></td></tr><tr><td><code>get_user</code></td><td>按用户名取模型</td><td><code>:72-76</code></td></tr><tr><td><code>verify_user</code></td><td>校验密码并返回模型</td><td><code>:78-82</code></td></tr><tr><td><code>update_user</code></td><td>按关键字参数更新列</td><td><code>:84-90</code></td></tr><tr><td><code>get_user_raw</code></td><td>取原始字典</td><td><code>:92-96</code></td></tr><tr><td><code>save_user_raw</code></td><td>写回原始字典</td><td><code>:98-107</code> 起</td></tr><tr><td><code>get_user_cards_dir</code></td><td>返回用户卡片目录</td><td>同文件后段</td></tr></tbody></table>
+<p><code>get_user</code> 与 <code>verify_user</code> 都会被请求路径调用：前者用于解析令牌后的用户查询，后者用于登录。<code>get_user_raw</code> 与 <code>save_user_raw</code> 走字典，主要给积分模块使用（模块注释写明这一点，<code>:4-5</code>）。</p>
+<h2 id="2-建表语句里的默认值">2. 建表语句里的默认值</h2>
+<p>用户表的列定义决定了哪些字段可以不写（<code>backend/storage/database.py:20-29</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#D73A49">CREATE</span><span style="color:#D73A49"> TABLE</span><span style="color:#6F42C1"> IF</span><span style="color:#D73A49"> NOT</span><span style="color:#D73A49"> EXISTS</span><span style="color:#24292E"> users (</span></span>
+<span class="line"><span style="color:#24292E">    username            </span><span style="color:#D73A49">TEXT</span><span style="color:#D73A49"> PRIMARY KEY</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    hashed_password     </span><span style="color:#D73A49">TEXT</span><span style="color:#D73A49"> NOT NULL</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    created_at          </span><span style="color:#D73A49">TEXT</span><span style="color:#D73A49"> NOT NULL</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    avatar_url          </span><span style="color:#D73A49">TEXT</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    membership          </span><span style="color:#D73A49">TEXT</span><span style="color:#D73A49"> NOT NULL</span><span style="color:#D73A49"> DEFAULT</span><span style="color:#032F62"> 'free'</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    membership_expiry   </span><span style="color:#D73A49">TEXT</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    points              </span><span style="color:#D73A49">INTEGER</span><span style="color:#D73A49"> NOT NULL</span><span style="color:#D73A49"> DEFAULT</span><span style="color:#005CC5"> 48</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    last_points_refill  </span><span style="color:#D73A49">TEXT</span></span>
+<span class="line"><span style="color:#24292E">);</span></span></code></pre>
+<p><code>create_user</code> 的 <code>INSERT</code> 只写三列（<code>sqlite_user_store.py:64-67</code>），其余五列由建表默认值与 <code>NULL</code> 补齐。<code>membership</code> 的 <code>'free'</code> 与 <code>points</code> 的 <code>48</code> 在两处各写了一遍：建表语句与 <code>User</code> 模型（<code>backend/models/user.py:20-22</code>），配置里还有 <code>MAX_POINTS_FREE = 48</code>（<code>backend/config.py:152</code>）。同一个数值出现在三个文件里。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>常量</th><th>位置</th><th>值</th></tr></thead><tbody><tr><td><code>MAX_POINTS_FREE</code></td><td><code>backend/config.py:152</code></td><td>48</td></tr><tr><td><code>User.points</code> 默认值</td><td><code>backend/models/user.py:22</code></td><td>48</td></tr><tr><td>建表默认值</td><td><code>backend/storage/database.py:27</code></td><td>48</td></tr><tr><td><code>membership</code> 默认值</td><td><code>models/user.py:20</code>、<code>database.py:25</code></td><td><code>"free"</code></td></tr></tbody></table>
+<h2 id="3-创建用户的流程">3. 创建用户的流程</h2>
+<p><code>create_user</code> 先查重、再哈希、后插入（<code>backend/storage/sqlite_user_store.py:57-70</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> create_user</span><span style="color:#24292E">(self, username: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, password: </span><span style="color:#005CC5">str</span><span style="color:#24292E">) -> User:</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.user_exists(username):</span></span>
+<span class="line"><span style="color:#D73A49">        raise</span><span style="color:#005CC5"> ValueError</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"用户名「</span><span style="color:#005CC5">{</span><span style="color:#24292E">username</span><span style="color:#005CC5">}</span><span style="color:#032F62">」已存在"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    hashed_password </span><span style="color:#D73A49">=</span><span style="color:#24292E"> get_password_hash(password)</span></span>
+<span class="line"><span style="color:#24292E">    now </span><span style="color:#D73A49">=</span><span style="color:#24292E"> datetime.utcnow().isoformat()</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.db.execute(</span></span>
+<span class="line"><span style="color:#032F62">        "INSERT INTO users (username, hashed_password, created_at) VALUES (?, ?, ?)"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">        (username, hashed_password, now),</span></span>
+<span class="line"><span style="color:#24292E">    )</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.db.commit()</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> User(</span><span style="color:#E36209">username</span><span style="color:#D73A49">=</span><span style="color:#24292E">username, </span><span style="color:#E36209">hashed_password</span><span style="color:#D73A49">=</span><span style="color:#24292E">hashed_password, </span><span style="color:#E36209">created_at</span><span style="color:#D73A49">=</span><span style="color:#24292E">datetime.utcnow())</span></span></code></pre>
+<p>入库的时间是 <code>isoformat()</code> 字符串，返回模型用的是 <code>datetime</code> 对象，两者表示同一时刻。查重与插入分成两句执行，中间没有事务或唯一约束兜底之外的检查：主键约束会在并发注册同一用户名时拒绝第二次插入，但异常类型是数据库异常而不是 <code>ValueError</code>，端点的处理分支只捕获 <code>ValueError</code>（<code>backend/routes/auth.py:64-68</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["create_user 用户名 密码"] --> B{"user_exists"}
+  B -->|占用| C["抛 ValueError 用户名已存在"]
+  B -->|空闲| D["get_password_hash 哈希"]
+  D --> E["INSERT 三列"]
+  E --> F["commit"]
+  F --> G["返回 User 模型"]
+  C --> H["端点转 400"]</pre></div>
+<h2 id="4-凭据校验的流程">4. 凭据校验的流程</h2>
+<p><code>verify_user</code> 只做两步：取用户，比对密码（<code>backend/storage/sqlite_user_store.py:78-82</code>）。用户不存在或密码不匹配都返回 <code>None</code>，端点统一抛 401。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant E as login 端点
+  participant S as SqliteUserStore
+  participant P as password 模块
+  participant D as users 表
+  E->>S: verify_user 用户名 密码
+  S->>D: SELECT * WHERE username
+  D-->>S: 行或空
+  alt 行存在
+    S->>P: verify_password 明文 哈希
+    P-->>S: 布尔值
+    S-->>E: User 或 None
+  else 行不存在
+    S-->>E: None 直接返回
+  end
+  E->>S: get_user_raw 用于积分初始化
+  S-->>E: 原始字典
+  E->>S: save_user_raw 补齐积分</pre></div>
+<p>登录成功后端点还会做一次积分初始化读写（<code>backend/routes/auth.py:88-91</code>），因此一次登录最少访问用户表三次：一次 <code>verify_user</code> 的查询、一次 <code>get_user_raw</code>、一次 <code>save_user_raw</code>。</p>
+<h2 id="5-模型与行的双向转换">5. 模型与行的双向转换</h2>
+<p>存储层用两个静态方法完成转换：<code>_row_to_user</code> 把行字典喂给 <code>User</code> 构造器（<code>sqlite_user_store.py:30-43</code>），<code>_row_to_dict</code> 直接 <code>dict(row)</code>（<code>:45-49</code>）。字段名与列名一一对应，没有映射表。</p>
+<p><code>User</code> 的 <code>created_at</code> 是 <code>datetime</code> 类型，数据库里存的是文本，构造时由 Pydantic 解析 ISO 字符串。这条路径依赖 Pydantic 的宽松解析，若把列改成其他格式的文本，构造会失败。</p>
+<h2 id="6-更新接口的写法">6. 更新接口的写法</h2>
+<p><code>update_user</code> 接受关键字参数，用键拼 <code>SET</code> 子句（<code>backend/storage/sqlite_user_store.py:84-90</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">sets </span><span style="color:#D73A49">=</span><span style="color:#032F62"> ", "</span><span style="color:#24292E">.join(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"</span><span style="color:#005CC5">{</span><span style="color:#24292E">k</span><span style="color:#005CC5">}</span><span style="color:#032F62"> = ?"</span><span style="color:#D73A49"> for</span><span style="color:#24292E"> k </span><span style="color:#D73A49">in</span><span style="color:#24292E"> kwargs)</span></span>
+<span class="line"><span style="color:#24292E">values </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> list</span><span style="color:#24292E">(kwargs.values()) </span><span style="color:#D73A49">+</span><span style="color:#24292E"> [username]</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.db.execute(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"UPDATE users SET </span><span style="color:#005CC5">{</span><span style="color:#24292E">sets</span><span style="color:#005CC5">}</span><span style="color:#032F62"> WHERE username = ?"</span><span style="color:#24292E">, values)</span></span></code></pre>
+<p>列名来自调用方的关键字参数名，值走参数占位符。仓库里的调用点传的是固定列名（例如 <code>backend/routes/auth.py:134</code> 的 <code>avatar_url</code>），因此不存在外部可控的列名。若将来有代码把用户输入当关键字参数传入，这条路径会成为注入面，加白名单列名可以彻底消除这个隐患。</p>
+<h2 id="7-原始字典接口的用途">7. 原始字典接口的用途</h2>
+<p><code>get_user_raw</code> 与 <code>save_user_raw</code> 绕开 <code>User</code> 模型，直接读写字典（<code>backend/storage/sqlite_user_store.py:92-107</code>）。积分模块需要处理模型里没有的中间状态，因此走字典更直接。<code>save_user_raw</code> 的 <code>UPDATE</code> 只覆盖六个列：哈希、头像、会员、到期时间、积分与上次恢复时间（<code>:99-107</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>接口</th><th>形态</th><th>使用方</th></tr></thead><tbody><tr><td><code>get_user</code> / <code>create_user</code></td><td><code>User</code> 模型</td><td>认证端点</td></tr><tr><td><code>get_user_raw</code> / <code>save_user_raw</code></td><td>字典</td><td>登录后的积分初始化、积分模块</td></tr></tbody></table>
+<p>模型接口与字典接口并存，意味着同一行数据有两条读写路径。字段增删时两条路径都要检查。</p>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>修改积分默认值只改一处</td><td>配置、模型、建表三处不一致</td><td><code>config.py:152</code>、<code>user.py:22</code>、<code>database.py:27</code></td></tr><tr><td>以为并发注册重名会走 <code>ValueError</code></td><td>主键冲突是数据库异常</td><td><code>sqlite_user_store.py:58-59</code></td></tr><tr><td>忘记登录路径的额外读写</td><td>一次登录三次访问用户表</td><td><code>routes/auth.py:88-91</code></td></tr><tr><td>认为 <code>update_user</code> 列名安全由语句保证</td><td>列名直接拼接</td><td><code>sqlite_user_store.py:87</code></td></tr><tr><td>改动时间列格式</td><td>构造函数解析失败</td><td><code>:37</code></td></tr><tr><td>只维护模型接口</td><td>字典接口漏改，积分字段失联</td><td><code>:92-107</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>接口面</td><td>基类八个方法，SQLite 实现逐一落地</td></tr><tr><td>建表默认值</td><td>会员 <code>free</code>、积分 48，与模型和配置重复定义</td></tr><tr><td>创建流程</td><td>查重、哈希、插入三列、返回模型</td></tr><tr><td>校验流程</td><td>取用户加比对密码，失败统一返回 <code>None</code></td></tr><tr><td>双接口</td><td>模型接口与原始字典接口并存</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>默认值位置</td><td>建表、模型、配置各写一份</td><td>各层可独立运行</td><td>改值要同步三处</td></tr><tr><td>查重方式</td><td>先查后插</td><td>错误信息友好</td><td>并发下的冲突类型不同</td></tr><tr><td>更新接口</td><td>关键字参数拼列名</td><td>调用灵活</td><td>列名缺少白名单校验</td></tr><tr><td>字典接口</td><td>保留给积分模块</td><td>兼容中间状态</td><td>同一行有两条读写路径</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出 <code>BaseUserStore</code> 的八个方法与各自用途。</li>
+<li>建表语句里 <code>membership</code> 与 <code>points</code> 的默认值是什么？与模型是否一致？</li>
+<li><code>create_user</code> 向 <code>users</code> 表写入哪三列？</li>
+<li>为什么 <code>verify_user</code> 无法区分用户不存在与密码错误？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把三处积分默认值收敛到一处，说明放置位置与建表语句的迁移方式。</li>
+<li>为 <code>update_user</code> 增加列名白名单，评估对现有调用点的影响。</li>
+<li>设计一个并发注册的测试用例，说明在主键冲突路径上端点应返回什么状态码，并给出代码改动点。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/storage/sqlite_user_store.py</code></td><td>转换（:30-49）、查重与创建（:51-70）、查询（:72-76）、校验（:78-82）、更新（:84-90）、字典接口（:92-107）</td></tr><tr><td><code>backend/storage/base.py</code></td><td><code>BaseUserStore</code> 抽象方法（:125-167）</td></tr><tr><td><code>backend/storage/database.py</code></td><td><code>users</code> 建表语句（:20-29）</td></tr><tr><td><code>backend/models/user.py</code></td><td>字段与默认值（:14-23）</td></tr><tr><td><code>backend/config.py</code></td><td><code>MAX_POINTS_FREE</code>（:152）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>注册错误转换（:64-68）、登录流程（:78-91）、头像更新（:134）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-受保护端点的鉴权面"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-受保护端点的鉴权面</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/03-鉴权/04-受保护端点的鉴权面.md</span></div><div class="dfile__body"><h1 id="受保护端点的鉴权面">受保护端点的鉴权面</h1>
+<p>鉴权的接线方式只有一种：端点在签名里声明 <code>current_user: User = Depends(get_current_user)</code>。全仓库这样的声明有 47 处，分布在 11 个模块；另有三个模块把用户依赖藏在存储提供者后面，端点签名里看不到 <code>get_current_user</code>。</p>
+<p>保护面与例外在这里逐一对照。依赖机制本身在 <code>28-FastAPI 后端/01-路由与依赖注入/03-Depends的工作方式.md</code>，用户存储在 <code>03-用户存储与凭据校验.md</code>，令牌在 <code>01-JWT的签发与校验.md</code>。</p>
+<h2 id="1-httpbearer-的接入">1. HTTPBearer 的接入</h2>
+<p><code>HTTPBearer</code> 实例在认证模块创建一次（<code>backend/routes/auth.py:20</code>），<code>get_current_user</code> 通过 <code>Depends(security)</code> 拿到凭证对象（<code>:29</code>）。它负责从 <code>Authorization</code> 头里解析出 <code>Bearer</code> 方案与令牌字符串，不负责校验令牌内容。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>执行者</th><th>结果</th></tr></thead><tbody><tr><td>取头</td><td><code>HTTPBearer</code></td><td>得到 <code>credentials.credentials</code></td></tr><tr><td>校验令牌</td><td><code>decode_access_token</code></td><td>通过或 <code>None</code></td></tr><tr><td>查用户</td><td><code>SqliteUserStore.get_user</code></td><td><code>User</code> 或 <code>None</code></td></tr></tbody></table>
+<p><code>HTTPBearer</code> 默认 <code>auto_error=True</code>，请求缺少 <code>Authorization</code> 头时由它直接结束请求。因此「没带令牌」与「带了无效令牌」的响应不同，具体差异见第 5 节。</p>
+<h2 id="2-十一个模块的保护面">2. 十一个模块的保护面</h2>
+<p>按直接声明 <code>Depends(get_current_user)</code> 的次数统计，各模块的保护面如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模块</th><th>直接声明次数</th><th>说明</th></tr></thead><tbody><tr><td><code>agent/routes/agent.py</code></td><td>4</td><td>对话与工具调用端点</td></tr><tr><td><code>routes/pipeline.py</code></td><td>12</td><td>收集与延申搜索、任务管理</td></tr><tr><td><code>routes/cards.py</code></td><td>8</td><td>卡片 CRUD 与搜索</td></tr><tr><td><code>routes/hub.py</code></td><td>7</td><td>论坛浏览与交互</td></tr><tr><td><code>routes/links.py</code></td><td>5</td><td>双向链接操作</td></tr><tr><td><code>routes/payment.py</code></td><td>4</td><td>订单创建、回调、查询</td></tr><tr><td><code>routes/auth.py</code></td><td>3</td><td>个人信息、头像上传、会员升级</td></tr><tr><td><code>routes/documents.py</code></td><td>1</td><td>文档上传</td></tr><tr><td><code>routes/sessions.py</code></td><td>1</td><td>会话存储提供者内部使用</td></tr><tr><td><code>routes/session_io.py</code></td><td>1</td><td>会话导入导出</td></tr><tr><td><code>routes/share.py</code></td><td>1</td><td>分享令牌</td></tr></tbody></table>
+<p><code>sessions</code>、<code>session_io</code>、<code>share</code> 三个模块的端点大多不直接写 <code>get_current_user</code>，而是依赖 <code>get_session_store</code>，后者内部依赖它（<code>backend/routes/sessions.py:19-21</code>）。因此这三个模块的实际保护面比计数更大。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph TD
+  A["HTTPBearer security"] --> B["get_current_user"]
+  B --> C["pipeline 12 处"]
+  B --> D["cards 8 处"]
+  B --> E["hub 7 处"]
+  B --> F["links 5 处"]
+  B --> G["payment 4 处"]
+  B --> H["agent 4 处"]
+  B --> I["auth 3 处"]
+  B --> J["documents 1 处"]
+  B --> K["get_session_store"]
+  K --> L["sessions / session_io / share"]</pre></div>
+<h2 id="3-公开端点清单">3. 公开端点清单</h2>
+<p>有些端点在设计的开放面上：认证入口必须在未登录时可访问，头像文件需要能被直接引用，健康检查需要无凭据探测。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>端点</th><th>位置</th><th>是否带鉴权依赖</th></tr></thead><tbody><tr><td><code>POST /api/auth/register</code></td><td><code>routes/auth.py:58</code></td><td>否，仅存储依赖</td></tr><tr><td><code>POST /api/auth/login</code></td><td><code>:74</code></td><td>否，仅存储依赖</td></tr><tr><td><code>GET /api/auth/avatar/{username}</code></td><td><code>:139</code></td><td>否</td></tr><tr><td><code>GET /</code></td><td><code>backend/main.py:147</code></td><td>否</td></tr><tr><td><code>POST /api/export</code> 与 <code>GET /api/export/download</code></td><td><code>routes/export.py:39</code>、<code>:48</code></td><td>否</td></tr></tbody></table>
+<p>前四个属于有意公开，导出两个端点属于未接入鉴权。<code>routes/export.py</code> 的导入列表里没有鉴权符号，两个端点也没有 <code>Depends</code>（<code>:8-17</code>、<code>:39-58</code>），任何能访问后端的人都可以导出全部卡片。</p>
+<h2 id="4-受保护请求的完整路径">4. 受保护请求的完整路径</h2>
+<p>一次受保护请求要经过凭证解析、令牌校验、用户查询三段，任何一段失败都会在端点函数执行前结束：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant B as HTTPBearer
+  participant J as decode_access_token
+  participant S as SqliteUserStore
+  participant E as 端点函数
+  C->>B: Authorization Bearer 令牌
+  alt 缺少请求头
+    B-->>C: 403 由库直接返回
+  else 有请求头
+    B->>J: 校验令牌
+    alt 令牌无效或过期
+      J-->>C: 401 认证凭据无效
+    else 令牌有效
+      J->>S: 按 sub 查用户
+      alt 用户不存在
+        S-->>C: 401 用户不存在
+      else 用户存在
+        S-->>E: 传入 User
+        E-->>C: 业务响应
+      end
+    end
+  end</pre></div>
+<h2 id="5-缺凭证与凭证无效的状态码差异">5. 缺凭证与凭证无效的状态码差异</h2>
+<p>两类失败的响应不同，客户端需要分别处理：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>触发者</th><th>状态码</th><th>响应体</th></tr></thead><tbody><tr><td>未带 <code>Authorization</code> 头</td><td><code>HTTPBearer</code></td><td>403</td><td>框架默认文案</td></tr><tr><td>令牌无效或过期</td><td><code>get_current_user</code></td><td>401</td><td><code>认证凭据无效</code></td></tr><tr><td><code>sub</code> 缺失</td><td><code>get_current_user</code></td><td>401</td><td><code>认证凭据无效</code></td></tr><tr><td>用户已不存在</td><td><code>get_current_user</code></td><td>401</td><td><code>用户不存在</code></td></tr></tbody></table>
+<p>后三种都带 <code>WWW-Authenticate: Bearer</code> 头（<code>backend/routes/auth.py:38</code>、<code>:45</code>、<code>:53</code>）。403 那一条来自库的默认行为，属框架层处理，仓库未自定义。</p>
+<p>前端在收到 401 或 403 时的处理取决于调用方。<code>frontend/src/api/auth.ts</code> 的 <code>authFetch</code> 只按 <code>response.ok</code> 判断并抛出错误信息（<code>:32-36</code>），未区分状态码，因此令牌过期后用户看到的是通用错误提示，需要跳转登录页的逻辑另行判断。</p>
+<h2 id="6-端点签名的两种保护写法">6. 端点签名的两种保护写法</h2>
+<p>直接依赖与间接依赖的写法差异会出现在 OpenAPI 文档里：直接声明的端点会在参数列表中显示安全方案，间接依赖的端点通过存储提供者传递，文档上的表现取决于 FastAPI 的依赖展开。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>写法</th><th>例子</th><th>端点签名可见性</th></tr></thead><tbody><tr><td>直接声明用户依赖</td><td><code>routes/cards.py:49</code></td><td>参数列表中出现 <code>current_user</code></td></tr><tr><td>依赖会话存储</td><td><code>routes/sessions.py:24-26</code></td><td>只出现 <code>store</code></td></tr><tr><td>依赖用户存储</td><td><code>routes/auth.py:94</code></td><td>出现 <code>current_user</code> 与 <code>store</code></td></tr></tbody></table>
+<h2 id="7-前端侧的携带一致性">7. 前端侧的携带一致性</h2>
+<p>前端有两套取令牌逻辑。<code>api/auth.ts</code> 在 <code>authFetch</code> 里统一补 <code>Authorization</code> 头（<code>frontend/src/api/auth.ts:23-25</code>），<code>api/agent.ts</code> 自己在多处取令牌并拼头（<code>frontend/src/api/agent.ts:50-54</code>、<code>:199-213</code>、<code>:234-246</code>）。两处读取的是同一个 <code>localStorage</code> 键，但拼接逻辑各写一遍，新增请求方式时容易漏加。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>模块</th><th>取令牌位置</th><th>是否统一封装</th></tr></thead><tbody><tr><td><code>api/auth.ts</code></td><td><code>:5-7</code></td><td>是，集中在 <code>authFetch</code></td></tr><tr><td><code>api/agent.ts</code></td><td><code>:50</code>、<code>:199</code>、<code>:234</code></td><td>否，多处重复</td></tr></tbody></table>
+<h2 id="8-易错点">8. 易错点</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为所有端点都受保护</td><td>导出两个端点无鉴权</td><td><code>routes/export.py:39-58</code></td></tr><tr><td>把 403 当成令牌问题</td><td>缺请求头才是 403</td><td><code>routes/auth.py:20</code></td></tr><tr><td>用响应体区分两种 401</td><td>文案相同</td><td><code>:34-46</code></td></tr><tr><td>认为会话模块没有鉴权</td><td>保护藏在 <code>get_session_store</code> 里</td><td><code>routes/sessions.py:19-21</code></td></tr><tr><td>以为头像端点需要登录</td><td>取头像公开</td><td><code>routes/auth.py:139</code></td></tr><tr><td>只给部分前端模块补令牌头</td><td>Agent 模块自写一套</td><td><code>frontend/src/api/agent.ts:50-54</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>接线方式</td><td>端点声明 <code>Depends(get_current_user)</code>，共 47 处</td></tr><tr><td>覆盖模块</td><td>十一个模块直接使用，三个模块经存储提供者间接使用</td></tr><tr><td>公开端点</td><td>注册、登录、取头像、健康检查、导出两个端点</td></tr><tr><td>失败状态码</td><td>缺头 403，令牌无效与用户不存在 401</td></tr><tr><td>前端携带</td><td><code>auth.ts</code> 统一封装，<code>agent.ts</code> 多处重复</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>保护方式</td><td>函数依赖</td><td>端点自解释、可组合</td><td>每个端点都要写一遍</td></tr><tr><td>间接保护</td><td>存储提供者内依赖用户</td><td>端点签名更短</td><td>保护范围不易一眼看出</td></tr><tr><td>缺头处理</td><td>交给库默认</td><td>无自定义代码</td><td>状态码与令牌无效不一致</td></tr><tr><td>开放端点</td><td>注册、登录、头像公开</td><td>使用顺畅</td><td>用户名可被枚举探测</td></tr><tr><td>导出端点</td><td>未接入鉴权</td><td>调用方便</td><td>数据可被无凭据导出</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li><code>HTTPBearer</code> 负责什么，不负责什么？</li>
+<li>列出公开端点清单，并指出哪些属于有意公开。</li>
+<li>缺 <code>Authorization</code> 头与令牌无效分别返回什么状态码？</li>
+<li>为什么 <code>sessions</code> 模块的保护面比直接计数更大？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>把三个 401 分支的文案区分开，说明对客户端与安全性的影响。</li>
+<li>为导出端点补鉴权，列出改动点与对现有调用脚本的兼容处理。</li>
+<li>统一前端两套取令牌逻辑，说明封装位置与需要修改的调用点，并给出漏加请求头的检测方式。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/auth.py</code></td><td><code>HTTPBearer</code> 与提供者（:20、:28-55）、公开端点（:58、:74、:139）、受保护端点（:94、:122-126、:150-154）</td></tr><tr><td><code>backend/routes/sessions.py</code></td><td>存储提供者的间接依赖（:19-21）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>直接依赖示例（:49）</td></tr><tr><td><code>backend/routes/export.py</code></td><td>无鉴权的两个端点（:39-58）</td></tr><tr><td><code>backend/main.py</code></td><td>健康检查端点（:147-150）</td></tr><tr><td><code>backend/routes/pipeline.py</code>、<code>backend/routes/hub.py</code>、<code>backend/routes/links.py</code>、<code>backend/routes/payment.py</code>、<code>backend/agent/routes/agent.py</code></td><td>各模块的依赖声明位置</td></tr><tr><td><code>frontend/src/api/auth.ts</code></td><td>统一封装与状态码处理（:5-7、:23-25、:32-36）</td></tr><tr><td><code>frontend/src/api/agent.ts</code></td><td>多处取令牌（:50-54、:199-213、:234-246）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/03-鉴权/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="鉴权链路的易错点与排查">鉴权链路的易错点与排查</h1>
+<p>鉴权问题的表现通常是 401、403 或登录后立刻失效，原因却可能在配置、令牌、存储或前端携带四层中的任意一层。风险集中列出，并给出一条从状态码反推到配置的排查顺序。</p>
+<p>令牌细节见 <code>01-JWT的签发与校验.md</code>，密码见 <code>02-密码哈希与截断.md</code>，存储见 <code>03-用户存储与凭据校验.md</code>，端点覆盖见 <code>04-受保护端点的鉴权面.md</code>。</p>
+<h2 id="1-风险清单">1. 风险清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>密钥在导入期校验</td><td><code>backend/config.py:169-170</code></td><td>未配置时应用无法启动</td></tr><tr><td>R2</td><td>有效期注释与实际值不一致</td><td><code>auth/jwt.py:5</code> 与 <code>config.py:172</code></td><td>按注释估算过期时间会错</td></tr><tr><td>R3</td><td>无吊销与刷新机制</td><td><code>auth/jwt.py:18-51</code></td><td>令牌只能等到期或换密钥</td></tr><tr><td>R4</td><td>令牌存在 <code>localStorage</code></td><td><code>frontend/src/api/auth.ts:3-15</code></td><td>同源脚本可读取</td></tr><tr><td>R5</td><td>bcrypt 在事件循环内同步执行</td><td><code>routes/auth.py:76</code></td><td>并发登录互相排队</td></tr><tr><td>R6</td><td>登录失败不区分原因</td><td><code>routes/auth.py:80-86</code></td><td>排查时无法判断是用户还是密码</td></tr><tr><td>R7</td><td>注册接口暴露用户名占用</td><td><code>:64-68</code></td><td>可批量探测已注册用户名</td></tr><tr><td>R8</td><td>取头像端点公开</td><td><code>:139-147</code></td><td>按用户名可探测头像是否存在</td></tr><tr><td>R9</td><td>导出端点无鉴权</td><td><code>routes/export.py:39-58</code></td><td>无凭据可导出全部卡片</td></tr><tr><td>R10</td><td>两种失败状态码不同</td><td><code>routes/auth.py:20</code></td><td>客户端需要处理 401 与 403</td></tr><tr><td>R11</td><td>积分默认值重复三处</td><td><code>config.py:152</code>、<code>models/user.py:22</code>、<code>storage/database.py:27</code></td><td>改一处后行为不一致</td></tr><tr><td>R12</td><td>更新语句拼接列名</td><td><code>storage/sqlite_user_store.py:87</code></td><td>列名来源失控时成为注入面</td></tr></tbody></table>
+<h2 id="2-启动期密钥与配置">2. 启动期：密钥与配置</h2>
+<p><code>JWT_SECRET</code> 缺失会在导入 <code>backend/config.py</code> 时抛 <code>RuntimeError</code>（<code>:169-170</code>）。这个文件被入口、令牌模块与限流模块共同导入，所以表现是应用启动失败，而不是登录接口报错。排查启动失败时先看日志里的异常类型，再看环境变量是否注入到进程。</p>
+<p><code>JWT_EXPIRATION_HOURS</code> 有默认值 4（<code>config.py:172</code>），未配置时不会报错。它与令牌的有效期直接相关，排查「登录后很快失效」时先确认这个值。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>配置项</th><th>缺失表现</th><th>默认值</th></tr></thead><tbody><tr><td><code>JWT_SECRET</code></td><td>启动失败</td><td>无，必填</td></tr><tr><td><code>JWT_EXPIRATION_HOURS</code></td><td>无提示</td><td>4 小时</td></tr><tr><td><code>CORS_ORIGINS</code></td><td>无提示</td><td><code>"*"</code></td></tr></tbody></table>
+<h2 id="3-请求期状态码的含义">3. 请求期：状态码的含义</h2>
+<p>三类失败对应三种状态码，排查时先按状态码分流：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>状态码</th><th>触发条件</th><th>排查方向</th></tr></thead><tbody><tr><td>403</td><td>缺少 <code>Authorization</code> 头</td><td>前端是否带了令牌</td></tr><tr><td>401 认证凭据无效</td><td>令牌过期、签名不符、结构损坏、缺 <code>sub</code></td><td>令牌内容与有效期</td></tr><tr><td>401 用户不存在</td><td>令牌有效但用户被删</td><td>用户表记录</td></tr></tbody></table>
+<p><code>decode_access_token</code> 把所有解析失败压成 <code>None</code>（<code>auth/jwt.py:50-51</code>），所以 401 <code>认证凭据无效</code> 无法进一步区分原因。要定位到具体原因，需要在解码处打印异常类型，或临时用一个独立脚本解析令牌的 <code>exp</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["请求被拒"] --> B{"状态码"}
+  B -->|403| C["检查请求头是否带 Authorization"]
+  B -->|401 认证凭据无效| D["解析令牌 看签名与 exp"]
+  B -->|401 用户不存在| E["查 users 表是否有该用户"]
+  B -->|其他| F["按业务错误处理"]
+  D --> G{"令牌是否过期"}
+  G -->|是| H["确认 JWT_EXPIRATION_HOURS 与签发时间"]
+  G -->|否| I["确认密钥是否被更换"]</pre></div>
+<h2 id="4-请求期令牌与前端携带">4. 请求期：令牌与前端携带</h2>
+<p>令牌由前端主动放进 <code>localStorage</code>（<code>frontend/src/api/auth.ts:3-15</code>），登录成功后写入（<code>:55</code>）。若出现「刚登录就 401」，先检查写入与读取是否使用同一个键，再检查请求是否走了带令牌的封装。<code>api/agent.ts</code> 有一套独立的取令牌逻辑（<code>frontend/src/api/agent.ts:50-54</code>），两套逻辑读取同一个键但拼接位置不同，容易在新增请求时漏加。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>症状</th><th>先查</th><th>位置</th></tr></thead><tbody><tr><td>所有请求都 403</td><td>请求头是否带令牌</td><td><code>api/auth.ts:23-25</code></td></tr><tr><td>部分请求 401</td><td>该请求是否走封装</td><td><code>api/agent.ts:50-54</code></td></tr><tr><td>登录后立刻失效</td><td>令牌有效期与服务器时间</td><td><code>auth/jwt.py:15</code></td></tr></tbody></table>
+<h2 id="5-请求期密码与哈希">5. 请求期：密码与哈希</h2>
+<p>bcrypt 比对在 <code>verify_password</code> 里同步执行（<code>auth/password.py:36-48</code>），单个请求的耗时集中在哈希计算上。并发登录时，这段计算会占住事件循环，形成排队。排查登录变慢时，先确认并发量，再确认是否在循环里做了其他同步操作。</p>
+<p>哈希字符串损坏时 <code>checkpw</code> 抛异常，端点不会捕获（<code>:48</code>），最终由全局处理器返回 500。现象是「密码正确但服务报错」，需要看日志中的异常栈而不是响应体。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>症状</th><th>原因</th><th>位置</th></tr></thead><tbody><tr><td>登录慢</td><td>哈希计算占用事件循环</td><td><code>auth/password.py:48</code></td></tr><tr><td>登录 500</td><td>哈希字符串损坏，异常未捕获</td><td><code>:48</code></td></tr><tr><td>超长密码永远失败</td><td>两侧截断规则被改动</td><td><code>:46</code> 与 <code>:60</code></td></tr></tbody></table>
+<h2 id="6-访问面公开端点与重复常量">6. 访问面：公开端点与重复常量</h2>
+<p>公开端点包括注册、登录、取头像、健康检查与导出。前三个属于设计需要，导出属于未接入鉴权。排查数据暴露面时，先取一份端点清单对照 <code>backend/routes/export.py:39-58</code> 这类没有鉴权符号的模块。</p>
+<p>积分默认值 <code>48</code> 在三处重复：配置、模型与建表语句。排查「新用户积分不对」时，三处都要看，尤其是直接建表或直接构造模型而不经过注册端点的路径。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant D as 排查者
+  participant H as 请求头
+  participant T as 令牌
+  participant U as users 表
+  participant C as 配置与常量
+  D->>H: 403 先看是否带 Authorization
+  D->>T: 401 再看令牌与有效期
+  D->>U: 令牌有效则查用户记录
+  D->>C: 最后核对有效期与积分默认值
+  Note over D,C: 四步都不需要改代码即可缩小范围</pre></div>
+<h2 id="7-容易走错的方向">7. 容易走错的方向</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>容易先怀疑</th><th>实际应先查</th></tr></thead><tbody><tr><td>应用启动失败</td><td>路由代码</td><td><code>config.py:169-170</code> 的密钥校验</td></tr><tr><td>登录后很快失效</td><td>前端存储</td><td><code>JWT_EXPIRATION_HOURS</code> 与令牌 <code>exp</code></td></tr><tr><td>401 认证凭据无效</td><td>数据库</td><td>令牌解密结果，解码层把所有失败合并</td></tr><tr><td>登录返回 500</td><td>密码错误</td><td>哈希字符串是否损坏</td></tr><tr><td>新用户积分不对</td><td>注册逻辑</td><td>三处 48 的默认值是否一致</td></tr><tr><td>任意用户头像可见</td><td>端点鉴权</td><td>该端点本身设计为公开</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<p>核心概念：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>内容</th></tr></thead><tbody><tr><td>启动期风险</td><td>密钥缺失直接阻止启动，有效期配置无提示</td></tr><tr><td>状态码分流</td><td>403 缺头、401 令牌问题或用户不存在</td></tr><tr><td>令牌排查</td><td>解码层合并所有失败，需另取 <code>exp</code> 判断过期</td></tr><tr><td>哈希排查</td><td>慢在同步计算，500 来自未捕获异常</td></tr><tr><td>访问面</td><td>导出端点无鉴权，取头像与注册登录为有意公开</td></tr><tr><td>常量重复</td><td>积分 48 出现在配置、模型与建表三处</td></tr></tbody></table>
+<p>设计权衡：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>失败合并</td><td>解码统一返回 <code>None</code></td><td>调用方简单</td><td>排查缺少线索</td></tr><tr><td>密钥校验时机</td><td>导入期</td><td>缺配置立刻暴露</td><td>无法以降级模式启动</td></tr><tr><td>哈希执行</td><td>端点内同步</td><td>路径短</td><td>并发登录排队</td></tr><tr><td>公开头像</td><td>不挂鉴权</td><td>展示方便</td><td>用户名可探测</td></tr><tr><td>默认值分布</td><td>三层各写一份</td><td>各层自洽</td><td>修改需同步</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<p>基础题：</p>
+<ol>
+<li>列出三类失败对应的状态码与响应文案。</li>
+<li><code>JWT_SECRET</code> 缺失时应用会怎样？在哪个文件校验？</li>
+<li>为什么登录失败无法从响应判断是用户不存在还是密码错误？</li>
+<li>积分默认值 48 出现在哪三个位置？</li>
+</ol>
+<p>挑战题：</p>
+<ol start="5">
+<li>设计一份鉴权故障的排查清单，覆盖启动失败、403、401、登录 500 与积分异常五类现象，每类写出观测点与判定依据。</li>
+<li>为 <code>decode_access_token</code> 增加原因保留机制，说明对 <code>get_current_user</code> 与响应文案的影响。</li>
+<li>把鉴权风险按「可利用性」排序，给出前三名的整改建议与验证方式。</li>
+</ol>
+<hr>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/config.py</code></td><td>密钥校验（:169-170）、有效期（:172）、积分上限（:152）</td></tr><tr><td><code>backend/auth/jwt.py</code></td><td>注释（:5）、有效期计算（:15）、解码合并失败（:38-51）</td></tr><tr><td><code>backend/auth/password.py</code></td><td>校验（:36-48）、截断（:46、:60）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td><code>HTTPBearer</code>（:20）、登录失败（:80-86）、注册重名（:64-68）、头像端点（:139-147）、哈希调用位置（:76）</td></tr><tr><td><code>backend/routes/export.py</code></td><td>未鉴权的导出端点（:39-58）</td></tr><tr><td><code>backend/models/user.py</code></td><td><code>points</code> 默认值（:22）</td></tr><tr><td><code>backend/storage/database.py</code></td><td>建表默认值（:27）</td></tr><tr><td><code>backend/storage/sqlite_user_store.py</code></td><td>更新语句拼接（:87）</td></tr><tr><td><code>frontend/src/api/auth.ts</code></td><td>令牌存储与携带（:3-15、:23-25、:55）</td></tr><tr><td><code>frontend/src/api/agent.ts</code></td><td>独立取令牌（:50-54）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/02-Pydantic%E6%A8%A1%E5%9E%8B/"><span class="k">← 上一篇</span><span class="t">Pydantic模型</span><span class="d">FastAPI 后端 · 5 个文件</span></a><a class="next" href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/04-%E9%99%90%E6%B5%81%E4%B8%8E%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1/"><span class="k">下一篇 →</span><span class="t">限流与异步任务</span><span class="d">FastAPI 后端 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

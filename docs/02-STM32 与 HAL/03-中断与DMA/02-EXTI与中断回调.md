@@ -7,11 +7,12 @@ updated: 2026-10-07
 
 # EXTI 与中断回调
 
-> 本页的对照对象是 `Core/Src/gpio.c` 里的两个输入引脚，以及 HAL 的 GPIO 驱动
-> `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c`。
-> 结论是本工程配了 EXTI 但没有接通，缺口有三处，第 3.3 节给出可直接落地的补全代码。
+对照对象是 `Core/Src/gpio.c` 里的两个输入引脚，以及 HAL 的 GPIO 驱动 `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c`。
 
-## 1. 概念：EXTI 与 NVIC 的分工
+结论是本工程配了 EXTI 但没有接通，缺口有三处，第 3.3 节给出可直接落地的补全代码。下面先讲 EXTI 与 NVIC 的分工，再走一次边沿从寄存器到回调的完整路径。
+
+
+## 1. EXTI 与 NVIC 的分工
 
 **EXTI**（External interrupt/event controller，外部中断与事件控制器）负责把引脚上的电平变化变成一次挂起请求。它与 NVIC 的分工是：EXTI 管信号的采集与边沿判定，NVIC 管请求的使能与排队。
 
@@ -24,7 +25,7 @@ EXTI 有 23 条线（line），编号 0 到 22。
 
 本工程用到两组：`PA0`（`KEY_Pin`）与 `PG3`。
 
-## 2. 机制
+## 2. 一次边沿如何变成回调
 
 ### 2.1 EXTI 的五个寄存器与一次边沿
 
@@ -149,7 +150,7 @@ sequenceDiagram
   C->>A: 距上次有效动作已超过阈值 判定为松手
 ```
 
-## 3. 落到本项目
+## 3. 本工程的缺口与补全
 
 ### 3.1 两个引脚的配置
 
@@ -193,7 +194,7 @@ sequenceDiagram
 在全工程的应用代码里搜索 EXTI 只命中两处，都不是实现：
 
 ```bash
-$ cd /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal
+$ cd 2026OmniSentryGimbal
 $ grep -rn "EXTI" Core/Src Core/Inc BSP Task Communication USB_DEVICE
 ./Core/Src/gpio.c:40: * EXTI
 ./Core/Inc/stm32f4xx_hal_conf.h:85: #define HAL_EXTI_MODULE_ENABLED
@@ -328,11 +329,11 @@ extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c` | `PG3` 上升沿配置（:75-79）、`KEY_Pin` 双边沿配置（:88-92） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/main.h` | `KEY_Pin` 与 `KEY_GPIO_Port`（:60-61） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 全部中断服务函数，未见 EXTI 相关项 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/startup_stm32f407xx.s` | `EXTI0_IRQHandler` 与 `EXTI3_IRQHandler` 的弱别名（:285-295）、`Default_Handler`（:111-115） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` | EXTI 分支配置（:236-281）、`HAL_GPIO_EXTI_IRQHandler()`（:492-500）、弱回调（:507-514） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `HAL_EXTI_MODULE_ENABLED`（:85） |
-| `/home/wyx/Work-Summary-and-Diary/工作记录/精通stm32/第一章.md` | Cortex-M3/M4 的中断确定性延迟为 12 周期（:9） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/gpio.c` | 底盘板同样的两个引脚配置，与云台板一致 |
+| `2026OmniSentryGimbal/Core/Src/gpio.c` | `PG3` 上升沿配置（:75-79）、`KEY_Pin` 双边沿配置（:88-92） |
+| `2026OmniSentryGimbal/Core/Inc/main.h` | `KEY_Pin` 与 `KEY_GPIO_Port`（:60-61） |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 全部中断服务函数，未见 EXTI 相关项 |
+| `2026OmniSentryGimbal/startup_stm32f407xx.s` | `EXTI0_IRQHandler` 与 `EXTI3_IRQHandler` 的弱别名（:285-295）、`Default_Handler`（:111-115） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` | EXTI 分支配置（:236-281）、`HAL_GPIO_EXTI_IRQHandler()`（:492-500）、弱回调（:507-514） |
+| `2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `HAL_EXTI_MODULE_ENABLED`（:85） |
+| `第一章.md` | Cortex-M3/M4 的中断确定性延迟为 12 周期（:9） |
+| `2026OmniSentryChassis/Core/Src/gpio.c` | 底盘板同样的两个引脚配置，与云台板一致 |

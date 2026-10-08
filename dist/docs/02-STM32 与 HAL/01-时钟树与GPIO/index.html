@@ -1,8 +1,9 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>时钟树与GPIO · STM32 与 HAL · 王宇翔</title><meta name="description" content="HSE 12 MHz 经 PLLM 6、PLLN 168、PLLP 2 得到 168 MHz SYSCLK 的完整推导，对照 SystemClock_Config 源码、Flash 等待周期与 HAL 时间基的重算时机。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="时钟树与GPIO · STM32 与 HAL · 王宇翔"><meta property="og:description" content="HSE 12 MHz 经 PLLM 6、PLLN 168、PLLP 2 得到 168 MHz SYSCLK 的完整推导，对照 SystemClock_Config 源码、Flash 等待周期与 HAL 时间基的重算时机。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/">STM32 与 HAL</a><span class="sep" aria-hidden="true">/</span><span class="now">时钟树与GPIO</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>时钟树与GPIO</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>时钟树与 PLL</span></a><ul class="toc__heads"><li><a href="#1-时钟树的分层" data-depth="2" data-heading-j="0">1. 时钟树的分层</a></li><li><a href="#2-pll-参数的推导" data-depth="2" data-heading-j="1">2. PLL 参数的推导</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="5">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="6">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="7">6. 练习</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>总线拓扑与预分频</span></a><ul class="toc__heads"><li><a href="#1-三条总线与外设归属" data-depth="2" data-heading-j="0">1. 三条总线与外设归属</a></li><li><a href="#2-频率换算与定时器倍频" data-depth="2" data-heading-j="1">2. 频率换算与定时器倍频</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="5">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="6">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="7">6. 练习</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>GPIO 模式与复用</span></a><ul class="toc__heads"><li><a href="#1-概念" data-depth="2" data-heading-j="0">1. 概念</a></li><li><a href="#2-hal_gpio_init-的写入顺序" data-depth="2" data-heading-j="1">2. HAL_GPIO_Init 的写入顺序</a></li><li><a href="#3-落到本项目" data-depth="2" data-heading-j="2">3. 落到本项目</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="5">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="6">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="7">6. 练习</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>本项目引脚分配</span></a><ul class="toc__heads"><li><a href="#1-三处配置的分工" data-depth="2" data-heading-j="0">1. 三处配置的分工</a></li><li><a href="#2-引脚到外设的对应" data-depth="2" data-heading-j="1">2. 引脚到外设的对应</a></li><li><a href="#3-一次-bmi088-读取的引脚时序" data-depth="2" data-heading-j="2">3. 一次 BMI088 读取的引脚时序</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="5">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="6">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="7">6. 练习</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#1-三类问题的判据" data-depth="2" data-heading-j="0">1. 三类问题的判据</a></li><li><a href="#2-频率类问题的机制" data-depth="2" data-heading-j="1">2. 频率类问题的机制</a></li><li><a href="#3-落到本项目一次-can-通信故障的复盘" data-depth="2" data-heading-j="2">3. 落到本项目：一次 CAN 通信故障的复盘</a></li><li><a href="#4-易错点" data-depth="2" data-heading-j="3">4. 易错点</a></li><li><a href="#5-小结" data-depth="2" data-heading-j="4">5. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="5">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="6">设计权衡</a></li><li><a href="#6-练习" data-depth="2" data-heading-j="7">6. 练习</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">STM32 与 HAL</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>STM32F407 / HAL / 时钟树 / PLL / RCC / 哨兵固件 / AHB / APB</span></div><h1 class="docs__title">时钟树与GPIO</h1><p class="docs__lead">HSE 12 MHz 经 PLLM 6、PLLN 168、PLLP 2 得到 168 MHz SYSCLK 的完整推导，对照 SystemClock_Config 源码、Flash 等待周期与 HAL 时间基的重算时机。</p></header><section class="dfile" id="file-1" data-file="01-时钟树与PLL"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-时钟树与PLL</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/01-时钟树与PLL.md</span></div><div class="dfile__body"><h1 id="时钟树与-pll">时钟树与 PLL</h1>
-<p>STM32F407 复位后由内部 RC 振荡器（High-Speed Internal, <strong>HSI</strong>）提供 16 MHz 系统时钟。这个频率带不动云台 1 kHz 的控制循环，也满足不了 USB 与 CAN 对时序的要求。<code>Core/Src/main.c</code> 在 <code>HAL_Init()</code> 之后立刻调用 <code>SystemClock_Config()</code>，把时钟切到外部晶振（High-Speed External, <strong>HSE</strong>）经锁相环（Phase-Locked Loop, <strong>PLL</strong>）倍频后的 168 MHz。本单元推导这组参数的来源，两块哨兵板的取值完全一致。</p>
-<blockquote>
-<p>源码索引（路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）</p>
-</blockquote>
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>时钟树与GPIO · STM32 与 HAL · 王宇翔</title><meta name="description" content="HSE 12 MHz 经 PLLM 6、PLLN 168、PLLP 2 得到 168 MHz SYSCLK 的完整推导，对照 SystemClock_Config 源码、Flash 等待周期与 HAL 时间基的重算时机。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="时钟树与GPIO · STM32 与 HAL · 王宇翔"><meta property="og:description" content="HSE 12 MHz 经 PLLM 6、PLLN 168、PLLP 2 得到 168 MHz SYSCLK 的完整推导，对照 SystemClock_Config 源码、Flash 等待周期与 HAL 时间基的重算时机。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/01-%E6%97%B6%E9%92%9F%E6%A0%91%E4%B8%8EGPIO/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/">STM32 与 HAL</a><span class="sep" aria-hidden="true">/</span><span class="now">时钟树与GPIO</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>时钟树与GPIO</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>时钟树与 PLL</span></a><ul class="toc__heads"><li><a href="#1-源码索引" data-depth="2" data-heading-j="0">1. 源码索引</a></li><li><a href="#2-振荡源倍频与分频四层" data-depth="2" data-heading-j="1">2. 振荡源、倍频与分频四层</a></li><li><a href="#3-pll-四个参数怎么算出-168-mhz" data-depth="2" data-heading-j="2">3. PLL 四个参数怎么算出 168 MHz</a></li><li><a href="#4-systemclock_config-逐段读" data-depth="2" data-heading-j="3">4. SystemClock_Config 逐段读</a></li><li><a href="#5-时钟切完才重算的时间基" data-depth="2" data-heading-j="4">5. 时钟切完才重算的时间基</a></li><li><a href="#6-派生时钟与它们各自的服务对象" data-depth="2" data-heading-j="5">6. 派生时钟与它们各自的服务对象</a></li><li><a href="#7-hse_value-与实物晶振不一致的连锁反应" data-depth="2" data-heading-j="6">7. HSE_VALUE 与实物晶振不一致的连锁反应</a></li><li><a href="#8-易错点常见判断偏差" data-depth="2" data-heading-j="7">8. 易错点：常见判断偏差</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>总线拓扑与预分频</span></a><ul class="toc__heads"><li><a href="#源码索引" data-depth="2" data-heading-j="0">源码索引</a></li><li><a href="#三条总线的外设归属" data-depth="2" data-heading-j="1">三条总线的外设归属</a></li><li><a href="#apb-分频与定时器倍频两条规则" data-depth="2" data-heading-j="2">APB 分频与定时器倍频两条规则</a></li><li><a href="#从-168-mhz-到各外设实得频率" data-depth="2" data-heading-j="3">从 168 MHz 到各外设实得频率</a></li><li><a href="#can-与-spi-的算式核对" data-depth="2" data-heading-j="4">CAN 与 SPI 的算式核对</a></li><li><a href="#串口分频的两个推导值" data-depth="2" data-heading-j="5">串口分频的两个推导值</a></li><li><a href="#时钟门控落在哪几个寄存器" data-depth="2" data-heading-j="6">时钟门控落在哪几个寄存器</a></li><li><a href="#改动-apb1-分频的连带效应" data-depth="2" data-heading-j="7">改动 APB1 分频的连带效应</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="8">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>GPIO 模式与复用</span></a><ul class="toc__heads"><li><a href="#源码索引" data-depth="2" data-heading-j="0">源码索引</a></li><li><a href="#六个字段分别写哪个寄存器" data-depth="2" data-heading-j="1">六个字段分别写哪个寄存器</a></li><li><a href="#hal_gpio_init-的写入顺序" data-depth="2" data-heading-j="2">HAL_GPIO_Init 的写入顺序</a></li><li><a href="#引脚状态之间怎么切换" data-depth="2" data-heading-j="3">引脚状态之间怎么切换</a></li><li><a href="#本项目用到的全部引脚" data-depth="2" data-heading-j="4">本项目用到的全部引脚</a></li><li><a href="#片选定时器通道与开漏三处细节" data-depth="2" data-heading-j="5">片选、定时器通道与开漏三处细节</a></li><li><a href="#静默失效与其它常见判断偏差" data-depth="2" data-heading-j="6">静默失效与其它常见判断偏差</a></li><li><a href="#用寄存器读回验证配置" data-depth="2" data-heading-j="7">用寄存器读回验证配置</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="14">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>本项目引脚分配</span></a><ul class="toc__heads"><li><a href="#源码索引" data-depth="2" data-heading-j="0">源码索引</a></li><li><a href="#ioc-编号生成代码与运行时三处怎么对齐" data-depth="2" data-heading-j="1">.ioc 编号、生成代码与运行时三处怎么对齐</a></li><li><a href="#引脚与外设的对应" data-depth="2" data-heading-j="2">引脚与外设的对应</a></li><li><a href="#云台板引脚总表" data-depth="2" data-heading-j="3">云台板引脚总表</a></li><li><a href="#两条串口链路的差异" data-depth="2" data-heading-j="4">两条串口链路的差异</a></li><li><a href="#一次-bmi088-读取的引脚时序" data-depth="2" data-heading-j="5">一次 BMI088 读取的引脚时序</a></li><li><a href="#编号与功能的三个常见误判" data-depth="2" data-heading-j="6">编号与功能的三个常见误判</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="13">附：本页引用的固件路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与排查</span></a><ul class="toc__heads"><li><a href="#源码索引" data-depth="2" data-heading-j="0">源码索引</a></li><li><a href="#三类问题的判据" data-depth="2" data-heading-j="1">三类问题的判据</a></li><li><a href="#波特率为什么对时钟线性" data-depth="2" data-heading-j="2">波特率为什么对时钟线性</a></li><li><a href="#控制器从错误主动到总线关闭" data-depth="2" data-heading-j="3">控制器从错误主动到总线关闭</a></li><li><a href="#排查顺序" data-depth="2" data-heading-j="4">排查顺序</a></li><li><a href="#一次-can-通信故障的复盘" data-depth="2" data-heading-j="5">一次 CAN 通信故障的复盘</a></li><li><a href="#857142-hz-反推出的-pclk1" data-depth="2" data-heading-j="6">857142 Hz 反推出的 PCLK1</a></li><li><a href="#上电自检可以查什么" data-depth="2" data-heading-j="7">上电自检可以查什么</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="8">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的固件路径" data-depth="2" data-heading-j="15">附：本页引用的固件路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">STM32 与 HAL</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-07</span><span class="dot" aria-hidden="true">·</span><span>STM32F407 / HAL / 时钟树 / PLL / RCC / 哨兵固件 / AHB / APB</span></div><h1 class="docs__title">时钟树与GPIO</h1><p class="docs__lead">HSE 12 MHz 经 PLLM 6、PLLN 168、PLLP 2 得到 168 MHz SYSCLK 的完整推导，对照 SystemClock_Config 源码、Flash 等待周期与 HAL 时间基的重算时机。</p></header><section class="dfile" id="file-1" data-file="01-时钟树与PLL"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-时钟树与PLL</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/01-时钟树与PLL.md</span></div><div class="dfile__body"><h1 id="时钟树与-pll">时钟树与 PLL</h1>
+<p>STM32F407 复位后由内部 RC 振荡器 HSI 提供 16 MHz 系统时钟。这个频率带不动云台 1 kHz 的控制循环，也满足不了 USB 与 CAN 对时序的要求。<code>Core/Src/main.c</code> 在 <code>HAL_Init()</code> 之后立刻调用 <code>SystemClock_Config()</code>，把时钟切到外部晶振 HSE 经锁相环 PLL 倍频后的 168 MHz。</p>
+<p>时钟树上的每一个参数都同时影响多个外设。PLLM、PLLN、PLLP 决定内核与两条 APB 的频率，PLLQ 单独决定 USB 时钟；APB1 的分频系数又同时决定 CAN 位时钟与 HAL 时间基的计数频率。改一个数字，受影响的往往是三四个看起来无关的模块。</p>
+<p>两块哨兵板的取值完全一致，因此下面的推导对云台板与底盘板通用。</p>
+<h2 id="1-源码索引">1. 源码索引</h2>
+<p>路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
 
 
 
@@ -37,11 +38,11 @@
 
 
 <table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/main.c</code></td><td><code>SystemClock_Config()</code>，PLL 与总线分频的全部参数</td></tr><tr><td><code>Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>HSE_VALUE</code>、<code>HSI_VALUE</code>、<code>TICK_INT_PRIORITY</code></td></tr><tr><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>TIM2 时间基，按 APB1 频率反算预分频</td></tr><tr><td><code>Core/Src/system_stm32f4xx.c</code></td><td><code>SystemCoreClockUpdate()</code>，按 <code>HSE_VALUE</code> 重算主频</td></tr><tr><td><code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c</code></td><td><code>HAL_RCC_OscConfig()</code> 与 <code>HAL_RCC_ClockConfig()</code></td></tr><tr><td><code>2026sentriomeni.ioc</code></td><td>CubeMX 侧的同一组时钟参数</td></tr></tbody></table>
-<h2 id="1-时钟树的分层">1. 时钟树的分层</h2>
+<h2 id="2-振荡源倍频与分频四层">2. 振荡源、倍频与分频四层</h2>
 <p>时钟树是从振荡源到外设的一条定向通路，每一层只做两件事之一：选源，或者分频。自下而上分四层。</p>
 <ol>
 <li>振荡源。HSI 是芯片内部 16 MHz RC 振荡器，复位后默认使用；HSE 是板上晶振，本工程按 12 MHz 配置；另有 LSI（约 32 kHz）与 LSE（32.768 kHz），本工程未使用。系统时钟只能从 HSI、HSE、PLL 三者中选一个。</li>
-<li>PLL 倍频。压控振荡器（Voltage-Controlled Oscillator, <strong>VCO</strong>）先对输入源做除法，再乘法，最后除法得到系统时钟。输入源固定为 HSE 或 HSI。</li>
+<li>PLL 倍频。压控振荡器 VCO 先对输入源做除法，再乘法，最后除法得到系统时钟。输入源固定为 HSE 或 HSI。</li>
 <li>总线分频。系统时钟经 AHB 预分频得到 HCLK；HCLK 再经两个独立预分频分别得到 PCLK1（APB1）与 PCLK2（APB2）。Cortex-M4 内核、Flash 接口、DMA 与 GPIO 挂在 AHB 上，慢速外设分挂两条 APB。</li>
 <li>专用支路。PLLQ 分频器的输出不参与系统时钟选择，直接供 USB OTG FS 使用，要求 48 MHz。</li>
 </ol>
@@ -63,7 +64,7 @@
     P1 --> U3["USART3 与 I2C3"]
     P2 --> T10["TIM10 计数时钟 168 MHz&#x3C;br/>PWM 33.6 kHz"]
     P2 --> U6["USART1 USART6 SPI1"]</pre></div>
-<h2 id="2-pll-参数的推导">2. PLL 参数的推导</h2>
+<h2 id="3-pll-四个参数怎么算出-168-mhz">3. PLL 四个参数怎么算出 168 MHz</h2>
 <p>PLL 的四段关系如下，PLLM 与 PLLP 是除法，PLLN 是乘法，PLLQ 输出另走一路。</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>V</mi><mi>C</mi><mi>O</mi><mi>i</mi><mi>n</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>H</mi><mi>S</mi><mi>E</mi></mrow></msub><mrow><mi>P</mi><mi>L</mi><mi>L</mi><mi>M</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>12</mn><mtext> MHz</mtext></mrow><mn>6</mn></mfrac><mo>=</mo><mn>2</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{VCOin} = \frac{f_{HSE}}{PLLM} = \frac{12\ \text{MHz}}{6} = 2\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">O</span><span class="mord mathnormal mtight">in</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2772em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight">LL</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">12</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">2</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>V</mi><mi>C</mi><mi>O</mi><mi>o</mi><mi>u</mi><mi>t</mi></mrow></msub><mo>=</mo><msub><mi>f</mi><mrow><mi>V</mi><mi>C</mi><mi>O</mi><mi>i</mi><mi>n</mi></mrow></msub><mo>×</mo><mi>P</mi><mi>L</mi><mi>L</mi><mi>N</mi><mo>=</mo><mn>2</mn><mtext> MHz</mtext><mo>×</mo><mn>168</mn><mo>=</mo><mn>336</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{VCOout} = f_{VCOin} \times PLLN = 2\ \text{MHz} \times 168 = 336\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">O</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.2222em;">V</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">O</span><span class="mord mathnormal mtight">in</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal">LL</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">168</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">336</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
@@ -143,7 +144,8 @@
 
 <table><thead><tr><th>参数</th><th>约束</th><th>本工程取值</th><th>说明</th></tr></thead><tbody><tr><td>VCO 输入</td><td>1 至 2 MHz</td><td>2 MHz</td><td>顶到上限，PLLM 不能再小</td></tr><tr><td>VCO 输出</td><td>100 至 432 MHz</td><td>336 MHz</td><td>位于区间中部</td></tr><tr><td>PLLM</td><td>2 至 63</td><td>6</td><td>12 MHz 除以 6 得到 2 MHz</td></tr><tr><td>PLLN</td><td>64 至 432</td><td>168</td><td></td></tr><tr><td>PLLP</td><td>2、4、6、8</td><td>2</td><td>只有 2 能让 SYSCLK 达到上限 168 MHz</td></tr><tr><td>PLLQ</td><td>2 至 15</td><td>7</td><td>336 MHz 除以 7 恰好得到 48 MHz</td></tr><tr><td>SYSCLK</td><td>不超过 168 MHz</td><td>168 MHz</td><td>顶到上限</td></tr><tr><td>AHB 预分频</td><td>1 至 512</td><td>1</td><td>HCLK 与 SYSCLK 同频</td></tr><tr><td>APB1 预分频</td><td>1 至 16</td><td>4</td><td>PCLK1 上限 42 MHz</td></tr><tr><td>APB2 预分频</td><td>1 至 16</td><td>2</td><td>PCLK2 上限 84 MHz</td></tr></tbody></table>
 <p>PLLM 在 12 MHz 输入下有两个常用取值：除以 6 得 2 MHz，除以 8 得 1.5 MHz。选 2 MHz 让 VCO 输出 336 MHz 更居中，而 336 能被 7 整除，USB 的 48 MHz 因此不需要另配晶振。</p>
-<h2 id="3-落到本项目">3. 落到本项目</h2>
+<p>四段关系里只有一个自由度被浪费的空间：VCO 输出 336 MHz 同时要满足能被 2 整除得到 168 MHz、能被 7 整除得到 48 MHz。336 的最小公倍数条件是 2 与 7 互素，所以只要 PLLN 取 7 的倍数就自动满足。PLLN 取 168 恰好是 7 的 24 倍。</p>
+<h2 id="4-systemclock_config-逐段读">4. SystemClock_Config 逐段读</h2>
 <p><code>Core/Src/main.c:153-192</code> 的原文：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> SystemClock_Config</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
@@ -180,9 +182,15 @@
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>四件事按顺序看。</p>
 <p>第一，电压等级与 PWR 时钟。168 MHz 属于 F407 的最高频段，必须先把内部稳压器切到 <code>PWR_REGULATOR_VOLTAGE_SCALE1</code>，而写这个字段前要先开 PWR 时钟（第 160 至 161 行）。缺这一步，<code>HAL_RCC_ClockConfig()</code> 在高主频下会返回 <code>HAL_ERROR</code>。</p>
-<p>第二，晶振源与 PLL 参数由 <code>HAL_RCC_OscConfig()</code> 一次写入。该函数先置位 <code>RCC->CR</code> 的 <code>HSEON</code> 并轮询 <code>HSERDY</code>（超时按 <code>HSE_STARTUP_TIMEOUT</code> 计，取 100 ms，<code>Core/Inc/stm32f4xx_hal_conf.h:103</code>），再写 <code>RCC->PLLCFGR</code> 的 <code>PLLM</code>、<code>PLLN</code>、<code>PLLP</code>、<code>PLLQ</code>、<code>PLLSRC</code> 字段，使能 PLL 后轮询 <code>PLLRDY</code>。任何一步超时或参数越界，函数返回非 <code>HAL_OK</code>，<code>Error_Handler()</code> 关中断并停在那里（<code>main.c:224-233</code>）。</p>
-<p>第三，系统时钟切换与 <code>SystemCoreClock</code> 更新由 <code>HAL_RCC_ClockConfig()</code> 完成。它按传入的 <code>FLatency</code> 写 <code>FLASH->ACR</code>（<code>main.c:188</code> 传 <code>FLASH_LATENCY_5</code>），设置 <code>CFGR</code> 的 <code>HPRE</code>、<code>PPRE1</code>、<code>PPRE2</code>，把 <code>SW</code> 切到 PLL 并轮询 <code>SWS</code> 确认，最后用寄存器值与 <code>HSE_VALUE</code> 重算全局变量 <code>SystemCoreClock</code>（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c:719</code>），并紧接着调用 <code>HAL_InitTick(uwTickPrio)</code>（同文件第 722 行）。</p>
-<p>第四，<code>HAL_InitTick()</code> 在本工程里被调用两次。第一次在 <code>HAL_Init()</code> 内部（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c:176</code>），此时 <code>SystemCoreClock</code> 还是复位值 16 MHz，TIM2 预分频按这个频率计算；第二次由上面的 <code>HAL_RCC_ClockConfig()</code> 触发，才按真实的 42 MHz PCLK1 重算。时间基的实现见 <code>Core/Src/stm32f4xx_hal_timebase_tim.c</code>：第 70 行用 <code>HAL_RCC_GetPCLK1Freq()</code> 反算预分频，第 81 行把 Period 固定为 999。</p>
+<p>第二，晶振源与 PLL 参数由 <code>HAL_RCC_OscConfig()</code> 一次写入。</p>
+<p>该函数先置位 <code>RCC->CR</code> 的 <code>HSEON</code> 并轮询 <code>HSERDY</code>（超时按 <code>HSE_STARTUP_TIMEOUT</code> 计，取 100 ms，<code>Core/Inc/stm32f4xx_hal_conf.h:103</code>），再写 <code>RCC->PLLCFGR</code> 的 <code>PLLM</code>、<code>PLLN</code>、<code>PLLP</code>、<code>PLLQ</code>、<code>PLLSRC</code> 字段，使能 PLL 后轮询 <code>PLLRDY</code>。任何一步超时或参数越界，函数返回非 <code>HAL_OK</code>，<code>Error_Handler()</code> 关中断并停在那里（<code>main.c:224-233</code>）。</p>
+<p>第三，系统时钟切换与 <code>SystemCoreClock</code> 更新由 <code>HAL_RCC_ClockConfig()</code> 完成。</p>
+<p>它按传入的 <code>FLatency</code> 写 <code>FLASH->ACR</code>（<code>main.c:188</code> 传 <code>FLASH_LATENCY_5</code>），设置 <code>CFGR</code> 的 <code>HPRE</code>、<code>PPRE1</code>、<code>PPRE2</code>，把 <code>SW</code> 切到 PLL 并轮询 <code>SWS</code> 确认，最后用寄存器值与 <code>HSE_VALUE</code> 重算全局变量 <code>SystemCoreClock</code>（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c:719</code>），并紧接着调用 <code>HAL_InitTick(uwTickPrio)</code>（同文件第 722 行）。</p>
+<p>第四，<code>HAL_InitTick()</code> 在本工程里被调用两次。</p>
+<p>第一次在 <code>HAL_Init()</code> 内部（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c:176</code>），此时 <code>SystemCoreClock</code> 还是复位值 16 MHz，TIM2 预分频按这个频率计算；第二次由上面的 <code>HAL_RCC_ClockConfig()</code> 触发，才按真实的 42 MHz PCLK1 重算。</p>
+<p>时间基的实现见 <code>Core/Src/stm32f4xx_hal_timebase_tim.c</code>：第 70 行用 <code>HAL_RCC_GetPCLK1Freq()</code> 反算预分频，第 81 行把 Period 固定为 999。</p>
+<h2 id="5-时钟切完才重算的时间基">5. 时钟切完才重算的时间基</h2>
+<p>时间基重算的时序决定了 <code>HAL_GetTick()</code> 在启动阶段是否准确：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant M as main.c
     participant R as RCC 寄存器
@@ -197,7 +205,8 @@
     M->>M: 用寄存器值与 HSE_VALUE 重算 SystemCoreClock
     M->>H: HAL_InitTick 以 42 MHz PCLK1 重算预分频
     Note over H: 84 MHz 先降到 1 MHz 再计满 1000 次得 1 ms</pre></div>
-<p>派生时钟与受影响对象：</p>
+<p>第一次调用按 16 MHz 算出的预分频在切钟后立即被覆盖，因此 HAL 计时不会永久偏差；但在两次调用之间若执行了依赖 <code>HAL_GetTick()</code> 的等待，等待时长与预期不符。<code>HAL_Init()</code> 到 <code>SystemClock_Config()</code> 之间的代码只有电压等级与 PWR 时钟两行，没有延时调用，所以这段窗口在实践中不构成问题。</p>
+<h2 id="6-派生时钟与它们各自的服务对象">6. 派生时钟与它们各自的服务对象</h2>
 
 
 
@@ -246,16 +255,81 @@
 
 
 <table><thead><tr><th>派生时钟</th><th>公式</th><th>值</th><th>直接受影响的对象</th></tr></thead><tbody><tr><td>HCLK</td><td>168 MHz 除以 1</td><td>168 MHz</td><td>内核、Flash 接口、DMA、GPIO、CRC</td></tr><tr><td>PCLK1</td><td>168 MHz 除以 4</td><td>42 MHz</td><td>TIM2、CAN1、CAN2、USART3、I2C3</td></tr><tr><td>PCLK2</td><td>168 MHz 除以 2</td><td>84 MHz</td><td>TIM10、USART1、USART6、SPI1</td></tr><tr><td>APB1 定时器时钟</td><td>2 乘以 42 MHz</td><td>84 MHz</td><td>TIM2 计数时钟</td></tr><tr><td>APB2 定时器时钟</td><td>2 乘以 84 MHz</td><td>168 MHz</td><td>TIM10 计数时钟</td></tr><tr><td>USB 时钟</td><td>336 MHz 除以 7</td><td>48 MHz</td><td>USB OTG FS</td></tr></tbody></table>
+<p>两条 APB 的定时器时钟有个共同规律：当 APB 预分频不为 1 时，定时器时钟是该 APB 时钟的两倍。APB1 分频为 4，所以 TIM2 拿到 84 MHz；APB2 分频为 2，所以 TIM10 拿到 168 MHz。CAN 不享受这个加倍，它的位时钟就是 PCLK1 的 42 MHz。</p>
 <p><code>HAL_Init()</code> 另外两件与时钟相关的事写在 <code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c</code>：第 173 行把 NVIC 优先级分组设为 <code>NVIC_PRIORITYGROUP_4</code>，第 176 行以 <code>TICK_INT_PRIORITY</code>（<code>Core/Inc/stm32f4xx_hal_conf.h:151</code> 定义为 15）初始化时间基。</p>
-<h2 id="4-易错点">4. 易错点</h2>
-<p>（1）<code>HSE_VALUE</code> 与实际晶振不一致。这类问题不改变任何寄存器写入：PLLM、PLLN、PLLP 照写，硬件按真实晶振倍频，软件却按 <code>HSE_VALUE</code> 计算主频。设实物晶振为 8 MHz 而 <code>HSE_VALUE</code> 仍写 12000000，实际频率是</p>
+<h2 id="7-hse_value-与实物晶振不一致的连锁反应">7. HSE_VALUE 与实物晶振不一致的连锁反应</h2>
+<p>这类问题不改变任何寄存器写入：PLLM、PLLN、PLLP 照写，硬件按真实晶振倍频，软件却按 <code>HSE_VALUE</code> 计算主频。设实物晶振为 8 MHz 而 <code>HSE_VALUE</code> 仍写 12000000，实际频率是</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>S</mi><mi>Y</mi><mi>S</mi><mi>C</mi><mi>L</mi><mi>K</mi><mtext>实际</mtext></mrow></msub><mo>=</mo><mfrac><mrow><mn>8</mn><mtext> MHz</mtext></mrow><mn>6</mn></mfrac><mo>×</mo><mn>168</mn><mo>÷</mo><mn>2</mn><mo>=</mo><mn>112</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{SYSCLK实际} = \frac{8\ \text{MHz}}{6} \times 168 \div 2 = 112\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">Y</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord cjk_fallback mtight">实际</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">6</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">168</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">÷</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">112</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
 <p>而 <code>SystemCoreClock</code> 仍然报 168 MHz。连带后果有三处：TIM2 的 1 ms 实际变成约 1.5 ms，<code>HAL_GetTick()</code> 与所有 <code>HAL_Delay()</code> 同步偏慢；CAN 位时钟从 42 MHz 降到 28 MHz，1 Mbps 的位时序参数算出来是 666.7 kbps，总线上没有节点能应答；PLLQ 输出只有 32 MHz，USB 枚举失败。</p>
-<p>（2）VCO 输入顶在上限。PLLM=6 让 VCO 输入正好 2 MHz，这是允许区间的上边界。把晶振换成 16 MHz 而不改 PLLM，VCO 输入变成 2.67 MHz，<code>HAL_RCC_OscConfig()</code> 直接返回错误。</p>
-<p>（3）只改 PLLN 忘记 PLLQ。SYSCLK 与 USB 共用同一个 VCO 输出，任何改变 VCO 输出的操作都会连带改变 USB 时钟。USB FS 要求 48 MHz 偏差不超过 ±0.25%，只有 PLLQ 使 VCO 输出被 7 整除时成立。</p>
-<p>（4）Flash 等待周期与电压等级不匹配。主频提高而 <code>FLASH_LATENCY</code> 保持较小值，取指会读到错误数据，现象是随机跳进 <code>HardFault_Handler()</code> 或 <code>Error_Handler()</code>。F407 在 150 至 168 MHz 区间要求 5 个等待周期，与代码里的 <code>FLASH_LATENCY_5</code> 一致。</p>
-<p>（5）在 <code>main.c</code> 的 USER CODE 区之外手写代码。CubeMX 重新生成时只保留 <code>/* USER CODE BEGIN */</code> 与 <code>/* USER CODE END */</code> 之间的内容，<code>SystemClock_Config()</code> 的函数体全部由生成器重写。时钟相关的手工改动应当落在 <code>.ioc</code> 里，由生成器落到代码。</p>
-<h2 id="5-小结">5. 小结</h2>
+<p>三处后果里 CAN 最容易被误判为硬件故障，因为发送函数会返回成功而后没有任何反馈。判别方法是读 <code>HAL_RCC_GetPCLK1Freq()</code> 的返回值与实际波特率对照，而不是看位定时寄存器的数值。</p>
+<h2 id="8-易错点常见判断偏差">8. 易错点：常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为 <code>HSE_VALUE</code> 只影响注释</td><td>所有依赖频率的计算都按它取值</td><td><code>stm32f4xx_hal_rcc.c:719</code></td></tr><tr><td>2</td><td>认为 VCO 输入可以取到 3 MHz</td><td>上限为 2 MHz，PLLM=6 已是边界</td><td>参考手册的 PLL 约束</td></tr><tr><td>3</td><td>认为 PLLP 可以取任意偶数</td><td>只有 2、4、6、8</td><td>同表</td></tr><tr><td>4</td><td>只改 PLLN 不看 PLLQ</td><td>USB 时钟随之改变，枚举失败</td><td>两者共用 VCO 输出</td></tr><tr><td>5</td><td>认为 Flash 等待周期可以留 0</td><td>取指错误，随机进 <code>HardFault_Handler()</code></td><td><code>main.c:188</code></td></tr><tr><td>6</td><td>认为时间基预分频在切钟后仍是 16 MHz 的值</td><td><code>HAL_RCC_ClockConfig</code> 会重算一次</td><td><code>stm32f4xx_hal_rcc.c:722</code></td></tr><tr><td>7</td><td>把 APB 定时器时钟当成 APB 时钟</td><td>预分频不为 1 时定时器时钟翻倍</td><td>TIM2 为 84 MHz</td></tr><tr><td>8</td><td>在 CubeMX 生成区外改时钟代码</td><td>重新生成后被覆盖</td><td><code>USER CODE</code> 区之外不保留</td></tr><tr><td>9</td><td>认为 CAN 位时钟是 84 MHz</td><td>CAN 不做定时器加倍，取 42 MHz</td><td>见第 6 节派生表</td></tr></tbody></table>
+<h2 id="9-小结">9. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
 <li>复位后系统跑在 HSI 16 MHz；<code>main.c</code> 的 <code>SystemClock_Config()</code> 把源切到 HSE 12 MHz 经 PLL 倍频的 168 MHz。</li>
@@ -313,24 +387,64 @@
 
 
 <table><thead><tr><th>选择</th><th>本工程取值</th><th>代价与收益</th></tr></thead><tbody><tr><td>振荡源</td><td>HSE 12 MHz</td><td>精度远高于 HSI 的百分之一量级；代价是板上必须有晶振，起振失败要走 <code>Error_Handler()</code></td></tr><tr><td>PLLM</td><td>6</td><td>VCO 输入取到上限 2 MHz，VCO 输出居中；代价是更换晶振后必须同步调整</td></tr><tr><td>PLLP</td><td>2</td><td>唯一能让 SYSCLK 达到 168 MHz 的分频比</td></tr><tr><td>PLLQ</td><td>7</td><td>复用同一个 336 MHz VCO 输出得到 48 MHz，省一路时钟</td></tr><tr><td>APB1 分频</td><td>4</td><td>42 MHz 是 PCLK1 上限；代价是 CAN 与 TIM2 的时钟被这条链路绑定</td></tr><tr><td>APB2 分频</td><td>2</td><td>84 MHz 让 SPI1 与串口留有余量</td></tr><tr><td>Flash 等待周期</td><td>5</td><td>满足 168 MHz 的取指时序；代价是每次取指多等 5 拍</td></tr></tbody></table>
-<h2 id="6-练习">6. 练习</h2>
-<p>基础题</p>
+<h2 id="10-练习">10. 练习</h2>
+<h3 id="基础题">基础题</h3>
 <ol>
 <li>写出 HSE 换成 8 MHz 晶振后，为保持 SYSCLK 168 MHz，PLLM 与 PLLN 可以取哪些整数组合（要求 VCO 输入落在 1 至 2 MHz、VCO 输出落在 100 至 432 MHz）。</li>
 <li>计算把 <code>APB1CLKDivider</code> 改成 <code>RCC_HCLK_DIV8</code> 后 PCLK1 的值，并判断 CAN 在这种配置下能否得到 1 Mbps。</li>
 <li>说明 <code>SystemCoreClock</code> 在 <code>HAL_Init()</code> 之后、<code>SystemClock_Config()</code> 之前的取值。</li>
+<li>写出 TIM2 计数时钟的由来，并算出它的预分频与周期设置。</li>
 </ol>
-<p>挑战题</p>
-<ol start="4">
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
 <li>查阅 <code>system_stm32f4xx.c</code> 的 <code>SystemCoreClockUpdate()</code>（第 220 至 258 行），说明它与 <code>HAL_RCC_ClockConfig()</code> 内那次重算在输入来源上的差异。</li>
 <li>把 <code>FLASH_LATENCY_5</code> 误写成 <code>FLASH_LATENCY_0</code>，预测现象，并说明为什么在 <code>main()</code> 里加串口打印未必看得见。</li>
 <li>PLLQ 必须给出 48 MHz。给出 VCO 输出改为 384 MHz 时 <code>PLLN</code>、<code>PLLP</code>、<code>PLLQ</code> 的一组取值，并验证 SYSCLK 不超过 168 MHz。</li>
 <li>说明为什么 <code>HAL_InitTick()</code> 第一次按 16 MHz 计算预分频不会导致 HAL 计时永久错误。</li>
-</ol></div></section><section class="dfile" id="file-2" data-file="02-总线拓扑与预分频"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-总线拓扑与预分频</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/02-总线拓扑与预分频.md</span></div><div class="dfile__body"><h1 id="总线拓扑与预分频">总线拓扑与预分频</h1>
-<p>168 MHz 只有一个，需要它的外设却有十几类。STM32F407 把总线分成三层，每层频率由 <code>HPRE</code>、<code>PPRE1</code>、<code>PPRE2</code> 三个字段决定。外设实际拿到的时钟决定了它的位定时，CAN 的波特率完全由 APB1 频率反推。本单元给出两块板的总线拓扑与各外设的实得频率。</p>
-<blockquote>
-<p>源码索引（路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）</p>
-</blockquote>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td><code>SystemClock_Config()</code>（:153-192）、电压等级与 PWR 时钟（:160-161）、<code>FLASH_LATENCY_5</code>（:188）、<code>Error_Handler()</code>（:224-233）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>HSE_VALUE</code> 与 <code>HSE_STARTUP_TIMEOUT</code>（:103）、<code>TICK_INT_PRIORITY</code>（:151）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>TIM2 预分频反算（:70）与 Period（:81）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/system_stm32f4xx.c</code></td><td><code>SystemCoreClockUpdate()</code>（:220-258）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c</code></td><td><code>SystemCoreClock</code> 重算（:719）与 <code>HAL_InitTick</code>（:722）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c</code></td><td>优先级分组（:173）与首次 <code>HAL_InitTick</code>（:176）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td>CubeMX 侧的时钟树参数</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-总线拓扑与预分频"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-总线拓扑与预分频</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/02-总线拓扑与预分频.md</span></div><div class="dfile__body"><h1 id="总线拓扑与预分频">总线拓扑与预分频</h1>
+<p>168 MHz 只有一个，需要它的外设却有十几类。STM32F407 把总线分成三层，每层频率由 <code>HPRE</code>、<code>PPRE1</code>、<code>PPRE2</code> 三个字段决定。外设实际拿到的时钟决定了它的位定时，CAN 的波特率完全由 APB1 频率反推。</p>
+<p>分频系数看起来只是几个整数，但每一条都绑着若干外设：改动 APB1 的分频会同时影响 CAN 位时钟、I2C3 速率、USART3 波特率与 HAL 的 1 ms 时间基。下面给出两块板共用的总线拓扑、各外设的实得频率，以及三条能被直接核对的算式。</p>
+<h2 id="源码索引">源码索引</h2>
+<p>路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
 
 
 
@@ -369,11 +483,11 @@
 
 
 <table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/main.c</code></td><td>三个预分频字段的取值</td></tr><tr><td><code>Core/Src/gpio.c</code></td><td>端口时钟使能（AHB1）</td></tr><tr><td><code>Core/Src/dma.c</code></td><td>DMA1 与 DMA2 时钟使能（AHB1）与五个流的中断</td></tr><tr><td><code>Core/Src/can.c</code></td><td>CAN1 与 CAN2 的位时序参数与 APB1 时钟使能</td></tr><tr><td><code>Core/Src/usart.c</code>、<code>Core/Src/spi.c</code>、<code>Core/Src/i2c.c</code>、<code>Core/Src/tim.c</code></td><td>各外设的时钟使能与波特率</td></tr><tr><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>按 PCLK1 反算 TIM2 预分频</td></tr><tr><td><code>2026sentriomeni.ioc</code></td><td>CubeMX 算出的各外设频率（<code>RCC.AHB1Freq_Value</code> 等）</td></tr></tbody></table>
-<h2 id="1-三条总线与外设归属">1. 三条总线与外设归属</h2>
+<h2 id="三条总线的外设归属">三条总线的外设归属</h2>
 <ul>
-<li>AHB（Advanced High-performance Bus，<strong>AHB</strong>）：Cortex-M4 内核、Flash 接口、DMA1、DMA2、CRC、GPIOA 至 GPIOH、USB OTG FS 寄存器接口。频率记作 HCLK，与 SYSCLK 同频。</li>
-<li>APB1（Advanced Peripheral Bus 1，<strong>APB1</strong>）：TIM2 至 TIM7、CAN1、CAN2、I2C1 至 I2C3、USART2、USART3、UART4、UART5、PWR、DAC。频率记作 PCLK1，上限 42 MHz。</li>
-<li>APB2（Advanced Peripheral Bus 2，<strong>APB2</strong>）：TIM1、TIM8 至 TIM11、USART1、USART6、SPI1、SYSCFG、ADC、SDIO。频率记作 PCLK2，上限 84 MHz。</li>
+<li>AHB：Cortex-M4 内核、Flash 接口、DMA1、DMA2、CRC、GPIOA 至 GPIOH、USB OTG FS 寄存器接口。频率记作 HCLK，与 SYSCLK 同频。</li>
+<li>APB1：TIM2 至 TIM7、CAN1、CAN2、I2C1 至 I2C3、USART2、USART3、UART4、UART5、PWR、DAC。频率记作 PCLK1，上限 42 MHz。</li>
+<li>APB2：TIM1、TIM8 至 TIM11、USART1、USART6、SPI1、SYSCFG、ADC、SDIO。频率记作 PCLK2，上限 84 MHz。</li>
 </ul>
 <p>预分频字段是整数分频，AHB 取 1 至 512，APB 取 1 至 16。另有一条规则只作用于定时器：APB 预分频系数不为 1 时，挂在该总线上定时器的计数时钟是 PCLK 的两倍。这条规则让定时器在慢总线上仍能获得较高分辨率，代价是计算定时器频率时必须先判断分频系数。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
@@ -392,13 +506,14 @@
     PCLK2 --> H1["TIM10 PWM"]
     PCLK2 --> H2["SPI1 BMI088"]
     PCLK2 --> H3["USART1 与 USART6"]</pre></div>
-<h2 id="2-频率换算与定时器倍频">2. 频率换算与定时器倍频</h2>
+<h2 id="apb-分频与定时器倍频两条规则">APB 分频与定时器倍频两条规则</h2>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>H</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>S</mi><mi>Y</mi><mi>S</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mi>H</mi><mi>P</mi><mi>R</mi><mi>E</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>168</mn><mtext> MHz</mtext></mrow><mn>1</mn></mfrac><mo>=</mo><mn>168</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{HCLK} = \frac{f_{SYSCLK}}{HPRE} = \frac{168\ \text{MHz}}{1} = 168\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2772em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">Y</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">168</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>H</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mi>P</mi><mi>P</mi><mi>R</mi><mi>E</mi><mn>1</mn></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>168</mn><mtext> MHz</mtext></mrow><mn>4</mn></mfrac><mo>=</mo><mn>42</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{PCLK1} = \frac{f_{HCLK}}{PPRE1} = \frac{168\ \text{MHz}}{4} = 42\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2772em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">4</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">42</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>2</mn></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>H</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mi>P</mi><mi>P</mi><mi>R</mi><mi>E</mi><mn>2</mn></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>168</mn><mtext> MHz</mtext></mrow><mn>2</mn></mfrac><mo>=</mo><mn>84</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{PCLK2} = \frac{f_{HCLK}}{PPRE2} = \frac{168\ \text{MHz}}{2} = 84\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2772em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">168</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">84</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
 <p>定时器的计数时钟还要再乘一次倍频：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>T</mi><mi>I</mi><mi>M</mi></mrow></msub><mo>=</mo><mrow><mo fence="true">{</mo><mtable rowspacing="0.36em" columnalign="left left" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>P</mi><mi>P</mi><mi>R</mi><mi>E</mi><mo>=</mo><mn>1</mn></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mn>2</mn><mo>×</mo><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>P</mi><mi>P</mi><mi>R</mi><mi>E</mi><mo mathvariant="normal">≠</mo><mn>1</mn></mrow></mstyle></mtd></mtr></mtable></mrow></mrow><annotation encoding="application/x-tex">f_{TIM} = \begin{cases} f_{PCLK} &#x26; PPRE = 1 \\ 2 \times f_{PCLK} &#x26; PPRE \ne 1 \end{cases}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3em;vertical-align:-1.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">{</span></span><span class="mord"><span class="mtable"><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:1em;"></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">1</span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel"><span class="mrel"><span class="mord vbox"><span class="thinbox"><span class="rlap"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="inner"><span class="mord"><span class="mrel"></span></span></span><span class="fix"></span></span></span></span></span><span class="mspace nobreak"></span><span class="mrel">=</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
-<p>代入本工程得 <code>f_{TIM2} = 84 MHz</code>、<code>f_{TIM10} = 168 MHz</code>。这两个数字是后面所有定时参数的基准。</p>
+<p>代入本工程得 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>T</mi><mi>I</mi><mi>M</mi><mn>2</mn></mrow></msub><mo>=</mo><mn>84</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{TIM2} = 84\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">84</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>T</mi><mi>I</mi><mi>M</mi><mn>10</mn></mrow></msub><mo>=</mo><mn>168</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{TIM10} = 168\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="mord mathnormal mtight" style="margin-right:0.0785em;">I</span><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span><span class="mord mtight">10</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">168</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span>。这两个数字是后面所有定时参数的基准。</p>
+<h2 id="从-168-mhz-到各外设实得频率">从 168 MHz 到各外设实得频率</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["HCLK 168 MHz"] -->|PPRE1 分频 4| B["PCLK1 42 MHz"]
     B -->|定时器倍频 乘 2| C["TIM2 计数时钟 84 MHz"]
@@ -407,8 +522,6 @@
     A -->|PPRE2 分频 2| F["PCLK2 84 MHz"]
     F -->|定时器倍频 乘 2| G["TIM10 计数时钟 168 MHz"]
     G -->|Prescaler 0 与 Period 4999| H["PWM 33.6 kHz"]</pre></div>
-<h2 id="3-落到本项目">3. 落到本项目</h2>
-<p>各外设的实得频率与关键参数：</p>
 
 
 
@@ -492,12 +605,50 @@
 
 
 <table><thead><tr><th>外设</th><th>总线</th><th>时钟来源</th><th>关键参数</th><th>落地结果</th></tr></thead><tbody><tr><td>TIM2</td><td>APB1</td><td>定时器倍频 84 MHz</td><td>Prescaler 83、Period 999</td><td>1 kHz 更新中断，HAL 的 1 ms</td></tr><tr><td>CAN1、CAN2</td><td>APB1</td><td>42 MHz</td><td>Prescaler 2、BS1 15TQ、BS2 5TQ、SJW 1TQ</td><td>1 Mbps</td></tr><tr><td>USART3</td><td>APB1</td><td>42 MHz</td><td>100000 波特、8E1、仅接收</td><td>DBUS 遥控器</td></tr><tr><td>I2C3</td><td>APB1</td><td>42 MHz</td><td>400 kHz</td><td>板载低速外设</td></tr><tr><td>TIM10</td><td>APB2</td><td>定时器倍频 168 MHz</td><td>Prescaler 0、Period 4999、PWM1</td><td>33.6 kHz，IMU 加热</td></tr><tr><td>SPI1</td><td>APB2</td><td>84 MHz</td><td>预分频 64</td><td>1.3125 MHz，BMI088</td></tr><tr><td>USART1</td><td>APB2</td><td>84 MHz</td><td>115200 波特、8N1</td><td>调试串口</td></tr><tr><td>USART6</td><td>APB2</td><td>84 MHz</td><td>115200 波特、8N1</td><td>云台未启用，底盘接裁判系统</td></tr><tr><td>USB OTG FS</td><td>AHB2 与 PLLQ</td><td>48 MHz</td><td>全速 12 Mbps</td><td>与视觉小电脑的 CDC</td></tr><tr><td>DMA1、DMA2、CRC、GPIO</td><td>AHB1</td><td>168 MHz</td><td>五条 DMA 流</td><td>见 <code>Core/Src/dma.c:47-61</code></td></tr></tbody></table>
+<h2 id="can-与-spi-的算式核对">CAN 与 SPI 的算式核对</h2>
 <p>CAN 的波特率是这条链上最直接的算式。位时间由同步段、BS1、BS2 三段组成，总长 1+15+5=21 个时间份额（Time Quantum, TQ）：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi><mi>a</mi><mi>u</mi><mi>d</mi><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub><mrow><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>42</mn><mtext> MHz</mtext></mrow><mrow><mn>2</mn><mo>×</mo><mn>21</mn></mrow></mfrac><mo>=</mo><mn>1</mn><mtext> Mbps</mtext></mrow><annotation encoding="application/x-tex">Baud = \frac{f_{PCLK1}}{Prescaler \times (1 + BS1 + BS2)} = \frac{42\ \text{MHz}}{2 \times 21} = 1\ \text{Mbps}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal">a</span><span class="mord mathnormal">u</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4522em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">esc</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mbin mtight">×</span><span class="mopen mtight">(</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">2</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2757em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mbin mtight">×</span><span class="mord mtight">21</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">42</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">1</span><span class="mspace"> </span><span class="mord text"><span class="mord">Mbps</span></span></span></span></span></p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mi>Q</mi><mo>=</mo><mfrac><mrow><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi></mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub></mfrac><mo>=</mo><mfrac><mn>2</mn><mrow><mn>42</mn><mtext> MHz</mtext></mrow></mfrac><mo>=</mo><mn>47.619</mn><mtext> ns</mtext></mrow><annotation encoding="application/x-tex">TQ = \frac{Prescaler}{f_{PCLK1}} = \frac{2}{42\ \text{MHz}} = 47.619\ \text{ns}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3612em;vertical-align:-0.4811em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8801em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">esc</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">42</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord text mtight"><span class="mord mtight">MHz</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">47.619</span><span class="mspace"> </span><span class="mord text"><span class="mord">ns</span></span></span></span></span></p>
 <p>这两个数字在 CubeMX 的 <code>.ioc</code> 里被原样记录：<code>2026sentriomeni.ioc:9</code> 的 <code>CAN1.CalculateBaudRate=1000000</code>、<code>:11</code> 的 <code>CAN1.CalculateTimeQuantum=47.61904761904762</code>。参数原文在 <code>Core/Src/can.c:42-46</code>（CAN1）与 <code>:74-78</code>（CAN2），两者完全一致。</p>
 <p>SPI1 的预分频同样可以直接核对：84 MHz 除以 64 得 1.3125 MHz，与 <code>2026sentriomeni.ioc:405</code> 的 <code>SPI1.CalculateBaudRate=1.3125 MBits/s</code> 相符。TIM10 的算式是 168 MHz 除以 <code>(0+1)</code> 再除以 <code>(4999+1)</code>，得 33.6 kHz。</p>
-<p>时钟使能的落点分散在各初始化文件里，端口时钟在 AHB1，DMA 与 CRC 也在 AHB1：</p>
+<p>三组算式覆盖了两条 APB：CAN 与 SPI 分别落在 42 MHz 与 84 MHz 上，TIM10 走的还是倍频后的 168 MHz。</p>
+<h2 id="串口分频的两个推导值">串口分频的两个推导值</h2>
+<p>USART 的波特率由 <code>BRR</code> 决定，16 倍过采样下：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>U</mi><mi>S</mi><mi>A</mi><mi>R</mi><mi>T</mi><mi>D</mi><mi>I</mi><mi>V</mi><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mn>16</mn><mo>×</mo><mi>B</mi><mi>a</mi><mi>u</mi><mi>d</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">USARTDIV = \frac{f_{PCLK}}{16 \times Baud}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">U</span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3355em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">16</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight">d</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>两个串口的推导值如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>串口</th><th>时钟</th><th>目标波特率</th><th>USARTDIV</th><th>最近可表示值</th><th>实际波特率</th></tr></thead><tbody><tr><td>USART1</td><td>84 MHz</td><td>115200</td><td>45.5729</td><td>45 + 9/16</td><td>115226</td></tr><tr><td>USART3</td><td>42 MHz</td><td>100000</td><td>26.25</td><td>26 + 4/16</td><td>100000</td></tr></tbody></table>
+<p>USART3 的 26.25 能被 1/16 整除，误差为 0；USART1 的 45.5729 只能取到 45.5625，误差约 0.02%，远低于串口允许的 2% 到 3%。表中数值是按公式反推的推导值，用于核对 CubeMX 生成的 <code>BRR</code> 是否合理，源码里的实际初值以 <code>Core/Src/usart.c</code> 为准。</p>
+<h2 id="时钟门控落在哪几个寄存器">时钟门控落在哪几个寄存器</h2>
+<p>外设时钟使能的落点分散在各初始化文件里，端口与 DMA 在 AHB1，外设自身在对应的 APB：</p>
 <ul>
 <li><code>Core/Src/gpio.c:48-54</code>：GPIOB、GPIOG、GPIOA、GPIOD、GPIOC、GPIOH、GPIOF 七个端口。</li>
 <li><code>Core/Src/dma.c:43-44</code>：DMA2 与 DMA1。</li>
@@ -505,20 +656,79 @@
 <li><code>Core/Src/usart.c:132</code>、<code>:164</code>、<code>:210</code>：USART1、USART3、USART6。</li>
 <li><code>Core/Src/spi.c:74</code>、<code>Core/Src/i2c.c:90</code>、<code>Core/Src/tim.c:80</code>：SPI1、I2C3、TIM10。</li>
 </ul>
-<h2 id="4-易错点">4. 易错点</h2>
-<p>（1）改动 APB1 分频的连带效应。PCLK1 同时决定 CAN 位时钟、I2C3 的速率、USART3 的波特率和 TIM2 的 1 ms。把 <code>APB1CLKDivider</code> 从 <code>RCC_HCLK_DIV4</code> 改成 <code>RCC_HCLK_DIV8</code>，PCLK1 变成 21 MHz，CAN 位时序不变而实际速率减半，USART3 的 <code>BRR</code> 需要重算，TIM2 的预分频要重算。工作记录里的那次 CAN 故障就是这条链断掉的表现，第 05 章有复盘。</p>
-<p>（2）忽略定时器倍频规则。把 <code>PPRE1</code> 当成分频系数就等于把 TIM2 的计数时钟当成 42 MHz，预分频会算成 41 而不是 83，时间基变成 0.5 ms。<code>Core/Src/stm32f4xx_hal_timebase_tim.c:60-67</code> 里那段 <code>if (uwAPB1Prescaler == RCC_HCLK_DIV1)</code> 判断处理的正是这条规则。</p>
-<p>（3）把外设总线与端口时钟混淆。外设自己的时钟门控与它所用引脚的端口时钟是两套位。CAN1 使能 <code>RCC->APB1ENR</code> 的位，而 PD0、PD1 需要 <code>RCC->AHB1ENR</code> 的 GPIOD 位。两处都开才能收发。</p>
-<p>（4）端口时钟未开时的静默失效。<code>HAL_GPIO_Init()</code> 返回 <code>void</code>，时钟未开时寄存器写入被丢弃，编译与运行都不报错，引脚停在复位默认的浮空输入状态。这类问题在现象上与引脚被别的外设占用难以区分。</p>
-<p>（5）AHB 带宽竞争。五条 DMA 流（<code>Core/Src/dma.c:47-61</code>）都在 168 MHz 的 AHB1 上访问 SRAM，与内核取指共用同一组总线。SPI1 的接收与发送各占一条流，在 1 kHz 的 IMU 采样节奏下占用不高，但把 SPI1 预分频改小、或把采样率提高，都会让内核的取指延迟上升。</p>
-<h2 id="5-小结">5. 小结</h2>
+<p>CAN2 那一处需要展开：在 F4 系列里 CAN1 与 CAN2 共用滤波器资源，滤波器寄存器的时钟挂在 CAN1 上，因此使能 CAN2 时必须先保证 CAN1 时钟已开。<code>HAL_RCC_CAN1_CLK_ENABLED</code> 是一个引用计数，两次使能不会互相关掉。</p>
+<h2 id="改动-apb1-分频的连带效应">改动 APB1 分频的连带效应</h2>
+<p>PCLK1 同时决定 CAN 位时钟、I2C3 的速率、USART3 的波特率和 TIM2 的 1 ms。把 <code>APB1CLKDivider</code> 从 <code>RCC_HCLK_DIV4</code> 改成 <code>RCC_HCLK_DIV8</code>，PCLK1 变成 21 MHz，CAN 位时序不变而实际速率减半，USART3 的 <code>BRR</code> 需要重算，TIM2 的预分频要重算。工作记录里的那次 CAN 故障就是这条链断掉的表现，第 05 章有复盘。</p>
+<p>四条连带项里，只有 CAN 的失效是”没有报错”的：发送函数照样返回成功，帧进邮箱，总线上却无人应答。USART3 与 TIM2 的偏差会直接体现在数据错乱与计时变慢上，相对容易发现。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>把 APB 分频系数当成定时器分频</td><td>TIM2 预分频会算成 41 而不是 83</td><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c:60-67</code></td></tr><tr><td>2</td><td>认为外设时钟使能也管引脚</td><td>CAN1 在 APB1，PD0/PD1 在 AHB1，两处都要开</td><td><code>can.c:109</code> 与 <code>gpio.c:48-54</code></td></tr><tr><td>3</td><td>认为 CAN 也享受定时器倍频</td><td>CAN 位时钟就是 PCLK1 的 42 MHz</td><td><code>can.c:42-46</code></td></tr><tr><td>4</td><td>认为端口时钟未开会报错</td><td><code>HAL_GPIO_Init()</code> 返回 <code>void</code>，写入被丢弃</td><td>静默失效</td></tr><tr><td>5</td><td>认为 APB1 改动只影响 CAN</td><td>USART3、I2C3、TIM2 都要重算</td><td>见第 8 节</td></tr><tr><td>6</td><td>把 DMA 当成 APB 外设</td><td>DMA1 与 DMA2 在 AHB1，168 MHz</td><td><code>dma.c:43-44</code></td></tr><tr><td>7</td><td>认为 SPI1 频率可直接取 84 MHz</td><td>需经预分频，本工程为 64</td><td><code>ioc:405</code></td></tr><tr><td>8</td><td>认为 CAN2 可以单独开时钟</td><td>滤波器资源挂在 CAN1，需先开 CAN1</td><td><code>can.c:139-143</code></td></tr></tbody></table>
+<h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
 <li>三条总线：AHB 168 MHz、APB1 42 MHz、APB2 84 MHz，由 <code>HPRE</code>、<code>PPRE1</code>、<code>PPRE2</code> 三个字段决定。</li>
 <li>本工程 AHB DIV1、APB1 DIV4、APB2 DIV2，对应 168 / 42 / 84 MHz。</li>
 <li>定时器计数时钟在 APB 分频系数不为 1 时是 PCLK 的两倍：TIM2 得 84 MHz，TIM10 得 168 MHz。</li>
 <li>时间基 TIM2 用 Prescaler 83 与 Period 999 得到 1 ms。</li>
-<li>CAN 波特率 <code>Baud = f_{PCLK1} / (Prescaler \times 21)</code>，代入 42 MHz 与 Prescaler 2 得 1 Mbps，TQ 为 47.619 ns。</li>
+<li>CAN 波特率 <code>Baud = f_{PCLK1} / (Prescaler × 21)</code>，代入 42 MHz 与 Prescaler 2 得 1 Mbps，TQ 为 47.619 ns。</li>
 <li>SPI1 在 84 MHz 下用预分频 64 得到 1.3125 MHz，与 <code>.ioc</code> 的计算值一致。</li>
 <li>端口时钟在 AHB1，DMA 与 CRC 也在 AHB1，外设自身的时钟门控在 APB1 或 APB2，两者要分别使能。</li>
 </ul>
@@ -559,24 +769,76 @@
 
 
 <table><thead><tr><th>选择</th><th>本工程取值</th><th>代价与收益</th></tr></thead><tbody><tr><td>APB1 分频</td><td>4</td><td>42 MHz 是上限，CAN 与 TIM2 都吃这条链的余量；代价是 PCLK1 被压到 AHB 的四分之一</td></tr><tr><td>APB2 分频</td><td>2</td><td>84 MHz 让 SPI1 与串口有余量；代价是 PCLK2 与 PCLK1 相差两倍，两条总线的外设不能混算</td></tr><tr><td>定时器倍频</td><td>使用</td><td>TIM2 得到 84 MHz，1 ms 时间基的预分频只有 83；代价是算频率时必须先判断分频系数</td></tr><tr><td>SPI1 预分频</td><td>64</td><td>1.3125 MHz 远低于 BMI088 的 10 MHz 上限，读数稳定；代价是单次事务时间变长</td></tr><tr><td>DMA 归属</td><td>AHB1</td><td>与内核同频，搬运快；代价是与取指争用总线带宽</td></tr></tbody></table>
-<h2 id="6-练习">6. 练习</h2>
-<p>基础题</p>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
 <ol>
 <li>由 168 MHz 与 <code>APB1CLKDivider</code> 取值，写出 PCLK1 与 TIM2 计数时钟的算式，并说明为什么后者是前者的两倍。</li>
 <li>计算把 SPI1 预分频从 64 改成 8 后的 SCK 频率，并对照 BMI088 手册判断是否超限。</li>
 <li>计算 I2C3 在 PCLK1 为 42 MHz 时配置 400 kHz 所需的 <code>CCR</code> 量级（标准模式与快速模式分别讨论）。</li>
+<li>用第 7 节的公式核对 USART1 与 USART3 的最近可表示分频值。</li>
 </ol>
-<p>挑战题</p>
-<ol start="4">
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
 <li>已知 CAN 位时间是 21 TQ，采样点在 16/21。说明把 BS1 改为 13TQ、BS2 改为 7TQ 后波特率与采样点的变化。</li>
 <li>把 <code>APB1CLKDivider</code> 改成 <code>RCC_HCLK_DIV8</code>，列出需要同步修改的四处参数（CAN、USART3、I2C3、TIM2），并写出各自的修正值。</li>
 <li>云台板同时使用 DMA1 与 DMA2。查阅 <code>Core/Src/dma.c</code>，说明哪几条流属于哪条控制器，以及它们分别服务于哪个外设。</li>
 <li>说明 <code>HAL_RCC_GetPCLK1Freq()</code> 与 <code>HAL_RCC_GetHCLKFreq()</code> 的返回值在 <code>HAL_Init()</code> 之后、<code>SystemClock_Config()</code> 之前分别是多少。</li>
-</ol></div></section><section class="dfile" id="file-3" data-file="03-GPIO模式与复用"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-GPIO模式与复用</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/03-GPIO模式与复用.md</span></div><div class="dfile__body"><h1 id="gpio-模式与复用">GPIO 模式与复用</h1>
-<p>引脚在复位后默认是浮空输入（<code>MODER</code> 为 <code>00</code>），调试口占用的 PA13 至 PA15 与 PB3 与 PB4 例外，它们复位即为复用模式。未配置的引脚既不驱动输出也读不到有效电平。<code>MX_GPIO_Init()</code> 与各外设的 <code>HAL_xxx_MspInit()</code> 把用到的引脚逐个配置成输出、复用或中断输入。配置字段只有六个：方向、输出类型、速度、上下拉、复用编号、初始电平。本单元按 <code>HAL_GPIO_Init()</code> 的写入顺序解释这六个字段落到哪些寄存器，再对照两块板实际用到的模式。</p>
-<blockquote>
-<p>源码索引（路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）</p>
-</blockquote>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>三个预分频字段的取值</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c</code></td><td>端口时钟使能（:48-54）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/dma.c</code></td><td>DMA 时钟使能（:43-44）与五条流（:47-61）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>位时序（:42-46、:74-78）、时钟使能（:109、:139-143）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>时钟使能与波特率（:132、:164、:210）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c</code></td><td>SPI1 预分频（:74）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/i2c.c</code></td><td>I2C3 时钟（:90）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c</code></td><td>TIM10 时钟（:80）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c</code></td><td>APB1 分频判断（<code>Core/Src/stm32f4xx_hal_timebase_tim.c:60-67</code>）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td>CAN 与 SPI1 计算值（:9、:11、:405）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-GPIO模式与复用"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-GPIO模式与复用</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/03-GPIO模式与复用.md</span></div><div class="dfile__body"><h1 id="gpio-模式与复用">GPIO 模式与复用</h1>
+<p>引脚在复位后默认是浮空输入（<code>MODER</code> 为 <code>00</code>），调试口占用的 PA13 至 PA15 与 PB3 与 PB4 例外，它们复位即为复用模式。未配置的引脚既不驱动输出也读不到有效电平。<code>MX_GPIO_Init()</code> 与各外设的 <code>HAL_xxx_MspInit()</code> 把用到的引脚逐个配置成输出、复用或中断输入。</p>
+<p>配置字段只有六个：方向、输出类型、速度、上下拉、复用编号、初始电平。按 <code>HAL_GPIO_Init()</code> 的写入顺序，可以看出这六个字段落到哪些寄存器；再对照两块板实际用到的模式。两块板的引脚配置完全相同，因此清单对云台板与底盘板通用。</p>
+<h2 id="源码索引">源码索引</h2>
+<p>路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
 
 
 
@@ -611,15 +873,16 @@
 
 
 <table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>Core/Src/gpio.c</code></td><td>端口时钟使能与纯 GPIO 配置</td></tr><tr><td><code>Core/Src/stm32f4xx_hal_msp.c</code></td><td><code>HAL_MspInit()</code>，SYSCFG 与 PWR 时钟</td></tr><tr><td><code>Core/Src/can.c</code>、<code>usart.c</code>、<code>spi.c</code>、<code>i2c.c</code>、<code>tim.c</code></td><td>各外设的 GPIO 复用配置</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>USB OTG FS 的 PA11 与 PA12</td></tr><tr><td><code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c</code></td><td><code>HAL_GPIO_Init()</code> 的实现</td></tr><tr><td><code>BMI088/Src/BMI088.cpp</code></td><td>片选引脚的使用者</td></tr></tbody></table>
-<h2 id="1-概念">1. 概念</h2>
+<h2 id="六个字段分别写哪个寄存器">六个字段分别写哪个寄存器</h2>
 <ul>
 <li>端口与引脚：GPIOA 至 GPIOH，每个端口 16 个引脚。端口时钟挂在 AHB1，由 <code>RCC->AHB1ENR</code> 的 <code>GPIOxEN</code> 位门控。</li>
 <li>配置寄存器：<code>GPIOx_MODER</code>（方向）、<code>GPIOx_OTYPER</code>（推挽或开漏）、<code>GPIOx_OSPEEDR</code>（压摆率）、<code>GPIOx_PUPDR</code>（上下拉）、<code>GPIOx_AFRL</code> 与 <code>GPIOx_AFRH</code>（复用编号）。</li>
 <li>数据寄存器：<code>GPIOx_IDR</code> 读引脚电平，<code>GPIOx_ODR</code> 写输出电平。</li>
-<li>复用（Alternate Function, <strong>AF</strong>）：每个引脚有 16 个可选功能，编号 0 至 15。<code>AFRL</code> 管 0 至 7 号引脚，<code>AFRH</code> 管 8 至 15 号引脚，每个引脚占 4 bit。</li>
+<li>复用（Alternate Function，AF）：每个引脚有 16 个可选功能，编号 0 至 15。<code>AFRL</code> 管 0 至 7 号引脚，<code>AFRH</code> 管 8 至 15 号引脚，每个引脚占 4 bit。</li>
 <li>原子置位：<code>GPIOx_BSRR</code> 用一次写操作置位或复位单个引脚，不需要读改写，中断里改引脚不会破坏同端口其他位的电平。</li>
 </ul>
-<h2 id="2-hal_gpio_init-的写入顺序">2. HAL_GPIO_Init 的写入顺序</h2>
+<p>六个字段里只有方向与复用编号是互斥的：配成复用之后，<code>AFRL</code>/<code>AFRH</code> 的编号才有意义；配成普通输出时这两个寄存器里的值被忽略。</p>
+<h2 id="hal_gpio_init-的写入顺序">HAL_GPIO_Init 的写入顺序</h2>
 <p><code>HAL_GPIO_Init()</code> 从 <code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c:164</code> 开始，按固定顺序写寄存器：</p>
 <ol>
 <li>速度。读 <code>OSPEEDR</code> 的 2 bit，按 <code>GPIO_InitStruct.Speed</code> 写入（第 194 至 197 行）。</li>
@@ -642,6 +905,8 @@
     I --> J["写 RTSR 与 FTSR 触发方向&#x3C;br/>写 IMR 开放中断请求"]
     H -->|否| K["返回"]
     J --> L["NVIC 使能须单独调用&#x3C;br/>HAL_NVIC_EnableIRQ"]</pre></div>
+<h2 id="引脚状态之间怎么切换">引脚状态之间怎么切换</h2>
+<p>配置不是一次性的：同一个引脚可以在启动阶段先做输出，随后被 MspInit 改成复用，调试时也可能被 <code>HAL_GPIO_DeInit()</code> 复位回输入。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
     state "复位默认 输入模式 MODER 00" as Input
     state "输出 MODER 01 推挽或开漏" as Output
@@ -656,8 +921,9 @@
     Exti --> Input : HAL_GPIO_DeInit 清 IMR 与 RTSR
     Output --> Input : HAL_GPIO_DeInit
     Alternate --> Input : HAL_GPIO_DeInit</pre></div>
-<h2 id="3-落到本项目">3. 落到本项目</h2>
-<p>两块板的引脚配置完全相同，下表列出云台板的全部非虚拟引脚：</p>
+<p>状态图里没有从复用直接回到输入之外的路径：<code>HAL_GPIO_DeInit()</code> 会把该引脚的全部配置位清零，包括上下拉与复用编号，回到与复位相同的状态。</p>
+<h2 id="本项目用到的全部引脚">本项目用到的全部引脚</h2>
+<p>下表列出云台板的全部非虚拟引脚：</p>
 
 
 
@@ -808,23 +1074,125 @@
 
 
 <table><thead><tr><th>引脚</th><th>模式</th><th>输出类型</th><th>速度</th><th>上下拉</th><th>复用编号</th><th>配置位置</th></tr></thead><tbody><tr><td>PD0、PD1</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF9</td><td><code>Core/Src/can.c:117-122</code></td></tr><tr><td>PB5、PB6</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF9</td><td><code>Core/Src/can.c:150-155</code></td></tr><tr><td>PC11、PC10</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF7</td><td><code>Core/Src/usart.c:171-176</code></td></tr><tr><td>PA9、PB7</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF7</td><td><code>Core/Src/usart.c:140-152</code></td></tr><tr><td>PG14、PG9</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF8</td><td><code>Core/Src/usart.c:217-222</code></td></tr><tr><td>PB4、PB3、PA7</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF5</td><td><code>Core/Src/spi.c:83-95</code></td></tr><tr><td>PC9、PH7</td><td>复用</td><td>开漏</td><td>很高</td><td>无</td><td>AF4</td><td><code>Core/Src/i2c.c:75-87</code></td></tr><tr><td>PA11、PA12</td><td>复用</td><td>推挽</td><td>很高</td><td>无</td><td>AF10</td><td><code>USB_DEVICE/Target/usbd_conf.c:83-88</code></td></tr><tr><td>PF6</td><td>复用</td><td>推挽</td><td>低</td><td>无</td><td>AF3</td><td><code>Core/Src/tim.c:104-109</code></td></tr><tr><td>PA4、PB0</td><td>输出</td><td>推挽</td><td>低</td><td>无</td><td>未使用</td><td><code>Core/Src/gpio.c:94-106</code></td></tr><tr><td>PG6、PH11</td><td>输出</td><td>推挽</td><td>低</td><td>无</td><td>未使用</td><td><code>Core/Src/gpio.c:68-86</code></td></tr><tr><td>PG3</td><td>中断</td><td>未使用</td><td>未设置</td><td>上拉</td><td>未使用</td><td><code>Core/Src/gpio.c:75-79</code></td></tr><tr><td>PA0</td><td>中断</td><td>未使用</td><td>未设置</td><td>上拉</td><td>未使用</td><td><code>Core/Src/gpio.c:88-92</code></td></tr><tr><td>PH0、PH1</td><td>复位默认</td><td>代码不配置</td><td>代码不配置</td><td>代码不配置</td><td>未使用</td><td>HSE 使能后由振荡器电路使用</td></tr><tr><td>PA13、PA14</td><td>复用</td><td>推挽</td><td>很高</td><td>上拉</td><td>AF0</td><td>由调试端口默认配置</td></tr></tbody></table>
-<p>四组细节需要展开。</p>
+<p>表里 15 行覆盖了 20 个引脚。按模式统计：复用 14 个、普通输出 4 个、中断输入 2 个；速度只有两档，复用一律很高，输出一律低。复用的 14 个引脚分布在 AF3 到 AF10 八个编号上，没有两个功能共用同一个编号。</p>
+<h2 id="片选定时器通道与开漏三处细节">片选、定时器通道与开漏三处细节</h2>
 <p>片选引脚由 GPIO 层配置，不由驱动配置。<code>Core/Src/gpio.c:63</code> 与 <code>:66</code> 在配置成输出之前先把 ODR 写成高电平，保证 SPI 通信开始前 PA4 与 PB0 已经是高电平的空闲状态。驱动只负责拉低与拉高，配置见 <code>BMI088/Src/BMI088.cpp:181-193</code>，引脚编号在 <code>:343-345</code> 传入构造函数。把 <code>HAL_GPIO_WritePin()</code> 移到 <code>HAL_GPIO_Init()</code> 之后，片选会先出现一段低电平。</p>
 <p>PF6 的配置不在 <code>gpio.c</code> 里，而在 <code>HAL_TIM_MspPostInit()</code>（<code>Core/Src/tim.c:90-116</code>）。CubeMX 把带引脚的定时器通道单独生成到 post-init 函数，由 <code>MX_TIM10_Init()</code> 末尾第 67 行调用。查找定时器通道引脚时，只看 <code>gpio.c</code> 会漏掉它。</p>
 <p>I2C3 用开漏加外部上拉。<code>Core/Src/i2c.c:77</code> 与 <code>:84</code> 都写 <code>GPIO_NOPULL</code>，片内上下拉不使能，400 kHz 总线的上拉电阻在板上。把这里改成 <code>GPIO_PULLUP</code> 不会提高总线质量，只会叠加一组弱上拉。</p>
 <p>速度分两档。所有复用引脚用 <code>GPIO_SPEED_FREQ_VERY_HIGH</code>，纯输出与 TIM10 通道用 <code>GPIO_SPEED_FREQ_LOW</code>。加热 PWM 的边沿速率不影响控制精度，低速档可以少一些开关噪声。</p>
-<h2 id="4-易错点">4. 易错点</h2>
-<p>（1）端口时钟未开导致静默失效。<code>HAL_GPIO_Init()</code> 返回 <code>void</code>，端口时钟未使能时寄存器写入被丢弃，不产生错误码。引脚停在复位默认的浮空输入状态，现象是既读不到有效电平也没有输出。检查时应先读回 <code>GPIOx_MODER</code> 确认。</p>
-<p>（2）复用编号写错。<code>Alternate</code> 字段是 4 bit，<code>AFRL</code> 与 <code>AFRH</code> 按引脚号奇偶分界。写错编号后引脚的电平由另一个外设驱动，现象是外设寄存器状态正常而物理线上没有信号。</p>
-<p>（3）同一引脚被两处配置。<code>main.c:110</code> 先调用 <code>MX_GPIO_Init()</code>，各外设的 MspInit 在 <code>MX_xxx_Init()</code> 内部随后执行，后写覆盖先写。若把某个复用引脚同时在 <code>gpio.c</code> 里配成输出，最终生效的是 <code>gpio.c</code> 之外的那次调用。查找引脚冲突时应当按调用顺序核对，而不是只看一个文件。</p>
-<p>（4）EXTI 配了但 NVIC 没使能。<code>.ioc</code> 里 PA0 与 PG3 都标了 EXTI 配置，但 NVIC 列表中没有 <code>EXTI0_IRQn</code> 与 <code>EXTI3_IRQn</code>，<code>Core/Src/stm32f4xx_it.c</code> 里也没有对应的中断服务函数，工程内没有实现 <code>HAL_GPIO_EXTI_Callback()</code>。这两根引脚的中断因此不会触发，寄存器层面 <code>EXTI->IMR</code> 却已经打开，读寄存器会得到与实际行为相反的印象。</p>
-<p>（5）片选初始电平的顺序。初始电平必须在 <code>HAL_GPIO_Init()</code> 之前写，原因见上一节。这类顺序问题在功能上表现为首次 SPI 事务偶发读回全零。</p>
-<p>（6）上下拉与外部电路的重复。PG3 与 PA0 启用片内上拉，对应外部电路不应再挂上拉；两处并联后下拉能力增强，边沿变缓。</p>
-<h2 id="5-小结">5. 小结</h2>
+<h2 id="静默失效与其它常见判断偏差">静默失效与其它常见判断偏差</h2>
+<p>端口时钟未开导致静默失效。<code>HAL_GPIO_Init()</code> 返回 <code>void</code>，端口时钟未使能时寄存器写入被丢弃，不产生错误码。引脚停在复位默认的浮空输入状态，现象是既读不到有效电平也没有输出。检查时应先读回 <code>GPIOx_MODER</code> 确认。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为端口时钟未开会报错</td><td><code>HAL_GPIO_Init()</code> 返回 <code>void</code></td><td><code>stm32f4xx_hal_gpio.c:164</code></td></tr><tr><td>2</td><td>复用编号按引脚号顺序排</td><td><code>AFRH</code> 管 8 至 15 号，<code>AFRL</code> 管 0 至 7 号</td><td><code>:224-227</code></td></tr><tr><td>3</td><td>认为方向在复用编号之前写</td><td>顺序相反，先写编号后写方向</td><td><code>:231-234</code></td></tr><tr><td>4</td><td>认为 <code>HAL_GPIO_Init()</code> 会开 NVIC</td><td>需单独调用 <code>HAL_NVIC_EnableIRQ()</code></td><td><code>:249-280</code></td></tr><tr><td>5</td><td>同一引脚被两处配置</td><td>后写覆盖先写，<code>main.c:110</code> 之后各 MspInit 依次执行</td><td>调用顺序</td></tr><tr><td>6</td><td>认为 EXTI 配了就会触发</td><td>PA0 与 PG3 未使能 NVIC，也无服务函数与回调</td><td>工程内无实现</td></tr><tr><td>7</td><td>片选初值写在 <code>HAL_GPIO_Init()</code> 之后</td><td>首次 SPI 事务偶发读回全零</td><td><code>gpio.c:63</code>、<code>:66</code></td></tr><tr><td>8</td><td>给 I2C 加片内上拉</td><td>与板上电阻并联，边沿变缓</td><td><code>i2c.c:77</code>、<code>:84</code></td></tr><tr><td>9</td><td>在 <code>gpio.c</code> 里找 PF6</td><td>它在 <code>HAL_TIM_MspPostInit()</code></td><td><code>tim.c:90-116</code></td></tr></tbody></table>
+<p>第三行与第五行合起来说明同一件事：配置结果取决于最后一次写入，而写入顺序由调用顺序决定。查找引脚冲突时应当按调用顺序核对，而不是只看一个文件。</p>
+<h2 id="用寄存器读回验证配置">用寄存器读回验证配置</h2>
+<p>因为 <code>HAL_GPIO_Init()</code> 不返回状态，验证只能靠读回寄存器：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查项</th><th>寄存器</th><th>期望值</th></tr></thead><tbody><tr><td>方向</td><td><code>MODER</code></td><td>复用引脚 0b10，输出引脚 0b01，中断引脚 0b00</td></tr><tr><td>输出类型</td><td><code>OTYPER</code></td><td>只有 I2C3 的 PC9 与 PH7 两位为 0b1</td></tr><tr><td>上下拉</td><td><code>PUPDR</code></td><td>PG3 与 PA0 为 0b01，其余为 0b00</td></tr><tr><td>复用编号</td><td><code>AFRL</code> 与 <code>AFRH</code></td><td>按引脚表逐个核对</td></tr><tr><td>中断开放</td><td><code>EXTI->IMR</code></td><td>PA0 与 PG3 对应的位为 1</td></tr></tbody></table>
+<p>五张表项覆盖了六个配置字段中的五个，剩下的初始电平看 <code>ODR</code>。读回值与期望不符时，先查 <code>RCC->AHB1ENR</code> 里对应端口的使能位，再查是否有后执行的初始化覆盖了这次写入。</p>
+<h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
 <li>引脚复位默认是浮空输入（<code>MODER</code> 为 <code>00</code>），调试口相关的 PA13、PA14、PA15 与 PB3、PB4 复位即为复用模式；<code>MX_GPIO_Init()</code> 与各 MspInit 负责把用到的引脚改成输出、复用或中断输入。</li>
-<li>六个配置字段分别写 <code>OSPEEDR</code>、<code>OTYPER</code>、<code>PUPDR</code>、<code>AFRL/</code>AFRH<code>、</code>MODER<code>，中断模式还要写 </code>SYSCFG->EXTICR<code>与</code>EXTI->IMR/RTSR/FTSR`。</li>
+<li>六个配置字段分别写 <code>OSPEEDR</code>、<code>OTYPER</code>、<code>PUPDR</code>、<code>AFRL</code> 与 <code>AFRH</code>、<code>MODER</code>，中断模式还要写 <code>SYSCFG->EXTICR</code> 与 <code>EXTI->IMR/RTSR/FTSR</code>。</li>
 <li><code>HAL_GPIO_Init()</code> 的写入顺序是速度、输出类型、上下拉、复用编号、方向、中断线，顺序本身有作用。</li>
 <li>NVIC 的使能不在 <code>HAL_GPIO_Init()</code> 内，要单独调用 <code>HAL_NVIC_EnableIRQ()</code>。</li>
 <li><code>GPIOx_BSRR</code> 提供原子置位，中断里改引脚安全。</li>
@@ -873,24 +1241,76 @@
 
 
 <table><thead><tr><th>选择</th><th>本工程取值</th><th>代价与收益</th></tr></thead><tbody><tr><td>复用引脚速度</td><td>很高</td><td>边沿陡，满足 CAN 与 SPI 时序；代价是开关噪声略高</td></tr><tr><td>输出引脚速度</td><td>低</td><td>噪声低；片选与加热使能不需要快速边沿</td></tr><tr><td>I2C 输出类型</td><td>开漏</td><td>I2C 电气规范要求；代价是必须依赖板上上拉电阻</td></tr><tr><td>I2C 上下拉</td><td>不启用片内</td><td>避免与板上电阻并联；代价是板上电阻缺失时总线无上拉</td></tr><tr><td>中断引脚上下拉</td><td>上拉</td><td>悬空时电平确定；代价是与外部上拉并联</td></tr><tr><td>片选初值位置</td><td>配置之前写</td><td>空闲电平从第一刻起正确；代价是代码顺序不能随意调整</td></tr></tbody></table>
-<h2 id="6-练习">6. 练习</h2>
-<p>基础题</p>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
 <ol>
 <li>写出 <code>GPIO_InitStruct.Mode</code> 取 <code>GPIO_MODE_AF_PP</code> 时 <code>MODER</code> 对应引脚两位的取值，以及 <code>OTYPER</code> 对应位的取值。</li>
 <li>说明 <code>HAL_GPIO_Init()</code> 为什么要先写 <code>AFRL/AFRH</code> 再写 <code>MODER</code>。</li>
 <li>计算把 CAN2 的 PB5、PB6 复用编号从 AF9 写成 AF7 的后果（提示：查 STM32F407 数据手册的复用功能表）。</li>
+<li>按表统计本工程复用引脚用到的 AF 编号，说明为什么不能把两个功能配到同一编号。</li>
 </ol>
-<p>挑战题</p>
-<ol start="4">
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
 <li>说明 <code>GPIOx_BSRR</code> 与直接写 <code>GPIOx_ODR</code> 在中断上下文里的差异，并指出本工程里哪些代码属于后者。</li>
 <li>写出为一个新的 EXTI 引脚补齐中断所需的全部步骤，从 <code>.ioc</code> 配置一直列到中断服务函数。</li>
 <li>说明把 PA4 改成 <code>GPIO_MODE_OUTPUT_OD</code> 后 BMI088 通信是否仍然可用，以及需要什么外部条件。</li>
 <li>已知 <code>HAL_GPIO_Init()</code> 不返回状态。设计一种在启动阶段检查端口时钟是否使能的办法。</li>
-</ol></div></section><section class="dfile" id="file-4" data-file="04-本项目引脚分配"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-本项目引脚分配</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/04-本项目引脚分配.md</span></div><div class="dfile__body"><h1 id="本项目引脚分配">本项目引脚分配</h1>
-<p>引脚分配的事实源是 <code>.ioc</code>，运行时的配置结果分散在 <code>gpio.c</code> 与五个外设的 MspInit 里。本单元把三处对齐成一张表，标明每个引脚归谁使用、在哪一行被配置，并给出两块板的差异。</p>
-<blockquote>
-<p>源码索引（路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）</p>
-</blockquote>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c</code></td><td>片选初值（:63、:66）、输出引脚（:68-86、:94-106）、中断引脚（:75-79、:88-92）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>CAN1 与 CAN2 复用配置（:117-122、:150-155）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>USART1、USART3、USART6 复用配置（:140-152、:171-176、:217-222）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c</code></td><td>SPI1 复用配置（:83-95）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/i2c.c</code></td><td>I2C3 开漏与上下拉（:75-87、:77、:84）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c</code></td><td>TIM10 通道引脚（:67、:90-116）与配置（:104-109）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</code></td><td>USB OTG FS 引脚（:83-88）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp</code></td><td>片选使用（:181-193）与引脚编号传入（:343-345）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td><code>MX_GPIO_Init()</code> 调用顺序（:110）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c</code></td><td><code>HAL_GPIO_Init()</code> 全部写入（:164、:194-197、:200-203、:212-215、:224-227、:231-234、:240-246、:249-280）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-本项目引脚分配"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-本项目引脚分配</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/04-本项目引脚分配.md</span></div><div class="dfile__body"><h1 id="本项目引脚分配">本项目引脚分配</h1>
+<p>引脚分配的事实源是 <code>.ioc</code>，运行时的配置结果分散在 <code>gpio.c</code> 与五个外设的 MspInit 里。三处描述的是同一批引脚，但表达方式不同：<code>.ioc</code> 用编号与信号名，生成代码用寄存器字段，驱动用片选函数名。</p>
+<p>把三处配置对齐成一张表，每个引脚归谁使用、在哪一行被配置、两块板差在哪里就都能对上。查引脚时最容易走偏的地方是 <code>.ioc</code> 的 <code>Mcu.PinN</code> 编号：它只是 CubeMX 的内部顺序，同一功能的引脚编号往往不相邻。</p>
+<h2 id="源码索引">源码索引</h2>
+<p>路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
 
 
 
@@ -925,7 +1345,7 @@
 
 
 <table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>2026sentriomeni.ioc</code></td><td><code>Mcu.PinN</code> 编号与每个引脚的 <code>Signal</code></td></tr><tr><td><code>Core/Src/gpio.c</code></td><td>纯 GPIO 与端口时钟</td></tr><tr><td><code>Core/Src/can.c</code>、<code>usart.c</code>、<code>spi.c</code>、<code>i2c.c</code>、<code>tim.c</code></td><td>复用引脚的 AF 配置</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>USB 引脚与 OTG FS 时钟</td></tr><tr><td><code>Core/Src/main.c</code></td><td>初始化调用顺序</td></tr><tr><td><code>BMI088/Src/BMI088.cpp</code>、<code>BMI088/Src/ImuTempControl.cpp</code></td><td>片选与加热引脚的运行时使用者</td></tr></tbody></table>
-<h2 id="1-三处配置的分工">1. 三处配置的分工</h2>
+<h2 id="ioc-编号生成代码与运行时三处怎么对齐">.ioc 编号、生成代码与运行时三处怎么对齐</h2>
 <p><code>.ioc</code> 里的 <code>Mcu.PinN</code> 只是编号，表示这个引脚被占用，实际模式由同一文件里的 <code>引脚名.Signal</code> 与 <code>引脚名.Mode</code> 决定。生成代码时 CubeMX 把纯 GPIO 写进 <code>gpio.c</code>，把复用功能按外设拆进各自的 MspInit 函数。运行时的覆盖顺序由 <code>main.c:110-120</code> 决定：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6F42C1">MX_GPIO_Init</span><span style="color:#24292E">();</span></span>
 <span class="line"><span style="color:#6F42C1">MX_DMA_Init</span><span style="color:#24292E">();</span></span>
@@ -939,7 +1359,7 @@
 <span class="line"><span style="color:#6F42C1">MX_USART1_UART_Init</span><span style="color:#24292E">();</span></span>
 <span class="line"><span style="color:#6F42C1">MX_CRC_Init</span><span style="color:#24292E">();</span></span></code></pre>
 <p>同一个引脚若同时出现在 <code>gpio.c</code> 与某个 MspInit 里，先执行 <code>MX_GPIO_Init()</code>，后执行的外设配置生效。云台板的 <code>Mcu.PinsNb</code> 为 33，底盘板为 34，差异只有一个引脚。</p>
-<h2 id="2-引脚到外设的对应">2. 引脚到外设的对应</h2>
+<h2 id="引脚与外设的对应">引脚与外设的对应</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     CAN1["CAN1 PD0 与 PD1"] --> M1["LK 电机与底盘通信"]
     CAN2["CAN2 PB5 与 PB6"] --> M2["DJI 3508 与 6020"]
@@ -955,7 +1375,7 @@
     SWD["SWD PA13 与 PA14"] --> BURN["烧录与调试"]
     OSC["HSE PH0 与 PH1"] --> CLK["时钟树 12 MHz"]
     KEY["PA0 KEY 与 PG3 EXTI"] --> NONE["源码中无使用者"]</pre></div>
-<p>云台板的完整对应表：</p>
+<h2 id="云台板引脚总表">云台板引脚总表</h2>
 
 
 
@@ -1083,7 +1503,53 @@
 <table><thead><tr><th><code>.ioc</code> 编号</th><th>引脚</th><th>信号</th><th>配置位置</th><th>使用者</th></tr></thead><tbody><tr><td>Pin8、Pin13</td><td>PD0、PD1</td><td>CAN1_RX、CAN1_TX</td><td><code>can.c:117-122</code></td><td><code>bsp_can1</code> 系列函数</td></tr><tr><td>Pin0、Pin7</td><td>PB5、PB6</td><td>CAN2_RX、CAN2_TX</td><td><code>can.c:150-155</code></td><td><code>bsp_can2</code> 系列函数</td></tr><tr><td>Pin10、Pin9</td><td>PC10、PC11</td><td>USART3_TX、USART3_RX</td><td><code>usart.c:171-176</code></td><td>DBUS 遥控器，DMA1_Stream1 通道 4 循环模式</td></tr><tr><td>Pin15、Pin6</td><td>PA9、PB7</td><td>USART1_TX、USART1_RX</td><td><code>usart.c:140-152</code></td><td>调试串口，115200 波特</td></tr><tr><td>Pin1、Pin12</td><td>PG14、PG9</td><td>USART6_TX、USART6_RX</td><td><code>usart.c:217-222</code></td><td>云台板未注册回调，底盘板接裁判系统</td></tr><tr><td>Pin3、Pin2、Pin26</td><td>PB3、PB4、PA7</td><td>SPI1_SCK、SPI1_MISO、SPI1_MOSI</td><td><code>spi.c:83-95</code></td><td>BMI088，1.3125 MHz</td></tr><tr><td>Pin24、Pin27</td><td>PA4、PB0</td><td>GPIO_Output</td><td><code>gpio.c:94-106</code></td><td>BMI088 加速度计与陀螺仪的片选</td></tr><tr><td>Pin20</td><td>PF6</td><td>S_TIM10_CH1</td><td><code>tim.c:104-109</code></td><td>IMU 加热 PWM，33.6 kHz</td></tr><tr><td>Pin19、Pin22</td><td>PG6、PH11</td><td>GPIO_Output</td><td><code>gpio.c:68-86</code></td><td><code>ImuTempControl.cpp:12-13</code> 拉高使能加热</td></tr><tr><td>Pin21</td><td>PG3</td><td>GPXTI3</td><td><code>gpio.c:75-79</code></td><td>源码中无使用者，NVIC 未使能</td></tr><tr><td>Pin23</td><td>PA0</td><td>GPXTI0、标签 KEY</td><td><code>gpio.c:88-92</code></td><td>源码中无使用者，NVIC 未使能</td></tr><tr><td>Pin14、Pin11</td><td>PA11、PA12</td><td>USB_OTG_FS_DM、DP</td><td><code>usbd_conf.c:83-88</code></td><td>与视觉小电脑的 CDC 虚拟串口</td></tr><tr><td>Pin16、Pin25</td><td>PC9、PH7</td><td>I2C3_SDA、I2C3_SCL</td><td><code>i2c.c:75-87</code></td><td>板上低速外设，400 kHz</td></tr><tr><td>Pin17、Pin18</td><td>PH0、PH1</td><td>RCC_OSC_IN、RCC_OSC_OUT</td><td>时钟树</td><td>HSE 12 MHz 晶振</td></tr><tr><td>Pin4、Pin5</td><td>PA14、PA13</td><td>SYS_JTCK-SWCLK、SWDIO</td><td>复位默认的调试端口配置</td><td>烧录与调试</td></tr><tr><td>Pin28 至 Pin32</td><td>虚拟引脚</td><td>VP_CRC、VP_FREERTOS、VP_SYS、VP_TIM10、VP_USB_DEVICE</td><td>各外设初始化</td><td>不占物理引脚</td></tr></tbody></table>
 <p>其中 USART6 在两块板的用法不同：云台板的 <code>main.c</code> 只调用 <code>Uart_Init(&#x26;huart3, MyUartCallbackFun)</code>，<code>huart6</code> 的 DMA 与中断都配置好但没有注册接收回调；底盘板额外调用 <code>Uart_Init(&#x26;huart6, RefereeUartCallback)</code>，把 USART6 用作裁判系统链路。</p>
 <p>底盘板与云台板的 <code>Mcu.PinN</code> 差异只有一个引脚：底盘板多出 <code>PA10</code>，信号为 <code>USB_OTG_FS_ID</code>，因此 <code>PinsNb</code> 是 34。其余 <code>Signal</code> 完全一致。</p>
-<h2 id="3-一次-bmi088-读取的引脚时序">3. 一次 BMI088 读取的引脚时序</h2>
+<h2 id="两条串口链路的差异">两条串口链路的差异</h2>
+<p>USART3 与 USART6 都配了 DMA 循环接收，区别在通道与回调：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>USART3（遥控器）</th><th>USART6（云台未用，底盘接裁判系统）</th></tr></thead><tbody><tr><td>接收 DMA</td><td>DMA1_Stream1，通道 4</td><td>DMA2_Stream1，通道 5</td></tr><tr><td>发送 DMA</td><td>无</td><td>DMA2_Stream6，通道 5</td></tr><tr><td>外设对齐</td><td><code>DMA_PDATAALIGN_BYTE</code></td><td><code>DMA_PDATAALIGN_BYTE</code></td></tr><tr><td>模式</td><td><code>DMA_CIRCULAR</code></td><td><code>DMA_CIRCULAR</code></td></tr><tr><td>回调注册</td><td>两块板都注册 <code>MyUartCallbackFun</code></td><td>只有底盘板注册 <code>RefereeUartCallback</code></td></tr><tr><td>空闲中断</td><td>用于按包切分</td><td>用于按包切分</td></tr></tbody></table>
+<p>两条链路都采用循环 DMA 加空闲中断的组合：DMA 持续把字节写进缓冲区，空闲中断表示一包结束。云台板的 USART6 在硬件层配置完整，只是没有回调，因此接收到的数据不会被处理。</p>
+<p>两条链路还有一个共同点：发送侧的对齐与接收侧一致，都是按字节搬运。DBUS 与裁判系统的帧长都不超过几十字节，按字节搬运足够，不需要改成半字或字对齐。</p>
+<p>USART6 多出的发送 DMA 是因为底盘板要主动回帧，而遥控器链路只收不发。</p>
+<h2 id="一次-bmi088-读取的引脚时序">一次 BMI088 读取的引脚时序</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant I as ImuTask 约 1 kHz
     participant B as BMI088 驱动
@@ -1100,13 +1566,59 @@
     B->>P: csGyroHigh 拉高 PB0
     B->>I: gyro 与 accel 与 temp 填好</pre></div>
 <p>单字节访问走轮询（<code>BMI088/Src/BMI088.cpp:263</code>），多字节读走 DMA（<code>:295</code>），完成标志在回调里置位（<code>:356-361</code>）。PA4 与 PB0 的配置本身由 <code>gpio.c</code> 完成，驱动只操作电平。</p>
-<h2 id="4-易错点">4. 易错点</h2>
-<p>（1）把 <code>Mcu.PinN</code> 当成分组依据。编号只是 CubeMX 内部顺序，同一功能的引脚编号不相邻，例如 USART6 的 PG14 是 Pin1 而 PG9 是 Pin12。按编号读表会得出错误的分组。</p>
-<p>（2）遗漏 MspInit 里的配置。PF6 的复用配置在 <code>tim.c</code> 的 <code>HAL_TIM_MspPostInit()</code> 里，不在 <code>gpio.c</code>。只查 <code>gpio.c</code> 会认为 TIM10 没有引脚。</p>
-<p>（3）把 USART6 的配置当成已启用。两块板的 <code>usart.c</code> 相同，都有 DMA2_Stream1 与 DMA2_Stream6 与 USART6 中断使能，但云台板没有注册回调。看到 DMA 已配置就认为链路可用，会在排查时走偏。</p>
-<p>（4）忽略底盘板多出的 PA10。PA10 在底盘板上是 USB OTG FS 的 ID 引脚，云台板没有。两个工程共用同一套外设代码，引脚表不能互相套用。</p>
-<p>（5）PA4 与 PB0 的角色只在驱动里有名字。<code>gpio.c</code> 的注释只写 PA4 与 PB0，是 GPIO_Output；它们对应哪个传感器需要读 <code>BMI088.cpp:343-345</code>。改板或换传感器时这一层映射最容易失配。</p>
-<h2 id="5-小结">5. 小结</h2>
+<h2 id="编号与功能的三个常见误判">编号与功能的三个常见误判</h2>
+<p>把 <code>Mcu.PinN</code> 当成分组依据。编号只是 CubeMX 内部顺序，同一功能的引脚编号不相邻，例如 USART6 的 PG14 是 Pin1 而 PG9 是 Pin12。按编号读表会得出错误的分组。</p>
+<p>遗漏 MspInit 里的配置。PF6 的复用配置在 <code>tim.c</code> 的 <code>HAL_TIM_MspPostInit()</code> 里，不在 <code>gpio.c</code>。只查 <code>gpio.c</code> 会认为 TIM10 没有引脚。</p>
+<p>把 USART6 的配置当成已启用。两块板的 <code>usart.c</code> 相同，都有 DMA2_Stream1 与 DMA2_Stream6 与 USART6 中断使能，但云台板没有注册回调。看到 DMA 已配置就认为链路可用，会在排查时走偏。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>按 <code>Mcu.PinN</code> 分组</td><td>同功能引脚编号不相邻</td><td>USART6 的 Pin1 与 Pin12</td></tr><tr><td>2</td><td>只查 <code>gpio.c</code></td><td>漏掉 TIM10 的 PF6</td><td><code>tim.c:104-109</code></td></tr><tr><td>3</td><td>认为两块板引脚表可互换</td><td>底盘板多一个 PA10</td><td><code>PinsNb</code> 33 与 34</td></tr><tr><td>4</td><td>认为 USART6 已启用</td><td>云台板无回调</td><td><code>main.c</code> 只注册 <code>huart3</code></td></tr><tr><td>5</td><td>认为片选名在 <code>gpio.c</code> 里</td><td>注释只写 PA4 与 PB0</td><td><code>BMI088.cpp:343-345</code></td></tr><tr><td>6</td><td>认为 PA0 与 PG3 的 EXTI 会触发</td><td>NVIC 未使能，也无服务函数</td><td>工程内无实现</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
 <li><code>.ioc</code> 是引脚分配的事实源，<code>Mcu.PinN</code> 只是编号，模式由 <code>Signal</code> 与 <code>Mode</code> 决定。</li>
@@ -1149,25 +1661,86 @@
 
 
 
-<table><thead><tr><th>选择</th><th>本工程取值</th><th>代价与收益</th></tr></thead><tbody><tr><td>片选方式</td><td>软件片选，占用两个 GPIO</td><td>时序完全可控；代价是每个 SPI 从设备多占一根引脚</td></tr><tr><td>USART6</td><td>两块板都生成，只有底盘注册回调</td><td>共用一套外设代码；代价是云台板的 DMA 与中断空转</td></tr><tr><td>加热使能</td><td>两根使能引脚加一根 PWM</td><td>可独立控制两路加热元件；代价是配置分散在两个文件</td></tr><tr><td>引脚表来源</td><td>单一 <code>.ioc</code></td><td>两块板差异可对比；代价是编号顺序与功能无关，需按 <code>Signal</code> 读</td></tr></tbody></table>
-<h2 id="6-练习">6. 练习</h2>
-<p>基础题</p>
+
+
+
+
+
+<table><thead><tr><th>选择</th><th>本工程取值</th><th>代价与收益</th></tr></thead><tbody><tr><td>片选方式</td><td>软件片选，占用两个 GPIO</td><td>时序完全可控；代价是每个 SPI 从设备多占一根引脚</td></tr><tr><td>USART6</td><td>两块板都生成，只有底盘注册回调</td><td>共用一套外设代码；代价是云台板的 DMA 与中断空转</td></tr><tr><td>加热使能</td><td>两根使能引脚加一根 PWM</td><td>可独立控制两路加热元件；代价是配置分散在两个文件</td></tr><tr><td>引脚表来源</td><td>单一 <code>.ioc</code></td><td>两块板差异可对比；代价是编号顺序与功能无关，需按 <code>Signal</code> 读</td></tr><tr><td>串口接收</td><td>循环 DMA 加空闲中断</td><td>不丢字节且按包切分；代价是每条链路各占一条 DMA 流</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
 <ol>
 <li>按 <code>Signal</code> 重新分组云台板的 33 个引脚，列出属于 SPI1 与属于 USART3 的引脚编号。</li>
-<li>计算 USART3 的 DMA 请求通道（DMA1_Stream1 与 DMA_CHANNEL_4）与 CAN1 中断优先级分别是多少。</li>
+<li>写出 USART3 与 USART6 的 DMA 流与通道号，并说明为什么两条链路都用循环模式。</li>
 <li>说明 PH0 与 PH1 在 <code>gpio.c</code> 里没有出现的原因。</li>
+<li>列出 PA4 与 PB0 在 <code>gpio.c</code> 与 <code>BMI088.cpp</code> 中各自的角色。</li>
 </ol>
-<p>挑战题</p>
-<ol start="4">
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
 <li>对比两块板的 <code>.ioc</code>，列出引脚分配的全部差异，并说明 USB ID 引脚在 Device_Only 模式下的作用。</li>
 <li>云台板把 USART6 用作第三路串口，需要补哪些代码（参考 <code>Uart_Init()</code> 的签名与底盘板的调用方式）。</li>
 <li>说明在底盘板上把 <code>RefereeUartCallback</code> 换成 <code>MyUartCallbackFun</code> 的后果。</li>
 <li>已知 SPI1 的片选由软件控制。设计一种在同一总线上增加第二个 SPI 从设备的片选方案，并指出需要改动的文件。</li>
-</ol></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="易错点与排查">易错点与排查</h1>
-<p>时钟与 GPIO 这条链上的问题分三类：频率类（软件算出的时钟与实际不符）、引脚类（配置了但没生效）、生成类（改动手写代码后被覆盖）。三类的现象常常混在一起，例如 CAN 收不到报文既可能来自波特率算错，也可能来自 PD0、PD1 的复用没生效。本单元给出判据与排查顺序，并用一次真实故障复盘。</p>
-<blockquote>
-<p>源码索引（路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）</p>
-</blockquote>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td><code>Mcu.PinN</code> 编号与 <code>Signal</code></td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>初始化调用顺序（:110-120）与 <code>Uart_Init</code> 调用</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c</code></td><td>输出引脚（:68-86、:94-106）与中断引脚（:75-79、:88-92）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td>CAN1 与 CAN2 复用（:117-122、:150-155）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c</code></td><td>USART1、USART3、USART6 复用（:140-152、:171-176、:217-222）与 DMA</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c</code></td><td>SPI1 复用（:83-95）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/i2c.c</code></td><td>I2C3 复用（:75-87）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c</code></td><td>TIM10 通道引脚（:104-109）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</code></td><td>USB 引脚（:83-88）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp</code></td><td>单字节轮询（:263）、DMA 多字节（:295）、完成回调（:356-361）、片选编号（:343-345）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp</code></td><td>加热使能（:12-13）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/02-STM32 与 HAL/01-时钟树与GPIO/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="易错点与排查">易错点与排查</h1>
+<p>时钟与 GPIO 这条链上的问题分三类：频率类（软件算出的时钟与实际不符）、引脚类（配置了但没生效）、生成类（改动手写代码后被覆盖）。三类的现象常常混在一起，例如 CAN 收不到报文既可能来自波特率算错，也可能来自 PD0、PD1 的复用没生效。</p>
+<p>三类的共同点是都不产生编译错误，参数全部是编译期常量。判据与排查顺序如下，后面是一次真实故障复盘：那次的初始化、过滤器、中断与回调在故障期间都正确，结论只能从寄存器读回值反推。</p>
+<h2 id="源码索引">源码索引</h2>
+<p>路径相对固件仓库根目录；云台板 <code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>，底盘板 <code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>。</p>
 
 
 
@@ -1202,7 +1775,7 @@
 
 
 <table><thead><tr><th>文件</th><th>作用</th></tr></thead><tbody><tr><td><code>2026sentriomeni.ioc</code></td><td>时钟树与各外设频率的计算结果，含 <code>CAN1.CalculateBaudRate</code></td></tr><tr><td><code>Core/Src/can.c</code></td><td>位时序参数与 CAN1 与 CAN2 的 GPIO</td></tr><tr><td><code>Core/Src/gpio.c</code></td><td>端口时钟与纯 GPIO</td></tr><tr><td><code>Core/Src/main.c</code></td><td>初始化顺序与 <code>Error_Handler()</code></td></tr><tr><td><code>Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>HSE_VALUE</code> 与 <code>HSE_STARTUP_TIMEOUT</code></td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>故障记录原文</td></tr></tbody></table>
-<h2 id="1-三类问题的判据">1. 三类问题的判据</h2>
+<h2 id="三类问题的判据">三类问题的判据</h2>
 
 
 
@@ -1233,13 +1806,15 @@
 
 
 <table><thead><tr><th>类别</th><th>典型现象</th><th>直接判据</th><th>优先检查项</th></tr></thead><tbody><tr><td>频率类</td><td>通信全断、计时偏快或偏慢、USB 枚举失败</td><td><code>.ioc</code> 算出的频率、寄存器读回值与实物晶振</td><td>晶振频率、<code>HSE_VALUE</code>、三个预分频字段</td></tr><tr><td>引脚类</td><td>引脚电平恒定、复用外设无波形</td><td><code>GPIOx_MODER</code> 与 <code>GPIOx_AFR</code> 的读回值、端口时钟位</td><td>端口时钟、MspInit 的引脚配置、配置顺序</td></tr><tr><td>生成类</td><td>改动在下次生成后消失</td><td>代码是否位于 USER CODE 区</td><td><code>.ioc</code> 是否为唯一事实源</td></tr></tbody></table>
-<p>三类的共同点是都不产生编译错误。判断属于哪一类，先看现象是全局的还是单点的：所有外设一起异常先查频率，只有一路外设异常先查引脚。</p>
-<h2 id="2-频率类问题的机制">2. 频率类问题的机制</h2>
+<p>判断属于哪一类，先看现象是全局的还是单点的：所有外设一起异常先查频率，只有一路外设异常先查引脚。</p>
+<h2 id="波特率为什么对时钟线性">波特率为什么对时钟线性</h2>
 <p>CAN 波特率由 PCLK1 与位时序参数共同决定：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi><mi>a</mi><mi>u</mi><mi>d</mi><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub><mrow><mi>P</mi><mi>r</mi><mi>e</mi><mi>s</mi><mi>c</mi><mi>a</mi><mi>l</mi><mi>e</mi><mi>r</mi><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>1</mn><mo>+</mo><mi>B</mi><mi>S</mi><mn>2</mn><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">Baud = \frac{f_{PCLK1}}{Prescaler \times (1 + BS1 + BS2)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal">a</span><span class="mord mathnormal">u</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4522em;vertical-align:-0.52em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">esc</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span><span class="mbin mtight">×</span><span class="mopen mtight">(</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mtight">2</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.52em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub><mo>=</mo><mfrac><msub><mi>f</mi><mrow><mi>S</mi><mi>Y</mi><mi>S</mi><mi>C</mi><mi>L</mi><mi>K</mi></mrow></msub><mrow><mi>H</mi><mi>P</mi><mi>R</mi><mi>E</mi><mo>×</mo><mi>P</mi><mi>P</mi><mi>R</mi><mi>E</mi><mn>1</mn></mrow></mfrac></mrow><annotation encoding="application/x-tex">f_{PCLK1} = \frac{f_{SYSCLK}}{HPRE \times PPRE1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3355em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9322em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0077em;">R</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">E</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1076em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.2222em;">Y</span><span class="mord mathnormal mtight" style="margin-right:0.0576em;">S</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
 <p>把第二式代入第一式可以看出，波特率对 SYSCLK 是线性的：晶振频率、PLL 参数、AHB 与 APB1 分频中的任何一项改变，都会按同一比例改变波特率。位时序参数不变而 PCLK1 改变，等价于波特率改变；此时 CAN 控制器照常发送，总线上却没有节点能应答。</p>
-<p>应答缺失会把控制器推进错误状态，状态迁移由发送错误计数（Transmit Error Counter, TEC）驱动：</p>
+<p>线性关系带来一个排查上的好处：只要知道实际波特率与目标波特率之比，就能反推 PCLK1 之比，进而定位到具体是哪个分频或哪个 PLL 参数被改动。</p>
+<h2 id="控制器从错误主动到总线关闭">控制器从错误主动到总线关闭</h2>
+<p>应答缺失会把控制器推进错误状态，状态迁移由发送错误计数（Transmit Error Counter，TEC）驱动：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
     state "错误主动 TEC 小于 128" as Active
     state "错误被动 TEC 在 128 到 255 之间" as Passive
@@ -1250,7 +1825,7 @@
     Passive --> Off : TEC 达到 256
     Off --> Active : 检测到 128 次连续 11 位隐性位且 AutoBusOff 为 ENABLE</pre></div>
 <p>本工程把 <code>AutoBusOff</code> 配成 <code>ENABLE</code>（<code>Core/Src/can.c:48</code> 与 <code>:80</code>），总线关闭后控制器会自动恢复，不需要软件干预。这一点让故障现象表现为持续重试而不是永久停摆。</p>
-<p>排查顺序按代价从低到高排：</p>
+<h2 id="排查顺序">排查顺序</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["外设无响应或通信全断"] --> B{"时钟树是否与实物一致"}
     B -->|不一致| C["修正 HSE_VALUE 与 .ioc 后重新生成"]
@@ -1260,7 +1835,8 @@
     F -->|未使能| G["补外设时钟与 HAL_NVIC_EnableIRQ"]
     F -->|已使能| H["读 CAN 的 MSR 与 ESR 或串口的 SR 判断总线状态"]
     H --> I["检查物理层：接线、终端电阻、供电"]</pre></div>
-<h2 id="3-落到本项目一次-can-通信故障的复盘">3. 落到本项目：一次 CAN 通信故障的复盘</h2>
+<p>顺序按代价从低到高排：读 <code>.ioc</code> 与读寄存器都不需要动硬件，物理层放在最后。但顺序不等于优先级，任何一步发现问题都不必继续往下走。</p>
+<h2 id="一次-can-通信故障的复盘">一次 CAN 通信故障的复盘</h2>
 <p>工作记录 <code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code> 记载的故障与排查过程如下。</p>
 <p>现象与寄存器读回值：</p>
 
@@ -1299,23 +1875,140 @@
 <table><thead><tr><th>项目</th><th>记录内容</th></tr></thead><tbody><tr><td>现象</td><td>底盘 CAN1 与 CAN2 都收不到报文，进入不了接收回调</td></tr><tr><td>发送返回值</td><td>第一次 <code>HAL_CAN_AddTxMessage()</code> 返回 <code>HAL_OK</code>，之后持续返回 <code>HAL_ERROR</code></td></tr><tr><td><code>hcan2.ErrorCode</code></td><td><code>0x00200000</code>，记录标注为 <code>HAL_CAN_ERROR_NOT_STARTED</code>；本仓库头文件里这一位是 <code>HAL_CAN_ERROR_PARAM</code></td></tr><tr><td><code>MSR</code></td><td><code>0x0C08</code>，错误中断挂起位 ERRI 置位</td></tr><tr><td><code>TSR</code></td><td><code>0x82000004</code>，发送邮箱被占用</td></tr><tr><td>记录给出的计算</td><td>Prescaler 2、BS1 15TQ、BS2 5TQ 时算得 857142 Hz</td></tr></tbody></table>
 <p>记录把根因定为时钟树配置被改动，导致 APB1 频率与 CAN 位时序参数不匹配，修正 <code>.ioc</code> 后重新生成代码恢复。代码层面的初始化、过滤器、中断与回调在故障期间都正确，只检查它们不会得到结论。</p>
 <p>记录对错误码的标注与源码有一处出入。<code>0x00200000</code> 在本仓库的 HAL 里对应 <code>HAL_CAN_ERROR_PARAM</code>（<code>Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h:314</code>），<code>HAL_CAN_ERROR_NOT_STARTED</code> 是 <code>0x00100000</code>（同文件第 313 行）。<code>HAL_CAN_AddTxMessage()</code> 在三个发送邮箱全满时置 <code>HAL_CAN_ERROR_PARAM</code> 并返回 <code>HAL_ERROR</code>（<code>Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c:1327-1332</code>），判据是 <code>TSR</code> 的 <code>TME0</code> 至 <code>TME2</code> 三位（同文件第 1277 至 1279 行）。记录里的 <code>TSR</code> 读数是 <code>0x82000004</code>，这三位（bit26 至 bit28）都是 0，三个邮箱都没有空位，与该分支吻合。<code>HAL_CAN_ERROR_NOT_STARTED</code> 由 <code>HAL_CAN_Stop()</code> 在状态不符时置位（同文件第 1128 行），与本次现象无关。</p>
+<p><code>MSR</code> 的 <code>0x0C08</code> 也有一处细节：记录说 ERRI 置位，而 ERRI 是 bit2，<code>0x0C08</code> 的 bit2 为 0。置位的实际是 bit3 的 <code>WKUI</code>、bit10 的 <code>SAMP</code> 与 bit11 的 <code>RX</code>。这三位的含义与总线速率不一致无直接关系，读它们不能替代读 <code>BTR</code>。</p>
+<h2 id="857142-hz-反推出的-pclk1">857142 Hz 反推出的 PCLK1</h2>
 <p>复核这一步计算：857142 Hz 与 21 个时间份额、Prescaler 2 对应</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mrow><mi>P</mi><mi>C</mi><mi>L</mi><mi>K</mi><mn>1</mn></mrow></msub><mo>=</mo><mn>857142</mn><mo>×</mo><mn>2</mn><mo>×</mo><mn>21</mn><mo>=</mo><mn>36</mn><mtext> MHz</mtext></mrow><annotation encoding="application/x-tex">f_{PCLK1} = 857142 \times 2 \times 21 = 36\ \text{MHz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">P</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.0715em;">K</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">857142</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">21</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">36</span><span class="mspace"> </span><span class="mord text"><span class="mord">MHz</span></span></span></span></span></p>
 <p>本工程当前的 PCLK1 是 42 MHz（<code>2026sentriomeni.ioc:364</code> 的 <code>RCC.APB1Freq_Value=42000000</code>），因此故障期间的 APB1 分频或 PLL 参数与现在不同。36 MHz 对应 SYSCLK 144 MHz 配 APB1 分频 4，属于另一套时钟树。</p>
 <p>当前配置的正确性可以用 <code>.ioc</code> 自身的计算值交叉核对：<code>:9</code> 的 <code>CAN1.CalculateBaudRate=1000000</code>、<code>:11</code> 的 <code>CAN1.CalculateTimeQuantum=47.61904761904762</code> 与 <code>Core/Src/can.c:42-46</code> 的 Prescaler 2、BS1 15TQ、BS2 5TQ 一致，42 MHz 除以 2 得 47.619 ns，21 个时间份额组成 1000 ns 的位时间。</p>
-<h2 id="4-易错点">4. 易错点</h2>
-<p>（1）只看代码不看寄存器。故障期间 CAN 的初始化、过滤器、中断激活、回调与发送函数全部正确，逐行读代码得不到结论。<code>hcan->ErrorCode</code>、<code>MSR</code>、<code>TSR</code>、<code>ESR</code> 与 <code>BTR</code> 是外设当前状态的直接来源，应当先读它们再读代码。</p>
-<p>（2）只测第一次发送的返回值。CAN 控制器在首次发送时会先把报文放进邮箱，此时返回 <code>HAL_OK</code>；报文发不出去、ACK 缺失之后才进入错误状态并持续返回 <code>HAL_ERROR</code>。记录里正是这个差异把方向从软件引向了总线与时钟。</p>
-<p>（3）用编译通过当作配置正确。<code>HAL_GPIO_Init()</code> 与 <code>HAL_RCC_ClockConfig()</code> 的参数都是编译期常量，写错值也能通过编译。时钟与引脚类的错误全部属于这一类。</p>
-<p>（4）改生成代码而不改 <code>.ioc</code>。CubeMX 只保留 USER CODE 区内的内容，手改 <code>SystemClock_Config()</code> 或 CubeMX 生成的引脚配置在下次生成时被覆盖，故障会在下一次改动后重新出现。</p>
-<p>（5）忽略物理层。总线没有终端电阻、接线接反、共地缺失都会产生与波特率错误一致的现象。排查顺序里把物理层放在最后，是因为修改它的成本最高，但它必须在结论成立前被排除。</p>
-<p>（6）把 <code>.ioc</code> 与生成代码当成两个事实源。两处不一致时以 <code>.ioc</code> 为准并重新生成；直接改生成代码会让差异长期存在。</p>
-<h2 id="5-小结">5. 小结</h2>
+<p>反推出来的 36 MHz 与当前 42 MHz 相差 14.29%，对应的位时间从 1000 ns 变成 1166.67 ns。这个比值与 <code>.ioc</code> 里任何一个字段都不相等，说明故障来自时钟链上游，位时序参数没有被改动。</p>
+<h2 id="上电自检可以查什么">上电自检可以查什么</h2>
+<p>三类问题都能在启动阶段用小段代码覆盖，成本远低于现场复现：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查项</th><th>读取对象</th><th>判据</th><th>失败动作</th></tr></thead><tbody><tr><td>PCLK1 是否为 42 MHz</td><td><code>HAL_RCC_GetPCLK1Freq()</code></td><td>等于 42000000</td><td>停机并置错误标志</td></tr><tr><td>位定时是否为期望值</td><td><code>CAN1->BTR</code> 与 <code>CAN2->BTR</code></td><td>等于 <code>0x004E0001</code></td><td>停机</td></tr><tr><td>引脚方向是否落位</td><td><code>GPIOx_MODER</code></td><td>PD0、PD1 为 0b10</td><td>重新配置或置标志</td></tr><tr><td>复用编号是否落位</td><td><code>GPIOx_AFRL</code> 与 <code>AFRH</code></td><td>与引脚表一致</td><td>置标志</td></tr><tr><td>端口时钟是否使能</td><td><code>RCC->AHB1ENR</code></td><td>对应 <code>GPIOxEN</code> 为 1</td><td>补使能后重试</td></tr><tr><td>晶振是否起振</td><td><code>RCC->CR</code> 的 <code>HSERDY</code></td><td>已置位</td><td>停在错误处理</td></tr><tr><td>PLL 是否锁定</td><td><code>RCC->CR</code> 的 <code>PLLRDY</code></td><td>已置位</td><td>停在错误处理</td></tr></tbody></table>
+<p>最后两行把硬件起振问题与软件配置问题分开，起振失败时后面的频率与引脚检查都没有意义。</p>
+<p>五项里前两项覆盖频率类，后三项覆盖引脚类；生成类无法在运行时检查，只能靠”只改 <code>.ioc</code>”这条纪律避免。</p>
+<p>自检结果可以用一个全局变量承载，每一位对应一项检查，失败时停在错误处理函数里由调试器读。这种做法不需要串口与外部设备，也不会改变控制任务的时序。</p>
+<p>若一定要输出，最省事的是复用已有的调试串口，在调度器启动之前打印一次。此时 HAL 时间基已经重算完毕，串口时钟也已就位，打印不会与任务抢用总线。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>只看代码不看寄存器</td><td>逐行读初始化得不到结论</td><td><code>ErrorCode</code>、<code>MSR</code>、<code>TSR</code>、<code>BTR</code></td></tr><tr><td>2</td><td>只测第一次发送的返回值</td><td>首次返回 <code>HAL_OK</code> 不代表通信可用</td><td><code>stm32f4xx_hal_can.c:1277-1279</code></td></tr><tr><td>3</td><td>用编译通过当作配置正确</td><td>时钟与引脚错误全部属于此类</td><td>参数是编译期常量</td></tr><tr><td>4</td><td>按数值猜错误码含义</td><td>把 <code>0x00200000</code> 记成 <code>NOT_STARTED</code></td><td><code>stm32f4xx_hal_can.h:313-314</code></td></tr><tr><td>5</td><td>把 <code>MSR</code> 的 bit3 当 ERRI</td><td>ERRI 在 bit2</td><td><code>0x0C08</code> 的 bit2 为 0</td></tr><tr><td>6</td><td>改生成代码而不改 <code>.ioc</code></td><td>改动在下次生成后消失</td><td>USER CODE 区之外不保留</td></tr><tr><td>7</td><td>忽略物理层</td><td>无终端电阻与波特率错误现象一致</td><td>排查顺序的最后一步</td></tr><tr><td>8</td><td>认为 <code>.ioc</code> 与生成代码是两个事实源</td><td>两处不一致时无法判断以谁为准</td><td>以 <code>.ioc</code> 为准并重新生成</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
 <li>三类问题：频率类改变所有外设的时序，引脚类只影响一路，生成类的特征是改动会消失。</li>
 <li>频率类不产生编译错误，判据是 <code>.ioc</code> 的计算值、寄存器读回值与实物晶振三者是否一致。</li>
-<li>CAN 波特率 <code>Baud = f_{PCLK1} / (Prescaler \times (1 + BS1 + BS2))</code>，对 SYSCLK 线性，位时序参数不变时 PCLK1 改变等于波特率改变。</li>
+<li>CAN 波特率 <code>Baud = f_{PCLK1} / (Prescaler × (1 + BS1 + BS2))</code>，对 SYSCLK 线性，位时序参数不变时 PCLK1 改变等于波特率改变。</li>
 <li>ACK 缺失会推动控制器进入错误被动与总线关闭状态；本工程 <code>AutoBusOff</code> 为 <code>ENABLE</code>，总线关闭后可自动恢复。</li>
 <li>记录中的 857142 Hz 反推 PCLK1 为 36 MHz，与本工程当前的 42 MHz 不同，说明故障期间的时钟树是另一套参数。</li>
 <li>记录里的 <code>hcan2.ErrorCode = 0x00200000</code> 在本仓库 HAL 里是 <code>HAL_CAN_ERROR_PARAM</code>，对应发送邮箱全满；记录标注的 <code>NOT_STARTED</code> 是另一个位 <code>0x00100000</code>。</li>
@@ -1364,17 +2057,61 @@
 
 
 <table><thead><tr><th>排查手段</th><th>使用时机</th><th>代价与收益</th></tr></thead><tbody><tr><td>读 <code>.ioc</code> 计算值</td><td>第一步</td><td>零成本，只能验证软件侧的意图，不能验证硬件</td></tr><tr><td>读外设寄存器</td><td>软件侧无异常时</td><td>直接反映外设状态；代价是需要调试器与芯片手册</td></tr><tr><td>逐行读初始化代码</td><td>怀疑配置遗漏时</td><td>覆盖 <code>HAL_GPIO_Init()</code> 这类无返回值的调用；代价是慢</td></tr><tr><td>示波器测总线</td><td>排除寄存器问题后</td><td>唯一能直接观察到物理层的手段；代价是需要仪器与接线</td></tr><tr><td>对比测试首次与后续发送</td><td>怀疑总线应答时</td><td>区分邮箱写入成功与总线发送成功；代价是结论依赖对控制器的理解</td></tr><tr><td>检查物理层</td><td>最后</td><td>成本最高；但不排除它则前面的结论都不成立</td></tr></tbody></table>
-<h2 id="6-练习">6. 练习</h2>
-<p>基础题</p>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
 <ol>
 <li>已知位时间为 21 个时间份额、采样点在 16/21。写出 PCLK1 为 42 MHz、Prescaler 为 2 时的波特率与单个时间份额的纳秒数。</li>
 <li>说明 <code>HAL_CAN_ERROR_NOT_STARTED</code> 与 <code>HAL_CAN_ERROR_ACK</code> 分别对应什么状态。</li>
 <li>列出读回 <code>GPIOx_MODER</code> 可以判断出的两种引脚配置错误。</li>
+<li>写出 <code>MSR</code> 的 <code>0x0C08</code> 里实际置位的三个位及其含义。</li>
 </ol>
-<p>挑战题</p>
-<ol start="4">
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
 <li>记录中 857142 Hz 反推的 PCLK1 是 36 MHz。给出两套能产生 36 MHz PCLK1 的 SYSCLK 与 APB1 分频组合，并说明各自对应的 PLL 参数。</li>
 <li>设计一个上电自检流程：在 <code>main()</code> 里 <code>osKernelStart()</code> 之前检查时钟、CAN 位时序与关键引脚配置，并把结果以最少的代码量暴露出来。</li>
 <li>说明 <code>AutoBusOff = ENABLE</code> 与 <code>DISABLE</code> 在故障现象上的差异，并判断哪种配置更适合调试阶段。</li>
 <li>把 <code>HSE_VALUE</code> 从 12000000 改成 8000000 而硬件晶振仍是 12 MHz，预测 SYSCLK、TIM2 的 1 ms 与 CAN 波特率的变化，并说明为什么 USB 会先失败。</li>
-</ol></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/01-FreeRTOS/03-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%B8%8E%E4%B8%B4%E7%95%8C%E5%8C%BA/"><span class="k">← 上一篇</span><span class="t">内存管理与临界区</span><span class="d">FreeRTOS · 5 个文件</span></a><a class="next" href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/02-%E5%AE%9A%E6%97%B6%E5%99%A8%E4%B8%8EPWM/"><span class="k">下一篇 →</span><span class="t">定时器与PWM</span><span class="d">STM32 与 HAL · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 70 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+</ol>
+<h2 id="附本页引用的固件路径">附：本页引用的固件路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c</code></td><td><code>AutoBusOff</code>（:48、:80）与位时序参数（:42-46、:74-78）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c</code></td><td>端口时钟与纯 GPIO</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>初始化顺序与 <code>Error_Handler()</code></td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h</code></td><td><code>HSE_VALUE</code> 与 <code>HSE_STARTUP_TIMEOUT</code></td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc</code></td><td><code>CAN1.CalculateBaudRate</code>（:9）、<code>CalculateTimeQuantum</code>（:11）、<code>RCC.APB1Freq_Value</code>（:364）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h</code></td><td>错误码定义（:313-314）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c</code></td><td><code>TME</code> 判据（:1277-1279）、邮箱全满分支（:1327-1332）、<code>HAL_CAN_Stop</code>（:1128）</td></tr><tr><td><code>/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md</code></td><td>故障现象、寄存器读回值与根因记录</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/01-FreeRTOS/03-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%B8%8E%E4%B8%B4%E7%95%8C%E5%8C%BA/"><span class="k">← 上一篇</span><span class="t">内存管理与临界区</span><span class="d">FreeRTOS · 5 个文件</span></a><a class="next" href="/tc63/docs/02-STM32%20%E4%B8%8E%20HAL/02-%E5%AE%9A%E6%97%B6%E5%99%A8%E4%B8%8EPWM/"><span class="k">下一篇 →</span><span class="t">定时器与PWM</span><span class="d">STM32 与 HAL · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

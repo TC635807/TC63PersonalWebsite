@@ -1,0 +1,1025 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>分布偏移与CQL·IQL·TD3-BC · 离线强化学习 · 王宇翔</title><meta name="description" content="离线强化学习的设定与核心难点，分布偏移如何从 Q 值高估一路演变成性能崩溃，以及策略约束、悲观值估计、样本内学习三条解法路线各自的对策与代价。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/17-%E7%A6%BB%E7%BA%BF%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/01-%E5%88%86%E5%B8%83%E5%81%8F%E7%A7%BB%E4%B8%8ECQL%C2%B7IQL%C2%B7TD3-BC/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="分布偏移与CQL·IQL·TD3-BC · 离线强化学习 · 王宇翔"><meta property="og:description" content="离线强化学习的设定与核心难点，分布偏移如何从 Q 值高估一路演变成性能崩溃，以及策略约束、悲观值估计、样本内学习三条解法路线各自的对策与代价。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/17-%E7%A6%BB%E7%BA%BF%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/01-%E5%88%86%E5%B8%83%E5%81%8F%E7%A7%BB%E4%B8%8ECQL%C2%B7IQL%C2%B7TD3-BC/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/17-%E7%A6%BB%E7%BA%BF%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">离线强化学习</a><span class="sep" aria-hidden="true">/</span><span class="now">分布偏移与CQL·IQL·TD3-BC</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>分布偏移与CQL·IQL·TD3-BC</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>分布偏移与三条解法路线</span></a><ul class="toc__heads"><li><a href="#离线设定数据集固定而策略仍在变" data-depth="2" data-heading-j="0">离线设定：数据集固定而策略仍在变</a></li><li><a href="#偏移的链条从高估到崩溃" data-depth="2" data-heading-j="1">偏移的链条：从高估到崩溃</a></li><li><a href="#策略约束路线" data-depth="2" data-heading-j="2">策略约束路线</a></li><li><a href="#悲观值路线" data-depth="2" data-heading-j="3">悲观值路线</a></li><li><a href="#样本内学习路线" data-depth="2" data-heading-j="4">样本内学习路线</a></li><li><a href="#三族方法的横向对照" data-depth="2" data-heading-j="5">三族方法的横向对照</a></li><li><a href="#数据集侧的偏移防线" data-depth="2" data-heading-j="6">数据集侧的偏移防线</a></li><li><a href="#本项目的位置从行为克隆到离线算法" data-depth="2" data-heading-j="7">本项目的位置：从行为克隆到离线算法</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>CQL 的悲观值正则化</span></a><ul class="toc__heads"><li><a href="#损失结构贝尔曼项加正则项" data-depth="2" data-heading-j="0">损失结构：贝尔曼项加正则项</a></li><li><a href="#实现形式与-log-sum-exp" data-depth="2" data-heading-j="1">实现形式与 log-sum-exp</a></li><li><a href="#保守系数-α-与数据质量" data-depth="2" data-heading-j="2">保守系数 α 与数据质量</a></li><li><a href="#q-集成的必要性" data-depth="2" data-heading-j="3">Q 集成的必要性</a></li><li><a href="#cql-的失效模式" data-depth="2" data-heading-j="4">CQL 的失效模式</a></li><li><a href="#与策略约束路线的分工" data-depth="2" data-heading-j="5">与策略约束路线的分工</a></li><li><a href="#实现路径与训练预算" data-depth="2" data-heading-j="6">实现路径与训练预算</a></li><li><a href="#训练中要盯的信号" data-depth="2" data-heading-j="7">训练中要盯的信号</a></li><li><a href="#保守偏置与不确定性的关系" data-depth="2" data-heading-j="8">保守偏置与不确定性的关系</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>IQL 的期望回归与样本内学习</span></a><ul class="toc__heads"><li><a href="#期望回归给残差加不对称权重" data-depth="2" data-heading-j="0">期望回归：给残差加不对称权重</a></li><li><a href="#三步更新" data-depth="2" data-heading-j="1">三步更新</a></li><li><a href="#为什么不查询数据外动作" data-depth="2" data-heading-j="2">为什么不查询数据外动作</a></li><li><a href="#τ-的调节逻辑" data-depth="2" data-heading-j="3">τ 的调节逻辑</a></li><li><a href="#局限" data-depth="2" data-heading-j="4">局限</a></li><li><a href="#推荐超参数" data-depth="2" data-heading-j="5">推荐超参数</a></li><li><a href="#iql-与行为克隆的边界" data-depth="2" data-heading-j="6">IQL 与行为克隆的边界</a></li><li><a href="#与其他两族的稳定性差别" data-depth="2" data-heading-j="7">与其他两族的稳定性差别</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>TD3+BC 与算法选择、在线微调</span></a><ul class="toc__heads"><li><a href="#策略目标最大化值同时贴近数据动作" data-depth="2" data-heading-j="0">策略目标：最大化值、同时贴近数据动作</a></li><li><a href="#一行改动与一个超参" data-depth="2" data-heading-j="1">一行改动与一个超参</a></li><li><a href="#筛选与退火增强版-td3bc" data-depth="2" data-heading-j="2">筛选与退火：增强版 TD3+BC</a></li><li><a href="#按数据特征选择" data-depth="2" data-heading-j="3">按数据特征选择</a></li><li><a href="#按任务特征选择" data-depth="2" data-heading-j="4">按任务特征选择</a></li><li><a href="#决策矩阵与快速启动" data-depth="2" data-heading-j="5">决策矩阵与快速启动</a></li><li><a href="#在线微调三阶段与三个挑战" data-depth="2" data-heading-j="6">在线微调：三阶段与三个挑战</a></li><li><a href="#缓冲区与算法各自的微调方式" data-depth="2" data-heading-j="7">缓冲区与算法各自的微调方式</a></li><li><a href="#实证与检查清单" data-depth="2" data-heading-j="8">实证与检查清单</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">离线强化学习</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>离线强化学习 / 分布偏移 / CQL / IQL / 悲观值 / Q集成 / 期望回归 / AWR</span></div><h1 class="docs__title">分布偏移与CQL·IQL·TD3-BC</h1><p class="docs__lead">离线强化学习的设定与核心难点，分布偏移如何从 Q 值高估一路演变成性能崩溃，以及策略约束、悲观值估计、样本内学习三条解法路线各自的对策与代价。</p></header><section class="dfile" id="file-1" data-file="01-分布偏移与三条解法路线"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-分布偏移与三条解法路线</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/17-离线强化学习/01-分布偏移与CQL·IQL·TD3-BC/01-分布偏移与三条解法路线.md</span></div><div class="dfile__body"><p>在线强化学习里，策略与环境互为因果：策略决定看到什么数据，数据又反过来修正策略。离线强化学习把这条回路切断，只给一份固定的数据集，要求算法从里面学出一个还能在真实环境里跑的策略。回路被切断的代价是，算法再也无法验证自己对未见过的状态动作对的估计是否正确。</p>
+<p>这就是分布偏移问题的来源。文中的算法结论来自知识库素材，本仓库没有实现 CQL、IQL 或 TD3-BC，相关内容属方法梳理。</p>
+<h2 id="离线设定数据集固定而策略仍在变">离线设定：数据集固定而策略仍在变</h2>
+<p>离线学习的目标函数写起来和在线一样，都是最大化期望回报，但它对状态的期望是在数据集分布上取的，而评估时策略会走到数据集从来没有覆盖的状态（<code>02_modern_control/offline_rl/README.md:24-26</code>）。</p>
+<p>数据集由某个行为策略产生。只要学到的策略与行为策略不同，它访问的状态分布就会偏离数据集分布，这种偏离在训练过程中会自己放大：策略越自信，越会去它“自认为”好的区域，而那些区域又缺少数据支撑。</p>
+<p>与行为克隆相比，离线强化学习多了一个值函数通道，因此有超越数据集平均水平的可能；代价是必须处理值函数在数据外区域的估计误差。素材里的对照表把两者的泛化能力与最优性列在一起（<code>:45-53</code>）。</p>
+<h2 id="偏移的链条从高估到崩溃">偏移的链条：从高估到崩溃</h2>
+<p>偏移沿一条四步链条逐步发生：值函数在未见过的状态动作对上给出过高估计，策略更新于是偏向这些被高估的动作，策略进一步偏移到分布外区域，最终性能崩溃（<code>02_modern_control/offline_rl/README.md:65-70</code>）。</p>
+<p>链条里最关键的一环是第一步。值函数是用贝尔曼备份学出来的，备份会把当前估计传回前一个状态；只要某个动作的估计偏高一丁点，这个偏差就会沿时间反向传播并被放大。在线设定里这种偏差会被新采集的数据纠正回来，离线设定里没有新数据，于是偏差只能被算法结构本身抑制。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["未见 (s,a) 上的 Q 被高估"] --> B["策略更新偏向被高估的动作"]
+  B --> C["访问更靠外的状态分布"]
+  C --> D["这些状态上的目标值也没数据支撑"]
+  D --> A
+  D --> E["性能崩溃"]</pre></div>
+<h2 id="策略约束路线">策略约束路线</h2>
+<p>第一条路线是在策略优化时直接或隐式地让学到的策略靠近行为策略，例如加一个分布距离约束，要求策略与行为策略的散度不超过阈值（<code>02_modern_control/offline_rl/README.md:74-83</code>）。</p>
+<p>它的优点是原理直观、实现简单，缺点是保守程度需要精调：约束太松挡不住偏移，太紧则性能上限被行为策略锁死。素材把 TD3+BC、BCQ、BEAR、BRAC 归入这一族，并把 TD3+BC 列为其中较实用的选择（<code>:88</code>）。</p>
+<h2 id="悲观值路线">悲观值路线</h2>
+<p>第二条路线不对策略加约束，而是让值函数自己变得保守：在损失里加入一项，压低策略分布下动作的估计值，同时抬高数据集中真实出现过的动作的估计值，净效果是数据内的动作不被低估、数据外的动作被低估（<code>02_modern_control/offline_rl/README.md:90-103</code>）。</p>
+<p>这一族的理论保证更强，代表算法是 CQL、COMBO、MOPO 与 MOReL，其中 CQL 配合 Q 集成被列为较安全的选择（<code>:103</code>）。代价是保守偏置本身是个超参数，偏置过大时会丢弃数据集里有用的信息。</p>
+<h2 id="样本内学习路线">样本内学习路线</h2>
+<p>第三条路线最彻底：训练过程中完全不查询数据外动作。值函数的更新目标只用数据集中真实出现过的动作，策略则通过加权回归从数据集里已有的动作中挑出好的（<code>02_modern_control/offline_rl/README.md:105-119</code>）。</p>
+<p>不该选这一族的情形同样清楚：数据集覆盖过窄时它连基线都够不到，因为策略只能从数据里已有的动作中挑；需要外推到数据之外的更好动作时，这条路线没有通道。代表算法是 IQL、IMC、InAC、SQL，其中 IQL 被列为这族里较实用的选择（<code>:119</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  subgraph A["策略约束"]
+    A1["策略与行为策略保持接近"]
+  end
+  subgraph B["悲观值"]
+    B1["压低未见动作的估计值"]
+  end
+  subgraph C["样本内学习"]
+    C1["只对数据集里的动作做更新"]
+  end
+  A1 --> D["限制偏移"]
+  B1 --> D
+  C1 --> E["偏移无从发生"]</pre></div>
+<h2 id="三族方法的横向对照">三族方法的横向对照</h2>
+<p>把三族放在同一张表里，差别集中在“是否查询数据外动作”与“外推能力”两列（<code>02_modern_control/offline_rl/README.md:121-131</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>策略约束</th><th>悲观值</th><th>样本内学习</th></tr></thead><tbody><tr><td>代表算法</td><td>TD3+BC、BCQ</td><td>CQL、COMBO</td><td>IQL、InAC</td></tr><tr><td>是否查询数据外动作</td><td>部分</td><td>是</td><td>从不</td></tr><tr><td>实现复杂度</td><td>低</td><td>中</td><td>低到中</td></tr><tr><td>稳定性</td><td>中</td><td>中低</td><td>最高</td></tr><tr><td>外推能力</td><td>弱</td><td>中</td><td>无</td></tr><tr><td>数据质量敏感度</td><td>最敏感</td><td>中</td><td>最鲁棒</td></tr></tbody></table>
+<p>“数据质量敏感度”这一列解释了为什么三族都有存在价值：数据以混合质量为主时，悲观值路线能靠压低坏动作的估计取胜；数据基本是专家演示时，策略约束路线更省事；数据质量未知时，样本内学习路线的失败风险最小。</p>
+<h2 id="数据集侧的偏移防线">数据集侧的偏移防线</h2>
+<p>算法侧的三条路线之外，数据侧还有一层更朴素的防线。素材给出的实践顺序是：先按 episode 累计奖励筛掉低质量轨迹（常保留前 50% 到 80%），对视觉数据做帧级去重，把观测与动作标准化到零均值单位方差，必要时重标奖励（<code>02_modern_control/offline_rl/README.md:520-527</code>）。</p>
+<p>这些步骤的作用在于减少噪声对值函数的干扰，而不在于提高算法上限。标准化尤其重要：动作尺度不统一时，同一个保守化系数在不同维度上的实际强度不同，等于给每个关节配了不同的约束（<code>:640-648</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数据步骤</th><th>作用</th><th>不做会怎样</th></tr></thead><tbody><tr><td>按回报筛轨迹</td><td>去掉低质量样本</td><td>值函数被拖低</td></tr><tr><td>帧级去重</td><td>降低重复样本权重</td><td>少数轨迹主导训练</td></tr><tr><td>观测动作标准化</td><td>各维度量纲一致</td><td>约束强度失衡</td></tr><tr><td>重标奖励</td><td>补上缺失信号</td><td>稀疏奖励下学不到</td></tr></tbody></table>
+<h2 id="本项目的位置从行为克隆到离线算法">本项目的位置：从行为克隆到离线算法</h2>
+<p>这套工程里没有 CQL、IQL 或 TD3-BC 的实现。与本单元内容最接近的是起身任务里的两条工作线：一条是用关键帧示范做行为克隆，产出可以直接喂给 PPO 的热启动权重（<code>RLcontroller_go1_moreinformation/train/bc_getup.py:1-14</code>）；另一条是 DAgger 式的状态聚合，让当前策略自己跑，在它实际访问到的状态上请专家生成纠正样本（<code>RLcontroller_go1_moreinformation/sim/dagger_getup.py:1-11</code>）。</p>
+<p>DAgger 的动机说明正好是本单元要讲的分布偏移：纯行为克隆的成功率只有 5.1%，原因是策略一旦偏离专家轨迹就进入没有监督的状态，误差单调累积；而训练损失仍然很小（<code>RLcontroller_go1_moreinformation/sim/dagger_getup.py:4-9</code>）。离线强化学习要解决的也是同一类偏移，区别在于它用值函数与保守化机制来抵抗，而不是靠补充专家标注。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>工作线</th><th>数据来源</th><th>抗偏移手段</th><th>本仓库状态</th></tr></thead><tbody><tr><td>行为克隆</td><td>关键帧成功轨迹</td><td>无</td><td>已实现（<code>train/bc_getup.py</code>）</td></tr><tr><td>DAgger 聚合</td><td>策略自己访问的状态加专家纠正</td><td>扩充状态覆盖</td><td>已实现（<code>sim/dagger_getup.py</code>）</td></tr><tr><td>离线强化学习</td><td>固定数据集</td><td>保守化或样本内更新</td><td>未实现，属方法梳理</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>离线强化学习只给固定数据集，学到的策略与环境不再有交互回路。</li>
+<li>分布偏移的核心是评估分布与数据分布不一致，值函数在数据外区域不可靠。</li>
+<li>偏移沿“高估、偏向、外移、崩溃”四步自我放大。</li>
+<li>策略约束路线限制策略靠近行为策略，实现简单但保守程度难调。</li>
+<li>悲观值路线压低未见动作的估计，理论更强但偏置是超参数。</li>
+<li>样本内学习路线从不查询数据外动作，稳定性最高但无外推。</li>
+<li>本仓库最接近的实现是行为克隆与 DAgger，离线算法本身未实现。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>抗偏移方式</td><td>约束、悲观、样本内三选一</td><td>覆盖不同数据条件</td><td>没有一种通吃</td></tr><tr><td>策略约束强度</td><td>需要精调</td><td>挡住偏移</td><td>上限被行为策略锁住</td></tr><tr><td>悲观偏置</td><td>需要调参</td><td>理论保证强</td><td>可能丢弃有用信息</td></tr><tr><td>样本内更新</td><td>不查询数据外动作</td><td>稳定</td><td>无外推能力</td></tr><tr><td>本项目路径</td><td>行为克隆加热启动</td><td>见效快</td><td>仍需在线微调纠偏</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出分布偏移四步链条，并指出哪一步是放大器。</li>
+<li>说明三族解法各自“是否查询数据外动作”的答案。</li>
+<li>解释为什么样本内学习路线的稳定性最高。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一份以低质量轨迹为主的数据集，说明三族中哪一族更合适，并给出理由。</li>
+<li>用本仓库 DAgger 的动机解释“训练损失很小但成功率只有 5.1%”这一现象。</li>
+<li>设计一个实验，比较行为克隆与样本内学习路线在同一份数据上的外推差异。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>robot_control_simulation/</td><td>知识库素材根，正文相对路径均相对它</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code></td><td>离线设定、分布偏移、三族解法与对照表</td></tr><tr><td>RLcontroller_go1_moreinformation/</td><td>本仓库最接近的实现所在仓库</td></tr><tr><td><code>train/bc_getup.py</code></td><td>行为克隆产热启动权重</td></tr><tr><td><code>sim/dagger_getup.py</code></td><td>DAgger 状态聚合与分布漂移说明</td></tr><tr><td><code>sim/collect_getup_demos.py</code></td><td>关键帧示范采集</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-CQL的悲观值正则化"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-CQL的悲观值正则化</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/17-离线强化学习/01-分布偏移与CQL·IQL·TD3-BC/02-CQL的悲观值正则化.md</span></div><div class="dfile__body"><p>分布偏移的根源是值函数在没见过的动作上给分太高。CQL 的思路很直接：不去限制策略能走到哪里，而是在损失函数里加一项，专门把没见过的动作的估计值压下去，同时保证数据集里真实出现过的动作不被误伤。</p>
+<p>这项正则化让 CQL 在混合质量数据上表现突出，也让它比样本内方法多出几个必须调的超参数。这一页按损失结构、实现形式、系数取值、集成手段、失效模式的顺序展开。文中算法结论来自知识库素材，本仓库未实现 CQL。</p>
+<h2 id="损失结构贝尔曼项加正则项">损失结构：贝尔曼项加正则项</h2>
+<p>CQL 的损失是在标准贝尔曼误差上叠加一个正则项，形如：贝尔曼项加上系数 α 乘以“策略分布下的期望估计值减去数据集里的期望估计值”（<code>02_modern_control/offline_rl/README.md:159-166</code>）。</p>
+<p>两项的方向相反：第一项对策略当前分布下的动作求期望，最小化它会压低这些估计；第二项对数据集里真实出现的动作求期望，最小化负号后的它会抬高这些估计。合起来就是“数据内不悲观，数据外悲观”（<code>:168</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["贝尔曼误差项"] --> D["总损失"]
+  B["α 乘 策略分布下的期望 Q"] --> D
+  C["减去 数据集动作的期望 Q"] --> D
+  D --> E["数据内动作保持估值"]
+  D --> F["数据外动作被压低"]</pre></div>
+<h2 id="实现形式与-log-sum-exp">实现形式与 log-sum-exp</h2>
+<p>策略分布下的期望在连续动作空间上没法精确计算，实际实现用 log-sum-exp 在采样动作上近似“最坏情况”的估计值，把正则项写成：系数乘上 log(对动作求 exp(Q) 的和) 再减去数据集动作的平均估计（<code>02_modern_control/offline_rl/README.md:170-178</code>）。</p>
+<p>这样做的效果是在动作空间上形成一个尖锐的估计分布：数据内的动作保持高值，数据外的动作被压到低位。素材把这一项的作用描述为等价于在策略上施加隐式约束（<code>:178</code>）——它没有显式地约束策略输出，但通过压低数据外动作的值，让策略更新没有动力往那里去。</p>
+<h2 id="保守系数-α-与数据质量">保守系数 α 与数据质量</h2>
+<p>α 控制悲观程度，取值随数据质量变化：高质量数据用小值（0.1 到 0.5），混合质量用中值（0.5 到 1.0），低质量数据为主用大值（1.0 到 5.0）（<code>02_modern_control/offline_rl/README.md:593-597</code>）。</p>
+<p>推荐做法是先做一轮对数间隔的扫描（0.1、0.5、1.0、2.0、5.0），再按验证表现选值（<code>:597</code>）。默认值 1.0 属于中间档，适合不确定数据质量时的起点（<code>:587</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数据情况</th><th>α 取值</th><th>理由</th></tr></thead><tbody><tr><td>基本是专家演示</td><td>0.1 到 0.5</td><td>数据本身可信，不需要强压制</td></tr><tr><td>混合质量</td><td>0.5 到 1.0</td><td>需要压低坏动作又不误伤好动作</td></tr><tr><td>低质量为主</td><td>1.0 到 5.0</td><td>数据外与数据内都不可信，只能强保守</td></tr><tr><td>不确定</td><td>先扫描再选</td><td>单个值无法覆盖不同数据集</td></tr></tbody></table>
+<h2 id="q-集成的必要性">Q 集成的必要性</h2>
+<p>素材反复强调一点：使用 5 到 10 个 Q 网络并取最小值可以显著提升 CQL 的稳定性（<code>02_modern_control/offline_rl/README.md:187</code>）。推荐配置表里的默认值是 2 个，范围可以到 10 个（<code>:588</code>）。</p>
+<p>集成生效的机制是取最小值：单个网络的高估会被其他网络拉回来，只有多个网络同时认为某个动作好，估计才会留在高位。这与乐观初始化相反，属于把不确定性直接变成保守性。</p>
+<h2 id="cql-的失效模式">CQL 的失效模式</h2>
+<p>第一类是专家数据上的过度悲观。当数据全部来自高质量演示时，CQL 的保守项可能压过了有用信号，表现反而不如简单的行为克隆；素材的建议是这种数据上改用 TD3+BC 或行为克隆（<code>02_modern_control/offline_rl/README.md:191</code>、<code>:197</code>）。</p>
+<p>第二类是 α 的调参成本。不同数据集需要不同的 α，而这没有通用规则（<code>:192</code>）。第三类是奖励尺度敏感：奖励量纲变化时同一个 α 的实际强度会变，也就是说 α 的含义依赖于奖励的归一化方式（<code>:193</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>失效模式</th><th>现象</th><th>应对</th></tr></thead><tbody><tr><td>专家数据上过悲观</td><td>不如行为克隆</td><td>换算法或减小 α</td></tr><tr><td>α 调参成本高</td><td>换数据集就要重扫</td><td>固定扫描序列形成经验</td></tr><tr><td>奖励尺度敏感</td><td>同 α 效果差很多</td><td>先归一化奖励再调 α</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["数据是什么质量?"] -->|"纯专家"| B["不建议 CQL"]
+  A -->|"混合"| C["混合质量: α 0.5 到 1.0"]
+  A -->|"低质量为主"| D["低质量: α 1.0 到 5.0"]
+  C --> E["配 Q 集成 5 到 10 个"]
+  D --> E
+  E --> F["看 Q 值曲线是否稳定"]</pre></div>
+<h2 id="与策略约束路线的分工">与策略约束路线的分工</h2>
+<p>CQL 与 TD3+BC 都处理数据外动作，但手法不同：前者压值，后者把策略拉回行为策略附近。这决定了它们的分工。数据以低质量或混合质量为主时，压值能有效阻止策略跟坏动作走，CQL 更合适；数据基本是专家演示时，策略本来就该靠近行为策略，约束路线更省事（<code>02_modern_control/offline_rl/README.md:191-198</code>）。</p>
+<p>另一个差别是性能上限的来源。悲观值路线不把策略锁在行为策略附近，因此有超越数据集最优动作的余地；策略约束路线的上限被约束半径限制，很难超过演示者太多（<code>:149</code>）。这两条特性互为代价：上限高意味着行为更不可预测，也更依赖 α 调得准。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>对比项</th><th>CQL</th><th>TD3+BC</th></tr></thead><tbody><tr><td>处理数据外动作的方式</td><td>压值</td><td>约束策略</td></tr><tr><td>低质量数据</td><td>擅长</td><td>差</td></tr><tr><td>专家数据</td><td>可能过悲观</td><td>简单可靠</td></tr><tr><td>超参数数量</td><td>多</td><td>少</td></tr><tr><td>超越数据集最优</td><td>有余地</td><td>近似到数据上界</td></tr></tbody></table>
+<h2 id="实现路径与训练预算">实现路径与训练预算</h2>
+<p>素材把 CQL 的共训练阶段描述为“多轮交替”，也就是值更新与策略更新轮流进行，而不是像样本内方法那样把两步解耦（<code>02_modern_control/offline_rl/README.md:143</code>）。这带来两个预算项：一是集成规模决定每步的前向次数，二是 α 扫描要求同一份数据跑多组配置。</p>
+<p>入门阶段的实现路径在素材的参考资源里：d3rlpy 是目前较完善的离线算法库，CORL 提供单文件实现，适合先读懂再迁移（<code>:837-843</code>）。实践顺序建议先用单文件实现确认数据与指标通路，再把配置搬到工程代码里，避免一开始就被训练框架的复杂度淹没。</p>
+<h2 id="训练中要盯的信号">训练中要盯的信号</h2>
+<p>素材列出的监控项里，与 CQL 直接相关的有两条：Q 值均值持续上升说明数据外动作仍在被高估，处理办法是增大 α 或增加集成规模；训练集上的 Q 值高而验证回滚表现差，说明分布偏移严重，应换用样本内方法或补充数据覆盖（<code>02_modern_control/offline_rl/README.md:611-636</code>）。</p>
+<p>还有一条容易被忽略的对照项是策略与行为策略的散度：散度过大意味着策略已经偏移出数据集覆盖，散度过小则说明约束把策略锁死（<code>:617</code>）。这两条一起看才能区分“保守过头”与“保守不够”。</p>
+<h2 id="保守偏置与不确定性的关系">保守偏置与不确定性的关系</h2>
+<p>α 是一个全局标量，而真实的不确定性因状态动作而异：数据密集的区域其实不需要压制，数据稀疏的边缘才需要。用一个常数近似整片空间，是 CQL 需要调参的根本原因。</p>
+<p>素材里同一族的不同算法给出了不同答案：CQL 用值函数的尖锐分布与集成来近似，模型类方法（MOPO、MOReL）改用动力学模型的不确定性作为惩罚依据（<code>02_modern_control/offline_rl/README.md:98</code>）。前者不需要学模型，后者对动力学建模质量敏感。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>不确定性来源</th><th>代表手段</th><th>依赖</th></tr></thead><tbody><tr><td>值估计分散</td><td>Q 集成取最小值</td><td>训练成本</td></tr><tr><td>数据密度低</td><td>惩罚项加系数</td><td>超参数</td></tr><tr><td>动力学未知</td><td>模型不确定性惩罚</td><td>动力学模型</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>CQL 在贝尔曼误差上加正则项，压低数据外动作、抬高数据内动作。</li>
+<li>实现上用 log-sum-exp 近似策略分布下的最坏估计。</li>
+<li>α 控制悲观程度，随数据质量从 0.1 调到 5.0。</li>
+<li>奖励尺度变化会改变 α 的实际含义，需先归一化。</li>
+<li>Q 集成取最小值，把不确定性转成保守性。</li>
+<li>专家数据上 CQL 可能过悲观，表现不如行为克隆。</li>
+<li>监控 Q 值均值与策略散度，用来判断保守是否合适。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>保守方式</td><td>值函数正则化</td><td>数据外动作被压低</td><td>需要调 α</td></tr><tr><td>期望近似</td><td>log-sum-exp</td><td>可计算且尖锐</td><td>依赖采样动作</td></tr><tr><td>集成规模</td><td>5 到 10 个</td><td>稳定性提升</td><td>训练与显存成本上升</td></tr><tr><td>数据质量假设</td><td>随 α 变化</td><td>覆盖多种数据</td><td>无通用取值</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 CQL 正则项的两部分各自的方向与作用。</li>
+<li>说明 log-sum-exp 在这里替代了什么运算。</li>
+<li>列出 α 随数据质量变化的三档取值。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一份混合质量数据集，设计 α 的扫描方案与判定指标。</li>
+<li>论证奖励归一化对 α 取值的影响，并给出一种让两者解耦的做法。</li>
+<li>说明 Q 集成规模从 2 增到 10 时，稳定性与计算成本的权衡点在哪里。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>robot_control_simulation/</td><td>知识库素材根，正文相对路径均相对它</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code></td><td>CQL 损失、实现、α 取值、集成与失效模式</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:611-648</td><td>监控信号与常见错误</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-IQL的期望回归与样本内学习"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-IQL的期望回归与样本内学习</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/17-离线强化学习/01-分布偏移与CQL·IQL·TD3-BC/03-IQL的期望回归与样本内学习.md</span></div><div class="dfile__body"><p>CQL 的代价是引入了一个需要扫描的保守系数。有没有办法完全不引入保守项，也不查询数据外动作，只靠数据集里出现过的动作把值函数学好？IQL 给出的答案是肯定的，代价是需要一个不对称的回归损失，以及一个决定乐观程度的参数。</p>
+<p>它的稳定性来自一个很强的前提：训练过程中出现的每一个动作都来自数据集。没有查询，就不会有“幻想出来的高值”。这一页按期望回归、三步更新、为什么不查询、参数调节、局限与超参数的顺序展开。文中算法结论来自知识库素材，本仓库未实现 IQL。</p>
+<h2 id="期望回归给残差加不对称权重">期望回归：给残差加不对称权重</h2>
+<p>标准回归最小化残差平方，得到的是条件均值。期望回归给正负残差不同的权重：残差为正时权重是 τ，为负时权重是 1 减 τ（<code>02_modern_control/offline_rl/README.md:206-212</code>）。</p>
+<p>当 τ 等于 0.5 时权重对称，退化为普通均方误差；τ 大于 0.5 时正残差被放大，拟合结果偏向分布的上分位数；τ 小于 0.5 时偏向低分位数（<code>:214-217</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>τ</th><th>权重偏向</th><th>拟合目标</th></tr></thead><tbody><tr><td>0.1</td><td>偏向负残差</td><td>条件分布下分位数</td></tr><tr><td>0.5</td><td>对称</td><td>条件均值</td></tr><tr><td>0.7</td><td>偏向正残差</td><td>偏上的分位数</td></tr><tr><td>0.9</td><td>强偏向正残差</td><td>接近上分位数</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["残差 u = y - f(x)"] --> B{"u 大于 0?"}
+  B -->|"是"| C["权重 τ"]
+  B -->|"否"| D["权重 1 减 τ"]
+  C --> E["加权平方损失"]
+  D --> E
+  E --> F["τ 大则结果偏向上分位数"]</pre></div>
+<h2 id="三步更新">三步更新</h2>
+<p>IQL 的训练由三个互相衔接的更新组成（<code>02_modern_control/offline_rl/README.md:221-235</code>）。状态值用期望回归拟合，目标是让它靠近 Q 函数在数据集动作上的上分位数；Q 函数用标准的平方误差，但目标里用的是下一状态的状态值而不是对动作取最大；策略用优势加权回归，权重是优势的指数放大。</p>
+<p>三步的关系可以这样理解：状态值回答“在这个状态上，数据里较好的动作大概值多少”；Q 函数把这个值沿时间传播；策略则从数据里那些超过平均水平的动作中学习。整套流程没有任何一步需要采样数据外动作。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["数据集 (s,a,r,s')"] --> B["V 用期望回归拟合 Q 的上分位数"]
+  B --> C["Q 的贝尔曼目标用 r 加 γV(s')"]
+  C --> D["优势 A = Q - V"]
+  D --> E["AWR 用 exp(βA) 加权回归策略"]
+  E --> F["新策略"]</pre></div>
+<h2 id="为什么不查询数据外动作">为什么不查询数据外动作</h2>
+<p>关键在 Q 的更新目标。常规方法写的是下一状态上的最大值，要算这个最大值就得对每个候选动作求估计，其中必然包含数据里没有的动作。IQL 把这一项换成状态值，而状态值只用数据集动作拟合过，于是 OOD 动作从头到尾没有出现过（<code>02_modern_control/offline_rl/README.md:227-230</code>、<code>:237-242</code>）。</p>
+<p>策略提取同样在数据内进行：优势加权回归对数据集里的每个动作赋予权重，权重高的样本被更多地模仿。整个过程不会出现灾难性的值发散，素材把这一点概括为“从不崩溃”（<code>:254</code>）。</p>
+<h2 id="τ-的调节逻辑">τ 的调节逻辑</h2>
+<p>τ 决定乐观程度，也决定这一步有多接近行为克隆（<code>02_modern_control/offline_rl/README.md:578-581</code>）：τ 等于 0.5 时上分位数变成均值，值函数不再偏向好动作，接近行为克隆；0.6 到 0.7 是稳健区间，默认取 0.7；0.8 到 0.9 更乐观，可能拿到更高性能，也可能因为过分相信少数高回报样本而不稳。</p>
+<p>素材给的默认值是 0.7，范围 0.5 到 0.9（<code>:570</code>）。调这个参数的直觉是：数据里好动作的比例越低，越需要把分位数往上推，才能让值函数注意到它们；但推得太高就变成只盯着少数样本。</p>
+<h2 id="局限">局限</h2>
+<p>第一是丢失数据外信息：因为不查询，它无法外推到数据集里没有的更好的动作，补救办法是接一段在线微调（<code>02_modern_control/offline_rl/README.md:246-250</code>）。</p>
+<p>第二是 τ 需要调。第三是稀疏奖励下的困难：优势加权回归要靠优势把好动作与坏动作分开，当绝大多数样本的奖励都为零时，区分度不足，性能会掉下来（<code>:250</code>）。素材给出的缓解思路是配合序列建模方法或增加奖励密度。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>局限</th><th>表现</th><th>缓解</th></tr></thead><tbody><tr><td>无外推</td><td>上限受数据覆盖限制</td><td>在线微调</td></tr><tr><td>τ 需调</td><td>过保守或过激进</td><td>从 0.7 起步</td></tr><tr><td>稀疏奖励</td><td>优势区分度低</td><td>加奖励密度或换序列建模</td></tr></tbody></table>
+<h2 id="推荐超参数">推荐超参数</h2>
+<p>素材给出的 IQL 推荐配置（<code>02_modern_control/offline_rl/README.md:566-576</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>推荐范围</th><th>默认值</th></tr></thead><tbody><tr><td>τ</td><td>0.5 到 0.9</td><td>0.7</td></tr><tr><td>β</td><td>0.3 到 10.0</td><td>3.0</td></tr><tr><td>学习率</td><td>3e-4 到 1e-3</td><td>3e-4</td></tr><tr><td>网络宽度</td><td>(256,256) 到 (512,512)</td><td>(256,256)</td></tr><tr><td>目标网络软更新</td><td>0.005 到 0.01</td><td>0.005</td></tr><tr><td>折扣因子</td><td>0.99</td><td>0.99</td></tr><tr><td>批大小</td><td>256 到 1024</td><td>256</td></tr></tbody></table>
+<p>β 是优势权重的温度：值大时权重分布更平，几乎所有样本都被模仿；值小时只有优势最大的样本被模仿（<code>:571</code>）。它与 τ 一起决定策略提取的“挑剔程度”。</p>
+<h2 id="iql-与行为克隆的边界">IQL 与行为克隆的边界</h2>
+<p>素材的 2026 共识里有一条与这里相关：离线强化学习与模仿学习的边界正在模糊，例如 IQL 在做法上融合了离线强化学习与加权行为克隆（<code>02_modern_control/offline_rl/README.md:794</code>）。把三步更新里的值函数部分去掉，剩下的就是按优势加权的模仿。</p>
+<p>这条边界在工程上很有用。本仓库已有的行为克隆与 DAgger 工作线（<code>RLcontroller_go1_moreinformation/train/bc_getup.py:1-11</code>、<code>sim/dagger_getup.py:4-11</code>）可以看作这条谱系上的一端：等权模仿专家动作，没有值函数；IQL 是另一端：先用期望回归学出相对好坏，再按好坏加权。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方法</th><th>动作权重</th><th>是否需要值函数</th><th>对坏样本的处理</th></tr></thead><tbody><tr><td>行为克隆</td><td>全部等权</td><td>否</td><td>一并模仿</td></tr><tr><td>优势加权回归</td><td>按优势指数加权</td><td>是（优势）</td><td>降低权重</td></tr><tr><td>IQL</td><td>优势权重加期望回归的值</td><td>是</td><td>降权且不查询数据外动作</td></tr><tr><td>DAgger 式聚合</td><td>按访问到的状态补标注</td><td>否</td><td>用专家纠正覆盖</td></tr></tbody></table>
+<h2 id="与其他两族的稳定性差别">与其他两族的稳定性差别</h2>
+<p>素材的总览表把稳定性一列给了 IQL 最高、CQL 中、TD3+BC 中高（<code>02_modern_control/offline_rl/README.md:137-151</code>）。造成差别的是“是否查询数据外动作”这一列：查询带来的信息可能有用，也可能把值函数带偏，而 IQL 直接放弃了这份信息。</p>
+<p>代价也体现在表格的另一列：IQL 的外推能力是“无”，CQL 是“中”。所以 IQL 适合作为默认起点，当需要更高上限时再换 CQL，而不是把 IQL 当成在所有场景都最优的方案（<code>:252-254</code>）。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>期望回归用不对称权重拟合分位数，τ 决定偏向哪一侧。</li>
+<li>IQL 的状态值用期望回归拟合，逼近数据里较好动作的价值。</li>
+<li>Q 的贝尔曼目标用状态值而不是动作最大值，因此不查询数据外动作。</li>
+<li>策略通过优势加权回归从数据集动作中提取。</li>
+<li>τ 等于 0.5 退化为行为克隆，0.7 是稳健默认值。</li>
+<li>IQL 的稳定性最高，代价是没有外推能力。</li>
+<li>稀疏奖励下优势区分度不足，是 IQL 的主要短板。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>贝尔曼目标</td><td>用状态值替代动作最大值</td><td>不查询数据外动作</td><td>失去外推</td></tr><tr><td>值拟合</td><td>期望回归</td><td>关注好动作</td><td>需要调 τ</td></tr><tr><td>策略提取</td><td>优势加权回归</td><td>数据内选优</td><td>依赖优势估计质量</td></tr><tr><td>定位</td><td>默认起点</td><td>失败风险低</td><td>上限受数据限制</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出期望回归的损失式，并说明 τ 在两个分支上的取值。</li>
+<li>解释 IQL 的 Q 更新目标与常规方法差在哪一项。</li>
+<li>说明 τ 等于 0.5 时 IQL 退化成什么。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一份稀疏奖励数据集，说明 IQL 会在哪一步遇到困难，并给出两种缓解方案。</li>
+<li>设计一轮实验，扫描 τ 的四个取值并给出选择依据。</li>
+<li>论证“不查询数据外动作”为什么同时是 IQL 的最大优势与最大限制。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>robot_control_simulation/</td><td>知识库素材根，正文相对路径均相对它</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:200-254</td><td>IQL 原理、三步更新、局限与共识</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:566-581</td><td>推荐超参数与 τ 调节指南</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:137-151</td><td>四算法总览对照表</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-TD3+BC与算法选择及在线微调"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-TD3+BC与算法选择及在线微调</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/17-离线强化学习/01-分布偏移与CQL·IQL·TD3-BC/04-TD3+BC与算法选择及在线微调.md</span></div><div class="dfile__body"><p>如果数据集本身质量不错，离线强化学习不必走保守值估计那条重路线：在现成的 TD3 上把行为克隆项加到策略目标里，多写几行代码就能得到一个可用基线。TD3+BC 就是这条极简路线，代价是它对数据质量的容忍度最低。</p>
+<p>文中算法结论来自知识库素材，本仓库未实现 TD3+BC 与在线微调。</p>
+<h2 id="策略目标最大化值同时贴近数据动作">策略目标：最大化值、同时贴近数据动作</h2>
+<p>TD3+BC 的策略更新目标写成两项之和：系数乘上对动作的估计值，减去策略输出与数据集动作的平方差（<code>02_modern_control/offline_rl/README.md:260-270</code>）。</p>
+<p>第一项是标准的 TD3 目标，鼓励策略选值高的动作；第二项是行为克隆正则，把策略输出拉回数据集里出现过的动作。权重 λ 取系数 α 除以估计值的平均绝对值，这个自适应归一化让两项的量纲可比——否则值函数的尺度一变，同一个 α 的实际强度也跟着变（<code>:271</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["数据集动作 a"] --> C["平方差项"]
+  B["策略输出 π(s)"] --> C
+  D["Q(s, π(s))"] --> E["乘自适应 λ"]
+  C --> F["策略损失"]
+  E --> F
+  F --> G["梯度更新策略"]</pre></div>
+<h2 id="一行改动与一个超参">一行改动与一个超参</h2>
+<p>素材把实现成本写得很清楚：在 TD3 基础上只增加大约五行代码，关键超参数只有 α 一个（<code>02_modern_control/offline_rl/README.md:273-278</code>）。推荐取值范围 1.0 到 10.0，默认 2.5（<code>:603</code>）。</p>
+<p>便宜是有代价的。它对数据质量很敏感，低质量数据中表现差；对数据覆盖要求也高，覆盖不均衡时容易只模仿常见动作（<code>:279-280</code>）。这两条限制解释了为什么它通常被当作基线与快速实现方案，而不是通用首选。</p>
+<h2 id="筛选与退火增强版-td3bc">筛选与退火：增强版 TD3+BC</h2>
+<p>两个增强手段可以压低上面两条限制的影响（<code>02_modern_control/offline_rl/README.md:282-291</code>）。第一个是 episode 筛选：训练前按累计回报对轨迹排序，只保留前若干比例的高质量轨迹参与策略更新。第二个是退火：训练过程中逐渐降低行为克隆系数，让后期更多依赖值优化。</p>
+<p>退火的形式是一条从初值线性降到下限的曲线（<code>:290</code>）。素材给出的经验是，在偏高质量数据集上，这两项合计可以比原版提升 15% 到 30%，且几乎没有额外开销（<code>:293-296</code>）。它适合的场景是数据质量基本可靠但混有部分低质量轨迹（<code>:298-301</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>增强项</th><th>做法</th><th>作用</th></tr></thead><tbody><tr><td>Episode 筛选</td><td>按累计回报保留前若干比例</td><td>去掉低质量轨迹</td></tr><tr><td>系数退火</td><td>从初值线性降到下限</td><td>后期少依赖模仿</td></tr><tr><td>组合效果</td><td>两项同时用</td><td>偏高质量数据上提升明显</td></tr></tbody></table>
+<h2 id="按数据特征选择">按数据特征选择</h2>
+<p>选择框架的第一层看数据（<code>02_modern_control/offline_rl/README.md:366-377</code>）：纯专家数据用 TD3+BC 或带权行为克隆；混合质量数据里若低质量占多数，用悲观值路线并配大系数；低质量只占少数，用样本内方法配默认参数；只有部分样本带奖励时，用样本内方法或行为克隆加奖励标注；异构多机器人数据则用跨本体的样本内或悲观值方法。</p>
+<p>这一层的判断依据是数据的质量分布，而不是任务本身。同一套算法在不同质量分布上的表现差异，比它们在同一种数据上的差异更大。</p>
+<h2 id="按任务特征选择">按任务特征选择</h2>
+<p>第二层看任务（<code>02_modern_control/offline_rl/README.md:379-394</code>）：稀疏奖励优先序列建模；稠密奖励且求稳用样本内方法、追求上限用悲观值方法；环境随机性强用样本内方法；长视距任务用带注意力机制的方法；有高质量人类演示用样本内方法或 TD3+BC 加筛选；数据以低质量为主时悲观值方法是唯一推荐。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["先看数据质量"] -->|"纯专家"| B["TD3+BC 或带权 BC"]
+  A -->|"低质量为主"| C["悲观值方法, 大系数"]
+  A -->|"混合, 少量低质量"| D["样本内方法, 默认参数"]
+  D --> E{"再看奖励密度"}
+  E -->|"稀疏"| F["序列建模"]
+  E -->|"稠密"| D</pre></div>
+<h2 id="决策矩阵与快速启动">决策矩阵与快速启动</h2>
+<p>素材把两个维度合成一张星级矩阵：序列建模在稀疏奖励与长视距上最强，样本内方法在稠密奖励与高随机性上最强，悲观值方法在稠密奖励上表现好但稀疏奖励较弱，TD3+BC 只在稠密奖励上到“推荐”档（<code>02_modern_control/offline_rl/README.md:396-409</code>）。</p>
+<p>快速启动的顺序是四步：先跑样本内方法作为基线，默认参数；不满意且数据以混合质量为主，再跑悲观值方法并扫描系数；任务稀疏奖励明显，才上序列建模；数据质量分布极端不均时，先做筛选再重试（<code>:411-420</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>场景</th><th>首选</th><th>备选</th></tr></thead><tbody><tr><td>不确定用什么</td><td>样本内方法</td><td>悲观值方法</td></tr><tr><td>稀疏奖励</td><td>序列建模</td><td>样本内方法</td></tr><tr><td>低质量数据为主</td><td>悲观值方法</td><td>无</td></tr><tr><td>快速实现</td><td>TD3+BC</td><td>行为克隆</td></tr></tbody></table>
+<h2 id="在线微调三阶段与三个挑战">在线微调：三阶段与三个挑战</h2>
+<p>离线策略的上限受数据集限制，突破的办法是接一段在线交互，流程分三阶段：离线预训练、在线微调过渡、纯在线训练（<code>02_modern_control/offline_rl/README.md:654-663</code>）。</p>
+<p>过渡阶段有三个已知挑战（<code>:665-671</code>）：离线值函数在新数据分布上可能突然失准；初期探索产生的低质量数据会污染训练；新数据会过快覆盖离线学到的价值。对应的实践手段是降低学习率、逐步释放探索、保留离线数据。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["阶段 1: 离线预训练"] --> B["阶段 2: 在线微调过渡"]
+  B --> C["阶段 3: 纯在线训练"]
+  B --> B1["学习率降至 10 到 50 百分比"]
+  B --> B2["探索噪声从零缓慢增加"]
+  B --> B3["缓冲区保留三成以上离线数据"]</pre></div>
+<h2 id="缓冲区与算法各自的微调方式">缓冲区与算法各自的微调方式</h2>
+<p>混合缓冲区的常见比例是离线数据占 30% 到 50%、在线数据占 50% 到 70%，采样时两路各半；随着在线步数增加逐步降低离线数据比例（<code>02_modern_control/offline_rl/README.md:702-714</code>）。学习率降到离线阶段的 10% 到 50%（<code>:675-685</code>）。</p>
+<p>不同算法的过渡方式不同：悲观值方法随在线步数线性衰减系数，衰减期约 10 万到 20 万步，衰减到零后回到标准在线算法（<code>:716-726</code>）；样本内方法最稳定，不需要系数衰减，把小学习率与混合缓冲区配好即可，素材把它推荐为默认方案（<code>:728-735</code>）；序列建模方法需要额外设计适配器（<code>:737-743</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>算法</th><th>过渡手段</th><th>特点</th></tr></thead><tbody><tr><td>悲观值方法</td><td>系数线性衰减</td><td>需要设定衰减期</td></tr><tr><td>样本内方法</td><td>小学习率加混合缓冲区</td><td>最稳定，推荐默认</td></tr><tr><td>序列建模</td><td>冻结主干加值函数头</td><td>需额外设计</td></tr></tbody></table>
+<h2 id="实证与检查清单">实证与检查清单</h2>
+<p>素材给出的在线微调提升数据来自一个仿真基准，样本内方法从 65% 到 88%，悲观值方法从 72% 到 85%，TD3+BC 从 58% 到 82%，序列建模从 60% 到 75%，全部在 50 万在线步以内（<code>02_modern_control/offline_rl/README.md:745-754</code>）。</p>
+<p>过渡前的检查清单包括：离线策略在验证环境上达到可接受水平、学习率已下调、缓冲区保留足够离线数据、探索噪声逐步释放、监控值函数变化、预留 2 万到 5 万步预热、性能下降时退回离线策略并增大保守度（<code>:756-764</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>环节</th><th>判据</th><th>越界后的动作</th></tr></thead><tbody><tr><td>预训练</td><td>验证成功率达标</td><td>继续离线训练</td></tr><tr><td>学习率</td><td>降至一成到五成</td><td>重新调</td></tr><tr><td>缓冲区</td><td>离线数据不低于三成</td><td>减少在线采样</td></tr><tr><td>探索</td><td>前 5 万步低探索</td><td>减慢释放速度</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>TD3+BC 在策略目标里加行为克隆项，λ 用估计值均值做自适应归一化。</li>
+<li>实现只需少量代码，关键超参数只有行为克隆系数。</li>
+<li>它对数据质量最敏感，低质量数据上表现差。</li>
+<li>Episode 筛选与系数退火能提升偏高质量数据上的表现。</li>
+<li>算法选择先看数据质量分布，再看任务奖励密度。</li>
+<li>在线微调分三阶段，核心手段是保守学习率与混合缓冲区。</li>
+<li>样本内方法的在线过渡最稳定，被列为默认方案。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>实现路线</td><td>行为克隆加 TD3</td><td>改动少</td><td>对数据质量敏感</td></tr><tr><td>系数处理</td><td>线性退火</td><td>后期少依赖模仿</td><td>需要设衰减期</td></tr><tr><td>数据筛选</td><td>按回报保留前列</td><td>去掉坏轨迹</td><td>可能丢覆盖</td></tr><tr><td>在线过渡</td><td>小学习率加混合缓冲区</td><td>防止崩溃</td><td>收敛慢</td></tr><tr><td>算法切换</td><td>样本内作基线</td><td>失败风险低</td><td>上限受数据限制</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 TD3+BC 的策略目标两项，并说明 λ 的作用。</li>
+<li>说明 episode 筛选与系数退火各自解决什么问题。</li>
+<li>列出在线微调的三阶段与三个挑战。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一份混有低质量轨迹的专家数据集，说明选择哪条路线并给出完整参数方案。</li>
+<li>设计一个缓冲区混合比例的退火方案，并说明用什么指标判断是否过热。</li>
+<li>论证“先跑样本内方法再考虑悲观值方法”这一启动顺序的合理性。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>robot_control_simulation/</td><td>知识库素材根，正文相对路径均相对它</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:256-301</td><td>TD3+BC 目标、特性与增强手段</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:364-420</td><td>算法选择框架与快速启动</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:652-764</td><td>在线微调流程、手段、实证与清单</td></tr><tr><td><code>02_modern_control/offline_rl/README.md</code>:599-607</td><td>TD3+BC 推荐配置</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/16-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E8%AF%95/03-%E5%A4%8D%E7%8E%B0%E5%AE%9E%E9%AA%8C%E4%B8%8E%E8%84%9A%E6%9C%AC/"><span class="k">← 上一篇</span><span class="t">复现实验与脚本</span><span class="d">强化学习评测与调试 · 4 个文件</span></a><a class="next" href="/tc63/docs/18-%E4%BB%BF%E7%9C%9F%E7%8E%AF%E5%A2%83%E5%AF%B9%E6%AF%94/01-%E4%B8%BB%E6%B5%81%E4%BB%BF%E7%9C%9F%E5%99%A8%E5%AF%B9%E6%AF%94%E7%9F%A9%E9%98%B5/"><span class="k">下一篇 →</span><span class="t">主流仿真器对比矩阵</span><span class="d">仿真环境对比 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

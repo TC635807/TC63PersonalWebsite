@@ -1,0 +1,1173 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>协议与消息 · MCP · 王宇翔</title><meta name="description" content="请求、响应、通知三种形态的判据，两个响应工厂的字段构成，handle_message 的校验顺序与方法分发表，以及批处理与 id 为 null 的边界"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/23-MCP/01-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E6%B6%88%E6%81%AF/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="协议与消息 · MCP · 王宇翔"><meta property="og:description" content="请求、响应、通知三种形态的判据，两个响应工厂的字段构成，handle_message 的校验顺序与方法分发表，以及批处理与 id 为 null 的边界"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/23-MCP/01-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E6%B6%88%E6%81%AF/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/23-MCP/">MCP</a><span class="sep" aria-hidden="true">/</span><span class="now">协议与消息</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>协议与消息</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>JSON-RPC 消息信封与分发顺序</span></a><ul class="toc__heads"><li><a href="#三种消息形态与判据" data-depth="2" data-heading-j="0">三种消息形态与判据</a></li><li><a href="#响应信封的两个工厂" data-depth="2" data-heading-j="1">响应信封的两个工厂</a></li><li><a href="#校验顺序与各自的返回" data-depth="2" data-heading-j="2">校验顺序与各自的返回</a></li><li><a href="#方法分发表" data-depth="2" data-heading-j="3">方法分发表</a></li><li><a href="#通知为什么不回响应" data-depth="2" data-heading-j="4">通知为什么不回响应</a></li><li><a href="#批处理与-id-为-null-的边界" data-depth="2" data-heading-j="5">批处理与 id 为 null 的边界</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>initialize 握手与协议版本协商</span></a><ul class="toc__heads"><li><a href="#initialize-的入参" data-depth="2" data-heading-j="0">initialize 的入参</a></li><li><a href="#版本选择的匹配逻辑" data-depth="2" data-heading-j="1">版本选择的匹配逻辑</a></li><li><a href="#能力与服务器信息" data-depth="2" data-heading-j="2">能力与服务器信息</a></li><li><a href="#instructions-的定位" data-depth="2" data-heading-j="3">instructions 的定位</a></li><li><a href="#初始化状态与后续方法" data-depth="2" data-heading-j="4">初始化状态与后续方法</a></li><li><a href="#候选版本从哪里来" data-depth="2" data-heading-j="5">候选版本从哪里来</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>tools 方法族的消息往返</span></a><ul class="toc__heads"><li><a href="#toolslist-的响应结构" data-depth="2" data-heading-j="0">tools/list 的响应结构</a></li><li><a href="#toolscall-的请求结构" data-depth="2" data-heading-j="1">tools/call 的请求结构</a></li><li><a href="#参数校验发生在网关" data-depth="2" data-heading-j="2">参数校验发生在网关</a></li><li><a href="#三条失败出路" data-depth="2" data-heading-j="3">三条失败出路</a></li><li><a href="#内容转换与出站包装" data-depth="2" data-heading-j="4">内容转换与出站包装</a></li><li><a href="#请求与响应的原文示例" data-depth="2" data-heading-j="5">请求与响应的原文示例</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>传输边界、错误码与通道卫生</span></a><ul class="toc__heads"><li><a href="#一行一条消息的边界" data-depth="2" data-heading-j="0">一行一条消息的边界</a></li><li><a href="#stdout-只写协议消息" data-depth="2" data-heading-j="1">stdout 只写协议消息</a></li><li><a href="#解析失败的响应" data-depth="2" data-heading-j="2">解析失败的响应</a></li><li><a href="#错误码的来源与分布" data-depth="2" data-heading-j="3">错误码的来源与分布</a></li><li><a href="#跨边界传递的上下文" data-depth="2" data-heading-j="4">跨边界传递的上下文</a></li><li><a href="#核验模式与启动失败" data-depth="2" data-heading-j="5">核验模式与启动失败</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">MCP</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>MCP / JSON-RPC / 协议 / 消息分发 / initialize / 版本协商 / capabilities / tools</span></div><h1 class="docs__title">协议与消息</h1><p class="docs__lead">请求、响应、通知三种形态的判据，两个响应工厂的字段构成，handle_message 的校验顺序与方法分发表，以及批处理与 id 为 null 的边界</p></header><section class="dfile" id="file-1" data-file="01-JSON-RPC消息信封与分发"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-JSON-RPC消息信封与分发</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/01-协议与消息/01-JSON-RPC消息信封与分发.md</span></div><div class="dfile__body"><h1 id="json-rpc-消息信封与分发顺序">JSON-RPC 消息信封与分发顺序</h1>
+<p>客户端把一行 JSON 写进标准输入，服务端把一行 JSON 写回标准输出——这是 MCP 最基础的通信形态。MCP（Model Context Protocol）是一套让模型客户端调用外部工具的协议，消息格式借用 JSON-RPC：每条消息带 <code>jsonrpc</code> 字段，请求另有 <code>id</code> 与 <code>method</code>，响应带 <code>result</code> 或 <code>error</code>。KnowledgeDiver 的 MCP 实现手写了一层 JSON-RPC 处理器，入口是 <code>McpServer.handle_message</code>（<code>backend/mcp/server.py:166-201</code>）。它接收一条已经解析成 Python 对象的消息，返回一条响应或 <code>None</code>。解析本身不在这一层，标准输入输出与逐行解码交给 <code>stdio.py</code>，因此这一层可以脱离传输单独测试。</p>
+<p>“返回 None”是这套实现里最需要先记住的约定：通知没有响应，非法通知也静默丢弃。JSON-RPC 规定通知不产生响应，代码把“没有 id 或 id 为 null”直接定义为通知（<code>:170-171</code>），于是连格式错误的通知也不会得到错误响应。客户端如果发了一条忘了带 id 的请求，就只能等超时。</p>
+<p>文中关于 JSON-RPC 规范的说法按通用做法标注，代码未实现的部分会明确写出。</p>
+<h2 id="三种消息形态与判据">三种消息形态与判据</h2>
+<p>一条 JSON-RPC 消息的三个判别字段是 <code>jsonrpc</code>、<code>id</code>、<code>method</code>。代码只用它们区分请求与通知：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>形态</th><th>特征</th><th>处理结果</th></tr></thead><tbody><tr><td>请求</td><td>有 <code>method</code>，<code>id</code> 存在且非 null</td><td>返回响应对象</td></tr><tr><td>通知</td><td>有 <code>method</code>，无 <code>id</code> 或 <code>id</code> 为 null</td><td>返回 <code>None</code></td></tr><tr><td>响应</td><td>通常由客户端发出，含 <code>result</code> 或 <code>error</code></td><td>本服务器不处理，会被当成缺 method 的请求</td></tr></tbody></table>
+<p>判据在进入校验之前就固定下来（<code>backend/mcp/server.py:170-171</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">msg_id </span><span style="color:#D73A49">=</span><span style="color:#24292E"> message.get(</span><span style="color:#032F62">"id"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">is_notification </span><span style="color:#D73A49">=</span><span style="color:#032F62"> "id"</span><span style="color:#D73A49"> not</span><span style="color:#D73A49"> in</span><span style="color:#24292E"> message </span><span style="color:#D73A49">or</span><span style="color:#24292E"> msg_id </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span></span></code></pre>
+<p><code>id</code> 为 <code>0</code> 或空字符串时仍是请求，因为判据用的是“存在且不为 None”。这一条与 JSON-RPC 对 id 的建议一致：<code>0</code> 是合法 id，null 在规范里虽然允许但被标注为不推荐。</p>
+<h2 id="响应信封的两个工厂">响应信封的两个工厂</h2>
+<p>响应只有两种形状，各自一个静态方法（<code>backend/mcp/server.py:126-132</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6F42C1">@</span><span style="color:#005CC5">staticmethod</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _ok</span><span style="color:#24292E">(msg_id, result):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">, </span><span style="color:#032F62">"id"</span><span style="color:#24292E">: msg_id, </span><span style="color:#032F62">"result"</span><span style="color:#24292E">: result}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1">@</span><span style="color:#005CC5">staticmethod</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _error</span><span style="color:#24292E">(msg_id, code, message):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">, </span><span style="color:#032F62">"id"</span><span style="color:#24292E">: msg_id, </span><span style="color:#032F62">"error"</span><span style="color:#24292E">: {</span><span style="color:#032F62">"code"</span><span style="color:#24292E">: code, </span><span style="color:#032F62">"message"</span><span style="color:#24292E">: message}}</span></span></code></pre>
+<p>成功响应只含 <code>result</code>，失败响应只含 <code>error</code>，二者不并存。<code>error</code> 对象由 <code>code</code> 与 <code>message</code> 两个字段组成，没有 <code>data</code> 字段；错误上下文全部塞进 <code>message</code> 文本。这个取舍让错误信息对模型可读，代价是客户端无法按结构化字段区分原因。</p>
+<p><code>id</code> 原样回填，不做类型转换。请求里的字符串 id、数字 id 都会原样出现在响应里，客户端按自己的规则匹配。</p>
+<h2 id="校验顺序与各自的返回">校验顺序与各自的返回</h2>
+<p>进入分发前有四道校验，顺序固定（<code>backend/mcp/server.py:168-184</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>检查</th><th>失败返回</th></tr></thead><tbody><tr><td>1</td><td>消息是 JSON 对象</td><td><code>-32600</code>，<code>id</code> 为 null</td></tr><tr><td>2</td><td><code>jsonrpc == "2.0"</code></td><td>通知返回 <code>None</code>，请求返回 <code>-32600</code></td></tr><tr><td>3</td><td><code>method</code> 是非空字符串</td><td>通知返回 <code>None</code>，请求返回 <code>-32600</code></td></tr><tr><td>4</td><td><code>params</code> 是对象或缺失</td><td>通知返回 <code>None</code>，请求返回 <code>-32602</code></td></tr></tbody></table>
+<p>第一道校验用 <code>None</code> 作响应 id，因为此时还没有可回填的 id；这与 stdio 层的解析错误响应形状一致。第二、三道把非法请求归为 <code>-32600</code>，第四道归为 <code>-32602</code>，区分的是“请求本身不合法”与“参数不合法”。</p>
+<p><code>params</code> 缺失时被归一成空字典（<code>:180-182</code>），因此不传 params 的方法调用等价于传 <code>{}</code>。<code>params</code> 传数组或字符串会得到 <code>-32602</code>，与 JSON-RPC 规范里允许数组位置参数的做法不同：本实现只支持具名参数，按通用做法标注为子集实现。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["handle_message(message)"] --> B{"是 JSON 对象吗"}
+  B -- 否 --> C["-32600, id=null"]
+  B -- 是 --> D["取 id 并判断是否通知"]
+  D --> E{"jsonrpc 等于 2.0 吗"}
+  E -- 否 --> F["通知返回 None，否则 -32600"]
+  E -- 是 --> G{"method 是非空字符串吗"}
+  G -- 否 --> H["通知返回 None，否则 -32600"]
+  G -- 是 --> I{"params 缺失或为对象吗"}
+  I -- 否 --> J["通知返回 None，否则 -32602"]
+  I -- 是 --> K["按 method 分发"]</pre></div>
+<h2 id="方法分发表">方法分发表</h2>
+<p>分发是一串顺序 <code>if</code>，没有注册表（<code>backend/mcp/server.py:186-201</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>method</th><th>处理</th><th>响应</th></tr></thead><tbody><tr><td><code>initialize</code></td><td>版本协商与能力声明</td><td><code>result</code> 含版本与能力</td></tr><tr><td><code>notifications/initialized</code>、<code>initialized</code>、<code>notifications/cancelled</code></td><td>无操作</td><td><code>None</code></td></tr><tr><td><code>ping</code></td><td>无操作</td><td><code>result: {}</code></td></tr><tr><td><code>tools/list</code></td><td>取网关工具描述</td><td><code>result.tools</code></td></tr><tr><td><code>tools/call</code></td><td>参数校验与执行</td><td><code>result.content</code> 与 <code>result.isError</code></td></tr><tr><td>其他</td><td>未实现</td><td><code>-32601</code>，消息含方法名</td></tr></tbody></table>
+<p>三种通知名并列在同一个分支里（<code>:188</code>），其中 <code>initialized</code> 是 <code>notifications/initialized</code> 的兼容写法。<code>notifications/cancelled</code> 只被忽略，没有中断正在执行的任务：<code>tools/call</code> 是逐个处理的，同一行输入里不存在并发执行，取消没有可作用的对象。按 MCP 的取消语义，客户端收到取消通知后服务端应尽力停止；本仓库未实现，标注为未实现。</p>
+<p>未实现方法统一返回 <code>-32601</code>，包括 <code>resources/list</code>、<code>prompts/list</code> 等 MCP 其他方法族（回归测试对 <code>resources/list</code> 断言了这一点，<code>tests/backend/test_mcp_server.py:254-255</code>）。服务器在 capabilities 里只声明了 <code>tools</code>，客户端的模型据此不会再调用其他方法族。</p>
+<h2 id="通知为什么不回响应">通知为什么不回响应</h2>
+<p>通知的处理只有两种结果：命中的分支返回 <code>None</code>，未命中的分支在“是通知”时也返回 <code>None</code>（<code>:199-201</code>）。<code>tools/call</code> 尤其需要这一条（<code>:195-196</code>）：通知形式的调用不产生响应，避免把执行结果写到没有人等待的通道上。</p>
+<p>代价是诊断困难。一条格式错误的通知不会留下协议层记录，只能靠 stderr 日志或调用方自己的约定发现。回归测试覆盖了 <code>notifications/initialized</code> 返回 None（<code>tests/backend/test_mcp_server.py:246-248</code>），但没有覆盖错误通知的静默路径。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant S as McpServer
+  participant T as stdio
+  C->>T: {"jsonrpc":"2.0","id":1,"method":"ping"}
+  T->>S: handle_message
+  S-->>T: {"jsonrpc":"2.0","id":1,"result":{}}
+  T-->>C: 一行响应
+  C->>T: {"jsonrpc":"2.0","method":"notifications/initialized"}
+  T->>S: handle_message
+  S-->>T: None
+  Note over T: 不写 stdout
+  C->>T: {"jsonrpc":"2.0","id":2,"method":"resources/list"}
+  T->>S: handle_message
+  S-->>T: error -32601
+  T-->>C: 一行错误响应</pre></div>
+<h2 id="批处理与-id-为-null-的边界">批处理与 id 为 null 的边界</h2>
+<p>JSON-RPC 2.0 规定一个数组可以承载多条消息，服务端应按数组逐条处理并返回数组。本实现遇到数组会走“消息不是对象”分支，返回单条 <code>-32600</code>（<code>:168-169</code>）。批处理未实现，按规范标注为子集。</p>
+<p><code>id</code> 为 null 的请求按通知处理，因此不会得到错误响应。若客户端想确认服务器是否活着，用 <code>ping</code> 并带上非 null 的 id；用 null 作 id 的 ping 不会得到任何回复，这不代表服务器没在工作。</p>
+<p>字符串 id 与数字 id 的行为一致。响应里的 <code>id</code> 与请求一致，包括 null 不会被用到——通知没有响应。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>用 <code>id: null</code> 发请求并等待响应。它被判为通知，没有响应。</li>
+<li>认为非法通知会收到 <code>-32600</code>。所有通知都不回响应，包括非法的。</li>
+<li>用数组发多条消息。批处理未实现，数组会被判为请求格式错误。</li>
+<li>用位置参数传 <code>params</code>。本实现只接受对象形式的具名参数。</li>
+<li>把 <code>error.message</code> 当结构化字段解析。所有上下文都在文本里。</li>
+<li>期待 <code>notifications/cancelled</code> 真的取消执行。实现只忽略它。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>通知判据</td><td>无 <code>id</code> 或 <code>id</code> 为 null</td><td><code>backend/mcp/server.py:170-171</code></td></tr><tr><td>响应形状</td><td><code>result</code> 或 <code>error</code> 二选一</td><td><code>:126-132</code></td></tr><tr><td>非法请求</td><td><code>-32600</code>，第一道检查 id 为 null</td><td><code>:168-169</code>、<code>:173-178</code></td></tr><tr><td>非法参数</td><td><code>-32602</code></td><td><code>:183-184</code></td></tr><tr><td>未实现方法</td><td><code>-32601</code>，消息含方法名</td><td><code>:199-201</code></td></tr><tr><td>通知方法</td><td>initialized 系列与 cancelled，均无响应</td><td><code>:188-189</code></td></tr><tr><td>方法集</td><td>initialize、ping、tools/list、tools/call</td><td><code>:186-197</code></td></tr><tr><td>批处理</td><td>未实现，数组判为 <code>-32600</code></td><td><code>:168-169</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>手写分发 if 链</td><td>依赖少，可读性高</td><td>方法增多后需要改成注册表</td></tr><tr><td>非法通知静默</td><td>符合通知无响应的约定</td><td>协议层错误难以发现</td></tr><tr><td>错误只带 message</td><td>对模型可读</td><td>客户端无法按字段分支处理</td></tr><tr><td>不支持批处理</td><td>实现简单，逐行处理</td><td>与 JSON-RPC 完整规范有差距</td></tr><tr><td>params 只收对象</td><td>参数校验逻辑单一</td><td>不接受位置参数</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出请求、通知与响应三种形态的判别字段，并说明 <code>id: 0</code> 属于哪一种。</li>
+<li>写出响应工厂生成的两个对象，指出哪一个字段互斥。</li>
+<li>说明四道校验的顺序，以及每道失败时的错误码。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给 <code>handle_message</code> 增加 JSON-RPC 批处理支持，说明返回值类型变化、通知与请求混排的处理顺序，以及需要补的测试。</li>
+<li>让非法通知也写一条 stderr 记录，列出需要改动的分支与如何避免影响 stdout 通道。</li>
+<li>设计一组消息级测试，覆盖 id 类型、缺字段、params 类型与未知方法的组合，并给出每条的期望响应的准确形状。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/server.py</code></td><td>消息校验、分发与响应工厂（:126-132、:166-201）</td></tr><tr><td><code>backend/mcp/stdio.py</code></td><td>解析错误响应的形状（:30-45）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>错误码常量与工具层错误（:37-40、:171-191）</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>协议语义回归断言（:224-300）</td></tr><tr><td><code>backend/mcp/__init__.py</code></td><td>协议层模块划分说明（:1-22）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-初始化握手与版本协商"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-初始化握手与版本协商</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/01-协议与消息/02-初始化握手与版本协商.md</span></div><div class="dfile__body"><h1 id="initialize-握手与协议版本协商">initialize 握手与协议版本协商</h1>
+<p>MCP 会话从 <code>initialize</code> 开始：客户端上报自己支持的协议版本与身份，服务端回一个它选定的版本、能力集合与服务器信息（<code>backend/mcp/server.py:135-148</code>）。这一次往返决定后续所有消息的解释方式，例如客户端据此知道服务端只提供 <code>tools</code> 而不提供 <code>resources</code>。</p>
+<p>实现上没有版本区间协商，也没有失败分支：客户端报的版本如果在候选列表里就原样返回，否则回退到列表第一项（<code>:136-137</code>）。回退是静默的，客户端收到的版本可能与它上报的不同，需要自己比较。这个取舍让握手永远不会因为版本不匹配而失败，代价是把兼容性判断推给客户端。</p>
+<p>版本列表的候选与官方 SDK 的导入关系是理解行为差异的关键：同一份代码在装了官方 mcp 包与没装的机器上，可能回不同的版本。</p>
+<h2 id="initialize-的入参">initialize 的入参</h2>
+<p><code>_initialize</code> 只读两个参数（<code>backend/mcp/server.py:135-138</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>类型</th><th>缺省时的行为</th></tr></thead><tbody><tr><td><code>protocolVersion</code></td><td>字符串</td><td>用候选列表第一项</td></tr><tr><td><code>clientInfo</code></td><td>对象，含 name 与 version</td><td>记录为 <code>None</code></td></tr></tbody></table>
+<p><code>clientInfo</code> 不是对象时被归一成 <code>None</code>，不报错（<code>:138</code>）。这个字段没有被后续逻辑使用，只保存在 <code>self.client_info</code> 上供诊断。<code>protocolVersion</code> 缺失时按“不在候选列表里”处理，同样回退。</p>
+<p>调用方在传输层看到的是 <code>params</code> 必须为对象，这一点由入口校验保证（<code>:180-184</code>）。<code>initialize</code> 自身不再做参数校验，因此 <code>params: {}</code> 是合法的，会得到一个完全默认的结果。</p>
+<h2 id="版本选择的匹配逻辑">版本选择的匹配逻辑</h2>
+<p>选择只有一行（<code>backend/mcp/server.py:136-137</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">requested </span><span style="color:#D73A49">=</span><span style="color:#24292E"> params.get(</span><span style="color:#032F62">"protocolVersion"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">version </span><span style="color:#D73A49">=</span><span style="color:#24292E"> requested </span><span style="color:#D73A49">if</span><span style="color:#24292E"> requested </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.protocol_versions </span><span style="color:#D73A49">else</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.protocol_versions[</span><span style="color:#005CC5">0</span><span style="color:#24292E">]</span></span></code></pre>
+<p>判据是精确相等，不做前缀或日期先后的比较。客户端报 <code>2025-03-26</code> 而候选列表里有它，就回 <code>2025-03-26</code>；报一个候选列表里没有的未来版本，回候选列表第一项。两种情况的响应形状完全相同，客户端无法从响应本身区分“接受了我的版本”与“回退到服务端首选”。</p>
+<p>候选列表的顺序有意义：第一项同时是默认版本与回退版本（<code>:52</code>）。列表由探测器构造，第一项是官方 SDK 的 <code>LATEST_PROTOCOL_VERSION</code>（如果装得上），其后是内置的三个版本。因此列表整体是从新到旧的排序。</p>
+<p>回归测试固定了两个行为：上报列表中最后一个版本时原样返回（<code>tests/backend/test_mcp_server.py:224-234</code>），上报 <code>1999-01-01</code> 时回退到第一项（<code>:237-243</code>）。这两个用例把“精确匹配加回退到首选”的语义锁住了。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["initialize 请求到达"] --> B["读 protocolVersion"]
+  B --> C{"在 protocol_versions 里吗"}
+  C -- 是 --> D["原样返回该版本"]
+  C -- 否 --> E["返回列表第一项"]
+  D --> F["声明 capabilities 与 serverInfo"]
+  E --> F
+  F --> G["置 initialized 为真并保存 clientInfo"]</pre></div>
+<h2 id="能力与服务器信息">能力与服务器信息</h2>
+<p>响应里的四个字段一次给全（<code>backend/mcp/server.py:140-148</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>内容</th><th>说明</th></tr></thead><tbody><tr><td><code>protocolVersion</code></td><td>选定的版本</td><td>见上一节</td></tr><tr><td><code>capabilities</code></td><td><code>{"tools": {"listChanged": false}}</code></td><td>只声明工具能力，且不发变更通知</td></tr><tr><td><code>serverInfo</code></td><td><code>{"name": "knowledgediver-readonly", "version": "0.1.0"}</code></td><td>常量，见 <code>:34-35</code></td></tr><tr><td><code>instructions</code></td><td>一段中文说明</td><td>告诉客户端本服务只读</td></tr></tbody></table>
+<p><code>capabilities</code> 里只有 <code>tools</code> 一项，没有 <code>resources</code>、<code>prompts</code> 或 <code>logging</code>。客户端按这份声明决定可用方法族，因此调用 <code>resources/list</code> 属于超出声明范围，服务端会回 <code>-32601</code>（<code>:199-201</code>）。</p>
+<p><code>listChanged</code> 为 <code>false</code> 表示服务端不会主动推送工具清单变化的通知。工具清单在网关构造时从注册表派生一次（<code>backend/mcp/gateway.py:60-72</code>），运行期不变，因此这个声明与实现一致。</p>
+<p><code>serverInfo</code> 的两个值是模块常量：名称 <code>knowledgediver-readonly</code>，版本 <code>0.1.0</code>（<code>backend/mcp/server.py:34-35</code>）。构造函数允许覆盖它们（<code>:111-121</code>），测试与嵌入方可以传自己的名字。</p>
+<h2 id="instructions-的定位">instructions 的定位</h2>
+<p><code>instructions</code> 是一段面向模型的中文说明，内容为“只读网关，可语义检索卡片、读取卡片/链接/树结构、诊断质量，不提供联网搜索或写库能力”（<code>backend/mcp/server.py:144-147</code>）。它同时出现在两个地方：协议的 initialize 响应里，以及 <code>backend/mcp/__init__.py</code> 的模块文档里（<code>:1-6</code>）。</p>
+<p>这段文字的作用是给客户端模型一个能力边界提示。它不是强制约束，约束由工具白名单与执行器启用集合实现（<code>backend/mcp/gateway.py:15-19</code>）。两者需要一致：如果以后放开写层工具，这段说明必须同步改，否则模型会按旧说明拒绝使用新工具。</p>
+<h2 id="初始化状态与后续方法">初始化状态与后续方法</h2>
+<p>握手会把 <code>self.initialized</code> 置为 <code>True</code>（<code>backend/mcp/server.py:139</code>），并把 <code>clientInfo</code> 存进 <code>self.client_info</code>（<code>:138</code>）。这两个状态只写不读：后续方法没有任何一处检查 <code>initialized</code>，也没有使用 <code>client_info</code>。</p>
+<p>后果是生命周期约束形同虚设：客户端可以在没有 <code>initialize</code> 的情况下直接发 <code>tools/list</code> 或 <code>tools/call</code>，服务端照常处理。按 MCP 的会话约定，客户端应先 initialize 再 initialized 通知，然后才调用其他方法；本实现未强制，标注为与本仓库实现相关的宽松处理。</p>
+<p><code>notifications/initialized</code> 是握手完成的确认通知，命中专门的分支后直接返回 <code>None</code>（<code>:188-189</code>）。它不改变任何状态，因此漏发这条通知不会影响服务端行为。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant S as McpServer
+  C->>S: initialize(requestedVersion, clientInfo)
+  S->>S: 匹配候选版本
+  S-->>C: protocolVersion 与 capabilities 与 serverInfo
+  S->>S: initialized = True
+  C->>S: notifications/initialized
+  S-->>C: 无响应
+  C->>S: tools/list
+  Note over S: 不检查 initialized，直接返回清单
+  S-->>C: 工具数组</pre></div>
+<h2 id="候选版本从哪里来">候选版本从哪里来</h2>
+<p>候选列表在模块导入时确定（<code>backend/mcp/server.py:37-52</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">_BUILTIN_PROTOCOL_VERSIONS</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> (</span><span style="color:#032F62">"2025-06-18"</span><span style="color:#24292E">, </span><span style="color:#032F62">"2025-03-26"</span><span style="color:#24292E">, </span><span style="color:#032F62">"2024-11-05"</span><span style="color:#24292E">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _detect_protocol_versions</span><span style="color:#24292E">():</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        from</span><span style="color:#24292E"> mcp.types </span><span style="color:#D73A49">import</span><span style="color:#005CC5"> LATEST_PROTOCOL_VERSION</span></span>
+<span class="line"><span style="color:#24292E">        latest </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> str</span><span style="color:#24292E">(</span><span style="color:#005CC5">LATEST_PROTOCOL_VERSION</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> (latest, </span><span style="color:#D73A49">*</span><span style="color:#005CC5">_BUILTIN_PROTOCOL_VERSIONS</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#005CC5"> _BUILTIN_PROTOCOL_VERSIONS</span></span></code></pre>
+<p>内置三项是固定的协议日期版本（<code>:38</code>）。首选版本取决于本机是否装了官方 mcp 包：装了就用它的最新版本，没装就用内置列表首项。注释记录本机 mcp 2.2.0 对应 <code>2026-07-28</code>（<code>:37</code>），也就是装了包时首选会变成这个日期。</p>
+<p>这带来一个部署差异：requirements.txt 没有声明 mcp（<code>backend/mcp/__init__.py:16-21</code> 说明过这一点），干净环境里首选是 <code>2025-06-18</code>，而开发者机器上可能是 <code>2026-07-28</code>。客户端上报的版本若只在装了包时才在列表里，两台机器上会得到不同的协商结果。要固定行为，需要在启动时把 <code>protocol_versions</code> 显式传给 <code>McpServer</code>（<code>:116</code>），或用配置锁定。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为版本不匹配会报错。列表里没有就静默回退到第一项。</li>
+<li>认为回退响应可识别。接受与回退的响应形状一致，只能比较请求与响应。</li>
+<li>依赖 <code>initialized</code> 状态。它只写不读，没有方法检查。</li>
+<li>把 <code>instructions</code> 当权限控制。实际的边界在网关白名单与执行器启用集合。</li>
+<li>忽略官方包的安装差异。首选版本随环境变化。</li>
+<li>认为 <code>clientInfo</code> 会影响行为。它只被保存，没有消费方。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>入参</td><td><code>protocolVersion</code>、<code>clientInfo</code></td><td><code>backend/mcp/server.py:135-138</code></td></tr><tr><td>版本匹配</td><td>精确相等，否则回退首项</td><td><code>:136-137</code></td></tr><tr><td>首选版本</td><td>SDK 的 LATEST，否则内置首项</td><td><code>:37-52</code></td></tr><tr><td>内置候选</td><td>2025-06-18、2025-03-26、2024-11-05</td><td><code>:38</code></td></tr><tr><td>能力声明</td><td>仅 tools，listChanged 为 false</td><td><code>:142</code></td></tr><tr><td>服务器信息</td><td>knowledgediver-readonly、0.1.0</td><td><code>:34-35</code>、<code>:143</code></td></tr><tr><td>握手状态</td><td><code>initialized</code> 与 <code>client_info</code> 只写不读</td><td><code>:138-139</code></td></tr><tr><td>完成通知</td><td>无响应，不改变状态</td><td><code>:188-189</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>版本精确匹配加回退</td><td>握手永不失败</td><td>客户端需自行比较协商结果</td></tr><tr><td>首选跟随已装 SDK</td><td>与官方客户端默认版本对齐</td><td>环境不同行为不同</td></tr><tr><td>不强制生命周期顺序</td><td>调试与手工测试方便</td><td>偏离 MCP 会话约定</td></tr><tr><td>capabilities 只声明 tools</td><td>客户端不会调用未实现方法族</td><td>扩展方法族时要同步改声明</td></tr><tr><td>instructions 与 <strong>init</strong> 重复</td><td>两处都能读到能力边界</td><td>改权限时容易漏改一处</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>initialize</code> 读取的两个参数，并说明缺省时各自的取值。</li>
+<li>说明上报版本不在候选列表时服务端返回什么，客户端如何判断发生了回退。</li>
+<li>列出 <code>capabilities</code> 的完整内容，并解释 <code>listChanged</code> 为 false 的含义。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把首选版本固定为不依赖已装 SDK 的常量，列出需要改动的代码与对现有测试的影响。</li>
+<li>给服务端加上生命周期检查：未握手时拒绝 <code>tools/list</code> 与 <code>tools/call</code>，说明错误码选择与需要补的测试。</li>
+<li>设计一个协商失败策略（例如客户端版本低于最低支持版本时拒绝），说明错误码、instructions 的作用范围与对现有客户端的影响。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/server.py</code></td><td>initialize 实现、版本探测与常量（:34-52、:111-148、:186-201）</td></tr><tr><td><code>backend/mcp/__init__.py</code></td><td>能力边界与手写实现原因（:1-22）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>工具清单派生与只读三层边界（:15-19、:60-72）</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>版本协商与通知断言（:224-248）</td></tr><tr><td><code>backend/mcp/examples/claude_desktop_config.json</code></td><td>客户端启动参数示例</td></tr><tr><td><code>backend/mcp/examples/cursor_mcp.json</code></td><td>另一客户端配置示例</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-tools方法族的消息往返"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-tools方法族的消息往返</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/01-协议与消息/03-tools方法族的消息往返.md</span></div><div class="dfile__body"><h1 id="tools-方法族的消息往返">tools 方法族的消息往返</h1>
+<p><code>tools</code> 是这份实现唯一完整支持的方法族，成员两个：<code>tools/list</code> 返回工具描述数组，<code>tools/call</code> 执行一个工具并返回文本内容（<code>backend/mcp/server.py:150-163</code>）。两个方法的响应形状不同：list 的 <code>result.tools</code> 是描述对象数组，call 的 <code>result</code> 是 <code>content</code> 与 <code>isError</code> 两项。</p>
+<p>调用失败时有三种出路，分别落在不同位置：协议或参数或权限问题走 JSON-RPC 的 <code>error</code> 对象；工具自己返回“失败”时走 <code>result.isError = true</code>；执行器抛出的异常被网关包装成 <code>-32603</code>，又回到 <code>error</code>。模块文档把前两条写成“工具自身执行失败用 isError 表达”，实际代码还多了第三条，理解这一点才能正确读客户端收到的消息。</p>
+<p>工具描述的字段来源与 schema 细节属于另一单元的范围，这里只写到消息结构需要为止。</p>
+<h2 id="toolslist-的响应结构">tools/list 的响应结构</h2>
+<p>处理只有一行（<code>backend/mcp/server.py:150-151</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _tools_list</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">dict</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"tools"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">.gateway.list_tools()}</span></span></code></pre>
+<p>网关的 <code>list_tools</code> 返回深拷贝并按名字排序的数组（<code>backend/mcp/gateway.py:155-156</code>），元素由 <code>mcp_tools</code> 派生（<code>:60-72</code>）。每个元素三个字段：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>来源</th></tr></thead><tbody><tr><td><code>name</code></td><td>注册表 schema 的 <code>function.name</code></td></tr><tr><td><code>description</code></td><td>注册表的描述文本，缺失时为空串</td></tr><tr><td><code>inputSchema</code></td><td>注册表的 <code>function.parameters</code> 深拷贝</td></tr></tbody></table>
+<p>清单在网关构造时定一次，<code>tools/list</code> 每次返回新的深拷贝。客户端修改返回的对象不会影响服务端后续响应。响应条数与工具层白名单一致：回归测试断言名字集合等于注册表 read 层（<code>tests/backend/test_mcp_server.py:265-270</code>）。</p>
+<h2 id="toolscall-的请求结构">tools/call 的请求结构</h2>
+<p>请求的 <code>params</code> 需要两个字段（<code>backend/mcp/server.py:154-155</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#24292E">{</span><span style="color:#005CC5">"name"</span><span style="color:#24292E">: </span><span style="color:#032F62">"search_similar_cards"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"arguments"</span><span style="color:#24292E">: {</span><span style="color:#005CC5">"query"</span><span style="color:#24292E">: </span><span style="color:#032F62">"图论"</span><span style="color:#24292E">}}</span></span></code></pre>
+<p><code>name</code> 必须是非空字符串，否则回 <code>-32602</code>，消息为“tools/call 缺少字符串参数 name”（<code>:156-157</code>）。<code>arguments</code> 缺失时归一成空对象（<code>:155</code>），因此无参工具可以只传 <code>name</code>。</p>
+<p>请求的 <code>id</code> 决定是否回复：通知形式的 call 直接返回 <code>None</code>（<code>:195-196</code>），执行不会被触发。需要执行并拿到结果的调用必须带非 null 的 id。</p>
+<h2 id="参数校验发生在网关">参数校验发生在网关</h2>
+<p><code>tools/call</code> 自身只校验 <code>name</code>，参数校验在网关内部完成（<code>backend/mcp/gateway.py:183</code>）。校验函数 <code>validate_arguments</code> 做四件事（<code>:92-138</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查</th><th>失败错误码</th><th>消息特征</th></tr></thead><tbody><tr><td><code>arguments</code> 是对象</td><td><code>-32602</code></td><td>arguments 必须是 JSON 对象</td></tr><tr><td>不含未知参数</td><td><code>-32602</code></td><td>不支持的参数，并列出可用参数</td></tr><tr><td>类型与 enum 匹配</td><td><code>-32602</code></td><td>参数类型错误或取值非法</td></tr><tr><td>必填参数齐全</td><td><code>-32602</code></td><td>缺少必填参数</td></tr></tbody></table>
+<p>校验通过后返回规整后的新字典：填入了 schema 里的默认值，只保留 schema 声明的属性（<code>:113-138</code>）。回归测试用默认值断言了这一点：只传 <code>query</code> 时执行器收到的是带 <code>limit</code> 与 <code>threshold</code> 的完整参数（<code>tests/backend/test_mcp_server.py:195-198</code>）。布尔值被特殊处理，不接受作为 integer 或 number（<code>gateway.py:85-89</code>）。</p>
+<p>这条链上的失败都以 <code>McpToolError</code> 抛出，由 <code>tools/call</code> 捕获并转成 JSON-RPC 错误（<code>backend/mcp/server.py:158-161</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    result </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.gateway.call_tool(name, arguments)</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#24292E"> McpToolError </span><span style="color:#D73A49">as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._error(msg_id, exc.code, exc.message)</span></span></code></pre>
+<p>错误码原样使用异常里的 <code>code</code>，不重写。网关在不同位置抛不同码：名字不在白名单或层级复核不通过抛 <code>-32601</code>（<code>gateway.py:176-181</code>），参数问题抛 <code>-32602</code>（<code>:101-137</code>），执行异常抛 <code>-32603</code>（<code>:189-191</code>）。</p>
+<h2 id="三条失败出路">三条失败出路</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>失败类型</th><th>消息位置</th><th>例子</th><th>来源</th></tr></thead><tbody><tr><td>协议/参数/权限</td><td><code>error.code</code></td><td>未知工具、缺必填参数、越权工具</td><td><code>backend/mcp/server.py:158-161</code></td></tr><tr><td>工具返回失败</td><td><code>result.isError = true</code></td><td>执行器返回 <code>success=False</code></td><td><code>:162-163</code>、<code>:105</code></td></tr><tr><td>执行器抛异常</td><td><code>error.code = -32603</code></td><td>数据库故障</td><td><code>backend/mcp/gateway.py:189-191</code></td></tr></tbody></table>
+<p>第二与第三条的区分需要记住：同样是“工具没成功”，如果执行器把失败包装成返回值，客户端拿到的是带文本内容的成功响应加 <code>isError</code> 标记；如果是抛出的异常，客户端拿到的是 JSON-RPC 错误，没有 <code>content</code> 字段。模块文档写的是“工具自身执行失败 → isError”，覆盖的是返回值那条路（<code>backend/mcp/server.py:10-13</code>）。</p>
+<p>回归测试两条都覆盖了：返回 <code>success=False</code> 时断言 <code>isError</code> 为真且文本含摘要（<code>tests/backend/test_mcp_server.py:283-290</code>），执行器抛 <code>RuntimeError</code> 时断言 <code>-32603</code> 且消息含原因（<code>:214-219</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["tools/call params"] --> B{"name 是非空字符串吗"}
+  B -- 否 --> C["error -32602"]
+  B -- 是 --> D{"名字在白名单且仍为 read 层吗"}
+  D -- 否 --> E["error -32601"]
+  D -- 是 --> F{"参数校验通过吗"}
+  F -- 否 --> G["error -32602"]
+  F -- 是 --> H["executor.execute"]
+  H --> I{"返回还是抛出"}
+  I -- 抛出 --> J["error -32603"]
+  I -- 返回 --> K{"success 为真吗"}
+  K -- 是 --> L["result.isError = false"]
+  K -- 否 --> M["result.isError = true"]
+  L --> N["content 文本数组"]
+  M --> N</pre></div>
+<h2 id="内容转换与出站包装">内容转换与出站包装</h2>
+<p>工具返回值先被拆成三部分：成功标志、摘要、数据（<code>backend/mcp/server.py:58-70</code>）。摘要成为文本主体，数据被 <code>json.dumps</code>（<code>ensure_ascii=False</code>）追加在后面，两者用空行分隔（<code>:87-94</code>）；都为空时写一句占位文本（<code>:95-96</code>）。最终 <code>content</code> 是单元素数组，元素类型固定为 <code>text</code>（<code>:105</code>）。</p>
+<p>出站文本还可以被不可信内容包裹：当工具返回成功、开关开启、且该工具被注册表标记为可能返回外部派生文本时，文本会被套上边界与免责声明（<code>:98-104</code>）。开关来自配置 <code>UNTRUSTED_WRAP_TOOL_RESULTS</code>（<code>backend/config.py:53</code>，默认 <code>inherit</code>）与 <code>UNTRUSTED_WRAP_MCP</code>（<code>:54</code>）。这是消息边界上的安全处理，因为客户端模型会把这些文本当指令读。</p>
+<p>内容数组目前只有文本类型，没有 <code>image</code>、<code>resource</code> 等类型，也没有较新规范里的 <code>structuredContent</code> 字段。工具返回的结构化数据被序列化进文本，按通用做法标注为本实现的简化。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant S as McpServer
+  participant G as ReadOnlyGateway
+  participant E as executor
+  C->>S: tools/call name 与 arguments
+  S->>G: call_tool(name, arguments)
+  G->>G: 白名单校验与层级复核
+  G->>G: validate_arguments 填默认值
+  G->>E: execute(name, args)
+  E-->>G: ToolResult 或异常
+  G-->>S: 结果或 McpToolError
+  S->>S: to_mcp_content 组装 content 与 isError
+  S-->>C: result.content 与 result.isError</pre></div>
+<h2 id="请求与响应的原文示例">请求与响应的原文示例</h2>
+<p>成功调用（id 为 5，测试里的形状）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#24292E">{</span><span style="color:#005CC5">"jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"id"</span><span style="color:#24292E">: </span><span style="color:#005CC5">5</span><span style="color:#24292E">, </span><span style="color:#005CC5">"method"</span><span style="color:#24292E">: </span><span style="color:#032F62">"tools/call"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5"> "params"</span><span style="color:#24292E">: {</span><span style="color:#005CC5">"name"</span><span style="color:#24292E">: </span><span style="color:#032F62">"list_cards"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"arguments"</span><span style="color:#24292E">: {}}}</span></span></code></pre>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#24292E">{</span><span style="color:#005CC5">"jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"id"</span><span style="color:#24292E">: </span><span style="color:#005CC5">5</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5"> "result"</span><span style="color:#24292E">: {</span><span style="color:#005CC5">"content"</span><span style="color:#24292E">: [{</span><span style="color:#005CC5">"type"</span><span style="color:#24292E">: </span><span style="color:#032F62">"text"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"text"</span><span style="color:#24292E">: </span><span style="color:#032F62">"list_cards ok</span><span style="color:#005CC5">\n\n</span><span style="color:#032F62">{</span><span style="color:#005CC5">\"</span><span style="color:#032F62">tool</span><span style="color:#005CC5">\"</span><span style="color:#032F62">: </span><span style="color:#005CC5">\"</span><span style="color:#032F62">list_cards</span><span style="color:#005CC5">\"</span><span style="color:#032F62">}"</span><span style="color:#24292E">}],</span></span>
+<span class="line"><span style="color:#005CC5">            "isError"</span><span style="color:#24292E">: </span><span style="color:#005CC5">false</span><span style="color:#24292E">}}</span></span></code></pre>
+<p>越权调用（<code>refresh_card</code> 属于写层）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#24292E">{</span><span style="color:#005CC5">"jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"id"</span><span style="color:#24292E">: </span><span style="color:#005CC5">7</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5"> "error"</span><span style="color:#24292E">: {</span><span style="color:#005CC5">"code"</span><span style="color:#24292E">: </span><span style="color:#005CC5">-32601</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">           "message"</span><span style="color:#24292E">: </span><span style="color:#032F62">"工具 refresh_card 属于 write 层，只读 MCP 网关不暴露。..."</span><span style="color:#24292E">}}</span></span></code></pre>
+<p>第二条的文本内容由摘要与数据拼接而成，拼接格式可以在 <code>backend/mcp/server.py:87-94</code> 对着看。第三条的错误消息由 <code>deny_reason</code> 生成，包含层级与可用工具名（<code>backend/mcp/gateway.py:161-169</code>）。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为所有工具失败都用 <code>isError</code>。抛出的异常走 <code>-32603</code>，没有 <code>content</code>。</li>
+<li>认为 <code>tools/call</code> 校验 <code>arguments</code>。校验在网关里，错误码仍是 <code>-32602</code>。</li>
+<li>用通知形式调用工具并等结果。通知直接丢弃，不执行。</li>
+<li>期待 <code>structuredContent</code>。内容只有文本一项。</li>
+<li>忽略出站包装开关。开启时文本会被边界包裹，客户端看到的前后缀不同。</li>
+<li>认为 <code>tools/list</code> 每次返回同一对象。每次是新的深拷贝。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>list 响应</td><td><code>result.tools</code> 数组，按名字排序</td><td><code>backend/mcp/server.py:150-151</code>、<code>gateway.py:155-156</code></td></tr><tr><td>list 元素字段</td><td>name、description、inputSchema</td><td><code>backend/mcp/gateway.py:60-72</code></td></tr><tr><td>call 请求</td><td><code>params.name</code> 与 <code>params.arguments</code></td><td><code>backend/mcp/server.py:154-155</code></td></tr><tr><td>参数校验</td><td>默认值填充、未知参数拒绝、类型与 enum、必填</td><td><code>backend/mcp/gateway.py:92-138</code></td></tr><tr><td>错误分流</td><td>协议走 error，返回失败走 isError，异常走 -32603</td><td><code>backend/mcp/server.py:158-163</code>、<code>gateway.py:189-191</code></td></tr><tr><td>内容形状</td><td>单元素 text 数组</td><td><code>backend/mcp/server.py:105</code></td></tr><tr><td>出站包装</td><td>按开关与工具标记包裹文本</td><td><code>:98-104</code>、<code>backend/config.py:53-54</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>校验集中在网关</td><td>协议层薄，校验可单测</td><td>协议层不校验 arguments，错误码需跨模块理解</td></tr><tr><td>工具失败用返回值表达</td><td>模型能看到原因并自我修正</td><td>客户端需要同时处理 isError 与 -32603 两条路</td></tr><tr><td>结构化数据并入文本</td><td>客户端无需额外解析</td><td>丢失结构化能力</td></tr><tr><td>出站包裹可开关</td><td>默认保持旧行为</td><td>两种文本形态需要在客户端侧兼容</td></tr><tr><td>只支持 text 类型</td><td>实现最小可用</td><td>无法返回资源引用与图片</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 <code>tools/list</code> 响应的字段结构，并说明每个字段来自注册表的哪一部分。</li>
+<li>写出 <code>tools/call</code> 请求的最小合法形状，说明 <code>arguments</code> 缺失时的行为。</li>
+<li>区分三种失败出路，并各给一个触发条件。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>让执行器抛出的异常也走 <code>isError</code> 路径，说明需要改动的函数、对客户端的影响与需要补的测试。</li>
+<li>在 <code>content</code> 里追加图片或资源类型，列出消息结构变化与客户端兼容性考虑。</li>
+<li>设计一组 <code>tools/call</code> 消息级测试，覆盖权限、参数、默认值、返回值失败与异常五类，并写出每条的期望响应的准确字段。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/server.py</code></td><td>list 与 call 的处理、内容转换与包装（:58-70、:87-105、:150-163）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>工具派生、参数校验与错误码（:37-40、:60-72、:92-138、:155-191）</td></tr><tr><td><code>backend/config.py</code></td><td>出站包装开关（:50-54）</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>消息语义与错误分流断言（:195-219、:265-300）</td></tr><tr><td><code>backend/mcp/__init__.py</code></td><td>方法子集与模块划分（:1-22）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-传输边界与错误码"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-传输边界与错误码</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/01-协议与消息/04-传输边界与错误码.md</span></div><div class="dfile__body"><h1 id="传输边界错误码与通道卫生">传输边界、错误码与通道卫生</h1>
+<p>协议层与传输层的分工在模块文档里写得很清楚：<code>server.py</code> 处理 JSON-RPC 方法，<code>stdio.py</code> 负责换行分隔的输入输出（<code>backend/mcp/__init__.py:8-14</code>）。边界上有两条不可违反的规则：一行一条 JSON 消息；标准输出只写协议消息，日志与异常一律走标准错误（<code>backend/mcp/stdio.py:3-6</code>）。任何一行多余的文本都会让客户端把非 JSON 内容当成协议消息解析。</p>
+<p>错误码把失败分成五类，分散定义在两个模块里。解析失败由传输层直接构造响应，请求与参数错误由协议层判断，权限与执行错误由网关抛出再由协议层包装。读客户端收到的错误时，<code>code</code> 是分类的第一依据，<code>message</code> 是上下文。</p>
+<p>stdio 服务的循环细节属于相邻单元，这里只写到与消息边界有关的部分。</p>
+<h2 id="一行一条消息的边界">一行一条消息的边界</h2>
+<p><code>serve_async</code> 的循环以行为单位（<code>backend/mcp/stdio.py:22-46</code>）：先从标准输入读一行，读到空串表示输入结束并退出循环（<code>:26-28</code>），否则去掉首尾空白，空行直接跳过（<code>:29-31</code>），再尝试解析。</p>
+<p>三条边界约定都体现在这几行里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>约定</th><th>代码位置</th><th>后果</th></tr></thead><tbody><tr><td>换行分隔</td><td><code>:32-33</code> 按行解析</td><td>一条消息不能跨行，多行 JSON 会解析失败</td></tr><tr><td>空行忽略</td><td><code>:30-31</code></td><td>心跳或占位空行不会触发错误</td></tr><tr><td>输入结束即退出</td><td><code>:27-28</code></td><td>客户端关闭管道，服务端结束会话</td></tr></tbody></table>
+<p>读取用 <code>asyncio.to_thread</code> 包装阻塞的 <code>readline</code>（<code>:26</code>），避免阻塞事件循环。处理是逐条串行的：一行读完处理完，才读下一行。因此同一会话里不会出现两条消息并发处理，这也解释了为什么取消通知没有可作用的对象。</p>
+<h2 id="stdout-只写协议消息">stdout 只写协议消息</h2>
+<p>响应写回时一次性写入整行并刷新（<code>backend/mcp/stdio.py:42-45</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">stdout.write(json.dumps(response, </span><span style="color:#E36209">ensure_ascii</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">) </span><span style="color:#D73A49">+</span><span style="color:#032F62"> "</span><span style="color:#005CC5">\n</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">stdout.flush()</span></span></code></pre>
+<p>只有 <code>response</code> 不为 <code>None</code> 时才写，通知因此不产生任何输出。<code>ensure_ascii=False</code> 让中文以 UTF-8 原样输出，配合入口配置里的 <code>PYTHONIOENCODING=utf-8</code>（<code>backend/mcp/examples/claude_desktop_config.json</code> 的 env 段）。写完立即刷新，避免客户端等待缓冲区。</p>
+<p>通道纪律的另一半在入口：日志被强制指向标准错误（<code>backend/mcp/__main__.py:30-31</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">logging.basicConfig(</span><span style="color:#E36209">level</span><span style="color:#D73A49">=</span><span style="color:#24292E">logging.</span><span style="color:#005CC5">INFO</span><span style="color:#24292E">, </span><span style="color:#E36209">stream</span><span style="color:#D73A49">=</span><span style="color:#24292E">sys.stderr, </span><span style="color:#E36209">format</span><span style="color:#D73A49">=</span><span style="color:#032F62">"[mcp] </span><span style="color:#005CC5">%(levelname)s</span><span style="color:#005CC5"> %(message)s</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>启动失败也写标准错误并返回退出码 2（<code>:34-38</code>）。任何在别处新增的 <code>print</code> 默认写标准输出，会污染协议通道，这是修改这个模块时最容易忽略的约束。</p>
+<h2 id="解析失败的响应">解析失败的响应</h2>
+<p>JSON 解析失败时，传输层直接构造响应，不走协议层（<code>backend/mcp/stdio.py:32-39</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">except</span><span style="color:#24292E"> json.JSONDecodeError </span><span style="color:#D73A49">as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#24292E">    response </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#032F62">        "jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">        "id"</span><span style="color:#24292E">: </span><span style="color:#005CC5">None</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">        "error"</span><span style="color:#24292E">: {</span><span style="color:#032F62">"code"</span><span style="color:#24292E">: </span><span style="color:#D73A49">-</span><span style="color:#005CC5">32700</span><span style="color:#24292E">, </span><span style="color:#032F62">"message"</span><span style="color:#24292E">: </span><span style="color:#D73A49">f</span><span style="color:#032F62">"JSON 解析失败: </span><span style="color:#005CC5">{</span><span style="color:#24292E">exc.msg</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">},</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span></code></pre>
+<p><code>id</code> 固定为 null，因为解析失败时拿不到消息里的 id。错误信息只带 <code>exc.msg</code>（解析器给出的短描述），不含出错位置或原始文本。客户端要定位问题需要对照自己发出的那一行。</p>
+<p>解析失败不影响循环：<code>response</code> 被写回后继续读下一行（<code>:42-45</code>）。一次坏消息不会让会话结束，只有标准输入关闭才会退出。</p>
+<h2 id="错误码的来源与分布">错误码的来源与分布</h2>
+<p>五类错误码的常量分布如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>码</th><th>含义</th><th>定义位置</th><th>使用位置</th></tr></thead><tbody><tr><td><code>-32700</code></td><td>JSON 解析失败</td><td><code>backend/mcp/stdio.py:38</code>（字面量）</td><td>传输层解析分支</td></tr><tr><td><code>-32600</code></td><td>请求不合法</td><td><code>backend/mcp/server.py:55</code></td><td><code>:169</code>、<code>:174</code>、<code>:178</code></td></tr><tr><td><code>-32601</code></td><td>方法未实现或工具被拒</td><td><code>backend/mcp/gateway.py:39</code></td><td><code>server.py:200</code>、<code>gateway.py:177</code>、<code>:181</code></td></tr><tr><td><code>-32602</code></td><td>参数不合法</td><td><code>backend/mcp/gateway.py:38</code></td><td><code>server.py:157</code>、<code>:184</code>，<code>gateway.py:101-137</code></td></tr><tr><td><code>-32603</code></td><td>执行内部错误</td><td><code>backend/mcp/gateway.py:40</code></td><td><code>gateway.py:191</code></td></tr></tbody></table>
+<p><code>-32700</code> 在协议层还有一个同名常量 <code>ERR_PARSE</code>（<code>backend/mcp/server.py:54</code>），但没有任何使用点，解析失败完全在传输层处理。这是一个只定义不使用的常量，排查时不要到协议层找解析分支。</p>
+<p><code>-32601</code> 承担两种语义：协议层用它表示未实现的方法（<code>:199-201</code>），网关用它表示工具不在白名单或层级复核不通过（<code>gateway.py:176-181</code>）。两者的消息文本不同，前者是“未实现的方法: X”，后者是 <code>deny_reason</code> 生成的层级说明。客户端若只按码分支，会把越权调用与打错方法名当成同一类。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["输入的一行"] --> B{"JSON 能解析吗"}
+  B -- 否 --> C["-32700, id=null"]
+  B -- 是 --> D{"jsonrpc 与 method 合法吗"}
+  D -- 否 --> E["-32600"]
+  D -- 是 --> F{"方法已实现吗"}
+  F -- 否 --> G["-32601 未实现的方法"]
+  F -- 是 --> H{"工具与参数通过吗"}
+  H -- 否 --> I["-32601 越权 或 -32602 参数"]
+  H -- 是 --> J{"执行是否抛异常"}
+  J -- 是 --> K["-32603"]
+  J -- 否 --> L["result 正常返回"]</pre></div>
+<h2 id="跨边界传递的上下文">跨边界传递的上下文</h2>
+<p>消息里携带的上下文有四处，都在出站方向上被处理过：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>上下文</th><th>位置</th><th>处理</th></tr></thead><tbody><tr><td><code>id</code></td><td>响应顶层</td><td>原样回填，解析失败时为 null</td></tr><tr><td><code>jsonrpc</code></td><td>响应顶层</td><td>固定为 2.0 字面量</td></tr><tr><td>错误 <code>message</code></td><td><code>error.message</code></td><td>中文说明加具体值，不含堆栈</td></tr><tr><td>工具文本</td><td><code>result.content[0].text</code></td><td>摘要加 JSON 数据，按开关套不可信边界</td></tr></tbody></table>
+<p>错误消息不泄漏堆栈：网关捕获执行异常后只把 <code>exc</code> 的字符串写进消息，并把原异常挂在 <code>__cause__</code> 上（<code>backend/mcp/gateway.py:189-191</code>），堆栈进日志而不是消息。工具文本的边界包裹在内容转换函数里（<code>backend/mcp/server.py:98-104</code>），作用于成功返回的文本。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant T as stdio
+  participant S as McpServer
+  C->>T: 一行 JSON
+  T->>T: json.loads
+  alt 解析失败
+    T-->>C: -32700 与 id=null
+  else 解析成功
+    T->>S: handle_message
+    S-->>T: 响应或 None
+    alt 响应非 None
+      T-->>C: 一行响应并 flush
+    else 通知
+      Note over T: 不写 stdout
+    end
+  end</pre></div>
+<h2 id="核验模式与启动失败">核验模式与启动失败</h2>
+<p>入口提供了一个不走协议的自检模式：<code>--list-tools</code> 把工具清单以缩进 JSON 打到标准输出后退出（<code>backend/mcp/__main__.py:40-43</code>）。这条路径写的是普通 JSON 而不是协议消息，属于人工核验，不能与 stdio 服务同时使用。配置示例里的客户端不会传这个参数。</p>
+<p>启动失败（例如没给用户名）在构造网关时抛出，入口捕获后写标准错误并返回 2（<code>:34-38</code>）。返回非零退出码让客户端能判断子进程启动失败，而不是一直等待首条响应。用户名来源是 <code>--username</code> 或环境变量 <code>KD_MCP_USERNAME</code>（<code>backend/mcp/runtime.py:21-40</code>）。</p>
+<p>就绪日志也走标准错误（<code>:49-52</code>），包含用户名与工具名列表，是排查“客户端连上了但没有工具”时的第一处证据。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>在 <code>backend/mcp/</code> 里新增 <code>print</code>。默认写标准输出，会破坏协议通道。</li>
+<li>发多行格式化的 JSON。按行解析，跨行内容会被判为 <code>-32700</code>。</li>
+<li>认为 <code>-32700</code> 由协议层产生。它在传输层构造，协议层的 <code>ERR_PARSE</code> 未被使用。</li>
+<li>只按错误码分类 <code>-32601</code>。它同时表示未实现方法与越权工具。</li>
+<li>从 <code>error.message</code> 里找堆栈。堆栈只进日志。</li>
+<li>把 <code>--list-tools</code> 的输出当协议响应。那是核验模式。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>消息边界</td><td>一行一条，空行忽略</td><td><code>backend/mcp/stdio.py:26-33</code></td></tr><tr><td>输出纪律</td><td>stdout 只写协议，日志走 stderr</td><td><code>stdio.py:42-45</code>、<code>backend/mcp/__main__.py:30-31</code></td></tr><tr><td>解析失败</td><td><code>-32700</code>，<code>id</code> 为 null，会话继续</td><td><code>stdio.py:32-39</code></td></tr><tr><td>请求错误</td><td><code>-32600</code></td><td><code>backend/mcp/server.py:169-178</code></td></tr><tr><td>未实现与越权</td><td><code>-32601</code>，消息不同</td><td><code>server.py:199-201</code>、<code>gateway.py:176-181</code></td></tr><tr><td>参数错误</td><td><code>-32602</code></td><td><code>server.py:157</code>、<code>gateway.py:92-138</code></td></tr><tr><td>内部错误</td><td><code>-32603</code>，不泄漏堆栈</td><td><code>gateway.py:189-191</code></td></tr><tr><td>启动失败</td><td>stderr 加退出码 2</td><td><code>backend/mcp/__main__.py:34-38</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>换行分隔 JSON</td><td>无需分帧协议，标准库即可</td><td>消息不能格式化多行</td></tr><tr><td>传输层直接处理解析错误</td><td>协议层保持干净</td><td>错误码常量两处定义</td></tr><tr><td><code>-32601</code> 复用两种语义</td><td>码集最小</td><td>客户端需读消息文本区分</td></tr><tr><td>错误只带短描述</td><td>消息紧凑，不泄漏内部</td><td>定位需要对照原始请求</td></tr><tr><td>提供 <code>--list-tools</code></td><td>人工核验方便</td><td>与协议模式互斥，需注意用法</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出从一行输入到一行输出的完整处理顺序，标出解析失败与通知两个分支。</li>
+<li>列出五个错误码，并各给一个触发条件与来源模块。</li>
+<li>说明为什么日志必须写标准错误，以及写错通道的后果。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给解析失败的消息补上出错行号或片段，说明如何在不泄漏敏感内容的前提下实现，并列出需要改动的函数。</li>
+<li>把 <code>-32601</code> 的两种语义拆成不同错误码，分析对现有客户端与测试的影响，给出兼容方案。</li>
+<li>设计一组传输层测试，覆盖空行、坏 JSON、通知、EOF 与超长单行，并写出每条期望的输出行数与错误码。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/stdio.py</code></td><td>逐行循环、解析失败与写出（:22-51）</td></tr><tr><td><code>backend/mcp/server.py</code></td><td>协议错误码与错误响应（:54-55、:157、:169-201）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>网关错误码与异常包装（:37-40、:92-138、:171-191）</td></tr><tr><td><code>backend/mcp/__main__.py</code></td><td>日志通道、启动失败与核验模式（:29-54）</td></tr><tr><td><code>backend/mcp/runtime.py</code></td><td>用户名与会话解析（:21-40）</td></tr><tr><td><code>backend/mcp/examples/claude_desktop_config.json</code></td><td>编码与启动参数</td></tr><tr><td><code>backend/mcp/__init__.py</code></td><td>模块分工与传输约定（:1-22）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/22-RAG%20%E4%B8%8E%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/03-sqlite-vec%E5%90%91%E9%87%8F%E6%A3%80%E7%B4%A2/"><span class="k">← 上一篇</span><span class="t">sqlite-vec向量检索</span><span class="d">RAG 与向量检索 · 4 个文件</span></a><a class="next" href="/tc63/docs/23-MCP/02-stdio%E6%9C%8D%E5%8A%A1%E5%99%A8/"><span class="k">下一篇 →</span><span class="t">stdio服务器</span><span class="d">MCP · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

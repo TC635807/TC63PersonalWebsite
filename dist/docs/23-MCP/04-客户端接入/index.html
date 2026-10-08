@@ -1,0 +1,1401 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>客户端接入 · MCP · 王宇翔</title><meta name="description" content="一客户端一进程的连接模型、配置行字段、mcp__server__tool 命名空间与冲突规则、环境变量清理，以及三种客户端的配置形态对照"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/23-MCP/04-%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%8E%A5%E5%85%A5/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="客户端接入 · MCP · 王宇翔"><meta property="og:description" content="一客户端一进程的连接模型、配置行字段、mcp__server__tool 命名空间与冲突规则、环境变量清理，以及三种客户端的配置形态对照"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/23-MCP/04-%E5%AE%A2%E6%88%B7%E7%AB%AF%E6%8E%A5%E5%85%A5/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/23-MCP/">MCP</a><span class="sep" aria-hidden="true">/</span><span class="now">客户端接入</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>客户端接入</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>客户端如何拉起 stdio 服务器</span></a><ul class="toc__heads"><li><a href="#一客户端一进程的连接模型" data-depth="2" data-heading-j="0">一客户端一进程的连接模型</a></li><li><a href="#配置行的四个字段" data-depth="2" data-heading-j="1">配置行的四个字段</a></li><li><a href="#工具命名空间" data-depth="2" data-heading-j="2">工具命名空间</a></li><li><a href="#冲突与更新规则" data-depth="2" data-heading-j="3">冲突与更新规则</a></li><li><a href="#三种客户端的配置形态" data-depth="2" data-heading-j="4">三种客户端的配置形态</a></li><li><a href="#易错点" data-depth="2" data-heading-j="5">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>dsh 插件包的声明与安装流程</span></a><ul class="toc__heads"><li><a href="#插件包的最小声明" data-depth="2" data-heading-j="0">插件包的最小声明</a></li><li><a href="#patch-行的字段" data-depth="2" data-heading-j="1">patch 行的字段</a></li><li><a href="#为什么必须暂存" data-depth="2" data-heading-j="2">为什么必须暂存</a></li><li><a href="#安装脚本的三步" data-depth="2" data-heading-j="3">安装脚本的三步</a></li><li><a href="#卸载与重装" data-depth="2" data-heading-j="4">卸载与重装</a></li><li><a href="#与通用配置形态的对照" data-depth="2" data-heading-j="5">与通用配置形态的对照</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>配置字段与超时预算</span></a><ul class="toc__heads"><li><a href="#一次调用的三层时间预算" data-depth="2" data-heading-j="0">一次调用的三层时间预算</a></li><li><a href="#dsh-侧调用超时" data-depth="2" data-heading-j="1">dsh 侧调用超时</a></li><li><a href="#抓取超时与正文上限" data-depth="2" data-heading-j="2">抓取超时与正文上限</a></li><li><a href="#启动与发现的超时" data-depth="2" data-heading-j="3">启动与发现的超时</a></li><li><a href="#解释器与浏览器的解析顺序" data-depth="2" data-heading-j="4">解释器与浏览器的解析顺序</a></li><li><a href="#knowledgediver-的配置缺项" data-depth="2" data-heading-j="5">KnowledgeDiver 的配置缺项</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>接入核对与故障定位</span></a><ul class="toc__heads"><li><a href="#接入成功的四条判据" data-depth="2" data-heading-j="0">接入成功的四条判据</a></li><li><a href="#工具集的冲突与更新" data-depth="2" data-heading-j="1">工具集的冲突与更新</a></li><li><a href="#断连与重连" data-depth="2" data-heading-j="2">断连与重连</a></li><li><a href="#服务端指令与提示模板" data-depth="2" data-heading-j="3">服务端指令与提示模板</a></li><li><a href="#两台服务器各自的核对清单" data-depth="2" data-heading-j="4">两台服务器各自的核对清单</a></li><li><a href="#故障定位表" data-depth="2" data-heading-j="5">故障定位表</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">MCP</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>MCP / 客户端 / stdio / 命名空间 / dsh / 插件 / 安装 / 超时</span></div><h1 class="docs__title">客户端接入</h1><p class="docs__lead">一客户端一进程的连接模型、配置行字段、mcp__server__tool 命名空间与冲突规则、环境变量清理，以及三种客户端的配置形态对照</p></header><section class="dfile" id="file-1" data-file="01-客户端如何拉起stdio服务器"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-客户端如何拉起stdio服务器</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/04-客户端接入/01-客户端如何拉起stdio服务器.md</span></div><div class="dfile__body"><h1 id="客户端如何拉起-stdio-服务器">客户端如何拉起 stdio 服务器</h1>
+<p>stdio 传输的接入动作可以用一句概括：客户端按配置启动一个本机进程，通过它的标准输入输出交换 JSON-RPC 消息。没有端口、没有握手 URL、没有服务注册中心。本仓库的服务器按这个模型设计（<code>backend/mcp/stdio.py:49-51</code>），客户端侧则按各自的配置格式描述这条命令行。</p>
+<p>客户端的差异集中在配置文件的形状与字段名上：Claude Desktop 用 <code>mcpServers</code>，dsh 用 profile 里的插件行，本仓库的爬虫服务还带一份通用的 <code>.mcp.json</code>。命令、参数、工作目录与环境变量的语义一致，都是启动子进程的参数。</p>
+<h2 id="一客户端一进程的连接模型">一客户端一进程的连接模型</h2>
+<p>客户端的接入动作分四步：按配置启动进程、发 <code>initialize</code>、发 <code>tools/list</code>、之后按需 <code>tools/call</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant S as stdio 服务器进程
+  C->>S: 按 command 与 args 与 env 启动
+  C->>S: initialize（协议版本与能力）
+  S-->>C: result（serverInfo 与 capabilities）
+  C->>S: notifications/initialized
+  C->>S: tools/list
+  S-->>C: 工具清单
+  C->>S: tools/call name 与 arguments
+  S-->>C: content 与 isError
+  C->>S: 关闭 stdin 或直接终止</pre></div>
+<p>dsh 客户端在 stdio 传输下有一个额外步骤：官方 SDK 会先起一个临时探测进程确认能拉起，再起实际提供服务的进程（<code>node_modules/@deepseek-ai/dsh-mcp-client/README.md:28</code>）。这条行为对启动慢的服务器意味着启动阶段要付出两次进程创建的成本，对只读服务器（本仓库的 KnowledgeDiver 网关）影响很小，对需要拉起浏览器的服务器（爬虫）影响明显。</p>
+<p>服务器侧不感知客户端数量：每个客户端各起一个进程，各自持有一份模块状态。本仓库的网关无跨进程共享状态，代价是嵌入模型在每个进程里各加载一份（见 22 领域相关单元）。</p>
+<h2 id="配置行的四个字段">配置行的四个字段</h2>
+<p>客户端配置行的公共字段是四个（<code>README.md:59</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>作用</th><th>缺省</th></tr></thead><tbody><tr><td><code>command</code></td><td>可执行文件</td><td>必填</td></tr><tr><td><code>args</code></td><td>命令行参数数组</td><td>空</td></tr><tr><td><code>env</code></td><td>附加环境变量，合并到清理后的父环境之上</td><td>空</td></tr><tr><td><code>cwd</code></td><td>子进程工作目录</td><td>继承客户端</td></tr></tbody></table>
+<p><code>env</code> 的合并语义需要单独记：客户端会先清理父进程环境，再叠加配置里的变量（<code>README.md:138</code>）。清理规则是丢弃名字匹配 <code>/KEY|PASSWORD|SECRET|TOKEN/i</code> 与 <code>DSH_*</code> 的环境变量，避免把宿主机的密钥透给第三方服务器。因此服务器需要的环境变量必须在配置里显式列出，不能指望从 shell 继承。</p>
+<p><code>cwd</code> 决定服务器里相对路径的解析基准。KnowledgeDiver 的配置把它设成仓库根，因为数据库与卡片目录按进程工作目录解析（<code>backend/mcp/examples/claude_desktop_config.json</code>）；爬虫的 <code>.mcp.json</code> 没有设 <code>cwd</code>，改为让启动脚本自己推导仓库根（<code>dsh-plugin/scripts/launch.sh:26-33</code>）。</p>
+<h2 id="工具命名空间">工具命名空间</h2>
+<p>客户端侧的工具名由服务名与原始名拼成，dsh 的规则是 <code>mcp__&#x3C;serverName>__&#x3C;rawName></code>（<code>README.md:75</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>serverName = better-crawler，rawName = fetch_url</span></span>
+<span class="line"><span>公开名 = mcp__better-crawler__fetch_url</span></span></code></pre>
+<p>实现是一个纯函数（<code>lib/index.js:96-100</code>）：干净情况下逐字拼接；当服务名或原始名含不合法字符或被规范化时，拼接串会追加一段由 <code>(serverName, rawName)</code> 哈希出的短后缀，保证同一对身份得到同一个稳定名字，不同身份不会撞名（<code>:85-95</code>）。命名规则被当作 v1 契约固定下来，因为它直接影响会话历史与权限规则（<code>README.md:224</code>）。</p>
+<p>本仓库爬虫的三个工具因此呈现为：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>原始名</th><th>公开名</th></tr></thead><tbody><tr><td><code>fetch_url</code></td><td><code>mcp__better-crawler__fetch_url</code></td></tr><tr><td><code>fetch_urls</code></td><td><code>mcp__better-crawler__fetch_urls</code></td></tr><tr><td><code>crawler_status</code></td><td><code>mcp__better-crawler__crawler_status</code></td></tr></tbody></table>
+<p>（<code>dsh-plugin/README.md:12-14</code>）服务端注册时用的是原始名 <code>fetch_url</code>（<code>src/better_crawler/mcp_server.py:63-70</code>），命名空间只加在客户端一侧。</p>
+<h2 id="冲突与更新规则">冲突与更新规则</h2>
+<p>命名空间把同名工具隔离开，但同名的服务器与重复列出的工具另有规则（<code>README.md:77-81</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情况</th><th>结果</th></tr></thead><tbody><tr><td>两个服务器都提供 <code>search</code></td><td>共存为 <code>mcp__a__search</code> 与 <code>mcp__b__search</code></td></tr><tr><td>两个配置行用同一个服务名</td><td>后加载的那条失败并报错</td></tr><tr><td>一个服务器重复列出同一工具</td><td>整个工具清单被拒，保持上一版工具集</td></tr><tr><td>更新与已注册工具名冲突</td><td>整次更新被拒，不产生部分工具集</td></tr></tbody></table>
+<p>最后两条的实现是注册前先查重，命中即抛错（<code>lib/index.js:131-132</code>）。这保证模型看到的工具集要么是完整的旧集合，要么是完整的新集合，不会出现半更新状态。</p>
+<h2 id="三种客户端的配置形态">三种客户端的配置形态</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>客户端</th><th>入口文件</th><th>服务名</th><th>身份/参数</th><th>来源</th></tr></thead><tbody><tr><td>Claude Desktop</td><td><code>claude_desktop_config.json</code></td><td><code>knowledgediver</code></td><td><code>--username</code> 与 <code>--session</code></td><td><code>backend/mcp/examples/claude_desktop_config.json</code></td></tr><tr><td>Cursor</td><td><code>cursor_mcp.json</code></td><td><code>knowledgediver</code></td><td><code>--username</code>，会话走默认</td><td><code>backend/mcp/examples/cursor_mcp.json</code></td></tr><tr><td>通用客户端</td><td><code>.mcp.json</code></td><td><code>better-crawler</code></td><td>无身份参数，只有环境变量</td><td><code>/mnt/d/better-crawler-4-agent/.mcp.json:1-16</code></td></tr><tr><td>dsh</td><td>profile 插件行</td><td><code>better-crawler</code></td><td>配置字段而非命令行 JSON</td><td><code>dsh-plugin/cordis.patch.yml:21-37</code></td></tr></tbody></table>
+<p>三种形态的公共点是都把同一条命令行表达出来。差异在身份传递方式：KnowledgeDiver 需要用户名与会话，爬虫只需要环境变量。接入一个新服务器时，先确认它是否要求身份参数，再决定配置里是否要放 <code>--username</code> 这类参数。</p>
+<p>服务器的自述名称与客户端的服务名是两回事：KnowledgeDiver 的 <code>serverInfo.name</code> 是 <code>knowledgediver-readonly</code>（<code>backend/mcp/server.py:34</code>），而配置里的键名与工具前缀用的是配置里的服务名。改其中一处不会同步另一处。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["客户端配置行"] --> B["command 与 args 与 env 与 cwd"]
+  B --> C["启动 stdio 子进程"]
+  C --> D["initialize 与 tools/list"]
+  D --> E{"服务名重复吗"}
+  E -- 是 --> F["后一条加载失败"]
+  E -- 否 --> G{"工具清单内有重名吗"}
+  G -- 是 --> H["整份清单被拒，保留旧集合"]
+  G -- 否 --> I["按 mcp__server__tool 注册"]
+  I --> J["模型可见的工具集"]</pre></div>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>指望从 shell 继承环境变量。父环境的密钥类变量会被清理，必须在 <code>env</code> 里显式声明。</li>
+<li>混淆服务器的 <code>serverInfo.name</code> 与客户端配置的服务名。工具前缀取后者。</li>
+<li>两个配置行写同一个服务名。后一条会加载失败。</li>
+<li>认为慢启动只付一次进程成本。stdio 传输会先起探测进程。</li>
+<li>在服务器侧改工具名。公开名由客户端拼装，改名会破坏历史与权限规则。</li>
+<li>忘记 <code>cwd</code>。依赖相对路径的服务器会读到错误的数据目录。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>连接模型</td><td>一客户端一子进程，stdio 交换 JSON-RPC</td><td><code>backend/mcp/stdio.py:49-51</code></td></tr><tr><td>配置字段</td><td>command、args、env、cwd</td><td><code>@deepseek-ai/dsh-mcp-client/README.md:59</code></td></tr><tr><td>环境清理</td><td>丢弃密钥类与 <code>DSH_*</code> 变量</td><td><code>README.md:138</code></td></tr><tr><td>命名空间</td><td><code>mcp__&#x3C;serverName>__&#x3C;rawName></code></td><td><code>README.md:75</code>、<code>lib/index.js:96-100</code></td></tr><tr><td>冲突规则</td><td>服务名重复失败、工具重名整份拒绝</td><td><code>README.md:77-81</code></td></tr><tr><td>命名契约</td><td>v1 固定，影响历史与权限</td><td><code>README.md:224</code></td></tr><tr><td>探测进程</td><td>stdio 协商先起临时进程</td><td><code>README.md:28</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>客户端一进程一会话</td><td>隔离彻底</td><td>每进程重复加载资源</td></tr><tr><td>服务名做命名空间</td><td>同名工具可共存</td><td>名字变长，前缀固定</td></tr><tr><td>名字带哈希兜底</td><td>非法字符也能得到稳定名</td><td>名字可读性下降</td></tr><tr><td>父环境清理</td><td>不泄漏宿主机密钥</td><td>必需变量须显式配置</td></tr><tr><td>更新整份替换</td><td>模型看不到半更新集合</td><td>一处冲突会回退整批</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出配置行的四个公共字段与 dsh 的环境清理规则。</li>
+<li>说明 <code>mcp__better-crawler__fetch_url</code> 的三段构成，以及服务端的原始名。</li>
+<li>列出三种工具集冲突情形及各自结果。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>给爬虫服务器换一个服务名，列出需要同步改动的位置与对既有会话历史的影响。</li>
+<li>设计一个跨客户端的配置生成脚本，说明如何处理 <code>mcpServers</code> 与 profile 插件行两种格式。</li>
+<li>分析 stdio 探测进程对启动时间的影响，给出测量方案与是否应当关闭的判断依据。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/README.md</code></td><td>客户端配置、命名空间与冲突规则（:28-93、:136-138、:224）</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/lib/index.js</code></td><td>公开名实现与清单查重（:96-100、:131-132）</td></tr><tr><td><code>backend/mcp/examples/claude_desktop_config.json</code></td><td>KnowledgeDiver 的 Claude Desktop 配置</td></tr><tr><td><code>backend/mcp/examples/cursor_mcp.json</code></td><td>KnowledgeDiver 的 Cursor 配置</td></tr><tr><td><code>backend/mcp/stdio.py</code></td><td>服务器侧 stdio 会话入口（:49-51）</td></tr><tr><td><code>backend/mcp/server.py</code></td><td><code>serverInfo.name</code>（:34）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/.mcp.json</code></td><td>通用客户端配置样例（:1-16）</td></tr><tr><td><code>dsh-plugin/cordis.patch.yml</code></td><td>dsh 插件行（:21-37）</td></tr><tr><td><code>dsh-plugin/README.md</code></td><td>工具名与安装说明（:5-35）</td></tr><tr><td><code>src/better_crawler/mcp_server.py</code></td><td>服务端工具注册（:36-44、:63-124）</td></tr><tr><td><code>dsh-plugin/scripts/launch.sh</code></td><td>启动脚本的仓库根推导（:26-39）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-dsh插件包与安装流程"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-dsh插件包与安装流程</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/04-客户端接入/02-dsh插件包与安装流程.md</span></div><div class="dfile__body"><h1 id="dsh-插件包的声明与安装流程">dsh 插件包的声明与安装流程</h1>
+<p>dsh 的接入单位是插件包，而不是一份配置文件。一个包要声明自己是 bundle 并给出 patch 文件，dsh 在启动或热更新时把 patch 应用到 profile 的插件树上（<code>dsh-plugin/package.json:8-12</code>）。爬虫仓库的 <code>dsh-plugin</code> 目录就是这层适配：它不包含抓取逻辑，只写一条插入语句，把官方 MCP 客户端插件挂到 profile 根上。</p>
+<p>这层适配的存在说明一个通用服务器的接入形态可以拆成两部分：服务器本体保持客户端中立，接入层按每个客户端写一遍。服务器本体的工具注册在相邻单元。</p>
+<h2 id="插件包的最小声明">插件包的最小声明</h2>
+<p>包声明只有几行（<code>dsh-plugin/package.json:1-13</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#005CC5">  "name"</span><span style="color:#24292E">: </span><span style="color:#032F62">"better-crawler-4-agent-dsh"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">  "private"</span><span style="color:#24292E">: </span><span style="color:#005CC5">true</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">  "type"</span><span style="color:#24292E">: </span><span style="color:#032F62">"module"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">  "dsh"</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#005CC5">    "bundle"</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#005CC5">      "patch"</span><span style="color:#24292E">: </span><span style="color:#032F62">"./cordis.patch.yml"</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>作用</th></tr></thead><tbody><tr><td><code>name</code></td><td>安装到 profile 时的包名</td></tr><tr><td><code>private</code></td><td>不发布到 npm</td></tr><tr><td><code>dsh.bundle.patch</code></td><td>声明这是 bundle 并指向 patch 文件</td></tr></tbody></table>
+<p>没有 <code>dsh.bundle.patch</code> 的目录不会被 dsh 当成插件；爬虫仓库根目录就没有这个字段，因此它本身不是 dsh 插件（<code>dsh-plugin/README.md:5-8</code>）。这条边界决定了安装时不能把仓库根目录直接 <code>dsh plugin add</code>。</p>
+<h2 id="patch-行的字段">patch 行的字段</h2>
+<p>patch 文件是一条插入语句，向 profile 根插入一个 MCP 客户端行（<code>dsh-plugin/cordis.patch.yml:21-37</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="yaml"><code><span class="line"><span style="color:#24292E">- </span><span style="color:#22863A">insert</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    - </span><span style="color:#22863A">id</span><span style="color:#24292E">: </span><span style="color:#032F62">mcp-better-crawler</span></span>
+<span class="line"><span style="color:#22863A">      name</span><span style="color:#24292E">: </span><span style="color:#032F62">'@deepseek-ai/dsh-mcp-client'</span></span>
+<span class="line"><span style="color:#22863A">      config</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#22863A">        serverName</span><span style="color:#24292E">: </span><span style="color:#032F62">better-crawler</span></span>
+<span class="line"><span style="color:#22863A">        transport</span><span style="color:#24292E">: </span><span style="color:#032F62">stdio</span></span>
+<span class="line"><span style="color:#22863A">        command</span><span style="color:#24292E">: </span><span style="color:#032F62">/bin/sh</span></span>
+<span class="line"><span style="color:#22863A">        args</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">          - </span><span style="color:#032F62">__PLUGIN_DIR__/scripts/launch.sh</span></span>
+<span class="line"><span style="color:#22863A">        env</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#22863A">          PYTHONIOENCODING</span><span style="color:#24292E">: </span><span style="color:#032F62">utf-8</span></span>
+<span class="line"><span style="color:#22863A">          PYTHONUTF8</span><span style="color:#24292E">: </span><span style="color:#032F62">'1'</span></span>
+<span class="line"><span style="color:#22863A">          BETTER_CRAWLER_TIMEOUT</span><span style="color:#24292E">: </span><span style="color:#032F62">'25'</span></span>
+<span class="line"><span style="color:#22863A">          BETTER_CRAWLER_MAX_CHARS</span><span style="color:#24292E">: </span><span style="color:#032F62">'50000'</span></span>
+<span class="line"><span style="color:#22863A">        toolCallTimeoutMs</span><span style="color:#24292E">: </span><span style="color:#005CC5">180000</span></span></code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>取值</th><th>含义</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>mcp-better-crawler</code></td><td>插件行的稳定地址，可被覆盖层按 id 关掉或改写</td></tr><tr><td><code>name</code></td><td><code>@deepseek-ai/dsh-mcp-client</code></td><td>提供 MCP 客户端能力的插件</td></tr><tr><td><code>serverName</code></td><td><code>better-crawler</code></td><td>工具名前缀</td></tr><tr><td><code>transport</code></td><td><code>stdio</code></td><td>用子进程传输</td></tr><tr><td><code>command</code></td><td><code>/bin/sh</code></td><td>先起 shell，再执行启动脚本</td></tr><tr><td><code>args</code></td><td>启动脚本路径</td><td>由暂存流程替换</td></tr><tr><td><code>env</code></td><td>四个变量</td><td>编码、抓取超时与正文上限</td></tr><tr><td><code>toolCallTimeoutMs</code></td><td><code>180000</code></td><td>单次调用上限，覆盖默认 60000</td></tr></tbody></table>
+<p>行是可寻址的：profile 自己的 patch 或 <code>--patch</code> 覆盖层能按 <code>mcp-better-crawler</code> 关掉它、改 <code>command</code> 或改超时，不必修改这个包（<code>cordis.patch.yml:17-19</code>、<code>dsh-plugin/README.md:47-48</code>）。这是把接入层做成声明式 patch 的收益：改配置不需要动服务器代码。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["dsh 启动或热更新"] --> B["读取 profile 的插件列表"]
+  B --> C["加载 better-crawler-4-agent-dsh"]
+  C --> D["读 dsh.bundle.patch 指向的 patch"]
+  D --> E["按 insert 将 mcp-better-crawler 行插入插件树"]
+  E --> F["dsh-mcp-client 读取 config"]
+  F --> G["按 command 与 args 启动 stdio 进程"]
+  G --> H["发现工具并注册为 mcp__better-crawler__*"]</pre></div>
+<h2 id="为什么必须暂存">为什么必须暂存</h2>
+<p>stdio MCP 行要写启动器的绝对路径，而仓库可能 clone 在任何位置。占位符 <code>__PLUGIN_DIR__</code> 与 <code>__REPO_DIR__</code> 不是可用路径，直接注册会失败（<code>dsh-plugin/README.md:30-33</code>）。</p>
+<p>安装脚本的应对是先把 <code>dsh-plugin/</code> 复制到 <code>$DSH_HOME/plugins/better-crawler-4-agent-dsh</code>，在副本里替换占位符，再注册副本（<code>dsh-plugin/install.sh:25-34</code>）。注册的是固定位置的副本，因此绝对路径不会随后续 clone 位置变化而失效。</p>
+<p>启动脚本本身对未替换的情况也留了后路：仓库根按 <code>BETTER_CRAWLER_REPO</code>、脚本所在布局、暂存时写入的绝对路径三种顺序推导，都拿不到才报错退出（<code>dsh-plugin/scripts/launch.sh:19-33</code>）。检查失败时的提示直接告诉用户运行 <code>install.sh</code> 或设置环境变量（<code>:36-39</code>），而不是留一个空指针式的报错。</p>
+<h2 id="安装脚本的三步">安装脚本的三步</h2>
+<p><code>install.sh</code> 接受一个参数：目标 profile，默认 <code>web</code>（<code>dsh-plugin/install.sh:18</code>）。流程是三步：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>步骤</th><th>动作</th><th>位置</th></tr></thead><tbody><tr><td>1</td><td>暂存目录到 <code>$DSH_HOME/plugins/</code></td><td><code>:25-31</code></td></tr><tr><td>2</td><td>注册为 profile bundle</td><td><code>:33-34</code></td></tr><tr><td>3</td><td>链接技能到 <code>$DSH_HOME/skills</code></td><td><code>:36-42</code></td></tr></tbody></table>
+<p>替换命令针对两个文件（<code>cordis.patch.yml</code> 与 <code>scripts/launch.sh</code>），并在替换后给启动脚本加执行位（<code>:29-31</code>）。技能链接用了保护：目标已存在且不是符号链接时不覆盖，只打印提示（<code>:38-42</code>），避免脚本覆盖用户自己放的同名技能。</p>
+<p>脚本开头有两道前置检查：<code>dsh</code> 必须在 <code>PATH</code> 上，仓库根的启动器必须存在（<code>:22-23</code>）。检查失败直接退出，不留下半安装状态。</p>
+<h2 id="卸载与重装">卸载与重装</h2>
+<p>卸载是三条命令：从 profile 移除包、删除暂存目录、删除技能符号链接（<code>dsh-plugin/README.md:39-43</code>）。第三步只在链接由脚本建立时才需要执行，文档里也标了这个前提。</p>
+<p>重装不需要先卸载：脚本会先 <code>rm -rf</code> 暂存目录再复制（<code>install.sh:26</code>），因此重复执行会得到一份干净的副本。风险点是技能链接：如果上一次的链接还在，第二步会走“已存在且是符号链接”的分支，删除并重建（<code>:38-39</code>）。</p>
+<p>配置生效时机取决于 HMR：启用时改动立即生效，未启用时需要重启 dsh（<code>dsh-plugin/README.md:35</code>）。安装脚本末尾的提示也是这个意思（<code>install.sh:44</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant U as 用户
+  participant I as install.sh
+  participant H as DSH_HOME
+  participant D as dsh CLI
+  U->>I: ./install.sh web
+  I->>I: 检查 dsh 与 launch.py
+  I->>H: 清空并复制 dsh-plugin 到 plugins 目录
+  I->>H: 替换 __PLUGIN_DIR__ 与 __REPO_DIR__
+  I->>D: dsh plugin --profile web add file:暂存目录
+  D-->>H: 写入 profile 插件列表
+  I->>H: 链接 skills/web-to-text
+  I-->>U: 提示未启用 HMR 时重启</pre></div>
+<h2 id="与通用配置形态的对照">与通用配置形态的对照</h2>
+<p>同一台服务器在 dsh 与通用客户端下的接入写法不同，语义相同：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th><code>.mcp.json</code></th><th>dsh patch 行</th></tr></thead><tbody><tr><td>载体</td><td>JSON 配置</td><td>YAML 插入语句</td></tr><tr><td>服务名</td><td><code>mcpServers</code> 的键</td><td><code>config.serverName</code></td></tr><tr><td>命令</td><td><code>command</code> 与 <code>args</code></td><td><code>config.command</code> 与 <code>config.args</code></td></tr><tr><td>环境</td><td>直接列变量</td><td><code>config.env</code></td></tr><tr><td>调用超时</td><td>客户端默认</td><td><code>config.toolCallTimeoutMs</code></td></tr><tr><td>生效方式</td><td>客户端重启或重载</td><td>HMR 或重启</td></tr><tr><td>覆盖方式</td><td>改配置文件</td><td>按行 id 的覆盖层</td></tr></tbody></table>
+<p><code>.mcp.json</code> 里命令是 <code>python</code> 加 <code>scripts/launch.py</code>（<code>.mcp.json:4-6</code>），dsh patch 里命令是 <code>/bin/sh</code> 加启动脚本（<code>cordis.patch.yml:27-29</code>）。后者多了 shell 一层，因为启动脚本要处理解释器选择与路径转换，而不是直接执行 Python。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>把仓库根目录直接 <code>dsh plugin add</code>。根目录没有 <code>dsh.bundle.patch</code>，不是插件包。</li>
+<li>手工注册未替换占位符的 patch。启动器路径不是可用路径。</li>
+<li>认为安装后立即生效。取决于 profile 是否启用 HMR。</li>
+<li>忘了技能链接的前提。目标已存在且不是符号链接时脚本不覆盖。</li>
+<li>把 <code>id</code> 与服务名混为一谈。<code>id</code> 用于覆盖，服务名用于工具前缀。</li>
+<li>认为改超时要改包。覆盖层可按行 id 改。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>包声明</td><td><code>dsh.bundle.patch</code> 指向 patch</td><td><code>dsh-plugin/package.json:8-12</code></td></tr><tr><td>插入行</td><td><code>id: mcp-better-crawler</code></td><td><code>dsh-plugin/cordis.patch.yml:21-24</code></td></tr><tr><td>客户端插件</td><td><code>@deepseek-ai/dsh-mcp-client</code></td><td><code>:23</code></td></tr><tr><td>暂存目录</td><td><code>$DSH_HOME/plugins/better-crawler-4-agent-dsh</code></td><td><code>dsh-plugin/install.sh:20</code>、<code>:25-28</code></td></tr><tr><td>占位符</td><td><code>__PLUGIN_DIR__</code>、<code>__REPO_DIR__</code></td><td><code>:29-30</code></td></tr><tr><td>技能链接</td><td><code>$DSH_HOME/skills/web-to-text</code></td><td><code>:36-42</code></td></tr><tr><td>生效时机</td><td>HMR 或重启</td><td><code>dsh-plugin/README.md:35</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>接入层独立成包</td><td>服务器保持客户端中立</td><td>每个客户端各写一层</td></tr><tr><td>patch 声明式插入</td><td>改配置不动代码</td><td>多一层 YAML 间接</td></tr><tr><td>安装先暂存</td><td>绝对路径稳定</td><td>磁盘上多一份副本</td></tr><tr><td>行可被覆盖</td><td>profile 可关闭或改写</td><td>id 成为需要维护的接口</td></tr><tr><td>技能单独链接</td><td>支持技能的会话可发现</td><td>多一步卸载清理</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出插件包声明 bundle 的字段与 patch 行的必填键。</li>
+<li>说明为什么安装脚本要先暂存再注册，以及占位符替换涉及哪两个文件。</li>
+<li>列出安装脚本的三步与各自的失败前置检查。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>把这条 patch 行改成 Streamable HTTP 形态，列出字段变化与需要调整的启动逻辑。</li>
+<li>设计一个校验脚本：在安装后确认 patch 已替换、启动脚本可执行、技能链接正确，写出检查项与期望输出。</li>
+<li>分析按行 id 覆盖超时的两种做法（profile patch 与 <code>--patch</code> 覆盖层）的差异与冲突优先级。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>dsh-plugin/package.json</code></td><td>bundle 声明（:1-13）</td></tr><tr><td><code>dsh-plugin/cordis.patch.yml</code></td><td>插入行与字段（:17-37）</td></tr><tr><td><code>dsh-plugin/install.sh</code></td><td>暂存、替换与注册（:16-44）</td></tr><tr><td><code>dsh-plugin/README.md</code></td><td>安装卸载与配置说明（:5-55）</td></tr><tr><td><code>dsh-plugin/scripts/launch.sh</code></td><td>仓库根推导与失败提示（:19-39）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/.mcp.json</code></td><td>通用配置形态对照（:1-16）</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/README.md</code></td><td>客户端插件字段与默认值（:55-67）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-配置字段与超时预算"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-配置字段与超时预算</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/04-客户端接入/03-配置字段与超时预算.md</span></div><div class="dfile__body"><h1 id="配置字段与超时预算">配置字段与超时预算</h1>
+<p>接入配置里最容易被忽略的是时间字段。一次工具调用的耗时由三层决定：客户端为整次调用设的上限、服务器为单次外部操作设的超时、以及外部资源本身的响应时间。三层里任何一层先到，调用都会失败，而失败的表现各不相同：客户端超时表现为调用被取消，服务器超时表现为返回一个带错误字段的结果。</p>
+<p>爬虫仓库把三层都显式写了出来：客户端层 <code>toolCallTimeoutMs: 180000</code>（<code>dsh-plugin/cordis.patch.yml:35-37</code>），服务器层 <code>BETTER_CRAWLER_TIMEOUT=25</code>（<code>:33</code>），外部资源是浏览器渲染。数值之间要留出批量操作的空间，</p>
+<h2 id="一次调用的三层时间预算">一次调用的三层时间预算</h2>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant S as MCP 服务器
+  participant B as 浏览器或网络
+  C->>S: tools/call（开始计时 toolCallTimeoutMs）
+  S->>B: 抓取（开始计时 BETTER_CRAWLER_TIMEOUT）
+  B-->>S: 页面内容或超时
+  S-->>C: 结果（含 ok 与 error 字段）
+  Note over C,S: 客户端上限先到则调用被取消，服务器超时先到则返回错误结果</pre></div>
+<p>三层的关系是包含而非并列：客户端上限应该大于服务器单次操作的上限之和，否则服务器还没来得及返回结果，调用就被客户端取消。批量工具是这条关系的压力点：<code>fetch_urls</code> 一次最多 20 条 URL，并发上限 8（<code>src/better_crawler/mcp_server.py:99-101</code>、<code>:105-110</code>），最坏情况下要跑几轮单页超时。</p>
+<p>注释把这个判断写在了配置里：<code>fetch_urls</code> 批量可能跑几十秒，SDK 默认的 60 秒会截断长批量（<code>cordis.patch.yml:35-36</code>）。因此这里取 180 秒。</p>
+<h2 id="dsh-侧调用超时">dsh 侧调用超时</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>默认值</th><th>本项目取值</th><th>来源</th></tr></thead><tbody><tr><td><code>toolCallTimeoutMs</code></td><td>60,000</td><td>180,000</td><td><code>@deepseek-ai/dsh-mcp-client/README.md:61</code>、<code>cordis.patch.yml:37</code></td></tr></tbody></table>
+<p>超时的作用范围是单次 <code>tools/call</code> 或资源请求（<code>README.md:61</code>），实现上作为 SDK 调用参数传入（<code>lib/index.js:145</code>、<code>:690</code>）。客户端超时与服务器自身超时是两条独立的计时器：前者在客户端进程里，后者在服务器进程里。</p>
+<p>KnowledgeDiver 的配置没有设这个字段，因此使用 60 秒默认值。它的只读工具都不做外部网络请求，唯一可能慢的是首次调用时的嵌入模型与扩展加载。</p>
+<h2 id="抓取超时与正文上限">抓取超时与正文上限</h2>
+<p>服务器侧的两个环境变量都从环境读取，默认值写在代码里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>变量</th><th>默认值</th><th>作用</th><th>来源</th></tr></thead><tbody><tr><td><code>BETTER_CRAWLER_TIMEOUT</code></td><td>25 秒</td><td>单页抓取超时，传给 <code>Fetcher</code></td><td><code>src/better_crawler/mcp_server.py:57</code></td></tr><tr><td><code>BETTER_CRAWLER_MAX_CHARS</code></td><td>50000</td><td>单次返回正文上限</td><td><code>:34</code></td></tr></tbody></table>
+<p>正文上限的作用是保护上下文：一条结果若把整页几万字都塞进模型上下文，后续对话会被挤占（<code>:33</code> 注释、<code>dsh-plugin/README.md:53</code>）。返回结果里带 <code>truncated</code> 标记说明是否被截断（<code>mcp_server.py:75</code>）。</p>
+<p>两个变量的传递路径在三条配置里都能看到：<code>.mcp.json</code> 的 <code>env</code>（<code>.mcp.json:11-12</code>）、dsh patch 的 <code>config.env</code>（<code>cordis.patch.yml:33-34</code>）、以及服务器代码的 <code>os.getenv</code>（<code>mcp_server.py:34</code>、<code>:57</code>）。环境变量是这条传输链的唯一载体，客户端不会把配置字段直接翻译成工具参数。</p>
+<p><code>crawler_status</code> 会把当前生效的 <code>timeout</code> 与 <code>max_chars_default</code> 打回给调用方（<code>mcp_server.py:123-129</code>），这是核对配置是否生效的最快方式：改完配置调用一次，看返回值里的数字。</p>
+<h2 id="启动与发现的超时">启动与发现的超时</h2>
+<p>除调用超时外还有一类超时发生在连接阶段。dsh 官方 SDK 用 60 秒默认值约束启动与发现请求，显式的连接超时仍是开放方向（<code>README.md:225</code>）。stdio 传输还会先起一个探测进程（<code>README.md:28</code>），因此慢启动的服务器在启动阶段可能连续消耗两次进程创建时间。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>约束</th><th>来源</th></tr></thead><tbody><tr><td>探测与连接</td><td>SDK 默认 60 秒</td><td><code>README.md:225</code></td></tr><tr><td><code>tools/list</code> 发现</td><td>SDK 分页与页限由 SDK 决定</td><td><code>README.md:80</code></td></tr><tr><td>单次调用</td><td><code>toolCallTimeoutMs</code></td><td><code>README.md:61</code></td></tr><tr><td>重连尝试间隔</td><td>500 ms 起，翻倍至 30 秒</td><td><code>README.md:65-66</code></td></tr></tbody></table>
+<p>重连的间隔与次数也属于时间预算：一次断连的尝试上限是 10 次（<code>README.md:67</code>），间隔按 500、1000、2000…… 翻倍到 30000 封顶（<code>:93</code>）。超过上限后工具被移除，直到重载配置或重启。</p>
+<h2 id="解释器与浏览器的解析顺序">解释器与浏览器的解析顺序</h2>
+<p>爬虫的启动器要解决两个路径问题：用哪个 Python、用哪个浏览器内核（<code>scripts/launch.py:1-16</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>资源</th><th>解析顺序</th></tr></thead><tbody><tr><td>解释器</td><td><code>BETTER_CRAWLER_PYTHON</code>、当前解释器、仓库内 <code>.venv</code>、<code>PATH</code> 上的 python</td></tr><tr><td>浏览器</td><td><code>BETTER_CRAWLER_BROWSERS_PATH</code> / <code>PLAYWRIGHT_BROWSERS_PATH</code>、仓库内 <code>.playwright</code>、Playwright 默认目录</td></tr></tbody></table>
+<p>依赖探测不只看能否导入，还要求 API 可用：<code>mcp 1.x</code> 没有 <code>mcp.server.mcpserver</code>，只查导入会选中旧版本，然后在实际启动时失败（<code>launch.py:28-35</code>）。这是把版本约束写进探测串的原因。</p>
+<p>启动脚本还固定了一条输出纪律：stdout 只承载 MCP 帧，所有诊断信息走 stderr（<code>dsh-plugin/scripts/launch.sh:12-13</code>）。stdio 传输下 stdout 混入任何非协议文本都会让客户端解析失败，这条纪律与服务器侧的日志设置一致（<code>backend/mcp/__main__.py:30-31</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["启动脚本被拉起"] --> B["解析仓库根：环境变量、脚本布局、暂存路径"]
+  B --> C{"launch.py 存在吗"}
+  C -- 否 --> D["stderr 提示并退出 1"]
+  C -- 是 --> E["选择解释器：环境变量到当前解释器到 .venv 到 PATH"]
+  E --> F["探测依赖与 mcp.server.mcpserver 可用性"]
+  F --> G{"探测通过吗"}
+  G -- 否 --> H["尝试下一个解释器"]
+  G -- 是 --> I["选择浏览器内核路径"]
+  I --> J["exec 进入 MCP 服务器，stdout 只走协议帧"]</pre></div>
+<h2 id="knowledgediver-的配置缺项">KnowledgeDiver 的配置缺项</h2>
+<p>对照爬虫的三层时间配置，KnowledgeDiver 的样例只设了路径、编码与身份：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>KnowledgeDiver</th><th>爬虫</th><th>影响</th></tr></thead><tbody><tr><td>客户端调用超时</td><td>未设，用默认</td><td>180000</td><td>只读检索通常远快于默认值</td></tr><tr><td>服务器单次操作超时</td><td>无此配置</td><td>25 秒</td><td>首次模型加载不受超时约束</td></tr><tr><td>返回正文上限</td><td>无此配置</td><td>50000</td><td>卡片内容本身受长度约束</td></tr><tr><td>解释器</td><td>直接指定虚拟环境解释器</td><td>启动脚本按序探测</td><td>路径写死，换机器要改</td></tr></tbody></table>
+<p>首次调用的耗时来自嵌入模型与向量扩展的加载，模型注释给的是首次约 500 ms 的量级（<code>backend/ai/embedder.py:4-5</code>），这个值未在本仓库实测。如果把它放进预算，客户端默认 60 秒足够覆盖；实际的风险是把服务器当成常驻进程，忽略了每个客户端会话都会重新加载一次。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>只调服务器超时不调客户端超时。批量调用会被客户端先取消。</li>
+<li>把 <code>BETTER_CRAWLER_TIMEOUT</code> 当整次批量超时。它是单页超时，批量按轮数累积。</li>
+<li>认为配置字段会直接变成工具参数。环境变量是唯一传输载体。</li>
+<li>用 <code>crawler_status</code> 之外的方式核对配置。返回值里有当前生效值。</li>
+<li>认为启动没有超时约束。SDK 默认 60 秒约束启动与发现请求。</li>
+<li>在 stdout 打印诊断。stdio 传输下会破坏协议解析。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>客户端调用超时</td><td>默认 60000，本项目 180000</td><td><code>@deepseek-ai/dsh-mcp-client/README.md:61</code>、<code>cordis.patch.yml:37</code></td></tr><tr><td>单页抓取超时</td><td>默认 25 秒</td><td><code>src/better_crawler/mcp_server.py:57</code></td></tr><tr><td>正文上限</td><td>默认 50000 字符</td><td><code>:34</code></td></tr><tr><td>启动与发现</td><td>SDK 默认 60 秒</td><td><code>README.md:225</code></td></tr><tr><td>重连预算</td><td>10 次，间隔 500 ms 起翻倍至 30 秒</td><td><code>:64-67</code>、<code>:93</code></td></tr><tr><td>解释器顺序</td><td>环境变量、当前、<code>.venv</code>、<code>PATH</code></td><td><code>scripts/launch.py:6-10</code></td></tr><tr><td>输出纪律</td><td>stdout 仅协议帧，诊断走 stderr</td><td><code>dsh-plugin/scripts/launch.sh:12-13</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>客户端超时放大到 180 秒</td><td>批量抓取不被打断</td><td>服务器卡死时客户端等待更久</td></tr><tr><td>正文上限 50000</td><td>单条结果不挤占上下文</td><td>长文被截断，需再抓</td></tr><tr><td>解释器按序探测</td><td>换机器不改配置</td><td>启动多几次探测开销</td></tr><tr><td>依赖探测含 API 校验</td><td>避免选中旧版本后崩溃</td><td>探测串需要随依赖升级维护</td></tr><tr><td>诊断全走 stderr</td><td>协议解析稳定</td><td>客户端要单独看 stderr</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出三层时间预算各自的字段或环境变量与默认值。</li>
+<li>说明 <code>BETTER_CRAWLER_TIMEOUT</code> 与 <code>toolCallTimeoutMs</code> 的区别，以及为什么后者要远大于前者。</li>
+<li>列出解释器与浏览器的解析顺序。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为一次 20 条 URL 的批量抓取估算最坏耗时，判断 180 秒是否足够，并给出测量方案。</li>
+<li>给 KnowledgeDiver 配置补一份超时预算，说明每个字段的取值依据与风险。</li>
+<li>设计一个启动自检：在客户端连接前验证解释器、依赖 API、浏览器路径与 stdout 纪律，写出检查命令与期望输出。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/README.md</code></td><td>调用、启动与重连超时（:61、:64-67、:80、:93、:225）</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/lib/index.js</code></td><td>超时传入与重连实现（:145、:567-578、:690）</td></tr><tr><td><code>dsh-plugin/cordis.patch.yml</code></td><td>180 秒与两个抓取变量（:30-37）</td></tr><tr><td><code>dsh-plugin/scripts/launch.sh</code></td><td>输出纪律与仓库根推导（:12-13、:19-39）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/.mcp.json</code></td><td>环境变量形态（:8-13）</td></tr><tr><td><code>src/better_crawler/mcp_server.py</code></td><td>抓取超时、正文上限与批量限制（:33-34、:57、:70、:91-110、:123-129）</td></tr><tr><td><code>scripts/launch.py</code></td><td>解释器与浏览器解析、依赖探测（:1-16、:28-35）</td></tr><tr><td><code>backend/mcp/examples/claude_desktop_config.json</code></td><td>KnowledgeDiver 配置字段</td></tr><tr><td><code>backend/ai/embedder.py</code></td><td>首次加载量级的声明值（:4-5）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-接入核对与故障定位"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-接入核对与故障定位</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/04-客户端接入/04-接入核对与故障定位.md</span></div><div class="dfile__body"><h1 id="接入核对与故障定位">接入核对与故障定位</h1>
+<p>接入完成后要确认的不只是“进程起来了”，还有四条更具体的判据：工具出现在模型工具列表里、名字符合命名空间规则、调用能返回真实结果、错误不会被伪装成成功。这四条分别对应客户端的发现、命名、调用与错误处理路径，任何一条不成立都有独立的排查方向。</p>
+<p>服务器之间的排查入口不同。KnowledgeDiver 是只读检索服务器，问题多出现在身份、数据目录与模型加载；爬虫服务器涉及外部浏览器与网络，问题多出现在依赖、浏览器内核与超时。</p>
+<h2 id="接入成功的四条判据">接入成功的四条判据</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>判据</th><th>期望</th><th>来源</th></tr></thead><tbody><tr><td>工具可见</td><td>首轮对话前工具列表已注册</td><td><code>@deepseek-ai/dsh-mcp-client/README.md:91</code></td></tr><tr><td>名字稳定</td><td><code>mcp__&#x3C;serverName>__&#x3C;rawName></code></td><td><code>:75</code></td></tr><tr><td>调用真实</td><td>返回远端服务器的结果，资源链接以文本出现</td><td><code>:85</code></td></tr><tr><td>错误可见</td><td>服务器报错时调用失败，不伪装成功</td><td><code>:85</code>、<code>:134</code></td></tr></tbody></table>
+<p>第四条在实现上更严格：MCP 的 <code>isError</code> 结果在图像持久化之前就抛出（<code>README.md:134</code>）。这意味着错误结果不会被当成一次成功调用来处理后续附件。</p>
+<p>图片类结果另有条件：当前模型接受图片输入且附件能力开启时才进入对话，否则与音频、内嵌资源一样给出一条诊断文本（<code>README.md:87</code>）。本仓库两台服务器的工具都返回文本，这条不适用，但换成返回图片的服务器时要先确认这两个前提。</p>
+<h2 id="工具集的冲突与更新">工具集的冲突与更新</h2>
+<p>发现阶段的异常都会导致“工具不出现”或“回退到旧集合”，而不是部分注册。规则集中在客户端一侧：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>情形</th><th>行为</th><th>来源</th></tr></thead><tbody><tr><td>服务名重复</td><td>后一条加载失败</td><td><code>README.md:78</code></td></tr><tr><td>工具清单内重名</td><td>整份清单被拒，保留旧工具</td><td><code>README.md:79</code>、<code>lib/index.js:131-132</code></td></tr><tr><td>更新与已注册名冲突</td><td>整次更新被拒，不产生部分集合</td><td><code>README.md:81</code>、<code>lib/index.js:110-114</code></td></tr><tr><td>发现失败</td><td>保留上一版工具</td><td><code>README.md:80</code></td></tr></tbody></table>
+<p>原子性来自“先校验后注册”的次序：全部工具名检查通过才提交，否则整批丢弃。对运维的含义是排查工具缺失时，先看日志里有没有“工具清单被拒”这类整批失败，而不是逐个工具找。</p>
+<h2 id="断连与重连">断连与重连</h2>
+<p>stdio 服务器进程崩溃后，客户端按固定的退避策略重连（<code>README.md:93</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>默认值</th><th>含义</th></tr></thead><tbody><tr><td><code>reconnect.enabled</code></td><td>true</td><td>是否自动重连</td></tr><tr><td><code>reconnect.initialDelayMs</code></td><td>500</td><td>首次延迟</td></tr><tr><td><code>reconnect.maxDelayMs</code></td><td>30000</td><td>退避上限</td></tr><tr><td><code>reconnect.maxAttempts</code></td><td>10</td><td>连续失败上限</td></tr></tbody></table>
+<p>间隔按 500、1000、2000 逐次翻倍直到 30000 封顶（<code>lib/index.js:576</code>），重连成功后重新同步工具集（<code>:674</code>）。达到 10 次连续失败后工具被移除并停止重连，直到重载配置或重启（<code>lib/index.js:567-573</code>、<code>README.md:93</code>）。服务器保持连接一段时间后计数会重置（<code>README.md:93</code>）。</p>
+<p>断连期间工具仍然在列表里，调用会失败——这一点容易误判成“服务器正常但工具坏了”。编辑配置条目会在原地重载连接（<code>README.md:93</code>），这是不重启客户端的恢复手段。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant C as 客户端
+  participant S as stdio 服务器
+  S--xC: 连接断开（进程崩溃）
+  C->>C: 保留上次工具集，日志记重连进度
+  C->>S: 第 1 次重连（500 ms 后）
+  S--xC: 失败
+  C->>S: 第 2 次（1000 ms 后）
+  C->>S: 第 n 次（翻倍至 30000 ms 封顶）
+  alt 重连成功
+    C->>S: 重新同步 tools/list
+    C->>C: 工具集更新，计数重置
+  else 连续失败超过 10 次
+    C->>C: 移除该服务器工具并停止重连
+  end</pre></div>
+<h2 id="服务端指令与提示模板">服务端指令与提示模板</h2>
+<p>服务器可以在初始化时提供 <code>instructions</code>，客户端把它作为字面文本并入系统提示（<code>README.md:12</code>）。爬虫的 <code>instructions</code> 说明服务只负责抓取、不提供搜索（<code>src/better_crawler/mcp_server.py:39-43</code>）；KnowledgeDiver 的 <code>instructions</code> 说明只读边界与工具用法（<code>backend/mcp/server.py:144-147</code>）。</p>
+<p>指令长度有硬上限：默认 32768 UTF-8 字节，含归属信息，超限会拒绝连接（<code>README.md:62</code>、<code>lib/index.js:494</code>、<code>:655-656</code>）。这条上限会把“写得太长的说明”变成启动失败，而不是截断，因此改 <code>instructions</code> 时要顺带核对字节数。</p>
+<p>MCP 的提示模板（prompts）在当前客户端里不支持（<code>README.md:12</code>、<code>:227</code>）。服务器若只暴露 prompts 而不暴露 tools，模型侧什么也看不到。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["接入后核对"] --> B{"工具在列表里吗"}
+  B -- 否 --> C["看日志：连接失败、服务名重复、清单被拒"]
+  B -- 是 --> D{"名字是 mcp__server__tool 吗"}
+  D -- 否 --> E["检查 serverName 与工具名规范化"]
+  D -- 是 --> F{"调用返回真实结果吗"}
+  F -- 否 --> G["区分客户端超时、服务器错误、isError"]
+  F -- 是 --> H{"错误被伪装成成功了吗"}
+  H -- 是 --> I["检查服务器是否正确返回 isError"]
+  H -- 否 --> J["接入完成"]</pre></div>
+<h2 id="两台服务器各自的核对清单">两台服务器各自的核对清单</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>核对项</th><th>KnowledgeDiver</th><th>爬虫</th></tr></thead><tbody><tr><td>工具数量</td><td>8 个只读工具</td><td>3 个工具</td></tr><tr><td>身份参数</td><td>需要用户名，会话可默认</td><td>无</td></tr><tr><td>环境变量</td><td><code>KD_MCP_USERNAME</code>、<code>KD_MCP_SESSION</code></td><td>编码、超时、正文上限</td></tr><tr><td>数据目录</td><td>由 <code>cwd</code> 与用户名决定</td><td>无</td></tr><tr><td>外部依赖</td><td>嵌入模型与向量扩展</td><td>浏览器内核与网络</td></tr><tr><td>首选探针</td><td><code>--list-tools</code> 打印工具清单</td><td><code>crawler_status</code> 返回状态与生效配置</td></tr><tr><td>启动失败信号</td><td>退出码 2 与 stderr 一行原因</td><td>启动脚本 stderr 提示与退出 1</td></tr></tbody></table>
+<p>KnowledgeDiver 的 <code>--list-tools</code> 会在构建网关之后打印工具清单并退出（<code>backend/mcp/__main__.py:40-43</code>），因此它同时验证了身份解析与网关构造。只读性由三层防线保证：清单白名单、构造期与调用期层级复核、执行器启用集合（<code>backend/mcp/gateway.py:33-35</code>、<code>:147-150</code>、<code>:178-181</code>、<code>backend/mcp/runtime.py:63</code>）。</p>
+<p>爬虫的 <code>crawler_status</code> 返回版本、超时、正文上限与浏览器可用性，并提示首次调用才会启动浏览器（<code>src/better_crawler/mcp_server.py:123-133</code>）。它不触网，是排查浏览器问题的第一站。</p>
+<h2 id="故障定位表">故障定位表</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>客户端侧检查</th><th>服务器侧检查</th></tr></thead><tbody><tr><td>工具完全不出现</td><td>日志中的连接失败与服务名重复</td><td>进程能否独立启动、stderr 输出</td></tr><tr><td>工具出现但调用报未知工具</td><td>名字是否被规范化加了后缀</td><td>服务端注册的原始名</td></tr><tr><td>调用被取消</td><td>是否触及 <code>toolCallTimeoutMs</code></td><td>单次操作是否超过服务器超时</td></tr><tr><td>调用返回失败但进程正常</td><td>结果为 <code>isError</code> 还是协议错误</td><td>执行器日志中的异常原因</td></tr><tr><td>断连后工具还在但调用失败</td><td>重连日志与尝试次数</td><td>进程崩溃原因</td></tr><tr><td>启动即失败</td><td>指令字节数是否超限</td><td>依赖探测、解释器与路径</td></tr><tr><td>中文乱码</td><td>—</td><td>输出流编码是否为 UTF-8</td></tr></tbody></table>
+<p>最后一行是两个仓库共同的经验：stdio 传输的编码问题在客户端表现为解析失败，在服务器表现为写入异常，排查起点都在服务器侧的 stderr。</p>
+<h2 id="易错点">易错点</h2>
+<ol>
+<li>认为工具缺失是逐个工具的问题。多数情况是整批清单被拒或连接失败。</li>
+<li>把断连期间的工具列表当成可用。调用会失败直到重连成功。</li>
+<li>忽略重连上限。10 次失败后工具被移除，需要重载或重启。</li>
+<li>把 <code>instructions</code> 当无限长的说明。超过 32768 字节会拒绝连接。</li>
+<li>期待 prompts 生效。当前客户端不支持提示模板。</li>
+<li>只看工具是否出现，不验证调用与错误路径。</li>
+</ol>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>工具可见时机</td><td>首轮对话之前</td><td><code>@deepseek-ai/dsh-mcp-client/README.md:91</code></td></tr><tr><td>错误处理</td><td><code>isError</code> 结果抛出，不伪装成功</td><td><code>:85</code>、<code>:134</code></td></tr><tr><td>清单原子性</td><td>重名或冲突整批拒绝</td><td><code>:79-81</code>、<code>lib/index.js:131-132</code></td></tr><tr><td>重连预算</td><td>10 次，500 ms 起翻倍至 30 秒</td><td><code>README.md:64-67</code>、<code>:93</code></td></tr><tr><td>指令上限</td><td>默认 32768 字节，超限拒绝连接</td><td><code>:62</code>、<code>lib/index.js:494</code></td></tr><tr><td>提示模板</td><td>当前不支持</td><td><code>README.md:12</code>、<code>:227</code></td></tr><tr><td>KD 探针</td><td><code>--list-tools</code></td><td><code>backend/mcp/__main__.py:40-43</code></td></tr><tr><td>爬虫探针</td><td><code>crawler_status</code></td><td><code>src/better_crawler/mcp_server.py:119-133</code></td></tr></tbody></table>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>工具集整批提交</td><td>不会出现半更新状态</td><td>一处冲突回退整批</td></tr><tr><td>断连保留工具列表</td><td>历史与权限规则稳定</td><td>期间调用失败，易误判</td></tr><tr><td>自动重连有上限</td><td>不会无限重试</td><td>达到上限需人工恢复</td></tr><tr><td>指令超限即拒绝连接</td><td>配置错误立刻暴露</td><td>说明写长会阻断启动</td></tr><tr><td>每台服务器一个探针工具</td><td>排查路径短</td><td>探针本身也要维护</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出接入成功的四条判据与各自的验证动作。</li>
+<li>说明工具清单被整批拒绝的三种情形。</li>
+<li>列出重连的四个参数与达到上限后的行为。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="4">
+<li>为接入设计一份自动化核对脚本，覆盖工具可见、命名、调用与错误路径，写出检查项与期望。</li>
+<li>分析 <code>failOnStartupError</code> 开关对部署的影响：何时应该打开，何时保持关闭。</li>
+<li>设计一个断连演练：如何安全地模拟服务器崩溃并验证重连与工具移除，说明恢复步骤。</li>
+</ol>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/README.md</code></td><td>判据、冲突、重连与指令上限（:12、:62-67、:75-93、:134、:227）</td></tr><tr><td><code>node_modules/@deepseek-ai/dsh-mcp-client/lib/index.js</code></td><td>清单查重、重连与指令校验（:110-114、:131-132、:494、:567-578、:655-674）</td></tr><tr><td><code>backend/mcp/__main__.py</code></td><td><code>--list-tools</code> 探针（:40-43）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>只读三层防线（:33-35、:147-150、:178-181）</td></tr><tr><td><code>backend/mcp/runtime.py</code></td><td>执行器启用集合（:63）</td></tr><tr><td><code>backend/mcp/server.py</code></td><td>指令文本（:144-147）</td></tr><tr><td><code>src/better_crawler/mcp_server.py</code></td><td>指令与 <code>crawler_status</code>（:39-43、:119-133）</td></tr><tr><td><code>dsh-plugin/scripts/launch.sh</code></td><td>启动失败提示（:36-39）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/23-MCP/03-%E5%B7%A5%E5%85%B7schema%E4%B8%8E%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%84/"><span class="k">← 上一篇</span><span class="t">工具schema与返回结构</span><span class="d">MCP · 4 个文件</span></a><a class="next" href="/tc63/docs/24-%E7%9F%A5%E8%AF%86%E5%9B%BE%E8%B0%B1%E4%B8%8E%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BC%B0/01-%E5%8D%A1%E7%89%87%E6%A0%91%E4%B8%8E%E5%8F%8C%E5%90%91%E9%93%BE%E6%8E%A5/"><span class="k">下一篇 →</span><span class="t">卡片树与双向链接</span><span class="d">知识图谱与质量评估 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -1,0 +1,1043 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>训练稳定性与超参 · 强化学习 · 王宇翔</title><meta name="description" content="拆解 mjx-go1-getup 行走训练的三档 PPO 参数预设，说明 brax 的 batch_size 语义、训练步与环境步的换算账目，以及梯度更新密度如何成为收敛速度的主要变量。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/11-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/04-%E8%AE%AD%E7%BB%83%E7%A8%B3%E5%AE%9A%E6%80%A7%E4%B8%8E%E8%B6%85%E5%8F%82/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="训练稳定性与超参 · 强化学习 · 王宇翔"><meta property="og:description" content="拆解 mjx-go1-getup 行走训练的三档 PPO 参数预设，说明 brax 的 batch_size 语义、训练步与环境步的换算账目，以及梯度更新密度如何成为收敛速度的主要变量。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/11-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/04-%E8%AE%AD%E7%BB%83%E7%A8%B3%E5%AE%9A%E6%80%A7%E4%B8%8E%E8%B6%85%E5%8F%82/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.Pw6Bc85W.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/11-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">强化学习</a><span class="sep" aria-hidden="true">/</span><span class="now">训练稳定性与超参</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>训练稳定性与超参</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>PPO 优化制度与梯度更新密度</span></a><ul class="toc__heads"><li><a href="#训练步与环境步的换算账目" data-depth="2" data-heading-j="0">训练步与环境步的换算账目</a></li><li><a href="#brax-的-batch_size-语义" data-depth="2" data-heading-j="1">brax 的 batch_size 语义</a></li><li><a href="#三档优化制度预设" data-depth="2" data-heading-j="2">三档优化制度预设</a></li><li><a href="#梯度更新密度是收敛的主要变量" data-depth="2" data-heading-j="3">梯度更新密度是收敛的主要变量</a></li><li><a href="#三档预设的命令行与日志判别" data-depth="2" data-heading-j="4">三档预设的命令行与日志判别</a></li><li><a href="#显存约束下的-gae-窗口" data-depth="2" data-heading-j="5">显存约束下的 GAE 窗口</a></li><li><a href="#整除性与断言护栏" data-depth="2" data-heading-j="6">整除性与断言护栏</a></li><li><a href="#学习率与熵的覆盖入口" data-depth="2" data-heading-j="7">学习率与熵的覆盖入口</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>网络结构、观测键与归一化选择</span></a><ul class="toc__heads"><li><a href="#actor-与-critic-的观测键分离" data-depth="2" data-heading-j="0">actor 与 critic 的观测键分离</a></li><li><a href="#三档网络宽度与参数量的对照" data-depth="2" data-heading-j="1">三档网络宽度与参数量的对照</a></li><li><a href="#激活函数必须显式传参" data-depth="2" data-heading-j="2">激活函数必须显式传参</a></li><li><a href="#分布类型与策略头结构" data-depth="2" data-heading-j="3">分布类型与策略头结构</a></li><li><a href="#观测归一化的取舍与-nan-的关系" data-depth="2" data-heading-j="4">观测归一化的取舍与 NaN 的关系</a></li><li><a href="#观测维度校验与续训守卫" data-depth="2" data-heading-j="5">观测维度校验与续训守卫</a></li><li><a href="#观测噪声与特权信息的可见性差异" data-depth="2" data-heading-j="6">观测噪声与特权信息的可见性差异</a></li><li><a href="#观测改动后的核对清单" data-depth="2" data-heading-j="7">观测改动后的核对清单</a></li><li><a href="#层宽与-rollout-长度的显存取舍" data-depth="2" data-heading-j="8">层宽与 rollout 长度的显存取舍</a></li><li><a href="#参数覆盖与评估环境数" data-depth="2" data-heading-j="9">参数覆盖与评估环境数</a></li><li><a href="#小结" data-depth="2" data-heading-j="10">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="13">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>数值稳定性与检查点安全</span></a><ul class="toc__heads"><li><a href="#总奖励截断与梯度归零" data-depth="2" data-heading-j="0">总奖励截断与梯度归零</a></li><li><a href="#溢出写到物理量之后的链条" data-depth="2" data-heading-j="1">溢出写到物理量之后的链条</a></li><li><a href="#njmax-与护栏字段的配合" data-depth="2" data-heading-j="2">njmax 与护栏字段的配合</a></li><li><a href="#求解器迭代次数与接触模型" data-depth="2" data-heading-j="3">求解器迭代次数与接触模型</a></li><li><a href="#日志里的-lossnan-是键名问题" data-depth="2" data-heading-j="4">日志里的 loss=nan 是键名问题</a></li><li><a href="#检查点覆盖闸门与绝对路径" data-depth="2" data-heading-j="5">检查点覆盖闸门与绝对路径</a></li><li><a href="#30-秒长测作为稳定性验收" data-depth="2" data-heading-j="6">30 秒长测作为稳定性验收</a></li><li><a href="#手动终止的判据" data-depth="2" data-heading-j="7">手动终止的判据</a></li><li><a href="#加载器与激活分布的一致性" data-depth="2" data-heading-j="8">加载器与激活分布的一致性</a></li><li><a href="#证伪过的两条稳定性解释" data-depth="2" data-heading-j="9">证伪过的两条稳定性解释</a></li><li><a href="#小结" data-depth="2" data-heading-j="10">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="13">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>超参实验的失败记录与验收口径</span></a><ul class="toc__heads"><li><a href="#三项记账错误合起来让-5m-名不副实" data-depth="2" data-heading-j="0">三项记账错误合起来让 5M 名不副实</a></li><li><a href="#磁盘上的记账证据" data-depth="2" data-heading-j="1">磁盘上的记账证据</a></li><li><a href="#分档默认值与实际生效值的差异" data-depth="2" data-heading-j="2">分档默认值与实际生效值的差异</a></li><li><a href="#预算档位的推进" data-depth="2" data-heading-j="3">预算档位的推进</a></li><li><a href="#行走与起身两个入口的默认预算" data-depth="2" data-heading-j="4">行走与起身两个入口的默认预算</a></li><li><a href="#续训必须降学习率" data-depth="2" data-heading-j="5">续训必须降学习率</a></li><li><a href="#评估指标在这套栈里不可信" data-depth="2" data-heading-j="6">评估指标在这套栈里不可信</a></li><li><a href="#关键帧基线与学习型策略的排名" data-depth="2" data-heading-j="7">关键帧基线与学习型策略的排名</a></li><li><a href="#已证伪的假设" data-depth="2" data-heading-j="8">已证伪的假设</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">强化学习</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>强化学习 / 超参 / PPO / MJX / 网络结构 / 数值稳定性 / 检查点 / 实验记录</span></div><h1 class="docs__title">训练稳定性与超参</h1><p class="docs__lead">拆解 mjx-go1-getup 行走训练的三档 PPO 参数预设，说明 brax 的 batch_size 语义、训练步与环境步的换算账目，以及梯度更新密度如何成为收敛速度的主要变量。</p></header><section class="dfile" id="file-1" data-file="01-优化制度与梯度更新密度"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-优化制度与梯度更新密度</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/11-强化学习/04-训练稳定性与超参/01-优化制度与梯度更新密度.md</span></div><div class="dfile__body"><p>同一份环境代码，换一组 PPO 参数，收敛速度可以差两个数量级。这套工程在早期版本上正好验证了这一点：环境与网络都没动，只改优化制度的四个参数，训练就从“eval_reward 全程 0.000”变成能跑满回合。</p>
+<p>问题出在两种框架对同一个名字的定义不同。brax 的 <code>batch_size</code> 指的是“每个 minibatch 的序列数”，一个 minibatch 的转移数要再乘 <code>unroll_length</code>；SB3 的 <code>batch_size</code> 直接就是 minibatch 的样本数。名字一样，语义差 32 倍。类似的换算还出现在训练预算上：brax 的 <code>num_timesteps</code> 是环境总步数，除以 rollout 长度才是训练步数。</p>
+<p>换算账目立不起来，后面的分档差异就没法比较：三档预设的参数差异只有放进同一张账目里才看得出来，梯度更新密度与显存约束正是这张账目的两个出口。</p>
+<h2 id="训练步与环境步的换算账目">训练步与环境步的换算账目</h2>
+<p>brax 里一个训练步（rollout）采集的样本数是 <code>batch_size × unroll_length × num_minibatches</code>。训练步数由总预算除以这个数得到。参考仓库的 5M 环境步对应 203 个训练步、约 78 万次梯度更新；v9 之前只给了 400K 环境步，等于 16 个训练步、约 6.1 万次更新，只有参考的十二分之一，所以 <code>eval_reward</code> 全程 0.000（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:168-173</code>）。</p>
+<p>v10 的实际账目可以在验收对照里查到：训练 5,136,384 环境步、209 个 rollout、802,560 次梯度更新（<code>:317-323</code>）。这个数与参考仓库的 779,520 次处在同一量级，是“训练预算补齐”的直接证据。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["num_timesteps 环境总步数"] --> B["rollout 样本 = batch_size × unroll × minibatches"]
+  B --> C["训练步数 = num_timesteps / rollout 样本"]
+  C --> D["梯度更新 = 训练步数 × minibatches × num_updates_per_batch"]
+  D --> E["每样本更新密度"]</pre></div>
+<h2 id="brax-的-batch_size-语义">brax 的 batch_size 语义</h2>
+<p>v4 到 v8 用 <code>batch_size=64</code>，按 brax 语义是每个 minibatch 64 条序列，乘 <code>unroll=32</code> 得到 2048 条转移；SB3 的 minibatch 是 64 条样本，两者相差 32 倍，于是每样本的更新密度只有 SB3 的三十二分之一（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:159-162</code>）。</p>
+<p>这个错误在磁盘上留下了可核对的痕迹：v4 到 v8 的 checkpoint 间隔是 786,432 步，等于 <code>64 × 32 × 384</code>，正好是参考 rollout 24,576 的 32 倍；v10 的间隔变成 270,336，等于 <code>11 × 24576</code>，恢复正确（<code>:164-166</code>）。从检查点目录的时间间隔反推 rollout 长度，是这类记账错误最直接的验证手段。</p>
+<p>正确的映射写在源码注释里：<code>batch_size=2</code>（2 条序列乘 32 步等于 64 条，对应 SB3 的 minibatch）、<code>num_minibatches=384</code>、<code>num_updates_per_batch=10</code>，密度 6.4 样本每次更新，与 SB3 完全一致（<code>train/train_go1.py:329-336</code>）。</p>
+<h2 id="三档优化制度预设">三档优化制度预设</h2>
+<p>入口脚本按开关分成三档，参数集中写在 <code>train/train_go1.py:318-399</code>。<code>--sb3_full</code> 完全对齐参考仓库，<code>--sb3_opt</code> 只对齐优化制度，两者都不加时用官方 locomotion 档。三档的差异如下：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>sb3_full</th><th>sb3_opt</th><th>默认档</th></tr></thead><tbody><tr><td>num_envs</td><td>768</td><td>由 <code>--num_envs</code> 决定</td><td>8192</td></tr><tr><td>unroll_length</td><td>32</td><td>20</td><td>20</td></tr><tr><td>batch_size</td><td>2</td><td>由整除关系算出</td><td>由整除关系算出</td></tr><tr><td>num_minibatches</td><td>384</td><td>256</td><td>32</td></tr><tr><td>num_updates_per_batch</td><td>10</td><td>8</td><td>4</td></tr><tr><td>entropy_cost</td><td>0.0</td><td>0.0</td><td>1e-2</td></tr><tr><td>discounting</td><td>0.99</td><td>0.99</td><td>0.97</td></tr><tr><td>clipping_epsilon</td><td>0.2</td><td>0.3</td><td>0.3</td></tr><tr><td>max_grad_norm</td><td>0.5</td><td>1.0</td><td>1.0</td></tr><tr><td>网络隐藏层</td><td>(64,64)</td><td>(512,256,128) 或 <code>--sb3_net</code></td><td>(512,256,128)</td></tr><tr><td>normalize_observations</td><td>False</td><td>True</td><td>True</td></tr><tr><td>distribution_type</td><td>normal</td><td>tanh_normal</td><td>tanh_normal</td></tr></tbody></table>
+<p>表里的三个默认档数字对应官方 locomotion 配置：8192 个并行环境、unroll 20、32 个 minibatch（<code>train/train_go1.py:367-370</code>）。这一档在 v1 上跑出过“GPU 反而更慢”的结果，原因在下一节。</p>
+<h2 id="梯度更新密度是收敛的主要变量">梯度更新密度是收敛的主要变量</h2>
+<p>v1 用官方档跑了 59.5M 环境步，梯度更新只有 4.7 万次；参考仓库 5M 步有 78 万次。表格里的四项差距是：网络参数量 27 倍、更新次数少 94%、每样本更新密度差 200 倍、熵与折扣分别是 1e-2 对 0 与 0.97 对 0.99（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:226-233</code>）。</p>
+<p>结论被记成一句可复用的话：PPO 收敛主要由梯度更新次数驱动，GPU 把采样吞吐放大了数百倍，但优化密度被稀释了两个数量级，缺的是消化能力，不是数据量（<code>:235-237</code>）。这条诊断在根因 4 里以另一个形式再次出现，说明它在这套栈上具有普遍性。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>变量</th><th>参考 SB3</th><th>v1 官方档</th><th>差距</th></tr></thead><tbody><tr><td>网络参数量</td><td>约 1.5 万</td><td>约 42 万</td><td>27 倍</td></tr><tr><td>梯度更新次数</td><td>约 78 万</td><td>约 4.7 万</td><td>减少 94%</td></tr><tr><td>每样本更新密度</td><td>6.4 样本一次</td><td>1280 样本一次</td><td>200 倍</td></tr><tr><td>熵 / 折扣</td><td>0 / 0.99</td><td>1e-2 / 0.97</td><td>探索大、视野短</td></tr></tbody></table>
+<h2 id="三档预设的命令行与日志判别">三档预设的命令行与日志判别</h2>
+<p>三档预设分别对应一次实验的命令形态：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># 完全对齐参考仓库 (5M 环境步)</span></span>
+<span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_go1</span><span style="color:#005CC5"> --sb3_full</span><span style="color:#005CC5"> --num_timesteps</span><span style="color:#005CC5"> 5000000</span><span style="color:#005CC5"> --logdir</span><span style="color:#032F62"> logs/walk_v9</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 只对齐优化制度, 网络与环境保持官方档</span></span>
+<span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_go1</span><span style="color:#005CC5"> --sb3_opt</span><span style="color:#005CC5"> --num_envs</span><span style="color:#005CC5"> 8192</span><span style="color:#005CC5"> --num_timesteps</span><span style="color:#005CC5"> 50000000</span><span style="color:#005CC5"> --logdir</span><span style="color:#032F62"> logs/walk_v2</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 官方 locomotion 档</span></span>
+<span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_go1</span><span style="color:#005CC5"> --num_timesteps</span><span style="color:#005CC5"> 100000000</span><span style="color:#005CC5"> --logdir</span><span style="color:#032F62"> logs/walk_v1</span></span></code></pre>
+<p>日志里能按打印行区分这三档。<code>--sb3_full</code> 会打印一行包含 minibatch 序列数、每步更新次数与密度，密度写的是 6.4（<code>train/train_go1.py:352-357</code>）。<code>--sb3_opt</code> 打印 minibatch 640 样本、每批 2048 次更新（<code>:364-365</code>）。不加两者的官方档没有预设打印，只能从后面的优化摘要行看 <code>layers</code>、<code>clip</code> 与 <code>grad_clip</code> 三个值（<code>:689-691</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["启动参数"] --> B{"--sb3_full?"}
+  B -->|"是"| C["768 环境, unroll 32, 网络 64x64"]
+  B -->|"否"| D{"--sb3_opt?"}
+  D -->|"是"| E["官方网络, minibatch 256, updates 8"]
+  D -->|"否"| F["官方 locomotion 档, minibatch 32, updates 4"]
+  C --> G["打印密度 6.4"]
+  E --> H["打印 minibatch 640 / 2048 次更新"]
+  F --> I["无预设打印, 看优化摘要行"]</pre></div>
+<p>预设之间不能混用。<code>--sb3_net</code> 单独出现时只换网络宽度，优化制度仍走官方档；它和 <code>--sb3_full</code> 的分支互斥，因为后者已经把网络、优化与环境规模一起换掉（<code>train/train_go1.py:358-380</code>）。</p>
+<h2 id="显存约束下的-gae-窗口">显存约束下的 GAE 窗口</h2>
+<p><code>--sb3_full</code> 档保留了一个残余差异：GAE 窗口是 32，SB3 是 2048。注释给出的原因是 8GB 显存装不下 <code>768 × 2048</code> 的 rollout（<code>train/train_go1.py:327</code>）。这是硬件约束而非算法选择，记录时要写明，否则复现者会以为 32 也是对齐项。</p>
+<p>窗口变短的代价是优势估计的偏差更大，对长周期任务的回报估计更噪。这套工程接受这个代价，因为梯度更新密度已经对齐，收敛速度的主要矛盾不在 GAE。</p>
+<h2 id="整除性与断言护栏">整除性与断言护栏</h2>
+<p>默认档的 <code>batch_size</code> 由 <code>num_envs // num_minibatches</code> 算出，源码在计算前加了一条断言：<code>num_envs</code> 必须能被 <code>num_minibatches</code> 整除（<code>train/train_go1.py:383-394</code>）。这条断言对应过一次真实回归：默认 <code>num_envs=8192</code> 配 <code>batch_size=64</code> 时，<code>64 × 32</code> 不被 8192 整除，brax 内部直接断言失败。注释把这件事写成“v9 加 batch_size 变量时引入的回归”，提醒改默认值时把三个数一起算。</p>
+<h2 id="学习率与熵的覆盖入口">学习率与熵的覆盖入口</h2>
+<p>学习率与熵系数可以在命令行覆盖：<code>--lr</code> 与 <code>--entropy</code> 分别对应默认的 3e-4 与三档算出的熵值，覆盖后会打印一行优化摘要（<code>train/train_go1.py:687-691</code>）。熵系数的帮助文本提到一个现象：收敛后的策略 <code>log_std</code> 往往被压得很低，此时熵项的作用主要是维持探索，取 0 与取 1e-2 是两种实验取向（<code>:163-165</code>）。</p>
+<p><code>ppo_params</code> 的组装在 <code>:710-736</code>，学习率与熵系数在最后一步取命令行覆盖值，其余字段按档位填好。这种“默认值加覆盖”的写法让日志里的优化摘要与实际训练参数一致，排查时以那行打印为准。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>brax 的 batch_size 是序列数，minibatch 转移数要乘 unroll_length。</li>
+<li>num_timesteps 是环境步数，训练步数等于它除以 rollout 样本数。</li>
+<li>checkpoint 间隔可以反推 rollout 长度，是记账错误最直接的证据。</li>
+<li>收敛速度主要由每样本更新密度决定，与并行环境数不是正相关。</li>
+<li>sb3_full 档的 GAE 窗口 32 由 8GB 显存约束给出，不是对齐项。</li>
+<li>batch_size 由整除关系算出，改 num_envs 或 minibatches 时要一起验算。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>优化制度</td><td>默认档偏密更新</td><td>收敛快</td><td>rollout 短，GAE 偏差大</td></tr><tr><td>完全对齐</td><td>sb3_full 用 768 环境</td><td>与参考逐项可比</td><td>并行度低，单步耗时长</td></tr><tr><td>预算表达</td><td>直接给 num_timesteps</td><td>与参考统一口径</td><td>训练步数需要换算</td></tr><tr><td>超参覆盖</td><td>命令行只覆盖两个</td><td>日志可控</td><td>其余参数要改代码</td></tr><tr><td>显存取舍</td><td>GAE 窗口压到 32</td><td>8GB 可跑</td><td>优势估计更噪</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>用 <code>batch_size=2</code>、<code>unroll=32</code>、<code>num_minibatches=384</code>、<code>num_updates_per_batch=10</code> 算出一次 rollout 的样本数与梯度更新次数。</li>
+<li>解释为什么 v4 到 v8 的 checkpoint 间隔是 786,432 步，并写出它与参考 rollout 的倍数关系。</li>
+<li>说明 <code>num_envs=8192</code> 配 <code>batch_size=64</code> 为什么会触发 brax 断言。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>给定一次实验的 checkpoint 目录，写出从间隔反推 <code>unroll_length</code> 与 <code>num_minibatches</code> 的步骤。</li>
+<li>在 8GB 显存约束下，设计一组参数使 GAE 窗口尽量长而更新密度不变，说明需要牺牲哪个量。</li>
+<li>如果只能改一个超参把收敛速度提上去，说明选哪个并给出一条验证实验设计。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>train/train_go1.py</code></td><td>三档预设、batch_size 换算、断言与优化摘要</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>预算记账、v1 诊断与 v10 验收对照</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-网络结构、观测键与归一化选择"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-网络结构、观测键与归一化选择</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/11-强化学习/04-训练稳定性与超参/02-网络结构、观测键与归一化选择.md</span></div><div class="dfile__body"><p>这套训练用的是单阶段非对称 actor-critic：一个策略只看本体传感器与指令，价值函数额外看特权信息。两者从同一份环境数据里取不同的键，网络宽度也是同一套参数。非对称结构不是两阶段蒸馏，两者的参数在同一轮 PPO 更新里训练。</p>
+<p>网络相关的选项里，有三个容易被默认值带偏。brax 的激活函数默认是 swish 而不是 tanh；分布类型默认是 tanh_normal 而不是普通高斯；观测归一化在完全对齐档里是关的。这三项都不会报错，只会让结果对不上，其中激活函数传错还会在加载检查点后建出一个“能跑但输出错误”的网络。</p>
+<p>观测键决定输入的语义，宽度、激活、分布与归一化只决定拟合能力与数值范围；顺序上先定前者，再调后者，续训校验则要同时覆盖两者。</p>
+<h2 id="actor-与-critic-的观测键分离">actor 与 critic 的观测键分离</h2>
+<p><code>network_factory</code> 里有两个键：策略取 <code>state</code>，价值函数取 <code>privileged_state</code>（<code>train/train_go1.py:728-735</code>）。基础维度是策略 48 维、价值 119 维；打开高度扫描后两边各加 35 维（7 乘 5 网格），打开相位奖励后各加 8 维（四足的 cos 与 sin）（<code>:680-685</code>）。</p>
+<p>v19 的启动日志把这两个数打印成 <code>state=83</code> 与 <code>privileged_state=154</code>，正好是 48 加 35 与 119 加 35（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2495</code>）。这类打印行的作用是让“环境配置”和“网络输入维度”对得上，改环境后第一件事就是核对它。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["环境观测"] --> B["state: 本体传感器 + 指令"]
+  A --> C["privileged_state: 额外特权信息"]
+  B --> D["策略网络 (policy_obs_key)"]
+  C --> E["价值网络 (value_obs_key)"]
+  D --> F["动作分布"]
+  B -->|"height_scan 开"| B2["+35 维高度网格"]
+  B -->|"feet_phase 开"| B3["+8 维相位编码"]</pre></div>
+<h2 id="三档网络宽度与参数量的对照">三档网络宽度与参数量的对照</h2>
+<p>完全对齐档用 (64,64) 两层网络，参数量约 1.5 万，与 SB3 的 MlpPolicy 同量级；官方档用 (512,256,128)，参数量约 42 万，是参考的 27 倍（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:230</code>）。<code>--sb3_net</code> 把宽度换成 (64,64) 而不改优化制度（<code>train/train_go1.py:375-380</code>）。</p>
+<p>策略头是 tanh_normal 时输出均值与对数标准差两组，24 维控制量对应 48 个输出，加上共享层后总参数量约 2 万，仍与参考同量级（<code>:372-374</code>）。<code>--layers</code> 可以覆盖隐藏层宽度，覆盖时策略与价值用同一组（<code>:400-402</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>档位</th><th>隐藏层</th><th>参数量量级</th><th>说明</th></tr></thead><tbody><tr><td>sb3_full</td><td>(64,64)</td><td>约 1.5 万</td><td>对齐 SB3 MlpPolicy</td></tr><tr><td>sb3_net</td><td>(64,64)</td><td>约 2 万</td><td>仅换网络，优化制度不变</td></tr><tr><td>官方档</td><td>(512,256,128)</td><td>约 42 万</td><td>参考仓库的 27 倍</td></tr></tbody></table>
+<h2 id="激活函数必须显式传参">激活函数必须显式传参</h2>
+<p>brax 的 <code>network_factory</code> 要求激活是一个函数而不是字符串。完全对齐档传 <code>jax.nn.tanh</code>，官方档传 <code>jax.nn.silu</code>，注释写明传字符串会直接 <code>TypeError</code>（<code>train/train_go1.py:350-351</code>、<code>:397-398</code>）。</p>
+<p>不传激活时 brax 用默认的 swish。加载检查点手动建网络时如果不显式指定，会建出一个能加载、能推理、但输出完全错误的网络；记录里把这类现象归到“换了 checkpoint 结果就变”的来源，并要求手动建网时同时传 <code>activation=jax.nn.tanh</code> 与 <code>distribution_type="normal"</code>（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:244-247</code>）。</p>
+<h2 id="分布类型与策略头结构">分布类型与策略头结构</h2>
+<p>分布类型只有两个取值：完全对齐档用 <code>normal</code>，因为 SB3 的高斯不做 squash；官方档用 <code>tanh_normal</code>，把动作压缩到有界区间（<code>train/train_go1.py:349</code>、<code>:396</code>）。两者的差别不在采样，而在动作边界的处理方式，切换时策略头的输出维度不变。</p>
+<p>分布类型与激活一样属于“不报错但影响结果”的选项，实验记录要求两者在加载与训练两侧保持一致。</p>
+<h2 id="观测归一化的取舍与-nan-的关系">观测归一化的取舍与 NaN 的关系</h2>
+<p><code>normalize_observations</code> 在完全对齐档是关闭的，在官方档是打开的（<code>train/train_go1.py:346</code>、<code>:395</code>）。它对应 SB3 的 <code>VecNormalize</code>，在参考仓库里是缺失件。</p>
+<p>归一化与数值稳定性的关系被一次对照实验否掉了因果推断：v6 用硬接触加归一化跑了 7.9M 步无 NaN，v7 同样配置加修正终止后在 6.29M 步出现 NaN，v10 用硬接触、不归一化、njmax 256 跑了 5.14M 步无 NaN（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:299-302</code>）。结论是 NaN 的出现与摔倒姿态的随机性有关，归一化既不必要也不充分，根因在求解器与护栏字段。</p>
+<h2 id="观测维度校验与续训守卫">观测维度校验与续训守卫</h2>
+<p>续训前会先读检查点目录里的 <code>ppo_network_config.json</code>，取出其中记录的观测维度与本次训练的维度对比，不一致就直接退出并打印两份维度（<code>train/train_go1.py:60-95</code>）。守卫在环境加载之前执行，避免拒绝时已经占用 GPU（<code>:699-702</code>）。</p>
+<p>守卫还会打印一条重要提醒：brax 的检查点不含优化器状态与步数，续训时 Adam 动量从零重建、<code>num_steps</code> 从 0 重新计数，所以续训需要降学习率（<code>:96-97</code>）。<code>step_offset</code> 只影响日志里显示的累计步数，不改变训练语义（<code>:98-99</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["--restore 路径"] --> B{"目录存在?"}
+  B -->|"否"| C["退出: 路径不存在"]
+  B -->|"是"| D{"有 ppo_network_config.json?"}
+  D -->|"否"| E["退出: 不像 brax 检查点"]
+  D -->|"是"| F["读检查点 obs 维度与层宽"]
+  F --> G{"与本次维度一致?"}
+  G -->|"否"| H["退出并打印两份维度"]
+  G -->|"是"| I["提示: 无优化器状态, 需降 lr"]
+  I --> J["开始训练"]</pre></div>
+<h2 id="观测噪声与特权信息的可见性差异">观测噪声与特权信息的可见性差异</h2>
+<p>噪声只加在策略侧的观测上，价值函数保持无噪。<code>obs_noise</code> 的五路幅值分别作用于线速度、角速度、重力分量、关节位置与关节速度，入口开关为 <code>--obs_noise</code>（<code>train/train_go1.py:516-521</code>，参数见 <code>envs/go1_walk.py:391-398</code>）。高度扫描的 0.02 m 噪声同样只进策略侧（<code>envs/go1_walk.py:369-371</code>）。</p>
+<p>这条不对称是有意的：价值函数的任务是估计回报，输入越干净越好；策略要面对带噪的传感器，才能在部署时不依赖精确读数。<code>--scan_noise</code> 可以单独覆盖高度噪声的幅值（<code>train/train_go1.py:505-507</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>选项</th><th>作用侧</th><th>默认</th><th>开关</th></tr></thead><tbody><tr><td>五路观测噪声</td><td>仅策略</td><td>关闭</td><td><code>--obs_noise</code></td></tr><tr><td>高度扫描噪声</td><td>仅策略</td><td>0.02 m</td><td><code>--scan_noise</code></td></tr><tr><td>特权信息</td><td>仅价值函数</td><td>始终启用</td><td>由观测键决定</td></tr><tr><td>观测归一化</td><td>策略与价值</td><td>按档位</td><td><code>--norm_obs</code> 可强制打开</td></tr></tbody></table>
+<h2 id="观测改动后的核对清单">观测改动后的核对清单</h2>
+<p>改观测结构会影响奖励函数的可学性与续训兼容性，按顺序检查四项：启动日志的维度打印是否与预期一致；<code>ppo_network_config.json</code> 里的维度是否与本次训练一致；奖励函数读取的状态量是否都在策略观测里；噪声项是否只落在策略侧。</p>
+<p>第三项来自一次真实故障：相位奖励的目标轨迹随相位周期变化，策略看不到相位时等价于给奖励加噪声，实测奖励与行为的相关系数接近 0，修正办法是在 <code>_get_obs</code> 里加入相位 cos 与 sin（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:3370-3382</code>）。这也是相位维度只在打开相位奖励时才进观测的原因（<code>train/train_go1.py:681-682</code>）。</p>
+<h2 id="层宽与-rollout-长度的显存取舍">层宽与 rollout 长度的显存取舍</h2>
+<p>完全对齐档用 768 个并行环境与 unroll 32，一次 rollout 是 24,576 条转移，正好复刻 SB3 的 <code>n_envs × n_steps</code>；注释指出 GAE 窗口只能用 32，因为 8GB 显存装不下 <code>768 × 2048</code>（<code>train/train_go1.py:320-327</code>）。官方档用 8192 个环境与 unroll 20，按参数推算一次 rollout 是 163,840 条转移，是前者的六倍多；它能跑起来的原因是网络小、GAE 窗口短，显存主要被并行环境数与 rollout 长度占用。</p>
+<p>这三项在 8GB 卡上互相牵制：环境数决定并行采样吞吐，rollout 长度决定优势估计质量，层宽决定每秒能跑多少步。源码里给出的取舍是先保证更新密度对齐，再压缩 GAE 窗口（<code>:329-336</code>）。换卡或换层宽时，这三个数要一起重算。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>档位</th><th>并行环境</th><th>unroll</th><th>rollout 转移数</th><th>隐藏层</th></tr></thead><tbody><tr><td>sb3_full</td><td>768</td><td>32</td><td>24,576</td><td>(64,64)</td></tr><tr><td>官方档</td><td>8192</td><td>20</td><td>163,840</td><td>(512,256,128)</td></tr><tr><td>官方档加 <code>--sb3_net</code></td><td>8192</td><td>20</td><td>163,840</td><td>(64,64)</td></tr></tbody></table>
+<p>上表第三行的 rollout 长度与官方档相同，只是网络换小。若显存不足，可选的调整顺序是先降并行环境数、再降层宽、最后才动 unroll，因为 unroll 直接决定 GAE 偏差（属按参数关系给出的建议，未在本工程实测）。</p>
+<h2 id="参数覆盖与评估环境数">参数覆盖与评估环境数</h2>
+<p>入口脚本把评估环境数固定为 128（<code>train/train_go1.py:753</code>），与训练环境数分开，评估结果因此不受并行度变化影响。检查点保存路径取 <code>logdir/checkpoints</code>，日志目录会转成绝对路径，因为 orbax 要求绝对路径，相对路径在首次保存时会报错（<code>:693-697</code>）。</p>
+<p><code>logdir</code> 默认落在 <code>logs/walk</code>；续训时 <code>--restore</code> 与 <code>--logdir</code> 可以指向不同目录，方便把不同难度的阶段产物分开归档（<code>:693</code>）。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>策略与价值函数用两个观测键，基础维度 48 与 119，加扫描与相位后同步增长。</li>
+<li>网络宽度分三档，参数量差 27 倍，换网络与换优化制度是两件事。</li>
+<li>激活函数必须传函数对象，不传会用 brax 默认的 swish。</li>
+<li>分布类型 normal 与 tanh_normal 对应有无动作压缩。</li>
+<li>观测归一化与 NaN 无因果关系，根因在求解器与护栏。</li>
+<li>续训守卫比对观测维度，并提醒检查点不含优化器状态。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>观测结构</td><td>策略与价值分键</td><td>价值函数可用特权信息</td><td>两份维度都要校验</td></tr><tr><td>网络宽度</td><td>三档可选</td><td>能复现参考也能自研</td><td>换档要重训</td></tr><tr><td>激活与分布</td><td>显式传参</td><td>与参考逐项可比</td><td>加载代码要同步传</td></tr><tr><td>归一化</td><td>完全对齐档关闭</td><td>与 SB3 对齐</td><td>官方档需要打开</td></tr><tr><td>续训守卫</td><td>环境加载前检查</td><td>不占 GPU 就拒绝</td><td>每次续训多一次读文件</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>算出打开高度扫描与相位奖励后，策略与价值函数的观测维度各是多少。</li>
+<li>说明加载检查点手动建网络时必须传哪两个参数，并给出传错时的现象。</li>
+<li>解释 v6、v7、v10 三次实验为什么能排除“归一化导致 NaN”的推断。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一个续训守卫，除了观测维度外再校验网络层宽与分布类型，写出需要读的字段。</li>
+<li>在 8GB 显存下，评估把价值网络宽度提高一档对训练吞吐的影响需要记录哪些量。</li>
+<li>如果要在保持参数量不变的前提下增加特权信息的使用效率，说明可以改哪一层并给出验证方案。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>train/train_go1.py</code></td><td>观测键、网络宽度、激活与分布、续训守卫</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>参数量对照、加载器问题与 NaN 对照实验</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-数值稳定性与检查点安全"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-数值稳定性与检查点安全</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/11-强化学习/04-训练稳定性与超参/03-数值稳定性与检查点安全.md</span></div><div class="dfile__body"><p>训练中的 NaN 很少是“梯度算错了”，多数是物理求解器在约束溢出之后把 NaN 写进了状态量，再顺着奖励进入优势估计，最后把参数打爆。这套工程在 v5、v7、v9 上崩过三次，直到 v10 才把根因和护栏一起补齐。</p>
+<p>与 NaN 同级的问题还有检查点安全。brax 保存检查点时按步数命名目录，续训的步数从 0 重新计数，如果日志目录指向上一次训练，新检查点会静默覆盖旧证据。v22 之前没有任何闸门，这件事被写进了守卫函数的文档串。</p>
+<p>总奖励截断与 njmax 溢出是数值链条上的两个入口，问题先以 NaN 的形式暴露，再沿求解器参数与日志键名散开；检查点闸门与加载器一致性决定失败时还能不能回到上一份可用参数。</p>
+<h2 id="总奖励截断与梯度归零">总奖励截断与梯度归零</h2>
+<p>总奖励的形式是 <code>clip(total, 0, 10000)</code>，下限由 <code>reward_clip_min</code> 给出，行走任务的默认值是 0.0（<code>envs/go1_walk.py:68-73</code>）。一旦某个负项把总奖励压到 0，该步梯度为零；连续多步归零就等于这段轨迹没有学习信号，这正是 v1 到 v7 “eval_reward 全程 0.000”的形态之一。</p>
+<p>验证口径不能只看均值。v19 的对照给出三项：基线每步总奖励 1.708、归零步数占比 7.2%、存活率 86.9%；加上 <code>base_height=-200</code> 后每步 1.635、归零占比 10.8%、存活率不变；再叠 <code>feet_impact=-2</code> 数字完全不变（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2465-2472</code>）。归零占比上升而存活率不变，说明新增负项只作用在已经摔倒的样本上，被截断吸收。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>配置</th><th>每步总奖励</th><th>归零步数占比</th><th>存活率</th></tr></thead><tbody><tr><td>基线</td><td>1.708</td><td>7.2%</td><td>86.9%</td></tr><tr><td>加 <code>base_height=-200</code></td><td>1.635</td><td>10.8%</td><td>86.9%</td></tr><tr><td>再叠 <code>feet_impact=-2</code></td><td>1.635</td><td>10.8%</td><td>86.9%</td></tr></tbody></table>
+<h2 id="溢出写到物理量之后的链条">溢出写到物理量之后的链条</h2>
+<p>NaN 的产生链条被拆成四步：约束数量超过 <code>njmax</code> 引发溢出，求解器把 NaN 写进 <code>qacc</code> 与 <code>sensordata</code>，奖励函数读取这些量后得到 NaN，NaN 沿 GAE 传播把优势估计污染，参数一次更新就被打爆（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:179-187</code>）。</p>
+<p>早期判断“warp 会自动丢弃溢出约束，不影响站立测试”被证伪：溢出确实会写坏物理量（<code>:397-399</code>）。这条经验改变了护栏的位置，从“只在日志里告警”改成“在奖励计算前检查有限性”。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["约束数超过 njmax"] --> B["求解器溢出"]
+  B --> C["qacc / sensordata 变 NaN"]
+  C --> D["奖励函数读到 NaN"]
+  D --> E["GAE 优势变 NaN"]
+  E --> F["参数更新爆掉"]
+  F --> G["eval_reward 归零或曲线崩"]</pre></div>
+<h2 id="njmax-与护栏字段的配合">njmax 与护栏字段的配合</h2>
+<p>单靠把 <code>njmax</code> 调大不够，还要覆盖所有被下游读取的字段。v8 加的护栏只回填了 <code>qpos</code> 与 <code>qvel</code>，而奖励还读 <code>qacc</code>、<code>qfrc_actuator</code>、<code>sensordata</code>，观测还读 <code>site_xmat</code> 与 <code>actuator_force</code>，护栏因此没有挡住（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:185-186</code>）。</p>
+<p>v10 的做法是三件一起做：<code>njmax</code> 提到 256、护栏覆盖全部被读字段、奖励里加有限性检查（<code>:211</code>）。结果是 5.14M 步全程 0 次 <code>nefc overflow</code>、0 次 NaN（<code>:27</code>、<code>:303</code>）。护栏字段的清单可以按“奖励函数与观测函数各读了哪些物理量”反推，这是比调大上限更可靠的收尾方式。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>关键改动</th><th>训练步数</th><th>NaN 情况</th></tr></thead><tbody><tr><td>v5</td><td>硬接触</td><td>约 15M</td><td>4.72M 起 NaN</td></tr><tr><td>v6</td><td>加观测归一化</td><td>7.9M</td><td>无 NaN</td></tr><tr><td>v7</td><td>修正终止语义</td><td>7.9M</td><td>6.29M 起 NaN</td></tr><tr><td>v8</td><td>加护栏（只回填 qpos/qvel）</td><td>1.57M</td><td>手动停</td></tr><tr><td>v9</td><td>修 batch_size，预算 400K</td><td>246K</td><td>147K 起 NaN</td></tr><tr><td>v10</td><td>njmax 256 + 全字段护栏 + 奖励 finite 检查</td><td>5.14M</td><td>无 NaN</td></tr></tbody></table>
+<h2 id="求解器迭代次数与接触模型">求解器迭代次数与接触模型</h2>
+<p>物理求解参数写在环境配置里：<code>solver_iterations=2</code>、<code>solver_ls_iterations=5</code>、<code>foot_soft_contact=True</code>，硬接触档的迭代次数是 <code>hard_contact_iters=20</code> 与 <code>hard_contact_ls_iters=10</code>（<code>envs/go1_walk.py:76-84</code>）。这些值在初始化时被写进 MuJoCo 的 <code>opt</code>（<code>:432-433</code>），硬接触开关由 <code>--hard_contact</code> 打开并把足端接触模型换回 XML 原样（<code>train/train_go1.py:406-411</code>）。</p>
+<p>软接触与硬接触在 MJX 迭代求解器下的收敛性不同：软接触是为 warp 后端收敛选的值，硬接触配 Newton 迭代是参考仓库的语义。数值稳定性的排查顺序是先看 <code>nefc overflow</code> 告警，再看求解器迭代，最后才怀疑梯度。</p>
+<h2 id="日志里的-lossnan-是键名问题">日志里的 loss=nan 是键名问题</h2>
+<p>v10 的日志里出现过 <code>loss=nan</code>，排查结论是取值键名不对：brax 的损失键没有 <code>losses/</code> 前缀，取不到时返回 NaN，与训练本身无关，v10 全程没有真实 NaN（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:339-340</code>）。</p>
+<p>这件事的处理方式是修训练脚本的取值函数，并把“日志里的 NaN 先确认键名”写成排查步骤。指标读取函数对缺失键返回 NaN 的实现是 <code>train/train_go1.py:763-767</code>，它让缺失与真实 NaN 在前端看起来一样。</p>
+<h2 id="检查点覆盖闸门与绝对路径">检查点覆盖闸门与绝对路径</h2>
+<p>续训时步数从 0 重新计数，新检查点会沿用 5M、10M 这套名字；如果日志目录指向上一次训练，同名目录会被强制覆盖。启动前的闸门检查 <code>logdir/checkpoints</code> 是否已有内容，有内容且未加 <code>--allow_overwrite</code> 就直接拒绝启动，并给出备份目录的建议（<code>train/train_go1.py:41-55</code>）。</p>
+<p>另一条硬性要求是日志目录必须是绝对路径，因为 orbax 在保存检查点时会拒绝相对路径；入口脚本先做 <code>os.path.abspath</code> 再建目录（<code>train/train_go1.py:693-697</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["启动训练"] --> B["logdir 转绝对路径"]
+  B --> C{"checkpoints 目录已有内容?"}
+  C -->|"是, 未加 allow_overwrite"| D["拒绝启动并提示换 logdir"]
+  C -->|"是, 已加 allow_overwrite"| E["打印覆盖警告"]
+  C -->|"否"| F["进入续训守卫"]
+  E --> F
+  F --> G{"restore 的维度一致?"}
+  G -->|"否"| H["拒绝并打印两份维度"]
+  G -->|"是"| I["开始训练"]</pre></div>
+<h2 id="30-秒长测作为稳定性验收">30 秒长测作为稳定性验收</h2>
+<p>训练日志只能说明”没崩”，不能说明”站得住”。稳定性验收用的是固定指令下的 30 秒长测：<code>sim/diag_30s.py</code> 加载策略文件或检查点目录，加 <code>--hard_contact</code> 用参考物理跑 30 秒，输出实测速度、姿态与是否摔倒（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:310-314</code>）。</p>
+<p>v10 的记录是 <code>vx=+0.492</code>、<code>up_z=1.00</code>、30 秒未摔，两个加载路径（策略文件与检查点目录）给出同一结果（<code>:311-314</code>）。验收摘要把”0 次 <code>nefc overflow</code>、0 次 NaN”与长测结果并列，说明数值稳定性与行为稳定性是两项独立验收（<code>:27</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  participant L as 训练日志
+  participant S as diag_30s 长测
+  participant D as diag_commands 逐指令
+  L->>L: 检查 overflow / NaN / 奖励曲线
+  L->>S: 通过后导出策略
+  S->>S: 固定指令跑 30s, 记 vx 与 up_z
+  S->>D: 长测通过后逐指令评估
+  D->>D: 数到 done 的真实步数</pre></div>
+<h2 id="手动终止的判据">手动终止的判据</h2>
+<p>不是所有失败都会自己崩。v8 在 1.57M 步被手动停掉，原因是 <code>eval_reward</code> 长期停在 0.001 附近而 <code>ep_len</code> 只有 25 左右，继续跑只是烧时间（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:209</code>）。v9 在 246K 步出现 NaN，间隔是 <code>49152</code>，等于 <code>2 × 24576</code>，说明 <code>batch_size</code> 已经改对、预算仍然不足（<code>:210</code>）。</p>
+<p>手动终止的判据可以归一成三条：奖励长时间不涨、回合长度长期不增、出现不可恢复的 NaN 或溢出。三条都写在每次运行的启动打印与日志里，不需要额外工具。</p>
+<h2 id="加载器与激活分布的一致性">加载器与激活分布的一致性</h2>
+<p>手动加载检查点建网络时，必须显式传 <code>activation=jax.nn.tanh</code> 与 <code>distribution_type="normal"</code>。不传会用 brax 默认的 swish，建出一个能加载但输出错误的网络；记录把这类现象归为“换了 checkpoint 结果就变”的来源（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:239-247</code>）。检查点里的 <code>ppo_network_config.json</code> 记录了层宽与观测维度，但不保证加载代码会按它传激活与分布，所以这一步要人工核对。</p>
+<h2 id="证伪过的两条稳定性解释">证伪过的两条稳定性解释</h2>
+<p>记录里明确否掉两条推断。第一条是“v5 的 NaN 因为缺 SB3 的 <code>VecNormalize</code>”，被 v10 “不归一化、5.14M 步无 NaN”否掉。第二条是“<code>nefc overflow</code> 只是警告，warp 会丢弃溢出约束”，被“溢出会写坏 <code>qacc</code> 与 <code>sensordata</code>”否掉。两条真因分别是归一化无关的随机摔倒姿态，以及 <code>njmax</code> 偏小加护栏字段不全（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:397-399</code>）。</p>
+<p>把被否掉的解释留在文档里，可以避免下一轮用同样的思路浪费 GPU 时间。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>总奖励下限为 0，负项压过正项会让该步梯度归零。</li>
+<li>NaN 链条是溢出、物理量污染、奖励污染、优势污染、参数爆掉五步。</li>
+<li>njmax 必须与护栏字段清单一起改，护栏要覆盖奖励与观测读取的每个物理量。</li>
+<li>求解器迭代次数与接触模型决定溢出发生频率，属排查的第一站。</li>
+<li>检查点闸门防覆盖，绝对路径是 orbax 的硬要求。</li>
+<li>加载检查点要显式传激活与分布类型，否则网络输出错误。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>奖励下限</td><td>行走任务取 0</td><td>与 SB3 语义一致</td><td>负项过多即无梯度</td></tr><tr><td>护栏位置</td><td>奖励计算前检查有限性</td><td>阻断 NaN 传播</td><td>每步多一次判据</td></tr><tr><td>njmax</td><td>提到 256</td><td>实测 0 次溢出</td><td>每步接触计算量增加</td></tr><tr><td>检查点保护</td><td>默认拒绝覆盖</td><td>不会毁掉旧证据</td><td>续训需要换目录</td></tr><tr><td>指标缺失</td><td>返回 NaN</td><td>代码简单</td><td>掩盖真实 NaN</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出 NaN 从约束溢出到参数爆掉的五步链条，指出护栏可以插在哪两步。</li>
+<li>列出 v8 护栏漏掉的字段，并说明奖励与观测各自读取它们的用途。</li>
+<li>说明 <code>loss=nan</code> 与真实 NaN 的区分方法。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一个检查点归档流程，使续训、评估与不同难度阶段互不覆盖，写出目录结构与闸门改动。</li>
+<li>给定一次训练曲线中出现 NaN，写出从 <code>nefc overflow</code> 到优化器的排查顺序与每一步的判据。</li>
+<li>论证把 <code>njmax</code> 从 64 提到 256 的代价与收益，给出定量估算所需的量。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>envs/go1_walk.py</code></td><td>奖励截断、求解器迭代与接触模型参数</td></tr><tr><td><code>train/train_go1.py</code></td><td>检查点闸门、续训守卫、指标读取与日志路径</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>NaN 根因、版本对照与证伪记录</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-超参实验的失败记录与验收口径"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-超参实验的失败记录与验收口径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/11-强化学习/04-训练稳定性与超参/04-超参实验的失败记录与验收口径.md</span></div><div class="dfile__body"><p>超参实验里最贵的错误是记错账；选错值的代价通常小得多。这套工程早期把“5M 环境步”当成三件事的合集：奖励面缺项、brax 的 batch_size 语义、num_timesteps 的换算。三处各自看起来都只是细节，合起来让训练预算名不副实，浪费了从 v4 到 v9 的六轮实验。</p>
+<p>另一类问题是拿错了验收指标。多方向任务里 brax 评估给出的回合长度与真实步数差五倍，原因在自动重置包装器不重置环境信息。如果按这个指标判断策略好坏，会得出与实测相反的结论。</p>
+<p>记账错误、分档与实际生效值的差异、续训学习率这三件事常同时出现，评估口径与基线排名只有在这三件事定下来之后才有意义。</p>
+<h2 id="三项记账错误合起来让-5m-名不副实">三项记账错误合起来让 5M 名不副实</h2>
+<p>第一项是奖励面漏项。参考仓库算出了 <code>joint_velocity_cost</code> 但求和时漏加，我们照着完整列表实现，该项在随机策略下每步 -1.98，是最大的单项成本；配合总奖励下限 <code>max(0, ·)</code>，正奖励区间被大幅收窄，把权重置 0 之后奖励地形才与参考一致（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:153-157</code>）。</p>
+<p>第二项是 <code>batch_size</code> 语义，v4 到 v8 每个 minibatch 装了 2048 条转移，是 SB3 的 32 倍，更新密度只有参考的三十二分之一（<code>:159-162</code>）。第三项是 <code>num_timesteps</code> 换算，v9 只给 400K 环境步，等于 16 个训练步，只有参考的十二分之一，<code>eval_reward</code> 自然全程 0.000（<code>:168-173</code>）。</p>
+<p>三项叠加的表现是“奖励恒为 0 且训练看起来在跑”，这一点在证伪表里被专门澄清：下限机制确实存在，但 v1 到 v7 的恒零是动作语义错误、漏项与预算记错三者叠加的结果（<code>:395-396</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["看起来在训练, eval_reward 全程 0"] --> B{"奖励面完整?"}
+  B -->|"否"| C["joint_velocity 漏项: 每步 -1.98"]
+  B -->|"是"| D{"更新密度够?"}
+  D -->|"否"| E["batch_size 语义: 差 32 倍"]
+  D -->|"是"| F{"预算够?"}
+  F -->|"否"| G["num_timesteps 换算: 只有 1/12"]
+  F -->|"是"| H["检查动作语义与终止条件"]</pre></div>
+<h2 id="磁盘上的记账证据">磁盘上的记账证据</h2>
+<p>记账错误可以从检查点目录反推。v4 到 v8 的间隔是 786,432 步，等于 <code>batch_size(64) × unroll(32) × num_minibatches(384)</code>，是参考 rollout 24,576 的 32 倍；v9 改成 <code>batch_size=2</code> 之后间隔变成 49,152，等于 <code>2 × 24576</code>，说明语义已改对；v10 的间隔是 270,336，等于 <code>11 × 24576</code>（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:164-166</code>、<code>:210</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>checkpoint 间隔</th><th>与参考 rollout 的关系</th><th>判定</th></tr></thead><tbody><tr><td>v4 到 v8</td><td>786,432</td><td>32 倍</td><td>batch_size 语义错误</td></tr><tr><td>v9</td><td>49,152</td><td>2 倍</td><td>语义已改对，预算不足</td></tr><tr><td>v10</td><td>270,336</td><td>11 倍</td><td>恢复正确</td></tr></tbody></table>
+<h2 id="分档默认值与实际生效值的差异">分档默认值与实际生效值的差异</h2>
+<p>分档只给默认值，命令行覆盖会让“实际生效”与“分档默认”不同。v18 的命令加了 <code>--layers 128,128</code>，覆盖了 sb3_full 分支里的 (64,64)，实际网络是两层 128 宽；记录里为此单独列了一张“实际生效超参”表（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:1696-1718</code>）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>v18 实际值</th><th>来源</th></tr></thead><tbody><tr><td>网络</td><td>actor 与 critic 各 (128,128)</td><td><code>--layers</code> 覆盖</td></tr><tr><td>激活 / 分布</td><td>tanh / normal</td><td>sb3_full</td></tr><tr><td>学习率</td><td>3e-4</td><td>默认</td></tr><tr><td>PPO clip / grad_clip</td><td>0.2 / 0.5</td><td>sb3_full</td></tr><tr><td>entropy / discount</td><td>0.0 / 0.99</td><td>sb3_full</td></tr><tr><td>观测归一化</td><td>关</td><td>未启用 <code>--norm_obs</code></td></tr><tr><td>rollout</td><td>768 × 32 = 24,576</td><td>sb3_full</td></tr><tr><td>minibatch</td><td>2 序列 × 32 步 = 64 条</td><td>sb3_full</td></tr></tbody></table>
+<p>同一节还给了一组实测参数量：观测 48 维时 actor 24,344 个参数、critic 22,913；观测涨到 83 维与 154 维后分别是 28,824 与 27,393（<code>:1722-1727</code>）。维度增加没有显著改变网络容量，这是“观测加宽不必同时加网络”的定量依据。</p>
+<h2 id="预算档位的推进">预算档位的推进</h2>
+<p>训练预算从 5M 提到 20M、40M、60M，每一步都由一次失败支撑。v10 在 5.14M 步达成 30 秒不摔（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:317-337</code>）；v18 用 20M 步证实“缺预算”的判断（<code>:910</code>）；v22 从 v21 续训到 40M 并加入爬升激励（<code>:4383</code>、<code>:4605</code>）；v23 在对称正则之后跑到 60M（<code>:4726</code>，检查点目录 <code>data/v23_60M_checks/</code>）。训练入口的默认预算是 100M 步（<code>train/train_go1.py:104</code>），与参考仓库 locomotion 档一致。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>版本</th><th>预算</th><th>主要变量</th><th>结果判断</th></tr></thead><tbody><tr><td>v10</td><td>5.14M</td><td>硬接触 + 护栏 + njmax</td><td>30 秒不摔</td></tr><tr><td>v18</td><td>20M</td><td>指令条件化 + 步态项</td><td>证实缺预算</td></tr><tr><td>v22</td><td>续训到 40M</td><td>只加 <code>ascent</code> 与降学习率</td><td>爬升改善</td></tr><tr><td>v23</td><td>60M</td><td>对称正则 + 台阶激励</td><td>见实验记录 28 章</td></tr></tbody></table>
+<h2 id="行走与起身两个入口的默认预算">行走与起身两个入口的默认预算</h2>
+<p>两个训练入口的默认超参可以并排看。行走入口的默认预算是 100M 环境步、8192 环境、回合 750 步、评估 20 次（<code>train/train_go1.py:104-107</code>）；起身入口是 50M 环境步、768 环境、回合 300 步、评估 20 次，学习率 3e-4、熵 0、折扣 0.99、clip 0.2、梯度裁剪 0.5、网络 (128,128)（<code>train/train_getup.py:113-137</code>）。</p>
+<p>起身入口的默认规模更小，原因是它的环境本身是单任务、单姿态的，768 个并行环境已经覆盖出生姿态的多样性；行走任务的指令条件化需要更大的并行度。两个入口的折扣都取 0.99，熵在起身侧默认 0，与“先发现动作再谈探索”的判断一致。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>项</th><th>行走入口</th><th>起身入口</th></tr></thead><tbody><tr><td>num_timesteps</td><td>100M</td><td>50M</td></tr><tr><td>num_envs</td><td>8192</td><td>768</td></tr><tr><td>episode_length</td><td>750</td><td>300</td></tr><tr><td>learning_rate</td><td>3e-4</td><td>3e-4</td></tr><tr><td>entropy</td><td>1e-2（默认档）</td><td>0.0</td></tr><tr><td>discounting</td><td>0.97（默认档）</td><td>0.99</td></tr><tr><td>网络</td><td>(512,256,128)</td><td>(128,128)</td></tr></tbody></table>
+<p>两张表的差异不代表两个任务用两套算法，而是两个入口各自把“参考配方”写成了默认值。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  state "v10: 5.14M 环境步" as V10
+  state "v18: 20M 环境步" as V18
+  state "v22: 续训到 40M" as V22
+  state "v23: 60M 环境步" as V23
+  [*] --> V10
+  V10 --> V18: 指令条件化 + 步态项
+  V18 --> V22: 只加 ascent 与降学习率
+  V22 --> V23: 对称正则 + 台阶激励
+  note right of V22 : 续训需 --restore + --step_offset</pre></div>
+<h2 id="续训必须降学习率">续训必须降学习率</h2>
+<p>续训时检查点不含优化器状态，Adam 动量从零重建、步数从 0 重新计数，所以续训需要更低的学习率（<code>train/train_go1.py:96-97</code>）。v22 的命令把学习率从 3e-4 降到 1e-4，并用 <code>--step_offset 20054016</code> 保持日志里的累计步数与实际进度一致（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4537-4554</code>）。</p>
+<p><code>step_offset</code> 只影响日志显示，不改训练语义，这一条在守卫打印里写得很清楚（<code>train/train_go1.py:98-99</code>）。同一条命令里 <code>--restore</code> 指向 v21 的那一份检查点目录，而不是 logs 根目录，避免加载到错误的步数档。</p>
+<h2 id="评估指标在这套栈里不可信">评估指标在这套栈里不可信</h2>
+<p>brax 评估报出的回合长度是 652 到 733，看起来几乎跑满；直接数“走到终止用了几步”得到 124 到 152，跑满率为 0，两者差五倍。原因是 <code>BraxAutoResetWrapper(full_reset=False)</code> 只重置数据与观测，不重置环境信息，<code>EpisodeWrapper</code> 维护的步数在终止后不清零，评估里的回合长度主要反映 750 步的截断计数（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:518-532</code>）。</p>
+<p>结论是会频繁终止的任务不能用 <code>eval/avg_episode_length</code> 判断好坏，要用逐指令评估工具直接跑到终止去数。v10 的回合长度恰好正确，因为它确实能跑满 750 步，这一点由 30 秒长测与逐指令评估双重确认（<code>:531-532</code>）。</p>
+<h2 id="关键帧基线与学习型策略的排名">关键帧基线与学习型策略的排名</h2>
+<p>起身任务的排名给出了一个反直觉结果：非学习的关键帧状态机实用成功率 20.1% 到 28.1%，模仿学习 5.1% 到 7.4%，模仿加 PPO 与纯 PPO 都是 0%（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:5604-5612</code>）。这说明在该任务上训练步数不是瓶颈，奖励与判据的对齐才是。</p>
+<p>同一节给出的下一步里，前三条都指向奖励与判据的对齐，第四条才是“微调阶段改用更强的 KL 或信任域约束、或改走 DAgger 用关键帧当专家在策略访问到的状态上打标签”（<code>:5595-5602</code>）。把预算与算法调整排在奖励对齐之后，是这份记录里反复出现的优先级。</p>
+<h2 id="已证伪的假设">已证伪的假设</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>曾经的假设</th><th>实际情况</th></tr></thead><tbody><tr><td>硬接触在 MJX 上不收敛</td><td>伪命题，软接触才是不收敛的那个</td></tr><tr><td><code>eval_reward=0</code> 是早期正常现象</td><td>部分错，恒零是动作语义、漏项与预算三者叠加</td></tr><tr><td>NaN 由缺观测归一化引起</td><td>错，v10 不归一化也无 NaN</td></tr><tr><td><code>nefc overflow</code> 只是警告</td><td>错，会写坏物理量并导致 NaN</td></tr><tr><td><code>njmax=64</code> 够用</td><td>错，摔倒自碰撞需要更大上限</td></tr></tbody></table>
+<p>这张表对应记录里第 8 节，来源是逐条实测（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:391-400</code>）。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>预算记账要同时看奖励面完整性、batch_size 语义与 num_timesteps 换算。</li>
+<li>checkpoint 间隔可以反推 rollout 长度，是记账最硬的证据。</li>
+<li>命令行覆盖会让实际生效值偏离分档默认，实验记录要写实际生效表。</li>
+<li>续训检查点不含优化器状态，必须降学习率并用 step_offset 对齐日志。</li>
+<li>会频繁终止的任务不能看 brax 的回合长度指标。</li>
+<li>关键帧基线在这套任务上强于纯 PPO，瓶颈在奖励与判据对齐。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决策</th><th>选择</th><th>收益</th><th>代价</th></tr></thead><tbody><tr><td>预算推进</td><td>5M 到 60M 逐档</td><td>每档有明确结论</td><td>长跑占用 GPU 时间长</td></tr><tr><td>超参记录</td><td>写实际生效表</td><td>换人复现不走样</td><td>每次实验多一份核对工作</td></tr><tr><td>续训策略</td><td>降学习率并续跑</td><td>省下从头训练的成本</td><td>无优化器状态，前期会回退</td></tr><tr><td>评估口径</td><td>逐指令跑到终止</td><td>与行为一致</td><td>需要额外工具</td></tr><tr><td>优先级</td><td>奖励对齐先于调参</td><td>不浪费预算在错的奖励上</td><td>需要先做诊断</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>用 v18 的命令行说明 <code>--layers 128,128</code> 覆盖了哪个分档的默认值。</li>
+<li>写出从 checkpoint 间隔 786,432 反推 batch_size 语义错误的计算过程。</li>
+<li>解释为什么续训要降学习率，并指出 <code>step_offset</code> 的作用范围。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol>
+<li>设计一张“实际生效超参表”的字段清单，使其能覆盖分档默认、命令行覆盖与环境配置三类来源。</li>
+<li>给定一份 brax 评估日志，写出用逐指令评估交叉验证回合长度的流程。</li>
+<li>论证“奖励与判据对齐优先于算法与预算调整”需要哪些证据，并设计一个能推翻它的实验。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>train/train_go1.py</code></td><td>预算默认值、续训提示与 step_offset 语义</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>记账错误、实际生效超参、预算档位与证伪表</td></tr><tr><td><code>data/v23_60M_checks/</code></td><td>60M 档的检查点与日志</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/11-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/03-%E5%A5%96%E5%8A%B1%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AF%BE%E7%A8%8B%E5%AD%A6%E4%B9%A0/"><span class="k">← 上一篇</span><span class="t">奖励设计与课程学习</span><span class="d">强化学习 · 4 个文件</span></a><a class="next" href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/01-jit%C2%B7vmap%C2%B7grad/"><span class="k">下一篇 →</span><span class="t">jit·vmap·grad</span><span class="d">JAX 与 Brax · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

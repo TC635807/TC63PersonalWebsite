@@ -7,8 +7,10 @@ updated: 2026-10-07
 
 # 本项目中断与 DMA 清单
 
-> 本页把前四页的结论收拢成可核对的清单：每一个中断服务函数的来源、优先级、回调落点，
-> 以及它是否真的会触发。末尾给出中断不进来时的排查顺序，与工作记录里的 CAN 故障报告对应。
+下面把结论收拢成可核对的清单：每一个中断服务函数的来源、优先级、回调落点，以及它是否真的会触发。
+
+一条中断从产生到产生效果要经过六段，清单按这六段组织；末尾给出中断不进来时的排查顺序，与工作记录里的 CAN 故障报告对应。
+
 
 ## 1. 清单怎么读
 
@@ -127,7 +129,7 @@ sequenceDiagram
   Note over ISR_C,G: 路径二 中断直接写全局量
   ISR_C->>G: HAL_CAN_GetRxMessage 后按 StdId 分发并赋值
   ISR_C-->>G: 中断返回 无唤醒 无缓冲
-  CT->>G: 任务侧直接读 5 ms 周期
+  CT->>G: 任务侧直接读 1 ms 周期
 ```
 
 两条路径的差别在 01-FreeRTOS 单元里核算过：队列路径有同步、有缓冲、有唤醒；CAN 路径三样都没有，靠"单字段天然原子"和"周期任务定时读"维持。本单元只确认调用链的落点：CAN 的回调在 `BSP/Src/bsp_can.cpp:590` 开始，USB 的回调在 `USB_DEVICE/App/usbd_cdc_if.c:261` 开始。
@@ -155,9 +157,9 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 
 ### 3.4 SPI 路径上的中断密度
 
-`BMI088::readRawData()` 在一次读操作里发起三次 DMA 传输：加速度计 6 字节、陀螺仪 8 字节、温度 2 字节（`BMI088/Src/BMI088.cpp:123-142`）。`HAL_SPI_TransmitReceive_DMA()` 会在收发两条流上都打开 TC 中断（`hal_dma.c:479` 的 `DMA_IT_TC`），所以每次传输最多产生两次 DMA 中断，用户回调落在其中一条流的完成处理里。
+`BMI088::readRawData()` 在一次读操作里发起三次 DMA 传输：加速度计 6 字节、陀螺仪 8 字节、温度 2 字节（`BMI088/Src/BMI088.cpp:123-142`）。`HAL_SPI_TransmitReceive_DMA()` 会在收发两条流上都打开 TC 中断（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c:479` 的 `DMA_IT_TC`），所以每次传输最多产生两次 DMA 中断，用户回调落在其中一条流的完成处理里。
 
-`ImuTask` 的循环是 1 ms 一次（`Task/Src/ImuTask.cpp:100` 的 `DWT_Delay_ms(1)`），每次循环调用 `BMI088_Read()` 一遍。按三次传输、每次两条流计算，SPI 的 DMA 中断密度在每秒六千次量级。这是本工程中断密度最高的一条路径，也是把 DMA 流优先级设为"最高"与"高"的原因。
+`ImuTask` 的循环是 1 ms 一次（`Task/Src/ImuTask.cpp:111` 的 `DWT_Delay_ms(1)`），每次循环调用 `BMI088_Read()` 一遍。按三次传输、每次两条流计算，SPI 的 DMA 中断密度在每秒六千次量级。这是本工程中断密度最高的一条路径，也是把 DMA 流优先级设为"最高"与"高"的原因。
 
 ### 3.5 TIM2 的时基链
 
@@ -251,16 +253,16 @@ $$f_{\text{CAN}} = \frac{42\ \text{MHz}}{2 \times (1 + 15 + 5)} = 1\ \text{Mbps}
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 全部服务函数（:82-165 内核异常、:177-368 外设中断） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 时基回调（:206-218）、实例注册（:126） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量（:48-61） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个向量（:125-128、:158-161） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 配置与向量（:42-84） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 通知激活（:36-59）、FIFO0 回调（:590 起） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 三次 DMA 读（:123-142）、完成回调（:355-369） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 1 ms 循环（:34-104） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | `CDC_Receive_FS` 与 `FromISR`（:261-283） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `HAL_DMA_Start_IT()` 打开的流中断（:479-484）、中止说明（:506-510） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理（:359-368） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c` | 两个实例注册与 `HAL_Delay(50)`（:126-127、:123-131） |
-| `/home/wyx/Work-Summary-and-Diary/工作记录/can通信波特率问题.md` | CAN 故障的排查过程与排查顺序 |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 全部服务函数（:82-165 内核异常、:177-368 外设中断） |
+| `2026OmniSentryGimbal/Core/Src/main.c` | 时基回调（:206-218）、实例注册（:126） |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量（:48-61） |
+| `2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个向量（:125-128、:158-161） |
+| `2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 配置与向量（:42-84） |
+| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 通知激活（:36-59）、FIFO0 回调（:590 起） |
+| `2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 三次 DMA 读（:123-142）、完成回调（:355-369） |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 1 ms 循环（:34-104） |
+| `2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | `CDC_Receive_FS` 与 `FromISR`（:261-283） |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `HAL_DMA_Start_IT()` 打开的流中断（:479-484）、中止说明（:506-510） |
+| `2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理（:359-368） |
+| `2026OmniSentryChassis/Core/Src/main.c` | 两个实例注册与 `HAL_Delay(50)`（:126-127、:123-131） |
+| `can通信波特率问题.md` | CAN 故障的排查过程与排查顺序 |

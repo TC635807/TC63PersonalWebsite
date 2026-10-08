@@ -19,7 +19,7 @@ CubeMX 每次生成都会按模板重写 `Core` 与 `USB_DEVICE` 下的文件。
 | `USB_DEVICE/App/usbd_cdc_if.c` | USB 接收回调，16 对标记 |
 | `Core/Src/syscalls.c`、`Core/Src/sysmem.c`、`Core/Src/system_stm32f4xx.c` | 完全没有标记的三个文件 |
 
-## 1. 概念
+## 1. 标记的抓取与回填
 
 生成文件里散落着成对的注释标记（marker）：
 
@@ -62,7 +62,7 @@ flowchart TD
 
 标记数量与手写内容没有关系。`usart.c` 的 24 对标记全是空的，因为外设参数由 `.ioc` 生成，不需要人工补充；`main.c` 只有 19 对，但手写代码集中在这里。判断一份生成文件有没有被改过，看标记内的内容比看行数可靠。
 
-## 3. 落到本项目：标记区里实际放了什么
+## 3. 标记区里实际放了什么
 
 ### 3.1 main.c
 
