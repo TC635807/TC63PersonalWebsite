@@ -11,6 +11,9 @@ body.is-docs {
   /* 正文阅读宽度：原来死卡 72ch —— 中文字宽是 ch 的两倍，等于每条只有四十来个字，
      右侧留一大片空。改成"铺满内容列，只在超宽屏上收一下" */
   --doc-read: min(100%, 1080px);
+  /* 正文里图片 / 图表的高度上限：竖长的截图或流程图原来能撑到三四屏高，
+     封顶之后一屏半以内看完，想看细节点开灯箱放大 */
+  --doc-media-max: min(80vh, 900px);
 }
 
 /* 文档页把站点栅格放宽：内容列更大，左右留白同时收窄 */
@@ -121,7 +124,11 @@ body.is-reading .docprogress { opacity: 1; }
   align-items: start;
   padding-block: clamp(24px, 3.4vw, 44px) clamp(40px, 6vw, 88px);
 }
-.docs__rail { position: relative; }
+/* 左栏必须在页面滚动时"跟住"：
+   .docs 是 align-items: start，网格项默认按内容高排版，也就是左栏高 = railbox 高，
+   sticky 的可移动行程正好是 0 —— 于是目录看着像普通流里的块，往下一滚就没了。
+   让左栏撑满整行（行高由正文列撑开），sticky 才有行程可用。 */
+.docs__rail { position: relative; align-self: stretch; }
 @media (min-width: 1081px) {
   .docs__rail > .railbox {
     position: sticky;
@@ -586,10 +593,16 @@ body.is-reading .docprogress { opacity: 1; }
 }
 .codeblock pre code { font-family: var(--ak-font-mono); }
 
-/* 图片：脚本包成 figure，带图注与放大 */
+/* 图片：脚本包成 figure，带图注与放大
+   位图不能像 svg 那样靠 preserveAspectRatio 兜底：width 一旦写死，max-height 会把画面压扁。
+   所以这里宽度留 auto（= 原始宽度，超出内容列才收缩），高度上限只负责"别太长" */
 .dfile__body img {
+  display: block;
+  width: auto;
   max-width: 100%;
   height: auto;
+  max-height: var(--doc-media-max);
+  margin-inline: auto;
   border: 1px solid var(--line);
   background: var(--paper);
 }
@@ -605,7 +618,17 @@ figure.fig .fig__frame {
   position: relative;
   clip-path: polygon(0 0, calc(100% - var(--doc-cut)) 0, 100% var(--doc-cut), 100% 100%, 0 100%);
 }
-figure.fig .fig__frame img { border: 0; display: block; width: 100%; }
+/* 同上：宽度按原始尺寸走，高度封顶，auto 外边距居中。
+   （实测 width:100% + max-height 会把 400x1600 的截图压成 1080x643，画面变形） */
+figure.fig .fig__frame img {
+  border: 0;
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--doc-media-max);
+  margin-inline: auto;
+}
 figure.fig .fig__frame::after {
   content: 'ZOOM';
   position: absolute;
@@ -655,8 +678,17 @@ figure.fig figcaption .k { color: var(--violet-700); letter-spacing: .12em; }
   transition: border-color .18s ease;
 }
 .diagram:hover { border-color: var(--violet-300); }
-/* mermaid 的 svg 带 viewBox：让它铺满容器宽度（客户端初始化时关掉 useMaxWidth） */
-.diagram svg { width: 100%; max-width: 100%; height: auto; display: block; margin: 0 auto; }
+/* mermaid 的 svg 带 viewBox：照旧铺满容器宽度（客户端初始化时关掉 useMaxWidth），
+   但加一道高度上限 —— 竖长的流程图/时序图原来能被拉到三四屏高，现在封顶在 --doc-media-max，
+   想细看就点开灯箱放大。 */
+.diagram svg {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--doc-media-max);
+  display: block;
+  margin: 0 auto;
+}
 /* 图表也能点开放大（只有脚本可用时才提示，避免无 JS 时给出假光标） */
 .docs-js .diagram { cursor: zoom-in; }
 .docs-js .diagram::after {
