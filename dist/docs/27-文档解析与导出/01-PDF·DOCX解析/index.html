@@ -2,13 +2,13 @@
 <p>用户上传一份资料，希望它变成卡片。第一步是把文件变成一段纯文本，AI 分析要等这一步完成：PDF 要逐页抽字，DOCX 要读段落和表格，纯文本文件要猜编码。仓库把这一步放在 <code>backend/documents/parser.py</code> 里，对外只有一个函数 <code>parse_file(filename, content)</code>。</p>
 <p>分派逻辑按扩展名进行，先判断大小与格式，再调用对应的解析函数。路由层在调用之前又做了一次格式检查，两道白名单并不完全重合，这决定了哪些扩展名实际能用。</p>
 <h2 id="1-入口与大小上限">1. 入口与大小上限</h2>
-<p><code>parse_file</code> 的第一件事是查大小（<code>backend/documents/parser.py:43</code>）：</p>
+<p><code>parse_file</code> 的第一件事是查大小（<code>backend/documents/parser.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">_MAX_FILE_SIZE</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 20</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 1024</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 1024</span><span style="color:#6A737D">  # 20 MB 文件大小上限</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> len</span><span style="color:#24292E">(content) </span><span style="color:#D73A49">></span><span style="color:#005CC5"> _MAX_FILE_SIZE</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> ParseError(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"文件过大（</span><span style="color:#005CC5">{len</span><span style="color:#24292E">(content) </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 1024</span><span style="color:#D73A49"> /</span><span style="color:#005CC5"> 1024</span><span style="color:#D73A49">:.1f</span><span style="color:#005CC5">}</span><span style="color:#032F62"> MB），上限 20 MB"</span><span style="color:#24292E">)</span></span></code></pre>
 <p>上限是 20 MB，超过就抛 <code>ParseError</code>，错误信息里带上实际大小。注意判断发生在内容已经读入内存之后：路由先 <code>await file.read()</code> 再调用解析，因此超大文件仍然会先占用内存。</p>
 <h2 id="2-扩展名分派">2. 扩展名分派</h2>
-<p>扩展名取自文件名最后一个点之后的部分，统一转小写（<code>parser.py:46</code>）。分派表如下：</p>
+<p>扩展名取自文件名最后一个点之后的部分，统一转小写（<code>parser.py</code>）。分派表如下：</p>
 
 
 
@@ -44,8 +44,8 @@
 
 
 
-<table><thead><tr><th>扩展名</th><th>处理</th><th>位置</th></tr></thead><tbody><tr><td><code>txt</code>、<code>md</code>、<code>markdown</code>、<code>text</code></td><td>文本解码</td><td><code>parser.py:48-49</code></td></tr><tr><td><code>pdf</code></td><td>pdfplumber 抽字</td><td><code>parser.py:50-51</code></td></tr><tr><td><code>docx</code></td><td>python-docx 读段落与表格</td><td><code>parser.py:52-53</code></td></tr><tr><td><code>doc</code></td><td>直接拒绝并给出另存为提示</td><td><code>parser.py:54-55</code></td></tr><tr><td>其他</td><td>尝试文本解码，失败再报错</td><td><code>parser.py:56-61</code></td></tr></tbody></table>
-<p>老版 <code>.doc</code> 的处理是直接抛出固定提示，不做解析尝试（<code>parser.py:17-20</code>）：说明该格式不支持，建议用 Word 或 WPS 另存为 <code>.docx</code>。这类错误对用户是可操作的。</p>
+<table><thead><tr><th>扩展名</th><th>处理</th><th>位置</th></tr></thead><tbody><tr><td><code>txt</code>、<code>md</code>、<code>markdown</code>、<code>text</code></td><td>文本解码</td><td><code>parser.py</code></td></tr><tr><td><code>pdf</code></td><td>pdfplumber 抽字</td><td><code>parser.py</code></td></tr><tr><td><code>docx</code></td><td>python-docx 读段落与表格</td><td><code>parser.py</code></td></tr><tr><td><code>doc</code></td><td>直接拒绝并给出另存为提示</td><td><code>parser.py</code></td></tr><tr><td>其他</td><td>尝试文本解码，失败再报错</td><td><code>parser.py</code></td></tr></tbody></table>
+<p>老版 <code>.doc</code> 的处理是直接抛出固定提示，不做解析尝试（<code>parser.py</code>）：说明该格式不支持，建议用 Word 或 WPS 另存为 <code>.docx</code>。这类错误对用户是可操作的。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["parse_file 文件名 内容"] --> B{"内容超过 20 MB"}
   B -->|是| C["ParseError 文件过大"]
@@ -60,7 +60,17 @@
   K -->|否| L["ParseError 不支持的格式"]
   K -->|是| F</pre></div>
 <h2 id="3-文本解码的编码回退链">3. 文本解码的编码回退链</h2>
-<p>纯文本没有自描述编码，函数按固定顺序尝试（<code>parser.py:64-71</code>）：</p>
+<p>解码失败不能直接放弃，按顺序试几种编码，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：编码探测与回退链</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> decode_text</span><span style="color:#24292E">(raw: </span><span style="color:#005CC5">bytes</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">str</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> enc </span><span style="color:#D73A49">in</span><span style="color:#24292E"> (</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">, </span><span style="color:#032F62">"utf-8-sig"</span><span style="color:#24292E">, </span><span style="color:#032F62">"gb18030"</span><span style="color:#24292E">, </span><span style="color:#032F62">"latin-1"</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">        try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">            return</span><span style="color:#24292E"> raw.decode(enc)</span></span>
+<span class="line"><span style="color:#D73A49">        except</span><span style="color:#005CC5"> UnicodeDecodeError</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">            continue</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> raw.decode(</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">, </span><span style="color:#E36209">errors</span><span style="color:#D73A49">=</span><span style="color:#032F62">"replace"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>纯文本文件本身不携带编码信息，只能靠试探。<code>utf-8-sig</code>处理带 BOM（字节顺序标记）的文件——Windows 记事本常写这个前缀，不解掉它会在正文开头留下一个不可见字符。<code>latin-1</code>放在最后是因为它把任意字节都映射成字符、永不失败，一旦提前使用就等于放弃探测；末尾的<code>errors="replace"</code>保证最坏情况也能返回可读文本而不是抛异常，代价是出现替换符时原文已经丢失。</p>
+<p>纯文本没有自描述编码，函数按固定顺序尝试（<code>parser.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> encoding </span><span style="color:#D73A49">in</span><span style="color:#24292E"> (</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">, </span><span style="color:#032F62">"gbk"</span><span style="color:#24292E">, </span><span style="color:#032F62">"gb2312"</span><span style="color:#24292E">, </span><span style="color:#032F62">"latin-1"</span><span style="color:#24292E">):</span></span>
 <span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> content.decode(encoding)</span></span>
@@ -100,7 +110,7 @@
 <table><thead><tr><th>顺序</th><th>编码</th><th>覆盖场景</th></tr></thead><tbody><tr><td>1</td><td><code>utf-8</code></td><td>现代编辑器与网页复制内容</td></tr><tr><td>2</td><td><code>gbk</code></td><td>中文 Windows 常见编码</td></tr><tr><td>3</td><td><code>gb2312</code></td><td><code>gbk</code> 的子集，多为历史文件</td></tr><tr><td>4</td><td><code>latin-1</code></td><td>任意字节都能解码，兜底</td></tr></tbody></table>
 <p><code>latin-1</code> 会把任何字节序列解成字符串，因此循环不会走到最后那条 <code>raise</code>：实际行为是「无法识别的内容变成乱码文本」，而不是报错。乱码会一路传进 AI 分析环节，表现为生成的卡片内容不可读。</p>
 <h2 id="4-未知扩展名的处理">4. 未知扩展名的处理</h2>
-<p>不在白名单里的扩展名不会立刻拒绝，而是先当成文本试一次（<code>parser.py:56-61</code>）。只有解码抛 <code>UnicodeDecodeError</code> 时才报「不支持的文件格式」。由于回退链最后有 <code>latin-1</code>，这条报错路径同样很难触发：二进制文件通常会被解成乱码并通过。</p>
+<p>不在白名单里的扩展名不会立刻拒绝，而是先当成文本试一次（<code>parser.py</code>）。只有解码抛 <code>UnicodeDecodeError</code> 时才报「不支持的文件格式」。由于回退链最后有 <code>latin-1</code>，这条报错路径同样很难触发：二进制文件通常会被解成乱码并通过。</p>
 
 
 
@@ -128,7 +138,7 @@
 
 <table><thead><tr><th>输入</th><th>期望</th><th>实际</th></tr></thead><tbody><tr><td>未知文本类扩展名</td><td>按文本解析</td><td>成功</td></tr><tr><td>未知二进制扩展名</td><td>拒绝</td><td>解成乱码后成功</td></tr><tr><td>文件名没有点</td><td>拒绝</td><td>按文本解析</td></tr></tbody></table>
 <h2 id="5-路由层的第二道白名单">5. 路由层的第二道白名单</h2>
-<p>上传接口在调用解析之前先把扩展名筛一遍（<code>backend/routes/documents.py:46-51</code>）：</p>
+<p>上传接口在调用解析之前先把扩展名筛一遍（<code>backend/routes/documents.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">ext </span><span style="color:#D73A49">=</span><span style="color:#24292E"> filename.rsplit(</span><span style="color:#032F62">"."</span><span style="color:#24292E">, </span><span style="color:#005CC5">1</span><span style="color:#24292E">)[</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">].lower() </span><span style="color:#D73A49">if</span><span style="color:#032F62"> "."</span><span style="color:#D73A49"> in</span><span style="color:#24292E"> filename </span><span style="color:#D73A49">else</span><span style="color:#032F62"> ""</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> ext </span><span style="color:#D73A49">not</span><span style="color:#D73A49"> in</span><span style="color:#24292E"> (</span><span style="color:#032F62">"txt"</span><span style="color:#24292E">, </span><span style="color:#032F62">"md"</span><span style="color:#24292E">, </span><span style="color:#032F62">"markdown"</span><span style="color:#24292E">, </span><span style="color:#032F62">"pdf"</span><span style="color:#24292E">, </span><span style="color:#032F62">"docx"</span><span style="color:#24292E">):</span></span>
 <span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> HTTPException(</span><span style="color:#E36209">status_code</span><span style="color:#D73A49">=</span><span style="color:#005CC5">400</span><span style="color:#24292E">, </span><span style="color:#E36209">detail</span><span style="color:#D73A49">=</span><span style="color:#D73A49">f</span><span style="color:#032F62">"不支持的文件格式 .</span><span style="color:#005CC5">{</span><span style="color:#24292E">ext</span><span style="color:#005CC5">}</span><span style="color:#032F62">（支持: txt, md, pdf, docx）"</span><span style="color:#24292E">)</span></span></code></pre>
@@ -154,7 +164,7 @@
 
 
 <table><thead><tr><th>层</th><th>白名单</th><th>作用</th></tr></thead><tbody><tr><td>路由</td><td><code>txt md markdown pdf docx</code></td><td>返回 400 与提示</td></tr><tr><td>解析器</td><td>上面四项加 <code>text</code>，其余尝试解码</td><td>兜底与解析</td></tr></tbody></table>
-<p>路由随后还会读内容并拒绝空文件（<code>documents.py:53-58</code>），然后才调用解析。解析层的 <code>ParseError</code> 被捕获后转成 400，错误文案直接来自异常消息（<code>documents.py:60-63</code>）。</p>
+<p>路由随后还会读内容并拒绝空文件（<code>documents.py</code>），然后才调用解析。解析层的 <code>ParseError</code> 被捕获后转成 400，错误文案直接来自异常消息（<code>documents.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant U as 上传请求
@@ -181,7 +191,7 @@
     end
   end</pre></div>
 <h2 id="6-解析之后">6. 解析之后</h2>
-<p><code>parse_file</code> 只负责产出文本，不写文件也不碰数据库。路由拿到文本后记录长度，再做积分与并发校验，最后把任务交给后台流水线（<code>documents.py:65-107</code>）。因此这一层的输出质量直接决定后续分析的上限：乱码、丢表格、丢页都会被当成正常输入。</p>
+<p><code>parse_file</code> 只负责产出文本，不写文件也不碰数据库。路由拿到文本后记录长度，再做积分与并发校验，最后把任务交给后台流水线（<code>documents.py</code>）。因此这一层的输出质量直接决定后续分析的上限：乱码、丢表格、丢页都会被当成正常输入。</p>
 
 
 
@@ -249,7 +259,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为超限文件不会占内存</td><td>先读入再判断</td><td><code>documents.py:53-58</code></td></tr><tr><td>以为能识别乱码</td><td><code>latin-1</code> 兜底使其通过</td><td><code>parser.py:66-71</code></td></tr><tr><td>以为未知格式一定会被拒</td><td>先按文本尝试</td><td><code>parser.py:56-61</code></td></tr><tr><td>用 <code>.text</code> 上传</td><td>路由白名单不含它</td><td><code>documents.py:47</code></td></tr><tr><td>以为 <code>.doc</code> 会被尽力解析</td><td>直接抛提示</td><td><code>parser.py:54-55</code></td></tr><tr><td>把 <code>ParseError</code> 与依赖缺失混为一谈</td><td>动态导入异常不被捕获</td><td><code>parser.py:77</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为超限文件不会占内存</td><td>先读入再判断</td><td><code>documents.py</code></td></tr><tr><td>以为能识别乱码</td><td><code>latin-1</code> 兜底使其通过</td><td><code>parser.py</code></td></tr><tr><td>以为未知格式一定会被拒</td><td>先按文本尝试</td><td><code>parser.py</code></td></tr><tr><td>用 <code>.text</code> 上传</td><td>路由白名单不含它</td><td><code>documents.py</code></td></tr><tr><td>以为 <code>.doc</code> 会被尽力解析</td><td>直接抛提示</td><td><code>parser.py</code></td></tr><tr><td>把 <code>ParseError</code> 与依赖缺失混为一谈</td><td>动态导入异常不被捕获</td><td><code>parser.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -432,7 +442,7 @@
   K -->|是| L["ParseError 无可提取文字 可能是扫描件"]
   K -->|否| M["用空行连接各页返回"]</pre></div>
 <h2 id="2-空页与扫描件">2. 空页与扫描件</h2>
-<p>空页不会报错，只是不进入结果：图片页、封面、纯分隔页都会被跳过。如果整本 PDF 一页都没抽出文字，函数抛出固定提示（<code>parser.py:93-94</code>），说明可能是扫描图片版且不支持 OCR。</p>
+<p>空页不会报错，只是不进入结果：图片页、封面、纯分隔页都会被跳过。如果整本 PDF 一页都没抽出文字，函数抛出固定提示（<code>parser.py</code>），说明可能是扫描图片版且不支持 OCR。</p>
 
 
 
@@ -461,8 +471,8 @@
 <table><thead><tr><th>输入</th><th>结果</th></tr></thead><tbody><tr><td>文字版 PDF</td><td>逐页文本，空页跳过</td></tr><tr><td>扫描图片版</td><td><code>ParseError</code> 提示不支持 OCR</td></tr><tr><td>空白页夹在中间</td><td>该页被忽略，其余正常</td></tr><tr><td>全书为空</td><td><code>ParseError</code></td></tr></tbody></table>
 <p>这条提示是解析层少见的可操作错误：用户看到后可以改用带文字层的 PDF，或先做 OCR 再上传。</p>
 <h2 id="3-依赖导入的位置">3. 依赖导入的位置</h2>
-<p><code>pdfplumber</code> 在函数内部导入（<code>parser.py:77</code>），不在模块顶部。这样做让未安装依赖的环境也能加载整个解析模块，只有在解析 PDF 时才触发导入。</p>
-<p>代价是缺依赖时抛的是 <code>ImportError</code>，不是 <code>ParseError</code>。路由只捕获 <code>ParseError</code>（<code>backend/routes/documents.py:60-63</code>），因此未安装 <code>pdfplumber</code> 的部署会在上传 PDF 时返回 500，而不是 400 与可读提示。依赖本身已在 <code>requirements.txt</code> 声明（<code>requirements.txt:19</code>）。</p>
+<p><code>pdfplumber</code> 在函数内部导入（<code>parser.py</code>），不在模块顶部。这样做让未安装依赖的环境也能加载整个解析模块，只有在解析 PDF 时才触发导入。</p>
+<p>代价是缺依赖时抛的是 <code>ImportError</code>，不是 <code>ParseError</code>。路由只捕获 <code>ParseError</code>（<code>backend/routes/documents.py</code>），因此未安装 <code>pdfplumber</code> 的部署会在上传 PDF 时返回 500，而不是 400 与可读提示。依赖本身已在 <code>requirements.txt</code> 声明（<code>requirements.txt</code>）。</p>
 
 
 
@@ -545,6 +555,15 @@
     end
   end</pre></div>
 <h2 id="5-抽取结果的固有损失">5. 抽取结果的固有损失</h2>
+<p>PDF 抽字是按页面坐标做的，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：逐页抽取并拼接</span></span>
+<span class="line"><span style="color:#24292E">parts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> page </span><span style="color:#D73A49">in</span><span style="color:#24292E"> pdf.pages:</span></span>
+<span class="line"><span style="color:#24292E">    text </span><span style="color:#D73A49">=</span><span style="color:#24292E"> page.extract_text() </span><span style="color:#D73A49">or</span><span style="color:#032F62"> ""</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> text.strip():                 </span><span style="color:#6A737D"># 空页（多为扫描件）跳过</span></span>
+<span class="line"><span style="color:#24292E">        parts.append(text.strip())</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#032F62"> "</span><span style="color:#005CC5">\n\n</span><span style="color:#032F62">"</span><span style="color:#24292E">.join(parts)            </span><span style="color:#6A737D"># 页与页之间用空行分隔</span></span></code></pre>
+<p>“PDF 是排版指令而不是文本容器”：文件里保存的是”在坐标 (x, y) 画这个字形”，没有段落、标题、阅读顺序的概念。抽取工具只能按坐标启发式地还原顺序，因此多栏排版、表格、公式会串行错位，这是格式本身的损失而不是库的缺陷。用空行拼接页面保留了”页”这个边界，也顺便让下游能按页定位问题。</p>
 <p>即使一切正常，<code>extract_text()</code> 的输出也不是原文的完整再现：</p>
 
 
@@ -637,7 +656,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为缺依赖会返回 400</td><td><code>ImportError</code> 不被捕获</td><td><code>parser.py:77</code> 与 <code>documents.py:62</code></td></tr><tr><td>认为任何解析失败都是 <code>ParseError</code></td><td>单页异常直接上抛</td><td><code>parser.py:85-91</code></td></tr><tr><td>期待表格结构保留</td><td>只调用 <code>extract_text</code></td><td><code>parser.py:87</code></td></tr><tr><td>把加密文件当成损坏</td><td>文案统一</td><td><code>parser.py:81-82</code></td></tr><tr><td>认为空页会导致失败</td><td>空页只被跳过</td><td><code>parser.py:88-89</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为缺依赖会返回 400</td><td><code>ImportError</code> 不被捕获</td><td><code>parser.py</code> 与 <code>documents.py</code></td></tr><tr><td>认为任何解析失败都是 <code>ParseError</code></td><td>单页异常直接上抛</td><td><code>parser.py</code></td></tr><tr><td>期待表格结构保留</td><td>只调用 <code>extract_text</code></td><td><code>parser.py</code></td></tr><tr><td>把加密文件当成损坏</td><td>文案统一</td><td><code>parser.py</code></td></tr><tr><td>认为空页会导致失败</td><td>空页只被跳过</td><td><code>parser.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -744,7 +763,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/documents/parser.py</code></td><td><code>_parse_pdf</code> 全文（:74-96）</td></tr><tr><td><code>backend/routes/documents.py</code></td><td><code>ParseError</code> 转 400（:60-63）</td></tr><tr><td><code>requirements.txt</code></td><td><code>pdfplumber</code> 版本声明（:19）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-DOCX段落与表格提取"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-DOCX段落与表格提取</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/01-PDF·DOCX解析/03-DOCX段落与表格提取.md</span></div><div class="dfile__body"><h1 id="docx-段落与表格提取">DOCX 段落与表格提取</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/documents/parser.py</code></td><td><code>_parse_pdf</code> 全文</td></tr><tr><td><code>backend/routes/documents.py</code></td><td><code>ParseError</code> 转 400</td></tr><tr><td><code>requirements.txt</code></td><td><code>pdfplumber</code> 版本声明</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-DOCX段落与表格提取"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-DOCX段落与表格提取</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/01-PDF·DOCX解析/03-DOCX段落与表格提取.md</span></div><div class="dfile__body"><h1 id="docx-段落与表格提取">DOCX 段落与表格提取</h1>
 <p>DOCX 是 zip 包里的 XML，结构信息完整：段落、表格、图片、页眉各有节点。<code>_parse_docx</code> 只取两类内容——段落与表格——并把它们压成一段段纯文本。做法是先用 <code>doc.paragraphs</code> 收集所有段落，再遍历 <code>doc.tables</code> 把每行拼成一条竖线分隔的记录，最后统一追加。</p>
 <p>这段逻辑很短，但它决定了 DOCX 里哪些信息能进入后续分析：段落与表格能，图片、文本框、脚注、页眉页脚不能；表格的二维结构被压成一行行文字；内容在文档中的先后顺序也不再保留。</p>
 <h2 id="1-提取流程">1. 提取流程</h2>
@@ -804,7 +823,7 @@
 
 
 
-<table><thead><tr><th>步骤</th><th>行为</th></tr></thead><tbody><tr><td>导入依赖</td><td>函数内 <code>from docx import Document</code></td></tr><tr><td>打开</td><td><code>Document(BytesIO(content))</code>，失败转 <code>ParseError</code></td></tr><tr><td>段落</td><td>去空白后非空才收集</td></tr><tr><td>表格</td><td>逐行、逐单元格取值，非空单元格用 `</td></tr><tr><td>空结果</td><td>抛 <code>ParseError</code></td></tr><tr><td>合并</td><td>所有条目用空行分隔</td></tr></tbody></table>
+<table><thead><tr><th>步骤</th><th>行为</th></tr></thead><tbody><tr><td>导入依赖</td><td>函数内 <code>from docx import Document</code></td></tr><tr><td>打开</td><td><code>Document(BytesIO(content))</code>，失败转 <code>ParseError</code></td></tr><tr><td>段落</td><td>去空白后非空才收集</td></tr><tr><td>表格</td><td>逐行、逐单元格取值，同一行非空单元格用竖线拼接</td></tr><tr><td>空结果</td><td>抛 <code>ParseError</code></td></tr><tr><td>合并</td><td>所有条目用空行分隔</td></tr></tbody></table>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["_parse_docx 字节内容"] --> B["动态导入 Document"]
   B --> C{"打开是否成功"}
@@ -842,7 +861,7 @@
 <table><thead><tr><th>原始顺序</th><th>提取后的顺序</th></tr></thead><tbody><tr><td>段落 A、表格 T、段落 B</td><td>段落 A、段落 B、表格 T</td></tr><tr><td>表格 T、段落 A</td><td>段落 A、表格 T</td></tr><tr><td>只有表格</td><td>表格行</td></tr></tbody></table>
 <p>顺序错乱对下游分析的影响是上下文断裂：解释表格的段落被排到了别处，AI 看不到「表前一句说了什么」。要保序需要改用文档体的迭代接口，按元素出现顺序逐个处理。</p>
 <h2 id="3-表格行的拼接规则">3. 表格行的拼接规则</h2>
-<p>每个非空单元格的文本去空白后，用竖线加空格连接（<code>parser.py:116-120</code>）：</p>
+<p>每个非空单元格的文本去空白后，用竖线加空格连接（<code>parser.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>| 原始表格 | 提取结果 |</span></span>
 <span class="line"><span>| 名称 | 数值 |</span></span>
 <span class="line"><span>| 电压 | 24 V |</span></span></code></pre>
@@ -874,6 +893,14 @@
 
 <table><thead><tr><th>情况</th><th>结果</th></tr></thead><tbody><tr><td>单元格为空</td><td>被过滤，不占位</td></tr><tr><td>整行为空</td><td>不产生记录</td></tr><tr><td>单元格含换行</td><td>换行保留在单元格文本里</td></tr><tr><td>合并单元格</td><td>按 python-docx 的表格模型，同一文本会在多个网格位置返回，行内可能重复</td></tr></tbody></table>
 <h2 id="4-只覆盖顶层表格">4. 只覆盖顶层表格</h2>
+<p>DOCX 的段落与表格是两个平行的顶层序列，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：分别收集段落与表格</span></span>
+<span class="line"><span style="color:#24292E">texts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [p.text.strip() </span><span style="color:#D73A49">for</span><span style="color:#24292E"> p </span><span style="color:#D73A49">in</span><span style="color:#24292E"> doc.paragraphs </span><span style="color:#D73A49">if</span><span style="color:#24292E"> p.text.strip()]</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> table </span><span style="color:#D73A49">in</span><span style="color:#24292E"> doc.tables:                 </span><span style="color:#6A737D"># 只遍历顶层表格</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> row </span><span style="color:#D73A49">in</span><span style="color:#24292E"> table.rows:</span></span>
+<span class="line"><span style="color:#24292E">        cells </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [c.text.strip() </span><span style="color:#D73A49">for</span><span style="color:#24292E"> c </span><span style="color:#D73A49">in</span><span style="color:#24292E"> row.cells]</span></span>
+<span class="line"><span style="color:#24292E">        texts.append(</span><span style="color:#032F62">" | "</span><span style="color:#24292E">.join(c </span><span style="color:#D73A49">for</span><span style="color:#24292E"> c </span><span style="color:#D73A49">in</span><span style="color:#24292E"> cells </span><span style="color:#D73A49">if</span><span style="color:#24292E"> c))</span></span></code></pre>
+<p>“DOCX 是 zip 包里的 XML”：解压后能看到<code>word/document.xml</code>，段落与表格是同级节点。<code>doc.tables</code>只返回顶层的表格对象，嵌套在单元格里的表格不会出现——这是”只覆盖顶层”的直接原因。代价是嵌套结构里的内容静默丢失；要覆盖它必须自己递归遍历 XML 节点。</p>
 <p><code>doc.tables</code> 返回文档体的顶层表格。嵌套在单元格里的表格不会被遍历，表格里的图片也不会被识别，因为实现只取 <code>cell.text</code>。</p>
 
 
@@ -932,7 +959,7 @@
     end
   end</pre></div>
 <h2 id="5-依赖导入与异常类型">5. 依赖导入与异常类型</h2>
-<p>与 PDF 一样，<code>python-docx</code> 在函数内导入（<code>parser.py:102</code>），依赖已在 <code>requirements.txt</code> 声明（<code>requirements.txt:20</code>，版本固定为 <code>1.2.0</code>）。缺依赖时抛 <code>ImportError</code>，路由只捕 <code>ParseError</code>，因此返回 500 而不是可读的 400。</p>
+<p>与 PDF 一样，<code>python-docx</code> 在函数内导入（<code>parser.py</code>），依赖已在 <code>requirements.txt</code> 声明（<code>requirements.txt</code>，版本固定为 <code>1.2.0</code>）。缺依赖时抛 <code>ImportError</code>，路由只捕 <code>ParseError</code>，因此返回 500 而不是可读的 400。</p>
 <p>打开阶段的异常被包装成「DOCX 文件损坏或无法读取」；段落与表格遍历阶段的异常没有捕获，遇到结构异常的文件会直接上抛。</p>
 
 
@@ -961,7 +988,7 @@
 
 <table><thead><tr><th>阶段</th><th>异常处理</th><th>路由表现</th></tr></thead><tbody><tr><td>导入依赖</td><td>无</td><td>500</td></tr><tr><td><code>Document(...)</code></td><td>转 <code>ParseError</code></td><td>400</td></tr><tr><td>段落与表格遍历</td><td>无</td><td>500</td></tr></tbody></table>
 <h2 id="6-大小与压缩比">6. 大小与压缩比</h2>
-<p>20 MB 上限在 <code>parse_file</code> 里按上传字节数判断（<code>parser.py:15</code>、<code>:43</code>）。DOCX 是压缩包，字节数小但解压后可能很大，解析时会一次性展开到内存。上传接口没有额外检查解压后体积，这与会话导入接口的 200 MB 解压上限形成对照（见 29/02-会话数据库 单元）。</p>
+<p>20 MB 上限在 <code>parse_file</code> 里按上传字节数判断（<code>parser.py</code>）。DOCX 是压缩包，字节数小但解压后可能很大，解析时会一次性展开到内存。上传接口没有额外检查解压后体积，这与会话导入接口的 200 MB 解压上限形成对照（见 29/02-会话数据库 单元）。</p>
 
 
 
@@ -1019,7 +1046,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>期待内容保持原顺序</td><td>段落全部排在表格前</td><td><code>parser.py:109-120</code></td></tr><tr><td>以为空单元格会占位</td><td>被过滤导致列错位</td><td><code>parser.py:118</code></td></tr><tr><td>以为嵌套表格会被读出</td><td>只遍历顶层</td><td><code>parser.py:116</code></td></tr><tr><td>缺依赖时期待 400</td><td><code>ImportError</code> 落到 500</td><td><code>parser.py:102</code></td></tr><tr><td>把图片版 DOCX 当成可解析</td><td>报没有可提取的文字</td><td><code>parser.py:122-123</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>期待内容保持原顺序</td><td>段落全部排在表格前</td><td><code>parser.py</code></td></tr><tr><td>以为空单元格会占位</td><td>被过滤导致列错位</td><td><code>parser.py</code></td></tr><tr><td>以为嵌套表格会被读出</td><td>只遍历顶层</td><td><code>parser.py</code></td></tr><tr><td>缺依赖时期待 400</td><td><code>ImportError</code> 落到 500</td><td><code>parser.py</code></td></tr><tr><td>把图片版 DOCX 当成可解析</td><td>报没有可提取的文字</td><td><code>parser.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -1134,7 +1161,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/documents/parser.py</code></td><td><code>_parse_docx</code> 全文（:99-125）与大小上限</td></tr><tr><td><code>backend/routes/documents.py</code></td><td><code>ParseError</code> 转 400 与上传流程</td></tr><tr><td><code>requirements.txt</code></td><td><code>python-docx</code> 版本声明（:20）</td></tr><tr><td><code>backend/routes/session_io.py</code></td><td>另一处解压体积限制，用于对照</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/01-PDF·DOCX解析/04-易错点与排查.md</span></div><div class="dfile__body"><h1 id="文档解析的易错点与排查">文档解析的易错点与排查</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/documents/parser.py</code></td><td><code>_parse_docx</code> 全文与大小上限</td></tr><tr><td><code>backend/routes/documents.py</code></td><td><code>ParseError</code> 转 400 与上传流程</td></tr><tr><td><code>requirements.txt</code></td><td><code>python-docx</code> 版本声明</td></tr><tr><td><code>backend/routes/session_io.py</code></td><td>另一处解压体积限制，用于对照</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/01-PDF·DOCX解析/04-易错点与排查.md</span></div><div class="dfile__body"><h1 id="文档解析的易错点与排查">文档解析的易错点与排查</h1>
 <p>上传文档失败时，用户只看到一条文案，排查者需要先分清它来自哪一层：路由的格式检查、解析层的大小与格式判断，还是没被捕获的运行时异常。前两类返回 400 与可读原因，后一类返回 500 与通用文案，两者的排查路径完全不同。</p>
 <p>这一篇先列风险，再给一条从返回码到具体原因的排查顺序。</p>
 <h2 id="1-风险清单">1. 风险清单</h2>
@@ -1213,7 +1240,7 @@
 
 
 
-<table><thead><tr><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>大小判断在读取之后</td><td><code>routes/documents.py:53-58</code> 与 <code>parser.py:43</code></td><td>超大文件先占内存再被拒</td></tr><tr><td>同步解析在异步路由里直接调用</td><td><code>routes/documents.py:61</code></td><td>大文件阻塞事件循环</td></tr><tr><td>依赖动态导入抛 <code>ImportError</code></td><td><code>parser.py:77</code>、<code>:102</code></td><td>缺依赖返回 500</td></tr><tr><td>单页与遍历异常未捕获</td><td><code>parser.py:85-91</code>、<code>:109-120</code></td><td>异常文件返回 500</td></tr><tr><td><code>latin-1</code> 兜底</td><td><code>parser.py:66-71</code></td><td>乱码静默通过</td></tr><tr><td>未知扩展名先按文本</td><td><code>parser.py:56-61</code></td><td>二进制解成乱码</td></tr><tr><td>两层白名单不一致</td><td><code>documents.py:47</code> 与 <code>parser.py:48</code></td><td><code>.text</code> 被路由挡下</td></tr><tr><td>扫描件无 OCR</td><td><code>parser.py:93-94</code></td><td>「没有可提取的文字」</td></tr><tr><td>加密 PDF 与损坏同文案</td><td><code>parser.py:81-82</code></td><td>提示不准确</td></tr><tr><td>表格结构未抽取</td><td><code>parser.py:87</code></td><td>表格被压平</td></tr><tr><td>DOCX 顺序丢失</td><td><code>parser.py:109-120</code></td><td>表格移到文末</td></tr><tr><td>DOCX 解压体积无上限</td><td>同 20 MB 判断</td><td>压缩包展开占内存</td></tr><tr><td>错误文案含底层异常</td><td><code>documents.py:63</code></td><td>用户看到库内部信息</td></tr></tbody></table>
+<table><thead><tr><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>大小判断在读取之后</td><td><code>routes/documents.py</code> 与 <code>parser.py</code></td><td>超大文件先占内存再被拒</td></tr><tr><td>同步解析在异步路由里直接调用</td><td><code>routes/documents.py</code></td><td>大文件阻塞事件循环</td></tr><tr><td>依赖动态导入抛 <code>ImportError</code></td><td><code>parser.py</code></td><td>缺依赖返回 500</td></tr><tr><td>单页与遍历异常未捕获</td><td><code>parser.py</code></td><td>异常文件返回 500</td></tr><tr><td><code>latin-1</code> 兜底</td><td><code>parser.py</code></td><td>乱码静默通过</td></tr><tr><td>未知扩展名先按文本</td><td><code>parser.py</code></td><td>二进制解成乱码</td></tr><tr><td>两层白名单不一致</td><td><code>documents.py</code> 与 <code>parser.py</code></td><td><code>.text</code> 被路由挡下</td></tr><tr><td>扫描件无 OCR</td><td><code>parser.py</code></td><td>「没有可提取的文字」</td></tr><tr><td>加密 PDF 与损坏同文案</td><td><code>parser.py</code></td><td>提示不准确</td></tr><tr><td>表格结构未抽取</td><td><code>parser.py</code></td><td>表格被压平</td></tr><tr><td>DOCX 顺序丢失</td><td><code>parser.py</code></td><td>表格移到文末</td></tr><tr><td>DOCX 解压体积无上限</td><td>同 20 MB 判断</td><td>压缩包展开占内存</td></tr><tr><td>错误文案含底层异常</td><td><code>documents.py</code></td><td>用户看到库内部信息</td></tr></tbody></table>
 <h2 id="2-排查顺序">2. 排查顺序</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["上传失败或内容不对"] --> B{"返回码"}
@@ -1266,7 +1293,17 @@
 
 <table><thead><tr><th>返回</th><th>首个检查点</th><th>判定依据</th></tr></thead><tbody><tr><td>400 不支持格式</td><td>路由白名单</td><td>扩展名是否在册</td></tr><tr><td>400 过大</td><td>上传体积</td><td>是否超过 20 MB</td></tr><tr><td>400 无文字</td><td>文件类型</td><td>扫描件或图片版</td></tr><tr><td>400 损坏</td><td>文件可读性</td><td>是否加密或截断</td></tr><tr><td>500</td><td>服务日志</td><td>缺依赖或库内部异常</td></tr><tr><td>500 之外的乱码</td><td>编码</td><td><code>latin-1</code> 是否兜底成功</td></tr></tbody></table>
 <h2 id="3-两类错误码的分界">3. 两类错误码的分界</h2>
-<p>解析层主动抛的 <code>ParseError</code> 都被路由转成 400，错误文案取自异常消息（<code>documents.py:60-63</code>）。没有被包装的异常统一落到 500，例如：</p>
+<p>分界靠”错误是否可预期”，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：可预期的输入问题返回 400，不可预期的运行时错误交给通用处理</span></span>
+<span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    text </span><span style="color:#D73A49">=</span><span style="color:#24292E"> parse_document(filename, content)</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#24292E"> ParseError </span><span style="color:#D73A49">as</span><span style="color:#24292E"> e:                   </span><span style="color:#6A737D"># 自己抛出的、有明确原因的</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> HTTPException(</span><span style="color:#005CC5">400</span><span style="color:#24292E">, </span><span style="color:#E36209">detail</span><span style="color:#D73A49">=</span><span style="color:#005CC5">str</span><span style="color:#24292E">(e))</span></span>
+<span class="line"><span style="color:#D73A49">except</span><span style="color:#005CC5"> Exception</span><span style="color:#24292E">:                         </span><span style="color:#6A737D"># 没料到的：记录堆栈，返回通用文案</span></span>
+<span class="line"><span style="color:#24292E">    logger.exception(</span><span style="color:#032F62">"parse failed"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> HTTPException(</span><span style="color:#005CC5">500</span><span style="color:#24292E">, </span><span style="color:#E36209">detail</span><span style="color:#D73A49">=</span><span style="color:#032F62">"文档解析失败"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>“可预期”指由输入直接决定、能给出修复建议的问题：格式不在白名单、超出大小上限、文件损坏。这类错误应当把原因回给用户并附 400。其余异常（依赖缺失、内存不足、未处理的库异常）返回 500 与通用文案，细节只进日志——把堆栈暴露给用户既无用又泄露实现。排查时先看错误码就能判断该查输入还是查服务端。</p>
+<p>解析层主动抛的 <code>ParseError</code> 都被路由转成 400，错误文案取自异常消息（<code>documents.py</code>）。没有被包装的异常统一落到 500，例如：</p>
 
 
 
@@ -1385,10 +1422,10 @@
 
 
 
-<table><thead><tr><th>缺失表现</th><th>原因</th><th>位置</th></tr></thead><tbody><tr><td>整份文档只有图片文字</td><td>无 OCR</td><td><code>parser.py:93-94</code></td></tr><tr><td>表格结构消失</td><td>只抽文本</td><td><code>parser.py:87</code></td></tr><tr><td>DOCX 表格出现在文末</td><td>段落与表格分两轮</td><td><code>parser.py:109-120</code></td></tr><tr><td>表格列错位</td><td>空单元格被过滤</td><td><code>parser.py:118</code></td></tr><tr><td>页眉页脚混入正文</td><td>每页完整抽取</td><td><code>parser.py:87</code></td></tr></tbody></table>
+<table><thead><tr><th>缺失表现</th><th>原因</th><th>位置</th></tr></thead><tbody><tr><td>整份文档只有图片文字</td><td>无 OCR</td><td><code>parser.py</code></td></tr><tr><td>表格结构消失</td><td>只抽文本</td><td><code>parser.py</code></td></tr><tr><td>DOCX 表格出现在文末</td><td>段落与表格分两轮</td><td><code>parser.py</code></td></tr><tr><td>表格列错位</td><td>空单元格被过滤</td><td><code>parser.py</code></td></tr><tr><td>页眉页脚混入正文</td><td>每页完整抽取</td><td><code>parser.py</code></td></tr></tbody></table>
 <p>这三种情况都不会报错，只会让下游分析拿到有损文本，因此需要在验收阶段用样本文件人工比对一次。</p>
 <h2 id="6-同步解析与事件循环">6. 同步解析与事件循环</h2>
-<p><code>parse_file</code> 是普通同步函数，被异步路由直接调用（<code>documents.py:61</code>），中间没有线程池切换。PDF 与 DOCX 的解析都是 CPU 密集的纯 Python 过程，20 MB 的文件可能占用数百毫秒到数秒，这段时间里整个事件循环被当前请求占住，其他请求的响应会一起变慢。</p>
+<p><code>parse_file</code> 是普通同步函数，被异步路由直接调用（<code>documents.py</code>），中间没有线程池切换。PDF 与 DOCX 的解析都是 CPU 密集的纯 Python 过程，20 MB 的文件可能占用数百毫秒到数秒，这段时间里整个事件循环被当前请求占住，其他请求的响应会一起变慢。</p>
 
 
 

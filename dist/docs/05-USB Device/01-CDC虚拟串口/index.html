@@ -140,15 +140,15 @@
   C->>A: CDC_Control_FS
   A-->>C: USBD_OK</pre></div>
 <h2 id="6-初始化入口与两次调用">6. 初始化入口与两次调用</h2>
-<p><code>MX_USB_DEVICE_Init()</code> 在 <code>USB_DEVICE/App/usb_device.c:64-91</code> 定义，四步失败都调用 <code>Error_Handler()</code>。工程里有两处调用：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/main.c:121 */</span></span>
+<p><code>MX_USB_DEVICE_Init()</code> 在 <code>USB_DEVICE/App/usb_device.c</code> 定义，四步失败都调用 <code>Error_Handler()</code>。工程里有两处调用：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/main.c */</span></span>
 <span class="line"><span style="color:#6F42C1">  MX_USB_DEVICE_Init</span><span style="color:#24292E">();</span></span>
 <span class="line"><span style="color:#24292E">...</span></span>
-<span class="line"><span style="color:#6A737D">/* Core/Src/main.c:130 */</span></span>
+<span class="line"><span style="color:#6A737D">/* Core/Src/main.c */</span></span>
 <span class="line"><span style="color:#6F42C1">  MX_FREERTOS_Init</span><span style="color:#24292E">();</span></span>
-<span class="line"><span style="color:#6A737D">/* Core/Src/main.c:133 */</span></span>
+<span class="line"><span style="color:#6A737D">/* Core/Src/main.c */</span></span>
 <span class="line"><span style="color:#6F42C1">  osKernelStart</span><span style="color:#24292E">();</span></span></code></pre>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c:146-155（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> StartDefaultTask</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#D73A49"> const</span><span style="color:#D73A49"> *</span><span style="color:#E36209"> argument</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#6A737D">  /* init code for USB_DEVICE */</span></span>
@@ -158,11 +158,11 @@
 <span class="line"><span style="color:#6F42C1">    osDelay</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">);</span></span>
 <span class="line"><span style="color:#24292E">  }</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>第一次调用在调度器启动之前，此时 <code>usbRxQueue</code> 还没有创建（<code>Core/Src/freertos.c:114</code> 在 <code>MX_FREERTOS_Init()</code> 内执行）。第二次调用在 <code>StartDefaultTask</code> 里，调度器已经运行、队列已经存在。同一套初始化被执行两次，第二次会重新复位 OTG FS 并触发一次重新枚举。硬件上是否能观察到主机的断开重连属于待实测项。</p>
-<p>接收回调因此保留了一个空指针保护分支：<code>usbd_cdc_if.c:266-268</code> 判断 <code>usbRxQueue == NULL</code> 时跳过入队、只重挂端点。这段分支覆盖的是第一次初始化到队列创建之间的窗口。</p>
+<p>第一次调用在调度器启动之前，此时 <code>usbRxQueue</code> 还没有创建（<code>Core/Src/freertos.c</code> 在 <code>MX_FREERTOS_Init()</code> 内执行）。第二次调用在 <code>StartDefaultTask</code> 里，调度器已经运行、队列已经存在。同一套初始化被执行两次，第二次会重新复位 OTG FS 并触发一次重新枚举。硬件上是否能观察到主机的断开重连属于待实测项。</p>
+<p>接收回调因此保留了一个空指针保护分支：<code>usbd_cdc_if.c</code> 判断 <code>usbRxQueue == NULL</code> 时跳过入队、只重挂端点。这段分支覆盖的是第一次初始化到队列创建之间的窗口。</p>
 <h2 id="7-描述符端点宏与外设侧参数">7. 描述符、端点宏与外设侧参数</h2>
 <p>类回调表与配置描述符都在类库里：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c:141-164（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c（节选） */</span></span>
 <span class="line"><span style="color:#24292E">USBD_ClassTypeDef  USBD_CDC </span><span style="color:#D73A49">=</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#24292E">  USBD_CDC_Init,</span></span>
@@ -174,12 +174,12 @@
 <span class="line"><span style="color:#24292E">  USBD_CDC_DataOut,</span></span>
 <span class="line"><span style="color:#24292E">  ...</span></span>
 <span class="line"><span style="color:#24292E">};</span></span></code></pre>
-<p>配置描述符在 <code>usbd_cdc.c:168-265</code>：<code>bNumInterfaces</code> 为 <code>0x02</code>，接口 0 为通信接口（类 <code>0x02</code>、子类 <code>0x02</code>、协议 <code>0x01</code>），带三条功能描述符与命令端点；接口 1 为数据接口（类 <code>0x0A</code>），带 OUT 与 IN 两条批量端点。</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* usbd_cdc.c:238-264（节选） */</span></span>
+<p>配置描述符在 <code>usbd_cdc.c</code>：<code>bNumInterfaces</code> 为 <code>0x02</code>，接口 0 为通信接口（类 <code>0x02</code>、子类 <code>0x02</code>、协议 <code>0x01</code>），带三条功能描述符与命令端点；接口 1 为数据接口（类 <code>0x0A</code>），带 OUT 与 IN 两条批量端点。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* usbd_cdc.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">  0x</span><span style="color:#005CC5">09</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">04</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">01</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">02</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">0A</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">,</span><span style="color:#6A737D">  /* 数据接口 */</span></span>
 <span class="line"><span style="color:#D73A49">  0x</span><span style="color:#005CC5">07</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">05</span><span style="color:#24292E">, CDC_OUT_EP, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">02</span><span style="color:#24292E">, </span><span style="color:#005CC5">64</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">,</span><span style="color:#6A737D">           /* 批量 OUT */</span></span>
 <span class="line"><span style="color:#D73A49">  0x</span><span style="color:#005CC5">07</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">05</span><span style="color:#24292E">, CDC_IN_EP,  </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">02</span><span style="color:#24292E">, </span><span style="color:#005CC5">64</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">00</span><span style="color:#6A737D">            /* 批量 IN  */</span></span></code></pre>
-<p>端点宏集中在 <code>Class/CDC/Inc/usbd_cdc.h:43-74</code> 这一段。</p>
+<p>端点宏集中在 <code>Class/CDC/Inc/usbd_cdc.h</code> 这一段。</p>
 
 
 
@@ -221,25 +221,25 @@
 
 
 <table><thead><tr><th>宏</th><th>值</th><th>含义</th></tr></thead><tbody><tr><td><code>CDC_IN_EP</code></td><td><code>0x81</code></td><td>数据 IN 端点</td></tr><tr><td><code>CDC_OUT_EP</code></td><td><code>0x01</code></td><td>数据 OUT 端点</td></tr><tr><td><code>CDC_CMD_EP</code></td><td><code>0x82</code></td><td>命令 IN 端点</td></tr><tr><td><code>CDC_DATA_FS_MAX_PACKET_SIZE</code></td><td><code>64</code></td><td>全速数据端点包大小</td></tr><tr><td><code>CDC_CMD_PACKET_SIZE</code></td><td><code>8</code></td><td>命令端点包大小</td></tr><tr><td><code>CDC_FS_BINTERVAL</code></td><td><code>0x10</code></td><td>命令端点的轮询间隔</td></tr></tbody></table>
-<p>端点开关在 <code>usbd_cdc.c:329-349</code> 的全速分支里完成：先以 64 字节打开数据 IN 与数据 OUT，再以 8 字节打开命令 IN，并把命令端点的 <code>bInterval</code> 设为 <code>CDC_FS_BINTERVAL</code>。本工程没有在 <code>USB_DEVICE/</code> 下覆盖这些宏（类头文件用 <code>#ifndef</code> 包裹），配置描述符与端点开关都直接引用类库默认值。</p>
+<p>端点开关在 <code>usbd_cdc.c</code> 的全速分支里完成：先以 64 字节打开数据 IN 与数据 OUT，再以 8 字节打开命令 IN，并把命令端点的 <code>bInterval</code> 设为 <code>CDC_FS_BINTERVAL</code>。本工程没有在 <code>USB_DEVICE/</code> 下覆盖这些宏（类头文件用 <code>#ifndef</code> 包裹），配置描述符与端点开关都直接引用类库默认值。</p>
 <p>外设侧的引脚与中断：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/Target/usbd_conf.c:78-95（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/Target/usbd_conf.c（节选） */</span></span>
 <span class="line"><span style="color:#24292E">    GPIO_InitStruct.Pin </span><span style="color:#D73A49">=</span><span style="color:#24292E"> GPIO_PIN_12</span><span style="color:#D73A49">|</span><span style="color:#24292E">GPIO_PIN_11;</span></span>
 <span class="line"><span style="color:#24292E">    GPIO_InitStruct.Alternate </span><span style="color:#D73A49">=</span><span style="color:#24292E"> GPIO_AF10_OTG_FS;</span></span>
 <span class="line"><span style="color:#6F42C1">    HAL_GPIO_Init</span><span style="color:#24292E">(GPIOA, </span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">GPIO_InitStruct</span><span style="color:#24292E">);</span></span>
 <span class="line"><span style="color:#6F42C1">    __HAL_RCC_USB_OTG_FS_CLK_ENABLE</span><span style="color:#24292E">();</span></span>
 <span class="line"><span style="color:#6F42C1">    HAL_NVIC_SetPriority</span><span style="color:#24292E">(OTG_FS_IRQn, </span><span style="color:#005CC5">5</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">);</span></span>
 <span class="line"><span style="color:#6F42C1">    HAL_NVIC_EnableIRQ</span><span style="color:#24292E">(OTG_FS_IRQn);</span></span></code></pre>
-<p>PA11 为 DM、PA12 为 DP，走 <code>GPIO_AF10_OTG_FS</code>。中断优先级为 5，服务函数在 <code>Core/Src/stm32f4xx_it.c:331-340</code>，只调用 <code>HAL_PCD_IRQHandler(&#x26;hpcd_USB_OTG_FS)</code>。设备句柄 <code>hUsbDeviceFS</code> 在 <code>USB_DEVICE/App/usbd_cdc_if.c:109</code> 外部声明。</p>
-<p>FIFO 分配在 <code>usbd_conf.c:365-367</code>：接收 FIFO 为 <code>0x80</code> words，发送 FIFO 0 为 <code>0x40</code>，发送 FIFO 1 为 <code>0x80</code>。三项之和为 <code>0x140</code>，等于 320 words，与 OTG FS 的总 FIFO 容量一致（按参考手册值，未在板子上实测）。</p>
-<p>主机侧的身份信息在 <code>USB_DEVICE/App/usbd_desc.c:65-69</code>：<code>USBD_VID</code> 为 <code>1155</code>（0x0483）、<code>USBD_PID_FS</code> 为 <code>22336</code>（0x5740）、产品字符串为 <code>STM32 Virtual ComPort</code>。这两个 ID 是 ST 官方虚拟串口例程的默认组合，工程没有改成自己的编号。</p>
+<p>PA11 为 DM、PA12 为 DP，走 <code>GPIO_AF10_OTG_FS</code>。中断优先级为 5，服务函数在 <code>Core/Src/stm32f4xx_it.c</code>，只调用 <code>HAL_PCD_IRQHandler(&#x26;hpcd_USB_OTG_FS)</code>。设备句柄 <code>hUsbDeviceFS</code> 在 <code>USB_DEVICE/App/usbd_cdc_if.c</code> 外部声明。</p>
+<p>FIFO 分配在 <code>usbd_conf.c</code>：接收 FIFO 为 <code>0x80</code> words，发送 FIFO 0 为 <code>0x40</code>，发送 FIFO 1 为 <code>0x80</code>。三项之和为 <code>0x140</code>，等于 320 words，与 OTG FS 的总 FIFO 容量一致（按参考手册值，未在板子上实测）。</p>
+<p>主机侧的身份信息在 <code>USB_DEVICE/App/usbd_desc.c</code>：<code>USBD_VID</code> 为 <code>1155</code>（0x0483）、<code>USBD_PID_FS</code> 为 <code>22336</code>（0x5740）、产品字符串为 <code>STM32 Virtual ComPort</code>。这两个 ID 是 ST 官方虚拟串口例程的默认组合，工程没有改成自己的编号。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 <ul>
-<li><code>CDC_Control_FS</code> 不解析 Line Coding。<code>usbd_cdc_if.c:180-244</code> 的 <code>switch</code> 覆盖了 <code>CDC_SET_LINE_CODING</code> 与 <code>CDC_GET_LINE_CODING</code> 等九个命令，全部分支为空，函数末尾统一返回 <code>USBD_OK</code>。主机设置波特率时收到成功应答，但设备不保存也不使用任何参数。</li>
+<li><code>CDC_Control_FS</code> 不解析 Line Coding。<code>usbd_cdc_if.c</code> 的 <code>switch</code> 覆盖了 <code>CDC_SET_LINE_CODING</code> 与 <code>CDC_GET_LINE_CODING</code> 等九个命令，全部分支为空，函数末尾统一返回 <code>USBD_OK</code>。主机设置波特率时收到成功应答，但设备不保存也不使用任何参数。</li>
 <li>设备级 <code>bDeviceClass</code> 写成 0x02。设备描述符把 <code>bDeviceClass</code> 填成 <code>0x02</code>，即设备级声明为 CDC；另一种常见做法是填 <code>0x00</code>，把类定义留给接口描述符。两种写法在主流系统上都能枚举，差异在于系统匹配驱动的顺序。工程沿用 ST 例程的写法，按事实记录即可。</li>
 <li>VID/PID 沿用 ST 默认导致同名设备。两块板插在同一台电脑上时，设备名与管理器里的条目相同，串口号可能出现互换。这是推断，未在同机双板条件下实测。要根治需要换成项目自己的 <code>idVendor</code> 与 <code>idProduct</code>，并同步更新主机侧 INF 或 udev 规则。</li>
-<li>初始化被调用两次。<code>main.c:121</code> 与 <code>freertos.c:149</code> 各调用一次 <code>MX_USB_DEVICE_Init()</code>，两次调用之间的差异与待确认项见第 6 节。</li>
-<li>LPM 关闭。<code>USB_DEVICE/Target/usbd_conf.h:74</code> 的 <code>USBD_LPM_ENABLED</code> 为 <code>0U</code>，链路电源管理未启用。设备描述符因此走 <code>bcdUSB 0x0200</code> 的常规分支，BOS 描述符中的 LPM 能力位不会出现。总线空闲时设备不会主动请求挂起。</li>
+<li>初始化被调用两次。<code>main.c</code> 与 <code>freertos.c</code> 各调用一次 <code>MX_USB_DEVICE_Init()</code>，两次调用之间的差异与待确认项见第 6 节。</li>
+<li>LPM 关闭。<code>USB_DEVICE/Target/usbd_conf.h</code> 的 <code>USBD_LPM_ENABLED</code> 为 <code>0U</code>，链路电源管理未启用。设备描述符因此走 <code>bcdUSB 0x0200</code> 的常规分支，BOS 描述符中的 LPM 能力位不会出现。总线空闲时设备不会主动请求挂起。</li>
 </ul>
 <h2 id="9-小结">9. 小结</h2>
 <p>核心概念：</p>
@@ -319,7 +319,7 @@
 <p>挑战题：</p>
 <p>5 把设备身份改成项目自有的 VID/PID。要求说明需要修改的文件与宏、主机侧需要同步的动作，并分析未同步时会出现什么现象。
 6 让 <code>CDC_Control_FS</code> 实际保存 Line Coding 参数。要求给出需要保存的结构体字段、保存位置、以及在收发路径上使用这些参数的可行方式。
-7 论证是否应该删除 <code>freertos.c:149</code> 的第二次初始化。要求给出可以观察到的判据、验证步骤，以及结论对接收回调空指针保护分支的影响。</p>
+7 论证是否应该删除 <code>freertos.c</code> 的第二次初始化。要求给出可以观察到的判据、验证步骤，以及结论对接收回调空指针保护分支的影响。</p>
 <hr>
 <h3 id="附本页引用的固件路径">附：本页引用的固件路径</h3>
 
@@ -375,7 +375,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>应用回调与端点参数（:109、:152-160、:180-244、:266-268、:297-313）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.h</code></td><td>应用缓冲大小（:52-53）、发送函数声明（:109）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usb_device.c</code></td><td>初始化四步（:64-91）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c</code></td><td>设备身份（:65-69）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</code></td><td>引脚与中断（:78-95）、FIFO 分配（:365-367）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h</code></td><td>设备库配置（:66-81）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</code></td><td>端点宏与包大小（:43-74）、句柄结构（:120-132）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td>类回调表（:141-164）、配置描述符（:168-265）、端点开关（:287-379）、端点重挂（:853-881）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>初始化调用与调度器启动（:121、:130、:133）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/freertos.c</code></td><td>第二次初始化（:146-155）、队列创建（:114）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c</code></td><td>OTG FS 中断服务（:331-340）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-端点与缓冲配置"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-端点与缓冲配置</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/02-端点与缓冲配置.md</span></div><div class="dfile__body"><h1 id="端点与缓冲配置">端点与缓冲配置</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td>应用回调与端点参数</td></tr><tr><td><code>USB_DEVICE/App/usbd_cdc_if.h</code></td><td>应用缓冲大小、发送函数声明</td></tr><tr><td><code>USB_DEVICE/App/usb_device.c</code></td><td>初始化四步</td></tr><tr><td><code>USB_DEVICE/App/usbd_desc.c</code></td><td>设备身份</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>引脚与中断、FIFO 分配</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.h</code></td><td>设备库配置</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</code></td><td>端点宏与包大小、句柄结构</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td>类回调表、配置描述符、端点开关、端点重挂</td></tr><tr><td><code>Core/Src/main.c</code></td><td>初始化调用与调度器启动</td></tr><tr><td><code>Core/Src/freertos.c</code></td><td>第二次初始化、队列创建</td></tr><tr><td><code>Core/Src/stm32f4xx_it.c</code></td><td>OTG FS 中断服务</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-端点与缓冲配置"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-端点与缓冲配置</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/02-端点与缓冲配置.md</span></div><div class="dfile__body"><h1 id="端点与缓冲配置">端点与缓冲配置</h1>
 <p>CDC 的端点与缓冲参数主要看四个文件：<code>Class/CDC/Inc/usbd_cdc.h</code>、<code>Class/CDC/Src/usbd_cdc.c</code>、<code>USB_DEVICE/App/usbd_cdc_if.h</code> 与 <code>usbd_cdc_if.c</code>。</p>
 <p>CDC 类与 COM 口的关系在 <code>01-USB-CDC类与虚拟串口.md</code>，链路行为在 <code>03-接收链路与队列.md</code> 与 <code>04-发送链路与忙等待.md</code>。端点地址怎么读、包大小怎么定、2048 字节的应用缓冲放在哪一层，是这里要回答的三个问题。</p>
 <h2 id="1-端点地址里的方向位与端点号">1. 端点地址里的方向位与端点号</h2>
@@ -427,7 +427,7 @@
 <h2 id="4-全速下三条端点的打开顺序">4. 全速下三条端点的打开顺序</h2>
 <p>类层 <code>USBD_CDC_Init()</code> 在主机下发 <code>SET_CONFIGURATION</code> 时执行。它先按速率分支选择包大小：高速用 512，全速用 64，然后依次打开数据 IN、数据 OUT、命令 IN，并把命令端点的 <code>bInterval</code> 写入。</p>
 <p>端点宏与包大小：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h:43-74（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> CDC_IN_EP</span><span style="color:#D73A49">        0x</span><span style="color:#005CC5">81</span><span style="color:#D73A49">U</span><span style="color:#6A737D">  /* EP1 for data IN  */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> CDC_OUT_EP</span><span style="color:#D73A49">       0x</span><span style="color:#005CC5">01</span><span style="color:#D73A49">U</span><span style="color:#6A737D">  /* EP1 for data OUT */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> CDC_CMD_EP</span><span style="color:#D73A49">       0x</span><span style="color:#005CC5">82</span><span style="color:#D73A49">U</span><span style="color:#6A737D">  /* EP2 for CDC commands */</span></span>
@@ -437,7 +437,7 @@
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> CDC_DATA_HS_MAX_PACKET_SIZE</span><span style="color:#005CC5"> 512</span><span style="color:#D73A49">U</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> CDC_DATA_FS_MAX_PACKET_SIZE</span><span style="color:#005CC5"> 64</span><span style="color:#D73A49">U</span></span></code></pre>
 <p>全速分支的打开顺序：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Class/CDC/Src/usbd_cdc.c:329-349（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Class/CDC/Src/usbd_cdc.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">  else</span></span>
 <span class="line"><span style="color:#24292E">  {</span></span>
 <span class="line"><span style="color:#24292E">    (</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span><span style="color:#6F42C1">USBD_LL_OpenEP</span><span style="color:#24292E">(pdev, CDCInEpAdd, USBD_EP_TYPE_BULK,</span></span>
@@ -449,15 +449,15 @@
 <span class="line"><span style="color:#24292E">  (</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span><span style="color:#6F42C1">USBD_LL_OpenEP</span><span style="color:#24292E">(pdev, CDCCmdEpAdd, USBD_EP_TYPE_INTR, CDC_CMD_PACKET_SIZE);</span></span></code></pre>
 <p>三条端点全部打开后，类层把接收缓冲置空并调用应用侧 <code>Init</code> 回调，随后校验 <code>RxBuffer</code> 是否已设置。这个顺序决定了应用回调必须设置缓冲，否则类层在下一步返回内存不足错误。</p>
 <h2 id="5-应用缓冲-2048-字节的实体与位置">5. 应用缓冲 2048 字节的实体与位置</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.h:52-53 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.h */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> APP_RX_DATA_SIZE</span><span style="color:#005CC5">  2048</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> APP_TX_DATA_SIZE</span><span style="color:#005CC5">  2048</span></span></code></pre>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c:91-94 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c */</span></span>
 <span class="line"><span style="color:#D73A49">uint8_t</span><span style="color:#E36209"> UserRxBufferFS</span><span style="color:#24292E">[APP_RX_DATA_SIZE];</span></span>
 <span class="line"><span style="color:#D73A49">uint8_t</span><span style="color:#E36209"> UserTxBufferFS</span><span style="color:#24292E">[APP_TX_DATA_SIZE];</span></span></code></pre>
 <p>两块缓冲是独立的静态数组，接收一块、发送一块。它们并不构成乒乓双缓冲：没有第二块同向缓冲，也没有缓冲区切换逻辑。</p>
 <h2 id="6-cdc_init_fs-设置缓冲的时机">6. CDC_Init_FS 设置缓冲的时机</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c:152-160 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> int8_t</span><span style="color:#6F42C1"> CDC_Init_FS</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#6F42C1">  USBD_CDC_SetTxBuffer</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">hUsbDeviceFS, UserTxBufferFS, </span><span style="color:#005CC5">0</span><span style="color:#24292E">);</span></span>
@@ -484,19 +484,19 @@
   Note over P: OUT 端点就绪 可接收第一个包</pre></div>
 <h2 id="7-硬件-fifo-与应用缓冲处于两层">7. 硬件 FIFO 与应用缓冲处于两层</h2>
 <p>OTG FS 内部另有一组 FIFO，与 2048 字节的应用缓冲处在不同层次：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/Target/usbd_conf.c:365-367 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/Target/usbd_conf.c */</span></span>
 <span class="line"><span style="color:#6F42C1">  HAL_PCDEx_SetRxFiFo</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">hpcd_USB_OTG_FS</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">80</span><span style="color:#24292E">);</span></span>
 <span class="line"><span style="color:#6F42C1">  HAL_PCDEx_SetTxFiFo</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">hpcd_USB_OTG_FS</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">40</span><span style="color:#24292E">);</span></span>
 <span class="line"><span style="color:#6F42C1">  HAL_PCDEx_SetTxFiFo</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">hpcd_USB_OTG_FS</span><span style="color:#24292E">, </span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">80</span><span style="color:#24292E">);</span></span></code></pre>
 <p>接收 FIFO 为 <code>0x80</code> words，两个发送 FIFO 分别为 <code>0x40</code> 与 <code>0x80</code> words，合计 <code>0x140</code> words。OTG FS 的总 FIFO 为 320 words（按参考手册值，未实测），三个数正好用满。FIFO 由 USB 外设硬件使用，应用缓冲由 CPU 侧回调访问，两者之间由 PCD 层搬运。</p>
 <h2 id="8-2048-字节缓冲与整帧容量的关系">8. 2048 字节缓冲与整帧容量的关系</h2>
-<p>协议帧长在 <code>Communication/Inc/usb_protocol.h:20-21</code> 定义为 <code>VISION_TO_GIMBAL_LEN = 29</code> 与 <code>GIMBAL_TO_VISION_LEN = 43</code>，并有编译期断言保证结构体大小一致（:73-77）。把 2048 除以帧长会得到 70 与 47 两个数，但它们只在「缓冲整帧复用」的假设下成立：实际路径逐字节入队，缓冲只决定单次包的最大长度，这两个数在本单元后续核算里不再出现。</p>
+<p>协议帧长在 <code>Communication/Inc/usb_protocol.h</code> 定义为 <code>VISION_TO_GIMBAL_LEN = 29</code> 与 <code>GIMBAL_TO_VISION_LEN = 43</code>，并有编译期断言保证结构体大小一致。把 2048 除以帧长会得到 70 与 47 两个数，但它们只在「缓冲整帧复用」的假设下成立：实际路径逐字节入队，缓冲只决定单次包的最大长度，这两个数在本单元后续核算里不再出现。</p>
 <h2 id="9-易错点">9. 易错点</h2>
 <ul>
 <li>把两块应用缓冲当成乒乓双缓冲。<code>UserRxBufferFS</code> 与 <code>UserTxBufferFS</code> 是收发各一块，不能在一次接收未处理完时切换到另一块同向缓冲。接收回调必须在返回前完成字节搬运，否则新包会覆盖旧数据。</li>
 <li>把收包等同于收帧。主机侧写 29 字节一次并不能保证设备收到一个 64 字节以内的完整包，也不能保证一个包内只有一个协议帧。帧边界由应用层状态机（见 <code>03-接收链路与队列.md</code>）判定，与 USB 包边界无关。</li>
 <li>认为 2048 字节决定了吞吐。逐字节转发路径里，每个包到达后会被立即搬进队列，缓冲大小只影响单次包的最大长度上限。瓶颈在队列深度（128 字节）与任务周期，见 <code>03-接收链路与队列.md</code> 的核算。</li>
-<li>RxBuffer 为空时初始化失败。类层在 <code>usbd_cdc.c:360-363</code> 检查 <code>hcdc->RxBuffer == NULL</code> 并返回 <code>USBD_EMEM</code>。若 <code>CDC_Init_FS</code> 没有调用 <code>USBD_CDC_SetRxBuffer</code>，设备会在配置阶段直接失败，表现为枚举后无数据端点。</li>
+<li>RxBuffer 为空时初始化失败。类层在 <code>usbd_cdc.c</code> 检查 <code>hcdc->RxBuffer == NULL</code> 并返回 <code>USBD_EMEM</code>。若 <code>CDC_Init_FS</code> 没有调用 <code>USBD_CDC_SetRxBuffer</code>，设备会在配置阶段直接失败，表现为枚举后无数据端点。</li>
 <li>忘记重新挂端点。<code>USBD_LL_PrepareReceive</code> 只在 <code>CDC_Init_FS</code> 与 <code>CDC_ReceivePacket</code> 两处调用。每个 OUT 包处理完后若不重新挂，端点保持 NAK，后续数据不会到达。详见 <code>03-接收链路与队列.md</code>。</li>
 </ul>
 <h2 id="10-小结">10. 小结</h2>
@@ -613,8 +613,8 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.h</code></td><td>应用缓冲大小（:52-53）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>缓冲实体（:91-94）、<code>CDC_Init_FS</code>（:152-160）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</code></td><td>端点宏与包大小（:43-74）、句柄结构（:120-132）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td>打开端点（:287-379）、<code>SetTxBuffer</code> 与 <code>SetRxBuffer</code>（:757-798）、<code>ReceivePacket</code>（:853-881）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</code></td><td>FIFO 分配（:365-367）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>帧长常量与编译期断言（:20-21、:73-77）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-接收链路与队列"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-接收链路与队列</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/03-接收链路与队列.md</span></div><div class="dfile__body"><h1 id="接收链路与队列">接收链路与队列</h1>
-<p>视觉数据从 USB OUT 端点到应用解析器要经过三处：<code>USB_DEVICE/App/usbd_cdc_if.c:261-284</code>、<code>Core/Src/freertos.c:38,114-118</code> 与 <code>Task/Src/UsbConnectTask.cpp:71-101</code>。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_cdc_if.h</code></td><td>应用缓冲大小</td></tr><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td>缓冲实体、<code>CDC_Init_FS</code></td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</code></td><td>端点宏与包大小、句柄结构</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td>打开端点、<code>SetTxBuffer</code> 与 <code>SetRxBuffer</code>、<code>ReceivePacket</code></td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>FIFO 分配</td></tr><tr><td><code>Communication/Inc/usb_protocol.h</code></td><td>帧长常量与编译期断言</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-接收链路与队列"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-接收链路与队列</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/03-接收链路与队列.md</span></div><div class="dfile__body"><h1 id="接收链路与队列">接收链路与队列</h1>
+<p>视觉数据从 USB OUT 端点到应用解析器要经过三处：<code>USB_DEVICE/App/usbd_cdc_if.c</code>、<code>Core/Src/freertos.c</code> 与 <code>Task/Src/UsbConnectTask.cpp</code>。</p>
 <p>协议解帧的状态机属于 USB 协议收发单元，本页只讲到把字节交给解析器。发送方向见 <code>04-发送链路与忙等待.md</code>。</p>
 <h2 id="1-中断入队与任务排空的两段式结构">1. 中断入队与任务排空的两段式结构</h2>
 <p>USB OUT 数据的到达时刻由主机决定。设备在 OTG 中断里拿到一个包，应用解析器需要按帧状态机逐字节处理。两者节奏不同：中断上下文要求尽量短，解析状态机可能跨越多个包。用一个字节队列把两者分开，中断只入队，任务负责排空与解析。</p>
@@ -622,7 +622,7 @@
 <h2 id="2-从-out-包到-receive-回调">2. 从 OUT 包到 Receive 回调</h2>
 <p>类层 <code>USBD_CDC_DataOut()</code> 在中断上下文被调用，它先取出本包长度，再把缓冲指针与长度交给应用侧 <code>Receive</code> 回调。应用回调在返回前必须完成字节搬运，因为注释里写明的语义是：在回调执行期间，主机发往该 OUT 端点的后续包会被 NAK。</p>
 <p>类层取长度与回调的实现：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c:577-595（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> uint8_t</span><span style="color:#6F42C1"> USBD_CDC_DataOut</span><span style="color:#24292E">(USBD_HandleTypeDef </span><span style="color:#D73A49">*</span><span style="color:#E36209">pdev</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint8_t</span><span style="color:#E36209"> epnum</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#24292E">  USBD_CDC_HandleTypeDef </span><span style="color:#D73A49">*</span><span style="color:#24292E">hcdc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (USBD_CDC_HandleTypeDef </span><span style="color:#D73A49">*</span><span style="color:#24292E">)pdev->pClassDataCmsit[pdev->classId];</span></span>
@@ -635,7 +635,7 @@
 <p>NAK 表示设备暂时不能接收。它不会造成数据丢失：主机检测到 NAK 后会稍后重试同一个包。代价是这段时间总线带宽被浪费。回调执行越久，NAK 窗口越长。</p>
 <p>回调结尾必须调用 <code>USBD_CDC_ReceivePacket</code> 重新准备 OUT 端点。这个动作告诉 PCD 层把接收缓冲重新挂上，允许下一个包进入。漏掉这一步，端点会一直 NAK，接收链路停止。</p>
 <h2 id="4-cdc_receive_fs-的五个要点">4. CDC_Receive_FS 的五个要点</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c:261-284 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> int8_t</span><span style="color:#6F42C1"> CDC_Receive_FS</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint8_t*</span><span style="color:#E36209"> Buf</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint32_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209">Len</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#005CC5">  BaseType_t</span><span style="color:#24292E"> xHigherPriorityTaskWoken </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pdFALSE;</span></span>
@@ -667,17 +667,17 @@
 <li><code>portYIELD_FROM_ISR</code> 在返回路径上执行，参数可能在入队过程中被置为 <code>pdTRUE</code>。</li>
 </ul>
 <h2 id="5-队列创建与-freertos-配置">5. 队列创建与 FreeRTOS 配置</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c:38 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c */</span></span>
 <span class="line"><span style="color:#005CC5">QueueHandle_t</span><span style="color:#24292E"> usbRxQueue </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E">;</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c:114-118（节选） */</span></span>
+<span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c（节选） */</span></span>
 <span class="line"><span style="color:#24292E">  usbRxQueue </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> xQueueCreate</span><span style="color:#24292E">(</span><span style="color:#005CC5">128</span><span style="color:#24292E">, </span><span style="color:#D73A49">sizeof</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint8_t</span><span style="color:#24292E">));</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (usbRxQueue </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E">) {</span></span>
 <span class="line"><span style="color:#6A737D">    // 队列创建失败，可以添加错误处理</span></span>
 <span class="line"><span style="color:#24292E">  }</span></span></code></pre>
-<p>队列深度 128，单元大小 <code>sizeof(uint8_t)</code> 为 1，数据区合计 128 字节。创建走动态分配：<code>Core/Inc/FreeRTOSConfig.h:60</code> 打开 <code>configSUPPORT_DYNAMIC_ALLOCATION</code>，<code>:67</code> 的堆为 40960 字节。创建失败时处理体为空，<code>usbRxQueue</code> 保持 <code>NULL</code>，接收回调之后每次都走 <code>NULL</code> 分支，表现为一个字节都收不到。</p>
+<p>队列深度 128，单元大小 <code>sizeof(uint8_t)</code> 为 1，数据区合计 128 字节。创建走动态分配：<code>Core/Inc/FreeRTOSConfig.h</code> 打开 <code>configSUPPORT_DYNAMIC_ALLOCATION</code> 的堆为 40960 字节。创建失败时处理体为空，<code>usbRxQueue</code> 保持 <code>NULL</code>，接收回调之后每次都走 <code>NULL</code> 分支，表现为一个字节都收不到。</p>
 <h2 id="6-任务侧排空与喂帧">6. 任务侧排空与喂帧</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/UsbConnectTask.cpp:79-101（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/UsbConnectTask.cpp（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> (;;) {</span></span>
 <span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> (usbRxQueue </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E">) {</span></span>
 <span class="line"><span style="color:#D73A49">            while</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">xQueueReceive</span><span style="color:#24292E">(usbRxQueue, </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">byte, </span><span style="color:#005CC5">0</span><span style="color:#24292E">) </span><span style="color:#D73A49">==</span><span style="color:#24292E"> pdTRUE)</span></span>
@@ -719,7 +719,7 @@
   D-->>T: 返回 true 表示凑齐一帧
   T->>T: 写 vision_data 七个字段</pre></div>
 <h2 id="7-中断优先级-5-与内核临界区">7. 中断优先级 5 与内核临界区</h2>
-<p><code>USB_DEVICE/Target/usbd_conf.c:94</code> 把 <code>OTG_FS_IRQn</code> 设为优先级 5。<code>Core/Inc/FreeRTOSConfig.h:110</code> 的 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code> 也是 5。Cortex-M 上调用中断安全 FreeRTOS API 的条件是中断数值优先级不小于该阈值，5 恰好满足，<code>xQueueSendFromISR</code> 与 <code>portYIELD_FROM_ISR</code> 合法。</p>
+<p><code>USB_DEVICE/Target/usbd_conf.c</code> 把 <code>OTG_FS_IRQn</code> 设为优先级 5。<code>Core/Inc/FreeRTOSConfig.h</code> 的 <code>configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</code> 也是 5。Cortex-M 上调用中断安全 FreeRTOS API 的条件是中断数值优先级不小于该阈值，5 恰好满足，<code>xQueueSendFromISR</code> 与 <code>portYIELD_FROM_ISR</code> 合法。</p>
 <p>若把 OTG 优先级调到 4 或更高，中断仍会进入，但队列操作会破坏内核临界区，属于必须避免的改法。</p>
 <h2 id="8-队列容量核算三种工况">8. 队列容量核算：三种工况</h2>
 <p>先列符号：</p>
@@ -798,14 +798,14 @@
 <p>队列满不是立刻可见的错误。它留下的是一段被截断的字节流，后续现象分三步出现：</p>
 <ul>
 <li>队列里字节数减少，任务排空后喂给状态机的字节序列与主机发送序列不一致。</li>
-<li><code>USBDecode</code> 在 <code>COLLECT</code> 阶段收满 29 字节，但凑出的帧错位，CRC 与模式校验失败（<code>Communication/Src/usb_decode.cpp:45-108</code>）。
+<li><code>USBDecode</code> 在 <code>COLLECT</code> 阶段收满 29 字节，但凑出的帧错位，CRC 与模式校验失败（<code>Communication/Src/usb_decode.cpp</code>）。
 只有等下一个帧头 <code>'S'</code> 重新对齐</li>
 </ul>
 <p>因此排查帧错位时，先看 <code>error_count_</code> 是否随队列水位一起变化，再看队列水位是否曾接近 128。</p>
 <h2 id="10-易错点">10. 易错点</h2>
 <ul>
-<li>队列满时静默丢字节。失败分支为空，是整条接收链路里唯一没有计数的环节。<code>USBDecode</code> 内部有 <code>error_count_</code>（<code>Communication/Src/usb_decode.cpp:91,95,101</code>），但队列满造成的字节缺失不会进入那个计数。排查丢包时先怀疑这里。</li>
-<li>忽略发送忙等对接收周期的拉长。排空与发送在同一个 <code>for(;;)</code> 循环里，发送侧的 <code>while</code> 忙等（<code>Task/Src/UsbConnectTask.cpp:143-149</code>）会把下一次排空一起推迟。视觉端长时间不取数据时，接收队列同时承担压力。这一点属于推断，未在视觉端停取的条件下实测。</li>
+<li>队列满时静默丢字节。失败分支为空，是整条接收链路里唯一没有计数的环节。<code>USBDecode</code> 内部有 <code>error_count_</code>（<code>Communication/Src/usb_decode.cpp</code>），但队列满造成的字节缺失不会进入那个计数。排查丢包时先怀疑这里。</li>
+<li>忽略发送忙等对接收周期的拉长。排空与发送在同一个 <code>for(;;)</code> 循环里，发送侧的 <code>while</code> 忙等（<code>Task/Src/UsbConnectTask.cpp</code>）会把下一次排空一起推迟。视觉端长时间不取数据时，接收队列同时承担压力。这一点属于推断，未在视觉端停取的条件下实测。</li>
 <li>把帧边界当成包边界。一个 USB 包可能含多个协议帧，一个协议帧也可能跨包。队列只保证字节顺序，帧边界完全由解析器状态机决定。包长度与帧长度没有对齐关系。</li>
 <li>提高 OTG 中断优先级。把 <code>OTG_FS_IRQn</code> 调到 5 以上会越过 FreeRTOS 的临界区界限，<code>xQueueSendFromISR</code> 可能在内核操作队列时打断内核。表现不可预期，通常是随机死机或队列结构损坏。</li>
 <li>误以为 NAK 会丢数据。NAK 只是拒绝当前包，主机会重试。实际的丢失发生在设备已经收下这个包、字节却没进队列的时候，也就是队列满的分支。</li>
@@ -932,8 +932,8 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td><code>CDC_Receive_FS</code>（:261-284）、队列外部声明（:34）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td><code>USBD_CDC_DataOut</code>（:577-595）、<code>USBD_CDC_ReceivePacket</code>（:853-881）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/freertos.c</code></td><td>队列变量（:38）、创建（:114-118）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h</code></td><td>动态分配（:60）、堆大小（:67）、中断优先级阈值（:110）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>排空与喂帧（:79-101）、发送忙等（:143-149）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</code></td><td>OTG 中断优先级（:94）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>解析状态机与错误计数（:45-108）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>帧头与帧长（:18-21）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-发送链路与忙等待"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-发送链路与忙等待</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/04-发送链路与忙等待.md</span></div><div class="dfile__body"><h1 id="发送链路与忙等待">发送链路与忙等待</h1>
-<p>云台状态帧从任务到 USB IN 端点要经过三处：<code>USB_DEVICE/App/usbd_cdc_if.c:297-336</code>、<code>Class/CDC/Src/usbd_cdc.c:536-568,813-845</code> 与 <code>Task/Src/UsbConnectTask.cpp:105-155</code>。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td><code>CDC_Receive_FS</code>、队列外部声明</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td><code>USBD_CDC_DataOut</code>、<code>USBD_CDC_ReceivePacket</code></td></tr><tr><td><code>Core/Src/freertos.c</code></td><td>队列变量、创建</td></tr><tr><td><code>Core/Inc/FreeRTOSConfig.h</code></td><td>动态分配、堆大小、中断优先级阈值</td></tr><tr><td><code>Task/Src/UsbConnectTask.cpp</code></td><td>排空与喂帧、发送忙等</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>OTG 中断优先级</td></tr><tr><td><code>Communication/Src/usb_decode.cpp</code></td><td>解析状态机与错误计数</td></tr><tr><td><code>Communication/Inc/usb_protocol.h</code></td><td>帧头与帧长</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-发送链路与忙等待"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-发送链路与忙等待</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/04-发送链路与忙等待.md</span></div><div class="dfile__body"><h1 id="发送链路与忙等待">发送链路与忙等待</h1>
+<p>云台状态帧从任务到 USB IN 端点要经过三处：<code>USB_DEVICE/App/usbd_cdc_if.c</code>、<code>Class/CDC/Src/usbd_cdc.c</code> 与 <code>Task/Src/UsbConnectTask.cpp</code>。</p>
 <p>接收链路在 <code>03-接收链路与队列.md</code>，帧内容与协议在 USB 协议收发单元；这里只跟一帧的提交、完成与重试有关。</p>
 <h2 id="1-in-传输与-txstate-忙标志">1. IN 传输与 TxState 忙标志</h2>
 <p>设备往主机发数据走 IN 端点。一次 IN 传输提交给 PCD 层后，硬件按主机的轮询节奏把它送上总线。应用不能在上一次传输还没结束时再次提交，因此类层用一个 TxState 标志表示占用状态。</p>
@@ -951,7 +951,7 @@
 <h2 id="2-一次提交的四个环节">2. 一次提交的四个环节</h2>
 <p>任务调用 <code>CDC_Transmit_FS</code>，它检查句柄与忙标志，把缓冲指针与长度写进类层，再调用 <code>USBD_CDC_TransmitPacket</code>。后者把 <code>TxState</code> 置 1 并调用 <code>USBD_LL_Transmit</code> 交给 PCD。传输完成后，PCD 层的传输完成回调进入类层 <code>USBD_CDC_DataIn</code>，在那里把 <code>TxState</code> 清 0。</p>
 <p>四个环节的代码位置：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Class/CDC/Src/usbd_cdc.c:813-845（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Class/CDC/Src/usbd_cdc.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (hcdc</span><span style="color:#D73A49">-></span><span style="color:#24292E">TxState </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#D73A49">U</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">  {</span></span>
 <span class="line"><span style="color:#24292E">    hcdc->TxState </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1</span><span style="color:#D73A49">U</span><span style="color:#24292E">;</span></span>
@@ -963,7 +963,7 @@
 <p><code>ret</code> 初值为 <code>USBD_BUSY</code>，只有在 <code>TxState == 0</code> 的分支里才改成 <code>USBD_OK</code>。这意味着忙标志在类层又检查了一次，即使应用层的检查刚通过。</p>
 <h2 id="3-零长度包与-43-字节帧">3. 零长度包与 43 字节帧</h2>
 <p><code>USBD_CDC_DataIn</code> 先判断本次传输长度是否是端点最大包长的整数倍。若整除，还需要补一个零长度包（ZLP）作为结束标志；若不整除，直接清忙标志。43 字节不是 64 的整数倍，走直接清零分支。</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Class/CDC/Src/usbd_cdc.c:536-568（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Class/CDC/Src/usbd_cdc.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> uint8_t</span><span style="color:#6F42C1"> USBD_CDC_DataIn</span><span style="color:#24292E">(USBD_HandleTypeDef </span><span style="color:#D73A49">*</span><span style="color:#E36209">pdev</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint8_t</span><span style="color:#E36209"> epnum</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#24292E">  ...</span></span>
@@ -985,7 +985,7 @@
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>43 字节帧的 <code>total_length % 64</code> 为 43，走 <code>else</code>，<code>TxState</code> 清 0，随后调用 <code>CDC_TransmitCplt_FS</code>。类层在清忙标志后调用应用侧 <code>TransmitCplt</code> 回调，本工程的这个回调是空的。</p>
 <h2 id="4-cdc_transmit_fs-的两个前置检查">4. CDC_Transmit_FS 的两个前置检查</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c:297-313 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c */</span></span>
 <span class="line"><span style="color:#D73A49">uint8_t</span><span style="color:#6F42C1"> CDC_Transmit_FS</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint8_t*</span><span style="color:#E36209"> Buf</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint16_t</span><span style="color:#E36209"> Len</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">  uint8_t</span><span style="color:#24292E"> result </span><span style="color:#D73A49">=</span><span style="color:#24292E"> USBD_OK;</span></span>
@@ -1003,13 +1003,13 @@
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>两个前置检查：类数据为空返回 <code>USBD_FAIL</code>；忙标志非零返回 <code>USBD_BUSY</code>。长度由调用方给出，本工程传 43。</p>
 <h2 id="5-任务侧-while-加-osdelay5">5. 任务侧 while 加 osDelay(5)</h2>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/UsbConnectTask.cpp:105-110（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/UsbConnectTask.cpp（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> (hUsbDeviceFS.dev_state </span><span style="color:#D73A49">==</span><span style="color:#24292E"> USBD_STATE_CONFIGURED)</span></span>
 <span class="line"><span style="color:#24292E">        {</span></span>
 <span class="line"><span style="color:#D73A49">            uint32_t</span><span style="color:#24292E"> current_time </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> HAL_GetTick</span><span style="color:#24292E">();</span></span>
 <span class="line"><span style="color:#D73A49">            if</span><span style="color:#24292E"> (current_time </span><span style="color:#D73A49">-</span><span style="color:#24292E"> last_send_time </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> 10</span><span style="color:#24292E">) {</span></span>
 <span class="line"><span style="color:#24292E">                last_send_time </span><span style="color:#D73A49">=</span><span style="color:#24292E"> current_time;</span></span></code></pre>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/UsbConnectTask.cpp:143-154（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/UsbConnectTask.cpp（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">                while</span><span style="color:#24292E"> (</span></span>
 <span class="line"><span style="color:#6F42C1">                    CDC_Transmit_FS</span><span style="color:#24292E">(</span></span>
 <span class="line"><span style="color:#D73A49">                           reinterpret_cast&#x3C;uint8_t*></span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">tx_pkt),</span></span>
@@ -1031,7 +1031,7 @@
 <p>任务循环末尾 <code>osDelay(10)</code>，发送门槛也是 10 ms，两者叠加使名义发送周期为 10 ms 量级，即 100 Hz。每帧 43 字节，名义出站码率为：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>R</mi><mrow><mi>t</mi><mi>x</mi></mrow></msub><mo>=</mo><mn>100</mn><mo>×</mo><mn>43</mn><mo>=</mo><mn>4300</mn><mtext> B/s</mtext></mrow><annotation encoding="application/x-tex">R_{tx} = 100 \times 43 = 4300\ \text{B/s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0077em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">x</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">100</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">43</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4300</span><span class="mspace"> </span><span class="mord text"><span class="mord">B/s</span></span></span></span></span></p>
 <p>43 字节小于一个 64 字节包，一帧对应一次 <code>USBD_LL_Transmit</code>。全速批量传输的名义上限远高于此，发送侧的瓶颈在忙标志与主机取数节奏。</p>
-<p>帧结构在 <code>Communication/Inc/usb_protocol.h:55-70</code>，建帧在 <code>Communication/Src/usb_protocol.cpp:11-49</code>：先填帧头与字段，<code>:38</code> 把 <code>crc16</code> 清零，<code>:41-45</code> 对前 41 字节算 CRC，<code>:47</code> 写回，返回 <code>GIMBAL_TO_VISION_LEN</code>。</p>
+<p>帧结构在 <code>Communication/Inc/usb_protocol.h</code>，建帧在 <code>Communication/Src/usb_protocol.cpp</code>：先填帧头与字段 把 <code>crc16</code> 清零 对前 41 字节算 CRC 写回，返回 <code>GIMBAL_TO_VISION_LEN</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant T as UsbConnectTask
@@ -1053,7 +1053,7 @@
   C->>F: TransmitCplt 空实现
   T->>T: 下一次循环再判断 10 ms</pre></div>
 <h2 id="7-完成回调为空的影响">7. 完成回调为空的影响</h2>
-<p><code>CDC_TransmitCplt_FS</code> 只对三个参数做 <code>UNUSED</code>（<code>usbd_cdc_if.c:327-336</code>）。发送完成的时刻在应用侧不可观测，只能靠下一轮 <code>TxState</code> 查询间接判断。</p>
+<p><code>CDC_TransmitCplt_FS</code> 只对三个参数做 <code>UNUSED</code>（<code>usbd_cdc_if.c</code>）。发送完成的时刻在应用侧不可观测，只能靠下一轮 <code>TxState</code> 查询间接判断。</p>
 <p>回调为空也意味着发送完成与下一帧组帧之间没有同步点：任务在收到 <code>USBD_OK</code> 之后才继续，而 <code>USBD_OK</code> 只表示提交成功，不表示总线已经 ACK。若要严格统计发送延迟，需要在这个回调里打时间戳。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 <ul>
@@ -1177,7 +1177,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td><code>CDC_Transmit_FS</code>（:297-313）、<code>CDC_TransmitCplt_FS</code>（:327-336）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td><code>USBD_CDC_DataIn</code>（:536-568）、<code>USBD_CDC_TransmitPacket</code>（:813-845）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</code></td><td><code>TxState</code> 与句柄结构（:120-132）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>发送条件与忙等（:105-155）、建帧调用（:129-140）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp</code></td><td>建帧与 CRC（:11-49）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>帧结构（:55-70）、帧长常量（:20-21）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="cdc-虚拟串口的易错点与排查">CDC 虚拟串口的易错点与排查</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td><code>CDC_Transmit_FS</code>、<code>CDC_TransmitCplt_FS</code></td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td><code>USBD_CDC_DataIn</code>、<code>USBD_CDC_TransmitPacket</code></td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h</code></td><td><code>TxState</code> 与句柄结构</td></tr><tr><td><code>Task/Src/UsbConnectTask.cpp</code></td><td>发送条件与忙等、建帧调用</td></tr><tr><td><code>Communication/Src/usb_protocol.cpp</code></td><td>建帧与 CRC</td></tr><tr><td><code>Communication/Inc/usb_protocol.h</code></td><td>帧结构、帧长常量</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/05-USB Device/01-CDC虚拟串口/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="cdc-虚拟串口的易错点与排查">CDC 虚拟串口的易错点与排查</h1>
 <p>CDC 单元的已知问题集中在 <code>01-USB-CDC类与虚拟串口.md</code> 到 <code>04-发送链路与忙等待.md</code> 四页引用的同一批文件里。每条问题都标出源码位置与可观察现象，推断项单独注明。</p>
 <h2 id="1-三类现象与它们的排查层级">1. 三类现象与它们的排查层级</h2>
 <p>CDC 虚拟串口牵涉主机、USB 外设、类库、应用回调、FreeRTOS 队列与任务六个环节。问题表现大多收敛成三类：主机看不到串口、串口能开但收不到数据、数据有但内容不对。三类现象对应的排查层级不同。</p>
@@ -1195,10 +1195,10 @@
   C1 -->|"否 但角度异常"| C3["查弧度角度换算与四元数参数"]</pre></div>
 <h2 id="2-从枚举到内容五级排查顺序">2. 从枚举到内容：五级排查顺序</h2>
 <p>主机侧先确认枚举是否发生。Linux 用 <code>dmesg</code> 看 USB 设备接入记录与驱动绑定，Windows 看设备管理器里的端口节点与驱动状态。没有记录时问题在硬件或外设初始化，不在类库。</p>
-<p>有记录但驱动异常时，核对 <code>USB_DEVICE/App/usbd_desc.c:65-69</code> 的 <code>VID</code> 与 <code>PID</code>，以及 <code>Class/CDC/Src/usbd_cdc.c:168-265</code> 的配置描述符长度与接口数量。描述符长度写错会导致枚举在配置阶段失败。</p>
+<p>有记录但驱动异常时，核对 <code>USB_DEVICE/App/usbd_desc.c</code> 的 <code>VID</code> 与 <code>PID</code>，以及 <code>Class/CDC/Src/usbd_cdc.c</code> 的配置描述符长度与接口数量。描述符长度写错会导致枚举在配置阶段失败。</p>
 <p>串口能打开说明枚举完成。此时先在 <code>CDC_Receive_FS</code> 入口下一个断点，或用一个计数变量确认回调是否到达。不命中说明 OUT 端点没有重挂，或主机根本没有写数据。</p>
 <p>回调命中但任务取不到字节时，在调试器里读 <code>usbRxQueue</code> 的 uxMessagesWaiting 字段。它长期为 0 说明入队没有发生，先检查队列指针是否为 <code>NULL</code>。它长期顶在 128 附近说明任务排空太慢。</p>
-<p>任务排空与发送共用一个循环。若任务停在 <code>Task/Src/UsbConnectTask.cpp:143-149</code> 的 <code>while</code> 里，接收也会一起停。用 <code>osThreadGetState</code> 或在忙等循环里递增一个计数可以看到这一点。</p>
+<p>任务排空与发送共用一个循环。若任务停在 <code>Task/Src/UsbConnectTask.cpp</code> 的 <code>while</code> 里，接收也会一起停。用 <code>osThreadGetState</code> 或在忙等循环里递增一个计数可以看到这一点。</p>
 <p>五个观察点在链路里的位置：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
@@ -1218,24 +1218,40 @@
   D-->>T: 凑齐帧返回 true
   Note over T: 观察点五 vision_data 字段是否更新</pre></div>
 <h2 id="3-队列满静默丢字节与帧错位">3. 队列满静默丢字节与帧错位</h2>
-<p><code>USB_DEVICE/App/usbd_cdc_if.c:270-274</code> 的入队失败分支为空。队列深度 128 字节，满速突发或超过约 22 ms 的阻塞即可溢出，丢字节不计数。定量推导见 <code>03-接收链路与队列.md</code>。</p>
-<p>解析器状态机在 <code>Communication/Src/usb_decode.cpp:45-108</code>：先等 <code>'S'</code> 再等 <code>'P'</code>，然后连续收集 29 字节。中间少一个字节会让整帧错位，只能等下一个 <code>'S'</code> 重新同步，<code>error_count_</code> 只在 CRC 或模式校验失败时增长。两件事叠加起来的表现是：丢的是队列里的字节，报错的是解析器的计数，两者不同源。</p>
+<p><code>USB_DEVICE/App/usbd_cdc_if.c</code> 的入队失败分支为空。队列深度 128 字节，满速突发或超过约 22 ms 的阻塞即可溢出，丢字节不计数。定量推导见 <code>03-接收链路与队列.md</code>。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* 简化：中断里逐字节入队，失败分支为空 */</span></span>
+<span class="line"><span style="color:#005CC5">BaseType_t</span><span style="color:#24292E"> ok </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> xQueueSendToBackFromISR</span><span style="color:#24292E">(usbRxQueue, </span><span style="color:#D73A49">&#x26;</span><span style="color:#E36209">byte</span><span style="color:#24292E">, </span><span style="color:#005CC5">NULL</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)ok;</span><span style="color:#6A737D">   /* pdFAIL（队列满）时字节被丢弃，没有计数器 */</span></span></code></pre>
+<p>解析器状态机在 <code>Communication/Src/usb_decode.cpp</code>：先等 <code>'S'</code> 再等 <code>'P'</code>，然后连续收集 29 字节。中间少一个字节会让整帧错位，只能等下一个 <code>'S'</code> 重新同步，<code>error_count_</code> 只在 CRC 或模式校验失败时增长。两件事叠加起来的表现是：丢的是队列里的字节，报错的是解析器的计数，两者不同源。</p>
+<p>状态机的骨架大致如下，丢字节与计数发生在两个不同的层：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* 简化：usb_decode.cpp 的解析状态机 */</span></span>
+<span class="line"><span style="color:#D73A49">switch</span><span style="color:#24292E"> (state) {</span></span>
+<span class="line"><span style="color:#D73A49">case</span><span style="color:#24292E"> WAIT_S:  </span><span style="color:#D73A49">if</span><span style="color:#24292E"> (byte </span><span style="color:#D73A49">==</span><span style="color:#032F62"> 'S'</span><span style="color:#24292E">) state </span><span style="color:#D73A49">=</span><span style="color:#24292E"> WAIT_P; </span><span style="color:#D73A49">break</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">case</span><span style="color:#24292E"> WAIT_P:  state </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (byte </span><span style="color:#D73A49">==</span><span style="color:#032F62"> 'P'</span><span style="color:#24292E">) </span><span style="color:#D73A49">?</span><span style="color:#24292E"> COLLECT </span><span style="color:#D73A49">:</span><span style="color:#24292E"> WAIT_S; </span><span style="color:#D73A49">break</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">case</span><span style="color:#24292E"> COLLECT: </span><span style="color:#E36209">buf</span><span style="color:#24292E">[idx</span><span style="color:#D73A49">++</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> byte;</span></span>
+<span class="line"><span style="color:#D73A49">              if</span><span style="color:#24292E"> (idx </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> 29</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">                  if</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">check_crc_and_mode</span><span style="color:#24292E">(buf)) </span><span style="color:#6F42C1">emit</span><span style="color:#24292E">(buf);</span></span>
+<span class="line"><span style="color:#D73A49">                  else</span><span style="color:#24292E"> error_count_</span><span style="color:#D73A49">++</span><span style="color:#24292E">;</span><span style="color:#6A737D">      /* 只在 CRC 或模式校验失败时增长 */</span></span>
+<span class="line"><span style="color:#24292E">                  idx </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">; state </span><span style="color:#D73A49">=</span><span style="color:#24292E"> WAIT_S;</span></span>
+<span class="line"><span style="color:#24292E">              }</span></span>
+<span class="line"><span style="color:#D73A49">              break</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <h2 id="4-cdc_control_fs-空实现与跨层-include">4. CDC_Control_FS 空实现与跨层 include</h2>
-<p><code>usbd_cdc_if.c:180-244</code> 的九个命令分支全为空，统一返回 <code>USBD_OK</code>。主机设置波特率、数据位、校验位都得到成功应答但不生效。虚拟串口数据通路不依赖这些参数，所以现象不体现在收发的正确性上。</p>
-<p><code>usbd_cdc_if.c:25</code> 引入了 <code>../../Task/Inc/UsbConnectTask.h</code>，注释写的是包含接收函数声明。该头文件里并没有接收函数声明，实际用到的是同文件 <code>:34</code> 的 <code>extern QueueHandle_t usbRxQueue</code>。USB 设备层反向依赖任务层头文件，编译耦合不必要。</p>
+<p><code>usbd_cdc_if.c</code> 的九个命令分支全为空，统一返回 <code>USBD_OK</code>。主机设置波特率、数据位、校验位都得到成功应答但不生效。虚拟串口数据通路不依赖这些参数，所以现象不体现在收发的正确性上。</p>
+<p><code>usbd_cdc_if.c</code> 引入了 <code>../../Task/Inc/UsbConnectTask.h</code>，注释写的是包含接收函数声明。该头文件里并没有接收函数声明，实际用到的是同文件里的 <code>extern QueueHandle_t usbRxQueue</code>。USB 设备层反向依赖任务层头文件，编译耦合不必要。</p>
 <h2 id="5-两处历史遗留usb_data_received-与-mode-类型">5. 两处历史遗留：USB_Data_Received 与 mode 类型</h2>
-<p><code>Task/Src/UsbConnectTask.cpp:165-174</code> 的 <code>USB_Data_Received</code> 函数体只做 <code>(void) byte</code>，循环没有取数动作；声明留在 <code>Task/Inc/UsbConnectTask.h:109</code>。接收实际走 <code>CDC_Receive_FS</code> 的队列路径，这个函数是历史遗留。</p>
-<p><code>Task/Inc/UsbConnectTask.h:56-64</code> 的结构体把 <code>mode</code> 声明为 <code>float</code>，协议里是 <code>uint8_t</code>。赋值处 <code>Task/Src/UsbConnectTask.cpp:92</code> 隐式转换。下游比较 <code>== 1 || == 2</code>（<code>Task/Src/ControlCenterTask.cpp:68,79</code>）在浮点精确表示 0 到 2 的前提下成立，改类型前要检查所有读取点。</p>
+<p><code>Task/Src/UsbConnectTask.cpp</code> 的 <code>USB_Data_Received</code> 函数体只做 <code>(void) byte</code>，循环没有取数动作；声明留在 <code>Task/Inc/UsbConnectTask.h</code>。接收实际走 <code>CDC_Receive_FS</code> 的队列路径，这个函数是历史遗留。</p>
+<p><code>Task/Inc/UsbConnectTask.h</code> 的结构体把 <code>mode</code> 声明为 <code>float</code>，协议里是 <code>uint8_t</code>。赋值处 <code>Task/Src/UsbConnectTask.cpp</code> 隐式转换。下游比较 <code>== 1 || == 2</code>（<code>Task/Src/ControlCenterTask.cpp</code>）在浮点精确表示 0 到 2 的前提下成立，改类型前要检查所有读取点。</p>
 <h2 id="6-四元数转换参数重复">6. 四元数转换参数重复</h2>
-<p><code>Task/Src/UsbConnectTask.cpp:129</code> 调用 <code>eulerToQuaternion(imu_data.gimbal_yaw_total_angle, imu_data.roll, imu_data.roll)</code>，第二个与第三个实参相同。函数签名第三个参数是 <code>roll</code>，第二个是 <code>pitch</code>（<code>:19</code>），调用处相当于把 roll 同时当作 pitch 与 roll。是否为有意为之需要对照视觉端约定确认。</p>
+<p><code>Task/Src/UsbConnectTask.cpp</code> 调用 <code>eulerToQuaternion(imu_data.gimbal_yaw_total_angle, imu_data.roll, imu_data.roll)</code>，第二个与第三个实参相同。函数签名第三个参数是 <code>roll</code>，第二个是 <code>pitch</code>，调用处相当于把 roll 同时当作 pitch 与 roll。是否为有意为之需要对照视觉端约定确认。</p>
 <h2 id="7-初始化两次与忙等无超时">7. 初始化两次与忙等无超时</h2>
-<p><code>Core/Src/main.c:121</code> 与 <code>Core/Src/freertos.c:149</code> 各调用一次 <code>MX_USB_DEVICE_Init()</code>，两次调用的完整叙述与待实测项见 <code>01-USB-CDC类与虚拟串口.md</code> 的「初始化入口与两次调用」一节。</p>
-<p><code>Task/Src/UsbConnectTask.cpp:143-149</code> 的 <code>while</code> 没有上界，返回 <code>USBD_FAIL</code> 时也会跳出。详见 <code>04-发送链路与忙等待.md</code>。</p>
-<p><code>Task/Src/ControlCenterTask.cpp:52</code> 把 USB 模式注释为待实现，但 <code>:68-102</code> 已经在使用 <code>vision_data</code> 并据此设置摩擦轮与拨弹状态。以代码为准。</p>
+<p><code>Core/Src/main.c</code> 与 <code>Core/Src/freertos.c</code> 各调用一次 <code>MX_USB_DEVICE_Init()</code>，两次调用的完整叙述与待实测项见 <code>01-USB-CDC类与虚拟串口.md</code> 的「初始化入口与两次调用」一节。</p>
+<p><code>Task/Src/UsbConnectTask.cpp</code> 的 <code>while</code> 没有上界，返回 <code>USBD_FAIL</code> 时也会跳出。详见 <code>04-发送链路与忙等待.md</code>。</p>
+<p><code>Task/Src/ControlCenterTask.cpp</code> 把 USB 模式注释为待实现，但同一文件已经在使用 <code>vision_data</code> 并据此设置摩擦轮与拨弹状态。以代码为准。</p>
 <h2 id="8-调试手段队列水位与观察点">8. 调试手段：队列水位与观察点</h2>
 <p>在调试器里展开 <code>usbRxQueue</code>，读 <code>uxMessagesWaiting</code> 与 <code>uxLength</code>。前者是当前字节数，后者是深度 128。这两个字段能直接区分入队问题与排空问题。</p>
 <p>队列满分支、<code>error_count_</code>、发送忙等循环各加一个 <code>volatile uint32_t</code> 计数。中断写任务读的场合，单次 32 位读写本身原子；跨字段一致性不做保证。注意 <code>volatile</code> 不提供互斥，只阻止编译器优化掉读写。</p>
-<p>用 <code>bsp_dwt</code> 记录回调进入与退出的时刻，可以量化中断内处理时长与 NAK 窗口。<code>Task/Src/UsbConnectTask.cpp:15</code> 已经引入该头文件。</p>
+<p>用 <code>bsp_dwt</code> 记录回调进入与退出的时刻，可以量化中断内处理时长与 NAK 窗口。<code>Task/Src/UsbConnectTask.cpp</code> 已经引入该头文件。</p>
 <p>在 <code>CDC_Receive_FS</code> 入口、<code>USBD_CDC_DataOut</code> 与 <code>USBD_CDC_DataIn</code> 三处下断点，可以确认包级事件顺序。中断里断点会暂停整个链路，观察队列水位时注意这一点。</p>
 <p>主机侧工具：Linux 用 <code>lsusb -v</code> 读描述符与端点，用 <code>cat /dev/ttyACM0</code> 与 <code>stty</code> 观察数据流。USB 协议分析仪能看到包级重试与 NAK，属于最直接的证据。</p>
 <h2 id="9-易错点速查">9. 易错点速查</h2>
@@ -1378,4 +1394,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>入队失败分支（:270-274）、空控制请求（:180-244）、跨层 include（:25、:34）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c</code></td><td>设备身份（:65-69）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c</code></td><td>引脚与中断（:78-95）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c</code></td><td>第一次 USB 初始化（:121）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/freertos.c</code></td><td>第二次初始化（:149）、队列创建（:114）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>排空与喂帧（:79-101）、忙等（:143-149）、空实现（:165-174）、四元数调用（:129）、DWT 引入（:15）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h</code></td><td><code>vision_data</code> 结构体（:56-64）、函数声明（:109）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>USB 模式注释（:52）、使用 <code>vision_data</code>（:68-102）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>解析状态机与错误计数（:45-108）</td></tr><tr><td><code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td>配置描述符（:168-265）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/06-%E4%B8%8A%E4%BD%8D%E6%9C%BA%E5%B0%81%E5%8C%85%E8%84%9A%E6%9C%AC/"><span class="k">← 上一篇</span><span class="t">上位机封包脚本</span><span class="d">串口通信与协议 · 5 个文件</span></a><a class="next" href="/tc63/docs/05-USB%20Device/02-%E6%8F%8F%E8%BF%B0%E7%AC%A6%E4%B8%8E%E6%9E%9A%E4%B8%BE/"><span class="k">下一篇 →</span><span class="t">描述符与枚举</span><span class="d">USB Device · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>USB_DEVICE/App/usbd_cdc_if.c</code></td><td>入队失败分支、空控制请求、跨层 include</td></tr><tr><td><code>USB_DEVICE/App/usbd_desc.c</code></td><td>设备身份</td></tr><tr><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>引脚与中断</td></tr><tr><td><code>Core/Src/main.c</code></td><td>第一次 USB 初始化</td></tr><tr><td><code>Core/Src/freertos.c</code></td><td>第二次初始化、队列创建</td></tr><tr><td><code>Task/Src/UsbConnectTask.cpp</code></td><td>排空与喂帧、忙等、空实现、四元数调用、DWT 引入</td></tr><tr><td><code>Task/Inc/UsbConnectTask.h</code></td><td><code>vision_data</code> 结构体、函数声明</td></tr><tr><td><code>Task/Src/ControlCenterTask.cpp</code></td><td>USB 模式注释、使用 <code>vision_data</code></td></tr><tr><td><code>Communication/Src/usb_decode.cpp</code></td><td>解析状态机与错误计数</td></tr><tr><td><code>Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</code></td><td>配置描述符</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/06-%E4%B8%8A%E4%BD%8D%E6%9C%BA%E5%B0%81%E5%8C%85%E8%84%9A%E6%9C%AC/"><span class="k">← 上一篇</span><span class="t">上位机封包脚本</span><span class="d">串口通信与协议 · 5 个文件</span></a><a class="next" href="/tc63/docs/05-USB%20Device/02-%E6%8F%8F%E8%BF%B0%E7%AC%A6%E4%B8%8E%E6%9E%9A%E4%B8%BE/"><span class="k">下一篇 →</span><span class="t">描述符与枚举</span><span class="d">USB Device · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

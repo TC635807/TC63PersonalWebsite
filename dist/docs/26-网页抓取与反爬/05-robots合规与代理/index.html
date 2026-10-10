@@ -62,7 +62,7 @@
 
 
 <table><thead><tr><th>方法</th><th>形态</th><th>说明</th></tr></thead><tbody><tr><td><code>can_fetch(url, domain)</code></td><td>异步</td><td>主入口，返回是否允许</td></tr><tr><td><code>can_fetch_sync(url)</code></td><td>同步</td><td>从 URL 解析域名后调用异步版本</td></tr></tbody></table>
-<p>异步版本接收两个参数，域名不一定要与 URL 一致，调用方负责传对。抓取器实际调用时用 <code>urlparse(url).netloc</code> 取值（<code>backend/scraper/fetcher.py:196</code>）。</p>
+<p>异步版本接收两个参数，域名不一定要与 URL 一致，调用方负责传对。抓取器实际调用时用 <code>urlparse(url).netloc</code> 取值（<code>backend/scraper/fetcher.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["can_fetch URL 域名"] --> B{"缓存里有该域名"}
   B -->|是| E["取出 disallow 列表"]
@@ -76,7 +76,7 @@
   I -->|是| J["返回禁止"]
   I -->|否| F</pre></div>
 <h2 id="3-下载路径">3. 下载路径</h2>
-<p>下载固定用 https，域名拼在后面（<code>robots.py:34</code>）：</p>
+<p>下载固定用 https，域名拼在后面（<code>robots.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">url </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> f</span><span style="color:#032F62">"https://</span><span style="color:#005CC5">{</span><span style="color:#24292E">domain</span><span style="color:#005CC5">}</span><span style="color:#032F62">/robots.txt"</span></span>
 <span class="line"><span style="color:#24292E">client_kwargs </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#032F62">    "timeout"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">.default_timeout,</span></span>
@@ -87,7 +87,19 @@
 <p>三个细节：默认超时 10 秒；传输层用 curl 伪装的浏览器指纹，跟主抓取路径保持一致的形态；代理来自 <code>get_proxy_url()</code>，配了代理时 <code>robots.txt</code> 也走代理。</p>
 <p>只有状态码 200 才返回正文，其余情况（404、403、超时、连接失败）统一返回空字符串。异常被整段捕获，不区分类型。</p>
 <h2 id="4-解析实现">4. 解析实现</h2>
-<p><code>_parse_robots</code> 先把文本按行去空，然后顺序扫描（<code>robots.py:51-77</code>）：</p>
+<p><code>_parse_robots</code> 先把文本按行去空，然后顺序扫描。示意如下（省略大小写与空值细节）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 逐行扫描 robots.txt，遇到 User-agent 就切组，组内收集 Disallow</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> raw </span><span style="color:#D73A49">in</span><span style="color:#24292E"> text.splitlines():</span></span>
+<span class="line"><span style="color:#24292E">    line </span><span style="color:#D73A49">=</span><span style="color:#24292E"> raw.strip()</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> line.lower().startswith(</span><span style="color:#032F62">'user-agent:'</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">        current_group </span><span style="color:#D73A49">=</span><span style="color:#24292E"> line.split(</span><span style="color:#032F62">':'</span><span style="color:#24292E">, </span><span style="color:#005CC5">1</span><span style="color:#24292E">)[</span><span style="color:#005CC5">1</span><span style="color:#24292E">].strip()   </span><span style="color:#6A737D"># 只记组名，不比对自身 UA</span></span>
+<span class="line"><span style="color:#D73A49">    elif</span><span style="color:#24292E"> line.lower().startswith(</span><span style="color:#032F62">'disallow:'</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">        path </span><span style="color:#D73A49">=</span><span style="color:#24292E"> line.split(</span><span style="color:#032F62">':'</span><span style="color:#24292E">, </span><span style="color:#005CC5">1</span><span style="color:#24292E">)[</span><span style="color:#005CC5">1</span><span style="color:#24292E">].strip()</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> path:</span></span>
+<span class="line"><span style="color:#24292E">            disallow.append(path)                       </span><span style="color:#6A737D"># 所有组的路径合并进同一个列表</span></span>
+<span class="line"><span style="color:#D73A49">    elif</span><span style="color:#24292E"> line.lower().startswith(</span><span style="color:#032F62">'crawl-delay:'</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">        crawl_delay </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(line.split(</span><span style="color:#032F62">':'</span><span style="color:#24292E">, </span><span style="color:#005CC5">1</span><span style="color:#24292E">)[</span><span style="color:#005CC5">1</span><span style="color:#24292E">])      </span><span style="color:#6A737D"># 解析并缓存，但后续未被使用</span></span></code></pre>
+<p>实现要点（<code>robots.py</code>）：</p>
 
 
 
@@ -117,10 +129,10 @@
 <p>内层循环一直到下一个 <code>User-agent</code> 或文本结束，因此不同 <code>User-agent</code> 组的 <code>Disallow</code> 会被合并进同一个列表。检查器没有比对自身 UA，也没有区分 <code>*</code> 与具名客户端：所有组的禁止路径对它一律生效。这是偏保守的做法——宁可多禁，不会漏禁，但可能挡掉本可抓的路径。</p>
 <p><code>Crawl-delay</code> 解析成浮点数后随缓存保存，返回给调用方的是 <code>(disallow, crawl_delay)</code> 元组，然而 <code>can_fetch</code> 只用了前者，间隔从未被执行。</p>
 <h2 id="5-缓存与淘汰">5. 缓存与淘汰</h2>
-<p>缓存挂在类上（<code>robots.py:26</code>），所有实例共享同一个字典：</p>
+<p>缓存挂在类上（<code>robots.py</code>），所有实例共享同一个字典：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">_cache: dict[</span><span style="color:#005CC5">str</span><span style="color:#24292E">, </span><span style="color:#005CC5">dict</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {}</span></span>
 <span class="line"><span style="color:#005CC5">_MAX_CACHE_SIZE</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 1000</span></span></code></pre>
-<p>写入时若已满 1000 条，按 <code>fetched_at</code> 排序删掉最旧的一半（<code>robots.py:104-107</code>）。条目里的 <code>fetched_at</code> 只在写入时记录，读取时不比较：<code>can_fetch</code> 命中缓存就直接用，没有过期判断。模块开头导入了 <code>timedelta</code>，但代码里没有用到。</p>
+<p>写入时若已满 1000 条，按 <code>fetched_at</code> 排序删掉最旧的一半（<code>robots.py</code>）。条目里的 <code>fetched_at</code> 只在写入时记录，读取时不比较：<code>can_fetch</code> 命中缓存就直接用，没有过期判断。模块开头导入了 <code>timedelta</code>，但代码里没有用到。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant F as 抓取器
@@ -140,7 +152,7 @@
     end
   end</pre></div>
 <h2 id="6-判定与失败语义">6. 判定与失败语义</h2>
-<p>判定只做一件事：把 URL 的路径取出，逐个 <code>Disallow</code> 前缀比较（<code>robots.py:109-114</code>）：</p>
+<p>判定只做一件事：把 URL 的路径取出，逐个 <code>Disallow</code> 前缀比较（<code>robots.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">parsed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> urlparse(url)</span></span>
 <span class="line"><span style="color:#24292E">path </span><span style="color:#D73A49">=</span><span style="color:#24292E"> parsed.path </span><span style="color:#D73A49">or</span><span style="color:#032F62"> "/"</span></span>
 <span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> d </span><span style="color:#D73A49">in</span><span style="color:#24292E"> data.get(</span><span style="color:#032F62">"disallow"</span><span style="color:#24292E">, []):</span></span>
@@ -216,7 +228,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为会区分 User-agent</td><td>所有组的规则合并生效</td><td><code>robots.py:51-77</code></td></tr><tr><td>以为 Crawl-delay 会限速</td><td>只解析保存，未执行</td><td><code>robots.py:69-73</code> 与 <code>:79-114</code></td></tr><tr><td>以为缓存会过期</td><td>只按容量淘汰</td><td><code>robots.py:92-108</code></td></tr><tr><td>以为下载失败会拦人</td><td>失败一律放行</td><td><code>robots.py:45-49</code></td></tr><tr><td>在事件循环里用同步入口</td><td><code>run_until_complete</code> 会报错</td><td><code>robots.py:116-118</code></td></tr><tr><td>把 Disallow 当精确路径</td><td>前缀匹配会连带禁用兄弟路径</td><td><code>robots.py:111-113</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为会区分 User-agent</td><td>所有组的规则合并生效</td><td><code>robots.py</code></td></tr><tr><td>以为 Crawl-delay 会限速</td><td>只解析保存，未执行</td><td><code>robots.py</code> 与</td></tr><tr><td>以为缓存会过期</td><td>只按容量淘汰</td><td><code>robots.py</code></td></tr><tr><td>以为下载失败会拦人</td><td>失败一律放行</td><td><code>robots.py</code></td></tr><tr><td>在事件循环里用同步入口</td><td><code>run_until_complete</code> 会报错</td><td><code>robots.py</code></td></tr><tr><td>把 Disallow 当精确路径</td><td>前缀匹配会连带禁用兄弟路径</td><td><code>robots.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -335,7 +347,7 @@
 <p>检查器写好了，但不代表抓取时会用它。是否检查 <code>robots.txt</code> 由一个布尔开关控制，而这个开关的默认值是 <code>False</code>，主流水线在构造抓取器时又显式传了 <code>False</code>。结果是默认部署下，检查器代码存在但调用链不会走到它。</p>
 <p>配置、构造与调用三个位置的默认值决定了这个开关的实际状态，而打开它之后的行为又与检查器的失败语义有关。</p>
 <h2 id="1-配置里的默认值">1. 配置里的默认值</h2>
-<p>配置模块给出一个布尔量（<code>backend/config.py:126</code>）：</p>
+<p>配置模块给出一个布尔量（<code>backend/config.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">SCRAPER_RESPECT_ROBOTS</span><span style="color:#24292E">: </span><span style="color:#005CC5">bool</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> False</span><span style="color:#6A737D"> # 是否遵守 robots.txt</span></span></code></pre>
 <p>它读的是环境变量 <code>SCRAPER_RESPECT_ROBOTS</code>，缺省关闭。相邻两行是超时 10 秒与请求间隔 1 秒：</p>
 
@@ -365,12 +377,12 @@
 
 <table><thead><tr><th>配置</th><th>默认值</th><th>含义</th></tr></thead><tbody><tr><td><code>SCRAPER_TIMEOUT</code></td><td>10</td><td>HTTP 请求超时秒数</td></tr><tr><td><code>SCRAPER_RATE_LIMIT</code></td><td>1.0</td><td>请求间隔秒数</td></tr><tr><td><code>SCRAPER_RESPECT_ROBOTS</code></td><td><code>False</code></td><td>是否检查 <code>robots.txt</code></td></tr></tbody></table>
 <h2 id="2-抓取器的构造参数">2. 抓取器的构造参数</h2>
-<p><code>WebFetcher</code> 把开关作为构造参数保存（<code>backend/scraper/fetcher.py:136</code>、<code>:143</code>）：</p>
+<p><code>WebFetcher</code> 把开关作为构造参数保存（<code>backend/scraper/fetcher.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#005CC5"> __init__</span><span style="color:#24292E">(self, ..., respect_robots: </span><span style="color:#005CC5">bool</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> False</span><span style="color:#24292E">, ...):</span></span>
 <span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.respect_robots </span><span style="color:#D73A49">=</span><span style="color:#24292E"> respect_robots</span></span></code></pre>
 <p>参数默认值同样是 <code>False</code>，与配置保持一致。抓取器内部只在一处读它，就是检查函数的第一行。</p>
 <h2 id="3-主流水线的写死">3. 主流水线的写死</h2>
-<p>决定线上行为的地方在流水线工厂（<code>backend/pipeline/factory.py:40</code>）：</p>
+<p>决定线上行为的地方在流水线工厂（<code>backend/pipeline/factory.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">web_fetcher </span><span style="color:#D73A49">=</span><span style="color:#24292E"> WebFetcher(</span><span style="color:#E36209">respect_robots</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">)</span></span></code></pre>
 <p>这里没有读配置项 <code>SCRAPER_RESPECT_ROBOTS</code>，而是写了字面量 <code>False</code>。因此即使把环境变量设成真，主流水线构造出的抓取器仍然不检查 <code>robots.txt</code>。配置项与工厂参数是两条没有接上的线。</p>
 
@@ -407,14 +419,14 @@
   F --> G["_check_robots 立即返回"]
   C -.->|"断开的连接"| E</pre></div>
 <h2 id="4-检查在抓取流程里的位置">4. 检查在抓取流程里的位置</h2>
-<p><code>fetch</code> 的顺序是先限速、再检查、然后依次尝试各条抓取路径（<code>fetcher.py:206-220</code>）：</p>
+<p><code>fetch</code> 的顺序是先限速、再检查、然后依次尝试各条抓取路径（<code>fetcher.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._rate_limit()</span></span>
 <span class="line"><span style="color:#D73A49">await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._check_robots(url)</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.use_fallback:</span></span>
 <span class="line"><span style="color:#24292E">    result </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._try_crawl4ai(url)</span></span></code></pre>
 <p>检查排在所有抓取尝试之前，因此一旦它拦下来，后面 Playwright、轻量客户端等路径都不会执行。限速在前，意味着被拦的请求也消耗了一次限速间隔。</p>
 <h2 id="5-命中规则后的行为">5. 命中规则后的行为</h2>
-<p><code>_check_robots</code> 的逻辑很短（<code>fetcher.py:191-202</code>）：</p>
+<p><code>_check_robots</code> 的逻辑很短（<code>fetcher.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.respect_robots:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span></span>
 <span class="line"><span style="color:#24292E">domain </span><span style="color:#D73A49">=</span><span style="color:#24292E"> urlparse(url).netloc</span></span>
@@ -523,7 +535,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为设了环境变量就生效</td><td>工厂写死 <code>False</code></td><td><code>pipeline/factory.py:40</code></td></tr><tr><td>以为检查器没被调用是死代码</td><td>开关打开即生效</td><td><code>fetcher.py:191-202</code></td></tr><tr><td>把被禁当成网络失败重试</td><td>每次都会抛同样的异常</td><td><code>fetcher.py:202</code></td></tr><tr><td>期待 <code>Crawl-delay</code> 自动生效</td><td>只解析不使用</td><td><code>robots.py:69-73</code></td></tr><tr><td>忽略被禁请求也占限速</td><td>检查在限速之后</td><td><code>fetcher.py:218-219</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为设了环境变量就生效</td><td>工厂写死 <code>False</code></td><td><code>pipeline/factory.py</code></td></tr><tr><td>以为检查器没被调用是死代码</td><td>开关打开即生效</td><td><code>fetcher.py</code></td></tr><tr><td>把被禁当成网络失败重试</td><td>每次都会抛同样的异常</td><td><code>fetcher.py</code></td></tr><tr><td>期待 <code>Crawl-delay</code> 自动生效</td><td>只解析不使用</td><td><code>robots.py</code></td></tr><tr><td>忽略被禁请求也占限速</td><td>检查在限速之后</td><td><code>fetcher.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -642,7 +654,7 @@
 <p>有些站点在本地网络里直连不通，抓取前需要把出口换成本机代理。这个仓库的代理配置只有四十行，却决定了四件事：什么时候直连、什么时候走代理、哪些调用会走代理、以及改完配置在哪里生效。</p>
 <p>它把「端口」当作唯一配置项，其余信息（协议、主机、字典形态）都由代码里的模板推出来。这种极简写法的好处是不会配错格式，代价是能力边界很窄：只支持本机 HTTP 代理，没有认证，也不读通用的代理环境变量。</p>
 <h2 id="端口是唯一的配置项">端口是唯一的配置项</h2>
-<p>配置模块只有四个公开名字（<code>backend/scraper/proxy_config.py:12-41</code>）：</p>
+<p>配置模块只有四个公开名字（<code>backend/scraper/proxy_config.py</code>）：</p>
 
 
 
@@ -679,9 +691,9 @@
 
 
 <table><thead><tr><th>名字</th><th>形态</th><th>作用</th></tr></thead><tbody><tr><td>模块级变量</td><td>整数或空</td><td>进程内的全局代理端口</td></tr><tr><td><code>set_proxy_port(port)</code></td><td>函数</td><td>设置全局端口</td></tr><tr><td><code>get_proxy_port()</code></td><td>函数</td><td>取端口，全局变量优先，回退环境变量</td></tr><tr><td><code>get_proxy_url()</code></td><td>函数</td><td>拼出代理 URL，端口为零时返回空</td></tr><tr><td><code>get_proxy_dict()</code></td><td>函数</td><td>给 requests 用的字典形态</td></tr></tbody></table>
-<p>协议与主机是写死的：拼出来的 URL 固定形如 <code>http://127.0.0.1:{port}</code>（<code>proxy_config.py:28-33</code>）。也就是说，这套配置默认代理进程就跑在同一台机器上，端口是它唯一的变量。</p>
+<p>协议与主机是写死的：拼出来的 URL 固定形如 <code>http://127.0.0.1:{port}</code>（<code>proxy_config.py</code>）。也就是说，这套配置默认代理进程就跑在同一台机器上，端口是它唯一的变量。</p>
 <h2 id="全局变量优先于环境变量">全局变量优先于环境变量</h2>
-<p>取端口时先看模块级变量，没有被设置过才去读环境变量，最后兜底为零（<code>proxy_config.py:21-25</code>）：</p>
+<p>取端口时先看模块级变量，没有被设置过才去读环境变量，最后兜底为零（<code>proxy_config.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> get_proxy_port</span><span style="color:#24292E">() -> </span><span style="color:#005CC5">int</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> _proxy_port </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> _proxy_port</span></span>
@@ -719,7 +731,7 @@
 
 <table><thead><tr><th>情形</th><th>取到的端口</th><th>原因</th></tr></thead><tbody><tr><td>只设环境变量</td><td>环境变量的值</td><td>全局变量为空</td></tr><tr><td>只调设置函数</td><td>函数传入的值</td><td>全局变量优先</td></tr><tr><td>两者都设</td><td>函数传入的值</td><td>全局变量优先</td></tr><tr><td>两者都没有</td><td>0</td><td>兜底直连</td></tr></tbody></table>
 <h2 id="端口为零表示直连">端口为零表示直连</h2>
-<p>零是「不用代理」的哨兵值，判断点只有一处（<code>proxy_config.py:30-33</code>）：</p>
+<p>零是「不用代理」的哨兵值，判断点只有一处（<code>proxy_config.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">port </span><span style="color:#D73A49">=</span><span style="color:#24292E"> get_proxy_port()</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> port </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> None</span><span style="color:#6A737D">  # 禁用代理，直连</span></span>
@@ -735,7 +747,7 @@
     F -->|"是"| G["返回空, 直连"]
     F -->|"否"| H["返回 http://127.0.0.1:端口"]</pre></div>
 <h2 id="url-与-requests-字典两种形态">URL 与 requests 字典两种形态</h2>
-<p>同一个 URL 有两种对外形态，分别给不同的客户端用（<code>proxy_config.py:28-41</code>）：</p>
+<p>同一个 URL 有两种对外形态，分别给不同的客户端用（<code>proxy_config.py</code>）：</p>
 
 
 
@@ -759,7 +771,7 @@
 <table><thead><tr><th>形态</th><th>返回值</th><th>给谁用</th></tr></thead><tbody><tr><td>单个 URL 字符串</td><td><code>http://127.0.0.1:端口</code></td><td>httpx 的 <code>proxy</code> 参数</td></tr><tr><td>字典</td><td><code>{"http": url, "https": url}</code></td><td>requests 的 <code>proxies</code> 参数</td></tr></tbody></table>
 <p>字典里 http 与 https 指向同一个地址，含义是「无论目标协议是什么，都从这个代理出去」，而不是「代理本身的协议是 https」。这一点容易混：URL 前缀 <code>http://</code> 描述的是到代理的连接方式，目标站点仍然可以是 https。</p>
 <h2 id="哪些调用会走代理">哪些调用会走代理</h2>
-<p>当前检出里代理被三处使用，覆盖两条链路（<code>backend/scraper/robots.py:16</code>、<code>:36</code>、<code>:41-42</code> 与 <code>backend/scraper/wikipedia_client.py:14</code>、<code>:57</code>、<code>:149</code>、<code>:192</code>）：</p>
+<p>当前检出里代理被三处使用，覆盖两条链路（<code>backend/scraper/robots.py</code>、<code>backend/scraper/wikipedia_client.py</code>）：</p>
 
 
 
@@ -795,7 +807,7 @@
     G["环境变量 PROXY_PORT"] --> A
     G --> E</pre></div>
 <h2 id="ai-侧走的是另一个通道">AI 侧走的是另一个通道</h2>
-<p>AI 调用与抓取读的是同一个环境变量，但落在两个不同的配置字段上：抓取侧由代理模块直接读取，AI 侧先经过总配置的 <code>AI_PROXY_PORT</code>，再传给 AI 客户端（<code>backend/config.py:29</code>、<code>backend/ai/config.py:7</code>、<code>:17</code>）。</p>
+<p>AI 调用与抓取读的是同一个环境变量，但落在两个不同的配置字段上：抓取侧由代理模块直接读取，AI 侧先经过总配置的 <code>AI_PROXY_PORT</code>，再传给 AI 客户端（<code>backend/config.py</code>、<code>backend/ai/config.py</code>）。</p>
 
 
 
@@ -851,8 +863,8 @@
 
 
 <table><thead><tr><th>症状</th><th>常见原因</th><th>现象</th></tr></thead><tbody><tr><td>需要代理认证</td><td>代理要求账号密码而配置不支持</td><td>状态码 407，提示需要代理认证</td></tr><tr><td>代理连接失败</td><td>端口没起服务或被防火墙拦</td><td>客户端报代理连接错误</td></tr><tr><td>代理不覆盖该域名</td><td>规则文件与页面一起取不到</td><td>表现为抓取全线失败</td></tr></tbody></table>
-<p>前两项的文案在另一个工具的错误映射表里有对应条目：407 映射为「需要代理认证」，连接类错误映射为「代理连接失败」（<code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py:23</code>、<code>:53</code>）。本仓库的代理模块只负责提供地址，不处理认证，也不重试。</p>
-<p>还有一条更隐蔽的路径：robots.txt 下载的异常被整段捕获并返回空字符串（<code>robots.py:35-49</code>），空字符串会让判定直接返回允许（<code>robots.py:95-97</code>）。所以代理配错、又开着 robots 检查时，检查器不会报错，而是静默放行。</p>
+<p>前两项的文案在另一个工具的错误映射表里有对应条目：407 映射为「需要代理认证」，连接类错误映射为「代理连接失败」（<code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py</code>）。本仓库的代理模块只负责提供地址，不处理认证，也不重试。</p>
+<p>还有一条更隐蔽的路径：robots.txt 下载的异常被整段捕获并返回空字符串（<code>robots.py</code>），空字符串会让判定直接返回允许。所以代理配错、又开着 robots 检查时，检查器不会报错，而是静默放行。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["代理地址配置错误"] --> B["robots.txt 下载异常"]
     B --> C["异常被捕获, 返回空文本"]
@@ -994,12 +1006,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scraper/proxy_config.py</code></td><td>端口读取、URL 与字典形态（<code>:12-41</code>）</td></tr><tr><td><code>backend/scraper/robots.py</code></td><td>robots.txt 下载走代理、异常吞掉与放行（<code>:16</code>、<code>:35-49</code>、<code>:95-97</code>）</td></tr><tr><td><code>backend/scraper/wikipedia_client.py</code></td><td>requests 调用带代理字典的三处（<code>:14</code>、<code>:57</code>、<code>:149</code>、<code>:192</code>）</td></tr><tr><td><code>backend/config.py</code>、<code>backend/ai/config.py</code></td><td>AI 侧代理端口字段（<code>:29</code> 与 <code>:7</code>、<code>:17</code>）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py</code></td><td>407 与代理连接失败的文案（<code>:23</code>、<code>:53</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/scraper/proxy_config.py</code></td><td>端口读取、URL 与字典形态</td></tr><tr><td><code>backend/scraper/robots.py</code></td><td>robots.txt 下载走代理、异常吞掉与放行</td></tr><tr><td><code>backend/scraper/wikipedia_client.py</code></td><td>requests 调用带代理字典的三处</td></tr><tr><td><code>backend/config.py</code>、<code>backend/ai/config.py</code></td><td>AI 侧代理端口字段（ 与 ）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py</code></td><td>407 与代理连接失败的文案</td></tr></tbody></table>
 <p>（引用的 KD 仓库路径以 /mnt/d/KnowledgeDiver 为根。）</p></div></section><section class="dfile" id="file-4" data-file="04-合规边界与排查顺序"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-合规边界与排查顺序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/05-robots合规与代理/04-合规边界与排查顺序.md</span></div><div class="dfile__body"><h1 id="合规边界与排查顺序">合规边界与排查顺序</h1>
 <p>抓取失败时，第一反应常常是「站点把 IP 封了」。但在这个项目里，一次抓不到至少有四层可能的原因：代理出口、速率限制、robots 开关与安全校验。四层里默认生效的只有一层，另外几层要么默认关闭，要么只覆盖部分路径，所以排查的第一步应当是分类：分清「代码拦了」还是「站点拒了」，换 IP 排在后面。</p>
 <p>这些层的默认状态决定了合规在这个项目里主要靠约定而不是靠强制。理解每一层的开关与它失效时的表现，才能既解释失败原因，也说明当前的合规强度到底落在哪里。</p>
 <h2 id="默认不检查的两层原因">默认不检查的两层原因</h2>
-<p>robots 检查在默认部署里不会执行，原因在配置与构造两处叠加：配置里开关的默认值是关闭，主流水线在建立抓取器时又显式传了关闭（<code>backend/config.py:124-126</code>、<code>backend/pipeline/factory.py:40</code>）。</p>
+<p>robots 检查在默认部署里不会执行，原因在配置与构造两处叠加：配置里开关的默认值是关闭，主流水线在建立抓取器时又显式传了关闭（<code>backend/config.py</code>、<code>backend/pipeline/factory.py</code>）。</p>
 
 
 
@@ -1026,7 +1038,7 @@
 
 
 <table><thead><tr><th>位置</th><th>写法</th><th>效果</th></tr></thead><tbody><tr><td>配置常量</td><td><code>SCRAPER_RESPECT_ROBOTS = False</code></td><td>默认关闭</td></tr><tr><td>抓取器构造</td><td>参数默认 <code>False</code></td><td>不传时关闭</td></tr><tr><td>流水线工厂</td><td>显式传 <code>False</code></td><td>即使改配置也不生效</td></tr></tbody></table>
-<p>第三行是关键：工厂写死了这个参数，所以只改配置常量不会改变线上行为（<code>backend/scraper/fetcher.py:127</code>、<code>:136</code>、<code>:143</code>、<code>backend/pipeline/factory.py:40</code>）。要实际启用，必须改工厂这一处的传值，或者从别处构造抓取器并显式打开。</p>
+<p>第三行是关键：工厂写死了这个参数，所以只改配置常量不会改变线上行为（<code>backend/scraper/fetcher.py</code>、<code>backend/pipeline/factory.py</code>）。要实际启用，必须改工厂这一处的传值，或者从别处构造抓取器并显式打开。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["配置: 开关默认关"] --> B["抓取器构造: 参数默认关"]
     B --> C["工厂显式传关"]
@@ -1034,7 +1046,7 @@
     E["只改配置常量"] --> C
     F["改工厂传值"] --> G["检查生效"]</pre></div>
 <h2 id="检查打开后落在哪里">检查打开后落在哪里</h2>
-<p>检查点在抓取入口的第一步之后：限速先执行，然后才做 robots 判定（<code>fetcher.py:218-219</code>）。判定本身分三种结果（<code>fetcher.py:191-202</code>）：</p>
+<p>检查点在抓取入口的第一步之后：限速先执行，然后才做 robots 判定（<code>fetcher.py</code>）。判定本身分三种结果：</p>
 
 
 
@@ -1057,10 +1069,10 @@
 
 
 <table><thead><tr><th>情形</th><th>行为</th></tr></thead><tbody><tr><td>开关关闭</td><td>直接返回，不下载规则</td></tr><tr><td>命中禁止</td><td>抛运行时错误，文案带目标 URL</td></tr><tr><td>检查器自身异常</td><td>当作允许，继续抓取</td></tr></tbody></table>
-<p>命中禁止抛的是通用运行时错误，不是自定义异常类型，因此调用方只能靠文案区分「被 robots 拦」与「所有抓取方法都失败」（<code>fetcher.py:201-202</code>、<code>:215-216</code>）。这一点排查时很实用：日志里出现带目标 URL 的禁止文案，说明规则生效了。</p>
+<p>命中禁止抛的是通用运行时错误，不是自定义异常类型，因此调用方只能靠文案区分「被 robots 拦」与「所有抓取方法都失败」（<code>fetcher.py</code>）。这一点排查时很实用：日志里出现带目标 URL 的禁止文案，说明规则生效了。</p>
 <p>检查器自身异常按允许处理，是第二处宽松策略：下载失败、解析失败都不会拦人。它与第一页讲的「失败一律放行」是同一套语义的上下两半——规则里的禁止会拦，规则拿不到就不拦。</p>
 <h2 id="默认生效的那道闸是限速">默认生效的那道闸是限速</h2>
-<p>四层里默认起作用的是限速。配置里请求间隔为 1 秒（<code>config.py:125</code>），而限速函数的实现是取间隔的倒数作为允许的频率（<code>fetcher.py:174-184</code>）：</p>
+<p>四层里默认起作用的是限速。配置里请求间隔为 1 秒（<code>config.py</code>），而限速函数的实现是取间隔的倒数作为允许的频率（<code>fetcher.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.rate_limit </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span></span>
 <span class="line"><span style="color:#24292E">min_interval </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> /</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.rate_limit</span></span></code></pre>
@@ -1090,7 +1102,7 @@
 
 
 <table><thead><tr><th>配置值</th><th>最小间隔</th><th>效果</th></tr></thead><tbody><tr><td>1.0</td><td>1 秒</td><td>每秒最多一次请求</td></tr><tr><td>0.5</td><td>2 秒</td><td>放慢一半</td></tr><tr><td>0 或负值</td><td>无</td><td>跳过限速</td></tr></tbody></table>
-<p>限速用一把锁保护，时间戳在等待结束后更新，因此并发调用会排队而不是各自计算间隔（<code>fetcher.py:178-187</code>）。这是当前唯一默认开启的节流手段，也是「不要高频批量抓取」这条约定在代码里的落点。</p>
+<p>限速用一把锁保护，时间戳在等待结束后更新，因此并发调用会排队而不是各自计算间隔（<code>fetcher.py</code>）。这是当前唯一默认开启的节流手段，也是「不要高频批量抓取」这条约定在代码里的落点。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["一次抓取请求"] --> B["取锁并计算等待时间"]
     B --> C{"配置是否为正"}
@@ -1100,7 +1112,7 @@
     F --> G["进入 robots 检查"]
     D --> G</pre></div>
 <h2 id="文档约定覆盖的边界">文档约定覆盖的边界</h2>
-<p>代码之外还有一层约定，写在抓取工具的说明文档里：抓取要遵守目标站点的规则与服务条款，工具适合按需读取具体页面，不要用于高频批量抓取（<code>/mnt/d/better-crawler-4-agent/README.md:348</code>）。同一份文档还列出了测试覆盖范围，包括地址安全校验、蜜罐识别、正文提取与错误页识别（<code>README.md:341-347</code>）。</p>
+<p>代码之外还有一层约定，写在抓取工具的说明文档里：抓取要遵守目标站点的规则与服务条款，工具适合按需读取具体页面，不要用于高频批量抓取（<code>/mnt/d/better-crawler-4-agent/README.md</code>）。同一份文档还列出了测试覆盖范围，包括地址安全校验、蜜罐识别、正文提取与错误页识别（<code>README.md</code>）。</p>
 <p>把代码能力与约定放在一起看，合规边界大致如下：</p>
 
 
@@ -1138,8 +1150,8 @@
 <table><thead><tr><th>边界项</th><th>当前状态</th></tr></thead><tbody><tr><td><code>Disallow</code> 前缀</td><td>支持，命中即拦</td></tr><tr><td><code>Allow</code> 与通配符</td><td>未实现，规则被忽略</td></tr><tr><td>抓取间隔建议</td><td>解析但不执行</td></tr><tr><td>多客户端分组</td><td>所有组规则合并生效</td></tr><tr><td>规则文件过期</td><td>缓存无时间淘汰</td></tr><tr><td>高频批量抓取</td><td>靠限速与文档约定约束</td></tr></tbody></table>
 <p>前五行来自检查器的实现，最后一行是这套工程手段的上限：限速把频率压到每秒一次，但如果有人把间隔调小或起多个进程，约定就只剩文档效力。</p>
 <h2 id="安全校验与代理的关系">安全校验与代理的关系</h2>
-<p>抓取工具本身还有一层地址安全校验：只允许 http 与 https，并拒绝解析到内网、回环与链路本地的地址，默认拦截，需要时用环境变量放开（<code>/mnt/d/better-crawler-4-agent/src/better_crawler/safety.py:1-5</code>、<code>:26-31</code>、<code>:71-101</code>）。</p>
-<p>这套校验的工作方式是先用系统解析把主机名换成地址，再逐个判断地址是否属于禁止范围（<code>safety.py:38-47</code>、<code>:50-68</code>）。它有一个与代理有关的盲区：解析发生在本地，而请求实际从代理出口发出，两者可能看到不同的地址。</p>
+<p>抓取工具本身还有一层地址安全校验：只允许 http 与 https，并拒绝解析到内网、回环与链路本地的地址，默认拦截，需要时用环境变量放开（<code>/mnt/d/better-crawler-4-agent/src/better_crawler/safety.py</code>）。</p>
+<p>这套校验的工作方式是先用系统解析把主机名换成地址，再逐个判断地址是否属于禁止范围（<code>safety.py</code>）。它有一个与代理有关的盲区：解析发生在本地，而请求实际从代理出口发出，两者可能看到不同的地址。</p>
 
 
 
@@ -1167,7 +1179,7 @@
     E --> F["请求从代理出口发出"]
     F -.-> G["出口地址未复核"]</pre></div>
 <h2 id="排查顺序">排查顺序</h2>
-<p>按「先分类、后分层」的顺序走，能避免一开始就怀疑站点封禁（错误文案表见 <code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py:18-26</code>、<code>:48-55</code>）：</p>
+<p>按「先分类、后分层」的顺序走，能避免一开始就怀疑站点封禁（<code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py</code>）：</p>
 
 
 
@@ -1356,5 +1368,5 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/config.py</code>、<code>backend/pipeline/factory.py</code></td><td>开关默认值与工厂写死的传参（<code>:124-126</code> 与 <code>:40</code>）</td></tr><tr><td><code>backend/scraper/fetcher.py</code></td><td>检查点位置、异常语义与限速实现（<code>:127-143</code>、<code>:174-187</code>、<code>:191-202</code>、<code>:218-219</code>）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/README.md</code></td><td>合规约定与测试覆盖范围（<code>:341-348</code>）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/src/better_crawler/safety.py</code></td><td>地址安全校验的范围与本地解析方式（<code>:1-5</code>、<code>:26-31</code>、<code>:38-68</code>、<code>:71-101</code>）</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py</code></td><td>状态码与连接类错误文案（<code>:18-26</code>、<code>:48-55</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/config.py</code>、<code>backend/pipeline/factory.py</code></td><td>开关默认值与工厂写死的传参（ 与 ）</td></tr><tr><td><code>backend/scraper/fetcher.py</code></td><td>检查点位置、异常语义与限速实现</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/README.md</code></td><td>合规约定与测试覆盖范围</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/src/better_crawler/safety.py</code></td><td>地址安全校验的范围与本地解析方式</td></tr><tr><td><code>/mnt/d/better-crawler-4-agent/src/better_crawler/errors.py</code></td><td>状态码与连接类错误文案</td></tr></tbody></table>
 <p>（引用的 KD 仓库路径以 /mnt/d/KnowledgeDiver 为根。）</p></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/04-%E5%AE%89%E5%85%A8/"><span class="k">← 上一篇</span><span class="t">安全</span><span class="d">网页抓取与反爬 · 3 个文件</span></a><a class="next" href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/06-%E6%AD%A3%E6%96%87%E6%8F%90%E5%8F%96/"><span class="k">下一篇 →</span><span class="t">正文提取</span><span class="d">网页抓取与反爬 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -3,15 +3,15 @@
 <p><code>src/better_crawler/fetcher.py</code> 把它们串成一个固定顺序，任何一档拿到合格正文就收工。难点不在”按顺序试”，而在”怎么算拿到了”。一条 200 响应可能是一页错误提示，一段够长的文本可能只是导航加站点说明。</p>
 <p>验收规则因此独立成函数：三档共用一套验收，判定标准决定要不要重试。</p>
 <h2 id="1-三档的顺序与理由">1. 三档的顺序与理由</h2>
-<p>模块注释把分层策略按实测收益排好：浏览器渲染是主路径，因为知乎、CSDN、掘金这类站点只有真浏览器能拿到正文；trafilatura 直取是静态站快路径，约 1 秒，也是浏览器不可用时唯一的依赖；HTTP 加浏览器指纹是二级兜底，补齐 <code>Sec-Ch-Ua</code> 与 <code>Sec-Fetch-*</code> 全套请求头（<code>src/better_crawler/fetcher.py:3</code>）。</p>
-<p>每一档都记录耗时与命中层级，返回给调用方判断，而不是只给一个成功或失败（<code>src/better_crawler/fetcher.py:9</code>）。这条设计决定了结果结构里必须有 <code>tier</code> 与 <code>attempts</code> 两个字段。</p>
+<p>模块注释把分层策略按实测收益排好：浏览器渲染是主路径，因为知乎、CSDN、掘金这类站点只有真浏览器能拿到正文；trafilatura 直取是静态站快路径，约 1 秒，也是浏览器不可用时唯一的依赖；HTTP 加浏览器指纹是二级兜底，补齐 <code>Sec-Ch-Ua</code> 与 <code>Sec-Fetch-*</code> 全套请求头（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p>每一档都记录耗时与命中层级，返回给调用方判断，而不是只给一个成功或失败（<code>src/better_crawler/fetcher.py</code>）。这条设计决定了结果结构里必须有 <code>tier</code> 与 <code>attempts</code> 两个字段。</p>
 <h2 id="2-结果结构的字段取舍">2. 结果结构的字段取舍</h2>
-<p><code>FetchResult</code>（<code>src/better_crawler/fetcher.py:35</code>）有十一个字段：地址、成功标志、正文、标题、命中档位、状态码、正文字符数、耗时、错误、警告与尝试记录（<code>src/better_crawler/fetcher.py:49</code>）。</p>
-<p>其中 <code>warning</code> 专门留给”拿到了内容但可能不完整”的情形，<code>attempts</code> 是逐档、逐次尝试的流水。对外输出由 <code>to_dict()</code>（<code>src/better_crawler/fetcher.py:51</code>）负责：传入 <code>max_chars</code> 时截断正文（<code>src/better_crawler/fetcher.py:53</code>），并把截断标记合并进 <code>truncated</code> 字段——原本因重试兜底标记的截断与本次按上限截断都算（<code>src/better_crawler/fetcher.py:66</code>）。耗时统一保留两位小数，避免把浮点噪声写进响应。</p>
+<p><code>FetchResult</code>（<code>src/better_crawler/fetcher.py</code>）有十一个字段：地址、成功标志、正文、标题、命中档位、状态码、正文字符数、耗时、错误、警告与尝试记录。</p>
+<p>其中 <code>warning</code> 专门留给”拿到了内容但可能不完整”的情形，<code>attempts</code> 是逐档、逐次尝试的流水。对外输出由 <code>to_dict()</code>（<code>src/better_crawler/fetcher.py</code>）负责：传入 <code>max_chars</code> 时截断正文，并把截断标记合并进 <code>truncated</code> 字段——原本因重试兜底标记的截断与本次按上限截断都算。耗时统一保留两位小数，避免把浮点噪声写进响应。</p>
 <p><code>validate_url()</code> 同时承担规范化职责：它返回的是校验后的地址，后续所有请求都使用这个返回值，而不是调用方传入的原始字符串。</p>
 <h2 id="3-入口先做三件事">3. 入口先做三件事</h2>
-<p><code>fetch()</code>（<code>src/better_crawler/fetcher.py:129</code>）的契约是”始终返回 FetchResult，不抛异常”。开头三步：记录起始时间（<code>src/better_crawler/fetcher.py:131</code>）、调用 <code>validate_url()</code> 做安全检查（<code>src/better_crawler/fetcher.py:135</code>）、取域名用于后续的档位冷却判断（<code>src/better_crawler/fetcher.py:142</code>）。</p>
-<p>安全检查失败时填好错误与耗时直接返回，不进入任何抓取档（<code>src/better_crawler/fetcher.py:137</code>）。安全检查的实现与规则在 26-网页抓取与反爬/04-安全 里展开。域名在这里只做一件事：作为 trafilatura 档冷却表的键（<code>src/better_crawler/fetcher.py:117</code>）。同一域名下的第一个失败会记住时间，之后的请求在冷却期内跳过这一档。</p>
+<p><code>fetch()</code>（<code>src/better_crawler/fetcher.py</code>）的契约是”始终返回 FetchResult，不抛异常”。开头三步：记录起始时间、调用 <code>validate_url()</code> 做安全检查、取域名用于后续的档位冷却判断。</p>
+<p>安全检查失败时填好错误与耗时直接返回，不进入任何抓取档（<code>src/better_crawler/fetcher.py</code>）。安全检查的实现与规则在 26-网页抓取与反爬/04-安全 里展开。域名在这里只做一件事：作为 trafilatura 档冷却表的键。同一域名下的第一个失败会记住时间，之后的请求在冷却期内跳过这一档。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["fetch(url)"] --> B["validate_url 安全检查"]
   B -->|"不安全"| Z["返回 error"]
@@ -27,7 +27,7 @@
   H -->|"失败"| I["Tier3 httpx 加指纹"]
   I --> J["汇总错误或返回 ok"]</pre></div>
 <h2 id="4-统一的验收规则">4. 统一的验收规则</h2>
-<p>三档都通过 <code>_consume_html()</code>（<code>src/better_crawler/fetcher.py:281</code>）写结果。它先用 <code>asyncio.to_thread()</code> 调 <code>extract_static()</code> 做提取（<code>src/better_crawler/fetcher.py:297</code>），然后按四条规则验收：</p>
+<p>三档都通过 <code>_consume_html()</code>（<code>src/better_crawler/fetcher.py</code>）写结果。它先用 <code>asyncio.to_thread()</code> 调 <code>extract_static()</code> 做提取，然后按四条规则验收：</p>
 
 
 
@@ -59,9 +59,9 @@
 
 
 <table><thead><tr><th>顺序</th><th>判据</th><th>处理</th></tr></thead><tbody><tr><td>1</td><td>提取为空或短于 <code>MIN_CONTENT_LENGTH</code></td><td>先识别错误页，再报长度不足</td></tr><tr><td>2</td><td>长度够但命中错误页特征且短于 500 字符</td><td>报错误页原因</td></tr><tr><td>3</td><td>状态码不小于 400</td><td>报状态码说明，附注疑似错误页内容</td></tr><tr><td>4</td><td>以上都不命中</td><td>写入正文、标题、档位并标成功</td></tr></tbody></table>
-<p>长度门槛来自 <code>MIN_CONTENT_LENGTH = 200</code>（<code>src/better_crawler/extract.py:26</code>）。错误页识别走 <code>detect_error_page()</code>（<code>src/better_crawler/extract.py:243</code>）：短文本分支先查它，因为反爬站常返回 200 却在页面里写”页面不存在”，只报”无有效正文”会掩盖真实原因（<code>src/better_crawler/fetcher.py:299</code>）。</p>
-<p>长度够时再查一次，只在文本短于 500 字符时才判定为错误页（<code>src/better_crawler/fetcher.py:323</code>），避免把正文里出现的”404”误判。状态码的归属有一条容易忽略的规则：成功时把状态码写成”拿到正文那一层的值”（<code>src/better_crawler/fetcher.py:346</code>）。</p>
-<p>原因是浏览器层可能先碰到 502，而正文最终来自 trafilatura 层，沿用旧的 502 会误导调用方；该层没提供状态码时就置空表示未知（<code>src/better_crawler/fetcher.py:344</code>）。</p>
+<p>长度门槛来自 <code>MIN_CONTENT_LENGTH = 200</code>（<code>src/better_crawler/extract.py</code>）。错误页识别走 <code>detect_error_page()</code>：短文本分支先查它，因为反爬站常返回 200 却在页面里写”页面不存在”，只报”无有效正文”会掩盖真实原因（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p>长度够时再查一次，只在文本短于 500 字符时才判定为错误页（<code>src/better_crawler/fetcher.py</code>），避免把正文里出现的”404”误判。状态码的归属有一条容易忽略的规则：成功时把状态码写成”拿到正文那一层的值”。</p>
+<p>原因是浏览器层可能先碰到 502，而正文最终来自 trafilatura 层，沿用旧的 502 会误导调用方；该层没提供状态码时就置空表示未知（<code>src/better_crawler/fetcher.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["_consume_html(html, tier, status)"] --> B["extract_static 提取"]
   B --> C{"为空或 &#x3C; 200 字符?"}
@@ -74,12 +74,12 @@
   I -->|"是"| J["返回状态码说明"]
   I -->|"否"| K["写入正文 标题 档位 标成功"]</pre></div>
 <h2 id="5-重试的判据与反例">5. 重试的判据与反例</h2>
-<p><code>_worth_retrying()</code>（<code>src/better_crawler/fetcher.py:81</code>）把失败分成两类。应当重试的是临时性问题：状态码 5xx 或 429（<code>src/better_crawler/fetcher.py:90</code>），以及说明文本里带”无有效正文""过短""未渲染”的骨架页（<code>src/better_crawler/fetcher.py:94</code>）。</p>
-<p>不必重试的是确定性失败：4xx 中的 400、403、404 等（<code>src/better_crawler/fetcher.py:92</code>），重试只会浪费一次加载。判据只看状态码与说明文本两类输入，不做网络探测，因此它是纯函数、可单独测试。</p>
-<p>这条判据同时被两处使用：浏览器档循环里决定是否继续（<code>src/better_crawler/fetcher.py:190</code>），以及确定失败时是否直接返回、不再降级（<code>src/better_crawler/fetcher.py:221</code>）。后者尤其重要——一个 404 页面交给后续档位同样拿不到内容。</p>
+<p><code>_worth_retrying()</code>（<code>src/better_crawler/fetcher.py</code>）把失败分成两类。应当重试的是临时性问题：状态码 5xx 或 429，以及说明文本里带”无有效正文""过短""未渲染”的骨架页。</p>
+<p>不必重试的是确定性失败：4xx 中的 400、403、404 等（<code>src/better_crawler/fetcher.py</code>），重试只会浪费一次加载。判据只看状态码与说明文本两类输入，不做网络探测，因此它是纯函数、可单独测试。</p>
+<p>这条判据同时被两处使用：浏览器档循环里决定是否继续（<code>src/better_crawler/fetcher.py</code>），以及确定失败时是否直接返回、不再降级。后者尤其重要——一个 404 页面交给后续档位同样拿不到内容。</p>
 <h2 id="6-并发抓取与最终汇总">6. 并发抓取与最终汇总</h2>
-<p><code>fetch_many()</code>（<code>src/better_crawler/fetcher.py:267</code>）用一个信号量限制并发（<code>src/better_crawler/fetcher.py:271</code>），内部逐条调用 <code>fetch()</code> 后用 <code>gather</code> 汇总（<code>src/better_crawler/fetcher.py:277</code>）。<code>gather</code> 保持输入顺序，因此返回值与传入的 URL 列表一一对应，调用方不需要额外记录映射关系。</p>
-<p>单条失败不会影响其他条目，每条结果都带自己的错误原因。所有档位都失败时，错误字段按情况生成：完全没有任何原因时写”所有抓取方式均未取到有效正文”并补一条 <code>none</code> 记录（<code>src/better_crawler/fetcher.py:257</code>）；已有明确原因但正文为空时只补一条汇总记录，保留原始原因（<code>src/better_crawler/fetcher.py:260</code>）。</p>
+<p><code>fetch_many()</code>（<code>src/better_crawler/fetcher.py</code>）用一个信号量限制并发，内部逐条调用 <code>fetch()</code> 后用 <code>gather</code> 汇总。<code>gather</code> 保持输入顺序，因此返回值与传入的 URL 列表一一对应，调用方不需要额外记录映射关系。</p>
+<p>单条失败不会影响其他条目，每条结果都带自己的错误原因。所有档位都失败时，错误字段按情况生成：完全没有任何原因时写”所有抓取方式均未取到有效正文”并补一条 <code>none</code> 记录（<code>src/better_crawler/fetcher.py</code>）；已有明确原因但正文为空时只补一条汇总记录，保留原始原因。</p>
 <p>验收函数的返回约定是：成功返回 <code>None</code>，失败返回原因字符串。调用方用 <code>if note is None</code> 判断，失败原因不需要额外变量承载。</p>
 <h2 id="7-易错点">7. 易错点</h2>
 <ul>
@@ -213,13 +213,13 @@
 <p>浏览器渲染”成功”不等于内容正确。有些站点的正文靠接口异步填充，而接口会概率性失败，页面停在只有导航与页脚的骨架状态：HTTP 状态正常、HTML 也拿回来了，提取出来的正文却短得不像文章。</p>
 <p><code>src/better_crawler/fetcher.py</code> 的浏览器档专门处理这种情形——重试，但重试的方式有讲究。降级到后两档的条件在 03-静态档与指纹档的降级条件，验收规则本身在 01-三档抓取路径与结果验收。重试循环有三个设计点：什么时候判定”没渲染出来”、每次重试前清空什么、以及为什么最终要返回”最完整的一次”。</p>
 <h2 id="1-默认重试两次的依据">1. 默认重试两次的依据</h2>
-<p><code>browser_retries</code> 默认值为 2（<code>src/better_crawler/fetcher.py:107</code>），构造时再夹一次非负（<code>src/better_crawler/fetcher.py:116</code>），循环因此最多跑三次（<code>src/better_crawler/fetcher.py:151</code>）。</p>
-<p>注释给出了这个数值的来源：实测万方这类站点单次成功率约一半，两次重试后成功率明显提升，而耗时可控（<code>src/better_crawler/fetcher.py:114</code>）。</p>
-<p>重试只针对一类失败，而不是所有失败。注释把目标写清楚：内容疑似没渲染出来时重试，因为接口概率性失败，重试通常能拿到（<code>src/better_crawler/fetcher.py:144</code>）。</p>
+<p><code>browser_retries</code> 默认值为 2（<code>src/better_crawler/fetcher.py</code>），构造时再夹一次非负，循环因此最多跑三次。</p>
+<p>注释给出了这个数值的来源：实测万方这类站点单次成功率约一半，两次重试后成功率明显提升，而耗时可控（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p>重试只针对一类失败，而不是所有失败。注释把目标写清楚：内容疑似没渲染出来时重试，因为接口概率性失败，重试通常能拿到（<code>src/better_crawler/fetcher.py</code>）。</p>
 <p>这一条把重试与”页面本身不存在”区分开——后者在第一次就会短路。循环是串行的：上一轮结束后才发起下一轮，因此同一 URL 的重试不会并发占用两个页面槽位。</p>
 <h2 id="2-循环里的三件状态">2. 循环里的三件状态</h2>
-<p>循环体只维护三样东西：最完整结果 <code>best</code>（<code>src/better_crawler/fetcher.py:149</code>）、上一轮失败说明 <code>last_note</code>（<code>src/better_crawler/fetcher.py:150</code>）、以及每轮新建的 <code>PageFetch</code> 结果容器（<code>src/better_crawler/fetcher.py:153</code>）。</p>
-<p>状态码在每轮取回后写入总结果，只保留最后一次的值（<code>src/better_crawler/fetcher.py:157</code>）。每轮先判断有没有 HTML：拿不到时写说明、补一条失败记录并直接跳出循环（<code>src/better_crawler/fetcher.py:159</code>）。浏览器不可用、整体超时、页面加载失败都属于这一类，重试没有意义，因为原因不在页面内容上。</p>
+<p>循环体只维护三样东西：最完整结果 <code>best</code>（<code>src/better_crawler/fetcher.py</code>）、上一轮失败说明 <code>last_note</code>、以及每轮新建的 <code>PageFetch</code> 结果容器。</p>
+<p>状态码在每轮取回后写入总结果，只保留最后一次的值（<code>src/better_crawler/fetcher.py</code>）。每轮先判断有没有 HTML：拿不到时写说明、补一条失败记录并直接跳出循环。浏览器不可用、整体超时、页面加载失败都属于这一类，重试没有意义，因为原因不在页面内容上。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["进入浏览器档"] --> B["attempt = 0"]
   B --> C["PageFetch + fetch_html_guarded"]
@@ -236,17 +236,17 @@
   J --> M</pre></div>
 <p>判据的输入同时包含 HTML 与正文，是因为有些骨架页的 HTML 里能看出端倪，而有些只能靠正文字符数判断。</p>
 <h2 id="3-未渲染的判据">3. 未渲染的判据</h2>
-<p>验收通过之后还有一道检查：<code>looks_unrendered()</code>（<code>src/better_crawler/extract.py:276</code>）同时看 HTML 与提取出的正文（<code>src/better_crawler/fetcher.py:172</code>）。</p>
-<p>它返回假时才算这次尝试成功，补一条成功记录并立刻返回（<code>src/better_crawler/fetcher.py:174</code>）。判定为未渲染时，说明文本写成”正文仅 N 字符，疑似未渲染出内容”（<code>src/better_crawler/fetcher.py:180</code>）。</p>
-<p>这条文本不只是给人看的：后面的重试判据会读它，因为文本里带”未渲染”（<code>src/better_crawler/fetcher.py:94</code>）。判据与说明文本耦合在一起，改动措辞会影响重试行为，这是当前实现里需要留意的一处隐性依赖。清理与验收函数之间存在分工：验收负责写结果，清理负责把结果恢复到未成功的初始态，两者都不负责保存历史。</p>
+<p>验收通过之后还有一道检查：<code>looks_unrendered()</code>（<code>src/better_crawler/extract.py</code>）同时看 HTML 与提取出的正文（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p>它返回假时才算这次尝试成功，补一条成功记录并立刻返回（<code>src/better_crawler/fetcher.py</code>）。判定为未渲染时，说明文本写成”正文仅 N 字符，疑似未渲染出内容”。</p>
+<p>这条文本不只是给人看的：后面的重试判据会读它，因为文本里带”未渲染”（<code>src/better_crawler/fetcher.py</code>）。判据与说明文本耦合在一起，改动措辞会影响重试行为，这是当前实现里需要留意的一处隐性依赖。清理与验收函数之间存在分工：验收负责写结果，清理负责把结果恢复到未成功的初始态，两者都不负责保存历史。</p>
 <h2 id="4-每轮失败前清空什么">4. 每轮失败前清空什么</h2>
-<p>重试前调用 <code>_clear_extracted()</code>（<code>src/better_crawler/fetcher.py:71</code>），它把成功标志、正文、标题、字符数、档位与错误全部复位（<code>src/better_crawler/fetcher.py:73</code>），但保留 <code>attempts</code> 记录（<code>src/better_crawler/fetcher.py:72</code>）。</p>
-<p>清空的目的是让下一轮从干净状态验收，避免把上一轮的残留正文字符数带进这一轮的判据。这条清理与 <code>best</code> 的保留是两套逻辑：<code>best</code> 在外层单独保存最完整的一次（<code>src/better_crawler/fetcher.py:170</code>），清理不碰它。也就是说”清空”针对当前轮次的验收状态，“保留”针对跨轮次的最优结果。</p>
+<p>重试前调用 <code>_clear_extracted()</code>（<code>src/better_crawler/fetcher.py</code>），它把成功标志、正文、标题、字符数、档位与错误全部复位，但保留 <code>attempts</code> 记录。</p>
+<p>清空的目的是让下一轮从干净状态验收，避免把上一轮的残留正文字符数带进这一轮的判据。这条清理与 <code>best</code> 的保留是两套逻辑：<code>best</code> 在外层单独保存最完整的一次（<code>src/better_crawler/fetcher.py</code>），清理不碰它。也就是说”清空”针对当前轮次的验收状态，“保留”针对跨轮次的最优结果。</p>
 <p><code>best</code> 只保存正文与标题两个字段，状态码与错误原因不进它，因此兜底结果的状态码来自最后一次尝试。</p>
 <h2 id="5-最完整的一次如何兜底">5. 最完整的一次如何兜底</h2>
-<p>循环结束时若 <code>best</code> 里有内容，就把结果标成功、写回正文与标题、档位记为 <code>browser</code>，并清掉错误字段（<code>src/better_crawler/fetcher.py:196</code>）。</p>
-<p>同时写入一条警告，内容是最后一轮的说明加上”已返回最完整的一次结果”与该次字符数与总尝试次数（<code>src/better_crawler/fetcher.py:203</code>）。</p>
-<p><code>best</code> 只在比当前内容更长时才更新（<code>src/better_crawler/fetcher.py:170</code>）。兜底之后直接返回，不再尝试后面的档位。注释给出的理由是：后续档拿到的是同一份 HTML 的更差提取结果，降级只会把内容换得更少（<code>src/better_crawler/fetcher.py:211</code>）。这条判断把”内容不完整”与”内容不存在”分开处理，前者宁可少也不要空。</p>
+<p>循环结束时若 <code>best</code> 里有内容，就把结果标成功、写回正文与标题、档位记为 <code>browser</code>，并清掉错误字段（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p>同时写入一条警告，内容是最后一轮的说明加上”已返回最完整的一次结果”与该次字符数与总尝试次数（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p><code>best</code> 只在比当前内容更长时才更新（<code>src/better_crawler/fetcher.py</code>）。兜底之后直接返回，不再尝试后面的档位。注释给出的理由是：后续档拿到的是同一份 HTML 的更差提取结果，降级只会把内容换得更少。这条判断把”内容不完整”与”内容不存在”分开处理，前者宁可少也不要空。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant F as Fetcher
   participant E as BrowserEngine
@@ -263,7 +263,7 @@
   F-->>F: 标成功并返回</pre></div>
 <p>两处短路都在循环内部判断，外层只负责在循环结束后决定是否降级。</p>
 <h2 id="6-两处提前收工">6. 两处提前收工</h2>
-<p>第一处是验收通过且未判定未渲染（<code>src/better_crawler/fetcher.py:172</code>），立即返回，不做多余尝试。第二处是验收失败但失败确定性明显：<code>_worth_retrying()</code> 返回假或已是最后一轮时跳出循环（<code>src/better_crawler/fetcher.py:190</code>），随后由外层判断是否直接返回而不降级（<code>src/better_crawler/fetcher.py:221</code>）。</p>
+<p>第一处是验收通过且未判定未渲染（<code>src/better_crawler/fetcher.py</code>），立即返回，不做多余尝试。第二处是验收失败但失败确定性明显：<code>_worth_retrying()</code> 返回假或已是最后一轮时跳出循环，随后由外层判断是否直接返回而不降级。</p>
 <p>两处短路共同控制最坏耗时：正常页面一次命中，骨架页最多三次尝试，404 这类页面只试一次。剩下的情况才继续向下走。重试的代价是时间：三轮浏览器抓取的最坏耗时接近三轮整体超时。抓取层因此把它当成同一档内的行为，而不是跨档重试的替代。</p>
 <h2 id="7-易错点">7. 易错点</h2>
 <ul>
@@ -394,14 +394,14 @@
 <p>浏览器档之后的两个档位承担”轻量”职责：trafilatura 直接取 HTML 并就地提取，通常一秒内返回；httpx 档补齐一整套浏览器请求头发请求，用来对付那些只靠请求头就能通过的站点。两档都不启动 Chromium，因此它们也是浏览器不可用时的全部退路。</p>
 <p>这两档的进入条件不同：trafilatura 档会被域名冷却表拦下，httpx 档只要开关打开就会尝试。它们的失败处理也不同：trafilatura 失败即标记域名冷却，httpx 失败则把状态码翻译成说明写进结果。两档的开关、超时、请求头与状态码处理各不相同。</p>
 <h2 id="1-trafilatura-档与域名冷却">1. trafilatura 档与域名冷却</h2>
-<p>进入这一档需要两个条件同时成立：<code>use_static</code> 为真，且该域名不在冷却期内（<code>src/better_crawler/fetcher.py:226</code>）。冷却表是一个域名到时间戳的字典（<code>src/better_crawler/fetcher.py:117</code>），判定函数比较当前时间与记录时间的差值是否小于 600 秒（<code>src/better_crawler/fetcher.py:413</code>），这个常量定义在模块顶部（<code>src/better_crawler/fetcher.py:32</code>）。</p>
-<p>注释解释了冷却的用途：反爬站的 trafilatura 必失败，TTL 内跳过可以省掉每次几秒的试错（<code>src/better_crawler/fetcher.py:31</code>）。标记动作在两个失败点各调用一次——trafilatura 档验收失败后（<code>src/better_crawler/fetcher.py:233</code>），以及 httpx 档验收失败后（<code>src/better_crawler/fetcher.py:243</code>）。第二处用同一个冷却表，说明”该域名静态抓取不管用”这个结论对两档共享。</p>
+<p>进入这一档需要两个条件同时成立：<code>use_static</code> 为真，且该域名不在冷却期内（<code>src/better_crawler/fetcher.py</code>）。冷却表是一个域名到时间戳的字典，判定函数比较当前时间与记录时间的差值是否小于 600 秒，这个常量定义在模块顶部。</p>
+<p>注释解释了冷却的用途：反爬站的 trafilatura 必失败，TTL 内跳过可以省掉每次几秒的试错（<code>src/better_crawler/fetcher.py</code>）。标记动作在两个失败点各调用一次——trafilatura 档验收失败后，以及 httpx 档验收失败后。第二处用同一个冷却表，说明”该域名静态抓取不管用”这个结论对两档共享。</p>
 <h2 id="2-静态档的超时上限">2. 静态档的超时上限</h2>
-<p><code>_fetch_static()</code>（<code>src/better_crawler/fetcher.py:353</code>）把超时夹到 5 到 15 秒之间：<code>fast = min(max(self.timeout, 5), 15)</code>（<code>src/better_crawler/fetcher.py:357</code>）。</p>
-<p>抓取层默认超时 25 秒（<code>src/better_crawler/fetcher.py:103</code>），如果不夹，静态档会占掉比浏览器档还长的时间，失去”快路径”的意义。调用方式是把同步函数丢进线程池再套超时：<code>asyncio.wait_for(asyncio.to_thread(trafilatura.fetch_url, url), timeout=fast)</code>（<code>src/better_crawler/fetcher.py:358</code>）。</p>
-<p>超时与一般异常分开处理，两者都只记 debug 日志并返回 <code>None</code>（<code>src/better_crawler/fetcher.py:362</code>、<code>:365</code>），因此这一档失败从不抛出。</p>
+<p><code>_fetch_static()</code>（<code>src/better_crawler/fetcher.py</code>）把超时夹到 5 到 15 秒之间：<code>fast = min(max(self.timeout, 5), 15)</code>。</p>
+<p>抓取层默认超时 25 秒（<code>src/better_crawler/fetcher.py</code>），如果不夹，静态档会占掉比浏览器档还长的时间，失去”快路径”的意义。调用方式是把同步函数丢进线程池再套超时：<code>asyncio.wait_for(asyncio.to_thread(trafilatura.fetch_url, url), timeout=fast)</code>。</p>
+<p>超时与一般异常分开处理，两者都只记 debug 日志并返回 <code>None</code>（<code>src/better_crawler/fetcher.py</code>），因此这一档失败从不抛出。</p>
 <h2 id="3-指纹-http-档的请求头">3. 指纹 HTTP 档的请求头</h2>
-<p><code>_fetch_httpx()</code>（<code>src/better_crawler/fetcher.py:369</code>）的文档字符串写着这套头的来历：缺 <code>Sec-Ch-Ua</code>、<code>Sec-Fetch-*</code> 或 HTTP/2 时，CSDN 这类站会概率性返回 521，这套头是实测补出来的（<code>src/better_crawler/fetcher.py:372</code>）。</p>
+<p><code>_fetch_httpx()</code>（<code>src/better_crawler/fetcher.py</code>）的文档字符串写着这套头的来历：缺 <code>Sec-Ch-Ua</code>、<code>Sec-Fetch-*</code> 或 HTTP/2 时，CSDN 这类站会概率性返回 521，这套头是实测补出来的。</p>
 
 
 
@@ -468,7 +468,7 @@
 
 
 <table><thead><tr><th>头字段</th><th>取值要点</th><th>作用</th></tr></thead><tbody><tr><td><code>User-Agent</code></td><td>Chrome 126 桌面版</td><td>与客户端提示头版本一致</td></tr><tr><td><code>Accept</code></td><td>含 html、xml 与通配</td><td>模拟文档导航</td></tr><tr><td><code>Accept-Language</code></td><td>中文优先</td><td>与语言偏好一致</td></tr><tr><td><code>Referer</code></td><td>目标站根地址</td><td>模拟站内跳转</td></tr><tr><td><code>Sec-Ch-Ua</code></td><td>Chromium 126</td><td>客户端提示，反爬识别重点</td></tr><tr><td><code>Sec-Ch-Ua-Mobile</code></td><td><code>?0</code></td><td>声明非移动设备</td></tr><tr><td><code>Sec-Ch-Ua-Platform</code></td><td><code>"Windows"</code></td><td>与 UA 平台一致</td></tr><tr><td><code>Sec-Fetch-Dest</code></td><td><code>document</code></td><td>声明导航请求</td></tr><tr><td><code>Sec-Fetch-Mode</code></td><td><code>navigate</code></td><td>声明顶层导航</td></tr><tr><td><code>Sec-Fetch-Site</code></td><td><code>same-site</code></td><td>声明站内来源</td></tr><tr><td><code>Upgrade-Insecure-Requests</code></td><td><code>1</code></td><td>允许升级到 HTTPS</td></tr></tbody></table>
-<p>客户端参数三项：超时同样夹到 15 秒以内、跟随重定向、启用 HTTP/2（<code>src/better_crawler/fetcher.py:401</code>）。HTTP/2 是这套头能否生效的前提之一，文档字符串把它与请求头并列提出。</p>
+<p>客户端参数三项：超时同样夹到 15 秒以内、跟随重定向、启用 HTTP/2（<code>src/better_crawler/fetcher.py</code>）。HTTP/2 是这套头能否生效的前提之一，文档字符串把它与请求头并列提出。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["浏览器档失败"] --> B{"use_static 且域名未冷却?"}
   B -->|"是"| C["_fetch_static 超时 5-15s"]
@@ -489,14 +489,14 @@
   K --> M
   L --> M</pre></div>
 <h2 id="4-非-200-与异常的处理">4. 非 200 与异常的处理</h2>
-<p>httpx 档只在状态码为 200 时返回正文，其余状态码连同状态码本身一起返回给上层（<code>src/better_crawler/fetcher.py:405</code>）。抓取入口对这一分支单独处理：状态码不小于 400 时调用 <code>describe_status()</code> 生成说明、补一条失败记录、在没有错误时写入该说明，并在状态码为空时写入状态码（<code>src/better_crawler/fetcher.py:248</code> 至 <code>:253</code>）。</p>
-<p>网络异常在 httpx 档内部被吞掉并返回 <code>(None, None)</code>（<code>src/better_crawler/fetcher.py:407</code>）。也就是说连接失败、DNS 失败这类问题不会带状态码上来，结果的错误原因只能来自其他档位或最终汇总。</p>
+<p>httpx 档只在状态码为 200 时返回正文，其余状态码连同状态码本身一起返回给上层（<code>src/better_crawler/fetcher.py</code>）。抓取入口对这一分支单独处理：状态码不小于 400 时调用 <code>describe_status()</code> 生成说明、补一条失败记录、在没有错误时写入该说明，并在状态码为空时写入状态码（<code>src/better_crawler/fetcher.py</code>）。</p>
+<p>网络异常在 httpx 档内部被吞掉并返回 <code>(None, None)</code>（<code>src/better_crawler/fetcher.py</code>）。也就是说连接失败、DNS 失败这类问题不会带状态码上来，结果的错误原因只能来自其他档位或最终汇总。</p>
 <p>这是当前实现的一个信息缺口：httpx 档的网络错误没有经过 <code>describe_browser_error()</code> 那条翻译路径。</p>
 <h2 id="5-档间状态码与错误的保留规则">5. 档间状态码与错误的保留规则</h2>
-<p>结果对象的状态码在每个档位取回后都会更新：浏览器档每轮写入（<code>src/better_crawler/fetcher.py:157</code>），httpx 档在拿到响应时写入（<code>src/better_crawler/fetcher.py:253</code>）。</p>
-<p>正文验收成功时，<code>_consume_html()</code> 会把状态码改写成命中档位的值（<code>src/better_crawler/fetcher.py:346</code>），因此最终状态码总是指向”正文来自哪一档”。错误字段的规则是”先到先留”：httpx 档只在结果还没有错误时才写入自己的说明（<code>src/better_crawler/fetcher.py:244</code>）。这让浏览器档的具体失败原因不会被后一档的笼统说明覆盖。</p>
+<p>结果对象的状态码在每个档位取回后都会更新：浏览器档每轮写入（<code>src/better_crawler/fetcher.py</code>），httpx 档在拿到响应时写入。</p>
+<p>正文验收成功时，<code>_consume_html()</code> 会把状态码改写成命中档位的值（<code>src/better_crawler/fetcher.py</code>），因此最终状态码总是指向”正文来自哪一档”。错误字段的规则是”先到先留”：httpx 档只在结果还没有错误时才写入自己的说明。这让浏览器档的具体失败原因不会被后一档的笼统说明覆盖。</p>
 <h2 id="6-三档都失败之后">6. 三档都失败之后</h2>
-<p>函数末尾统一收尾：记录总耗时（<code>src/better_crawler/fetcher.py:256</code>）。没有任何错误原因时写”所有抓取方式均未取到有效正文”，并补一条 <code>none</code> 档记录（<code>src/better_crawler/fetcher.py:257</code>）；已有原因但正文为空时只补一条汇总记录，不改写原因（<code>src/better_crawler/fetcher.py:260</code>）。两种情形的差别在于前者是”无信息失败”，后者是”有明确原因但内容为空”。</p>
+<p>函数末尾统一收尾：记录总耗时（<code>src/better_crawler/fetcher.py</code>）。没有任何错误原因时写”所有抓取方式均未取到有效正文”，并补一条 <code>none</code> 档记录；已有原因但正文为空时只补一条汇总记录，不改写原因。两种情形的差别在于前者是”无信息失败”，后者是”有明确原因但内容为空”。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant F as Fetcher
   participant T as trafilatura

@@ -51,6 +51,14 @@
 <p><code>sessions.json</code> 是一个以会话 ID 为键的字典，值是会话记录。目录名与会话 ID 相同，因此从元数据到卡片库只需要拼一次路径。<code>SessionStore.get_session_dir</code> 返回的正是这个目录。</p>
 <p>路径前缀 <code>cards</code> 用的是相对路径，含义随进程工作目录变化；会话库管理器则用项目根目录拼绝对路径。两者指向通常一致，但从别的目录启动进程时会分叉，这一点在 29/01 单元已记录。</p>
 <h2 id="3-默认会话的补建">3. 默认会话的补建</h2>
+<p>默认会话在构造时补齐，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：构造时保证至少有一个会话</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> ensure_default_session</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    sessions </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._load_sessions()               </span><span style="color:#6A737D"># 读元数据文件</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> sessions:</span></span>
+<span class="line"><span style="color:#24292E">        sessions </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [{</span><span style="color:#032F62">"id"</span><span style="color:#24292E">: </span><span style="color:#032F62">"default"</span><span style="color:#24292E">, </span><span style="color:#032F62">"name"</span><span style="color:#24292E">: </span><span style="color:#032F62">"Default"</span><span style="color:#24292E">, </span><span style="color:#032F62">"card_count"</span><span style="color:#24292E">: </span><span style="color:#005CC5">0</span><span style="color:#24292E">}]</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._save_sessions(sessions)              </span><span style="color:#6A737D"># 写回</span></span></code></pre>
+<p>这是”读取时惰性初始化”的一种：不在安装或注册流程里建默认数据，而是让第一次读取顺手补上。好处是新增用户、数据被手工删空等边界都走同一条路径；坏处是把写操作藏在了构造逻辑里，调用方以为只是读、实际可能触发写盘——所以这类补建要保证幂等，并且失败要能降级。</p>
 <p>构造 <code>SessionStore</code> 时先确保默认会话存在（<code>session_store.py</code> 的 <code>_ensure_default_session</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">sessions </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._load_sessions()</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> DEFAULT_SESSION_ID</span><span style="color:#D73A49"> not</span><span style="color:#D73A49"> in</span><span style="color:#24292E"> sessions:</span></span>
@@ -352,6 +360,12 @@
   G --> H["写回 sessions.json"]
   H --> I["返回更新后的会话"]</pre></div>
 <h2 id="4-删除的顺序">4. 删除的顺序</h2>
+<p>删除必须先断连接再删目录，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：删除会话的顺序</span></span>
+<span class="line"><span style="color:#24292E">manager.close_session(username, session_id)   </span><span style="color:#6A737D"># 1 先关闭该会话的数据库连接</span></span>
+<span class="line"><span style="color:#24292E">shutil.rmtree(session_dir, </span><span style="color:#E36209">ignore_errors</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">)  </span><span style="color:#6A737D"># 2 再删目录</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._save_sessions(remaining)               </span><span style="color:#6A737D"># 3 最后更新元数据</span></span></code></pre>
+<p>顺序反了的后果是平台相关的：Windows 上被进程持有的文件不能删除，目录会留下半个；即使删除成功，连接池里仍握着指向已删文件的句柄，后续写入会落到”幽灵文件”里。先释放资源再删实体、最后改引用它的元数据，这个顺序对任何”有句柄或引用的资源”都适用。</p>
 <p>删除是四步，顺序不能换（<code>session_store.py</code> 的 <code>delete_session</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> session_id </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> DEFAULT_SESSION_ID</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    raise</span><span style="color:#005CC5"> ValueError</span><span style="color:#24292E">(</span><span style="color:#032F62">"default 是系统保留会话，不可删除"</span><span style="color:#24292E">)</span></span>
@@ -709,6 +723,12 @@
 
 <table><thead><tr><th>值</th><th>位置</th><th>读取方式</th></tr></thead><tbody><tr><td>真实数量</td><td><code>session.db</code> 的 <code>cards</code> 表</td><td><code>COUNT(*)</code></td></tr><tr><td>显示数量</td><td><code>sessions.json</code></td><td>直接读字段</td></tr></tbody></table>
 <h2 id="2-刷新链路">2. 刷新链路</h2>
+<p>数量副本的刷新链路，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：写卡片后刷新计数</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> add_card</span><span style="color:#24292E">(self, card) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._db.save_card(card)                  </span><span style="color:#6A737D"># 1 真源：数据库</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._refresh_count()                     </span><span style="color:#6A737D"># 2 副本：元数据文件里的计数</span></span></code></pre>
+<p>“真源”指唯一权威的数据来源（这里是数据库），“副本”是为了性能另存的一份派生数据（这里是列表页要显示的数量）。副本必须由真源派生，且每次改动真源都要刷新，否则两者会漂移；漂移不会报错，只会让界面显示错数字。这类设计要额外准备一条对账路径：随时能用真源重算副本，用来修复历史遗漏。</p>
 <p>刷新由卡片存储发起，三步走（<code>backend/storage/sqlite_card_store.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _update_session_card_count</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.username:</span></span>
@@ -1093,6 +1113,13 @@
     Note over T: finally 不清理，目录残留
   end</pre></div>
 <h2 id="3-导入的校验顺序">3. 导入的校验顺序</h2>
+<p>导入外部压缩包要先校验再落盘，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：解压前的校验</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> name </span><span style="color:#D73A49">in</span><span style="color:#24292E"> zf.namelist():</span></span>
+<span class="line"><span style="color:#24292E">    target </span><span style="color:#D73A49">=</span><span style="color:#24292E"> os.path.realpath(os.path.join(dest, name))</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> target.startswith(os.path.realpath(dest) </span><span style="color:#D73A49">+</span><span style="color:#24292E"> os.sep):   </span><span style="color:#6A737D"># 防越界</span></span>
+<span class="line"><span style="color:#D73A49">        raise</span><span style="color:#005CC5"> ValueError</span><span style="color:#24292E">(</span><span style="color:#032F62">"压缩包包含非法路径"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>这就是”zip slip”：压缩包里的条目名可以写成<code>../../etc/x</code>，直接按名字解压就会写到目标目录之外。校验方式是先算出目标绝对路径、再用<code>realpath</code>归一化，确认它仍在目标目录内。除此之外，导入还要检查文件类型与必需文件是否齐全——把校验放在落盘之前，失败时磁盘上不会留下半成品。</p>
 <p>导入接口的校验按代价从低到高排列（<code>session_io.py</code> 的 <code>upload_session</code>）：</p>
 
 
@@ -1506,6 +1533,10 @@
 <table><thead><tr><th>场景</th><th>结果</th></tr></thead><tbody><tr><td>顺序执行</td><td>两条都在</td></tr><tr><td>同时读后写</td><td>后写覆盖先写</td></tr><tr><td>写一半进程退出</td><td>文件可能截断，下次读返回空</td></tr></tbody></table>
 <p>写操作使用覆盖写而不是临时文件改名，因此写入过程被打断会留下不完整文件，下次读取解析失败并返回空字典。</p>
 <h2 id="4-数量不一致的定位">4. 数量不一致的定位</h2>
+<p>定位方式是拿真源重算一遍与副本对比，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#6A737D">-- 示意：按会话统计真实卡片数</span></span>
+<span class="line"><span style="color:#D73A49">SELECT</span><span style="color:#24292E"> session_id, </span><span style="color:#005CC5">COUNT</span><span style="color:#24292E">(</span><span style="color:#D73A49">*</span><span style="color:#24292E">) </span><span style="color:#D73A49">AS</span><span style="color:#24292E"> real_count </span><span style="color:#D73A49">FROM</span><span style="color:#24292E"> cards </span><span style="color:#D73A49">GROUP BY</span><span style="color:#24292E"> session_id;</span></span></code></pre>
+<p>把这条结果与列表页显示的数字逐条对照，差在哪里就说明那条刷新链路漏了一次。对账的关键是”用真源重算派生数据”，而不是反过来相信副本——副本出错时没有任何异常，只有对照才能发现。修复也顺手：以真源结果覆盖副本即可。</p>
 <p>数量不一致时先取两个值：会话库 <code>cards</code> 表的行数与 <code>sessions.json</code> 里的 <code>card_count</code>。相等则问题不在数据层；不等时按操作类型判断。</p>
 
 

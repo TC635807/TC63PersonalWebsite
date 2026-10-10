@@ -2,7 +2,7 @@
 <p>换一家模型服务商时，如果每处调用都直接 import SDK，改动会散落在流水线、文档分析与改进策略里。这个仓库的做法是把调用收进一个对象：AI Provider。它负责把一段提示词发出去，把模型返回的文本或流取回来，切换服务商只改配置与实现类，上层代码不动——代价是抽象一旦定义得不合适，所有实现都要迁就它。</p>
 <p>抽象层的设计有一个明显的分层：三条方法必须实现，其余九条带默认实现，默认实现直接抛“未实现”。因此一个最小可用的 Provider 只要能对话、能流式对话、能测连通性就够了；摘要、翻译、聚类属于可选扩展。</p>
 <h2 id="三个数据模型">三个数据模型</h2>
-<p>Provider 文件里先定义三个 Pydantic 模型（<code>backend/ai/provider.py:14-41</code>）。Pydantic 是数据校验库，字段用类型标注声明，实例化时自动检查类型与必填：</p>
+<p>Provider 文件里先定义三个 Pydantic 模型（<code>backend/ai/provider.py</code>）。Pydantic 是数据校验库，字段用类型标注声明，实例化时自动检查类型与必填：</p>
 
 
 
@@ -29,10 +29,20 @@
 
 
 <table><thead><tr><th>模型</th><th>字段</th><th>用途</th></tr></thead><tbody><tr><td><code>AIConfig</code></td><td>服务地址、密钥、模型名、备注、代理端口、并发数</td><td>构造客户端</td></tr><tr><td><code>TopicCluster</code></td><td>主题名、来源索引列表、描述</td><td>聚类结果</td></tr><tr><td><code>GeneratedCard</code></td><td>标题、正文、来源索引、标签、置信度</td><td>生成卡片</td></tr></tbody></table>
-<p><code>AIConfig</code> 的前三个字段没有默认值，注释写明它们必须由配置加载层显式提供（<code>:17-19</code>）。后面三个有默认值：模型备注为空字符串、代理端口为 0、并发数为 10。没有默认值的字段是必填项，缺了就无法构造客户端。</p>
+<p><code>AIConfig</code> 的前三个字段没有默认值，注释写明它们必须由配置加载层显式提供。后面三个有默认值：模型备注为空字符串、代理端口为 0、并发数为 10。没有默认值的字段是必填项，缺了就无法构造客户端。</p>
 <p><code>TopicCluster</code> 的 <code>source_indices</code> 用的是整数索引，指向传入的摘要列表位置。<code>GeneratedCard</code> 的 <code>confidence</code> 默认 0.5，与质量评分里“缺数据取中性值”的做法一致。</p>
 <h2 id="三条必选接口">三条必选接口</h2>
-<p><code>AIProvider</code> 继承抽象基类，三条带装饰器的方法是硬约束（<code>provider.py:44-64</code>）：</p>
+<p>必选接口用抽象基类（ABC）声明，未实现的子类在实例化或调用时就会失败，而不是等到上线才暴露：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：三条必选接口的声明形式</span></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> AIProvider</span><span style="color:#24292E">(</span><span style="color:#005CC5">ABC</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#6F42C1">    @abstractmethod</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> chat</span><span style="color:#24292E">(self, messages, </span><span style="color:#D73A49">**</span><span style="color:#24292E">kw) -> </span><span style="color:#005CC5">str</span><span style="color:#24292E">: </span><span style="color:#005CC5">...</span></span>
+<span class="line"><span style="color:#6F42C1">    @abstractmethod</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> chat_stream</span><span style="color:#24292E">(self, messages, </span><span style="color:#D73A49">**</span><span style="color:#24292E">kw) -> AsyncIterator[</span><span style="color:#005CC5">str</span><span style="color:#24292E">]: </span><span style="color:#005CC5">...</span></span>
+<span class="line"><span style="color:#6F42C1">    @abstractmethod</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> health_check</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">bool</span><span style="color:#24292E">: </span><span style="color:#005CC5">...</span></span></code></pre>
+<p>抽象基类把”必须实现什么”变成语言层面的约束：忘记实现时实例化直接报错。可选能力用带默认实现的方法声明，默认实现抛”未实现”，这样调用方可以统一用<code>try</code>兜底，而不必逐个检查<code>hasattr</code>。</p>
+<p><code>AIProvider</code> 继承抽象基类，三条带装饰器的方法是硬约束（<code>provider.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6F42C1">@abstractmethod</span></span>
 <span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> generate</span><span style="color:#24292E">(self, prompt: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, </span><span style="color:#D73A49">**</span><span style="color:#24292E">kwargs) -> </span><span style="color:#005CC5">str</span><span style="color:#24292E">: </span><span style="color:#005CC5">...</span></span>
 <span class="line"><span style="color:#6F42C1">@abstractmethod</span></span>
@@ -41,7 +51,7 @@
 <span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> test_connection</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">bool</span><span style="color:#24292E">: </span><span style="color:#005CC5">...</span></span></code></pre>
 <p><code>generate</code> 返回完整文本，<code>generate_stream</code> 逐个片段产出，<code>test_connection</code> 返回布尔值。注意前两条都带 <code>**kwargs</code>，抽象层没有规定额外参数的语义——具体实现可以自行解释，调用方需要知道自己在用哪个实现。</p>
 <h2 id="九条可选能力">九条可选能力</h2>
-<p>其余方法都有默认实现，统一抛 <code>NotImplementedError</code>（<code>provider.py:66-108</code>）：</p>
+<p>其余方法都有默认实现，统一抛 <code>NotImplementedError</code>（<code>provider.py</code>）：</p>
 
 
 
@@ -98,7 +108,7 @@
 
 
 <table><thead><tr><th>方法</th><th>语义</th><th>关键参数</th></tr></thead><tbody><tr><td><code>summarize</code></td><td>纯摘要</td><td>—</td></tr><tr><td><code>summarize_with_metadata</code></td><td>摘要加元数据，合并为一次调用</td><td>—</td></tr><tr><td><code>extract_metadata</code></td><td>只抽元数据</td><td>—</td></tr><tr><td><code>extract_related_topics</code></td><td>抽取相关主题</td><td>最多主题数、搜索层级</td></tr><tr><td><code>translate_to_chinese</code></td><td>翻成中文</td><td>—</td></tr><tr><td><code>cluster_summaries</code></td><td>摘要聚类</td><td>摘要列表</td></tr><tr><td><code>generate_cards_from_sources</code></td><td>多来源生成卡片</td><td>来源列表、关键词</td></tr><tr><td><code>generate_cards_from_sources_stream</code></td><td>流式版本</td><td>同上</td></tr><tr><td><code>analyze_document_stream</code></td><td>文档分析出三层卡片</td><td>正文、文件名、已有卡标题</td></tr></tbody></table>
-<p>注释里给出了文档分析输出的形状：一个主卡片加若干章节卡片（<code>provider.py:103-107</code>）。这条注释是调用方拼接 JSON 的契约来源，因为流式接口只产出文本片段，完整结构要靠调用方解析。</p>
+<p>注释里给出了文档分析输出的形状：一个主卡片加若干章节卡片（<code>provider.py</code>）。这条注释是调用方拼接 JSON 的契约来源，因为流式接口只产出文本片段，完整结构要靠调用方解析。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">classDiagram
   class AIProvider {
     &#x3C;&#x3C;abstract>>
@@ -123,7 +133,7 @@
   AIProvider &#x3C;|-- OpenAIProvider
   OpenAIProvider ..> AIConfig</pre></div>
 <h2 id="配置从哪来">配置从哪来</h2>
-<p>配置加载只有一个函数（<code>backend/ai/config.py:11-19</code>），从全局配置模块取出五个常量，组装成 <code>AIConfig</code>：</p>
+<p>配置加载只有一个函数（<code>backend/ai/config.py</code>），从全局配置模块取出五个常量，组装成 <code>AIConfig</code>：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> load_config</span><span style="color:#24292E">() -> AIConfig:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> AIConfig(</span></span>
 <span class="line"><span style="color:#E36209">        api_url</span><span style="color:#D73A49">=</span><span style="color:#005CC5">AI_API_URL</span><span style="color:#24292E">,</span></span>
@@ -132,7 +142,7 @@
 <span class="line"><span style="color:#E36209">        proxy_port</span><span style="color:#D73A49">=</span><span style="color:#005CC5">AI_PROXY_PORT</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#E36209">        api_concurrency</span><span style="color:#D73A49">=</span><span style="color:#005CC5">AI_CONCURRENCY</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#24292E">    )</span></span></code></pre>
-<p>模块注释写明环境变量优先于全局默认值（<code>:1-5</code>），优先级逻辑在 <code>backend.config</code> 里，本模块只做搬运。<code>AIConfig</code> 的 <code>model_note</code> 字段没有被填，保持默认空字符串——这一项当前不在加载路径上。</p>
+<p>模块注释写明环境变量优先于全局默认值，优先级逻辑在 <code>backend.config</code> 里，本模块只做搬运。<code>AIConfig</code> 的 <code>model_note</code> 字段没有被填，保持默认空字符串——这一项当前不在加载路径上。</p>
 
 
 
@@ -175,7 +185,7 @@
   C --> D["构造 OpenAIProvider"]
   D --> E["首次调用时创建客户端"]</pre></div>
 <h2 id="包对外暴露什么">包对外暴露什么</h2>
-<p><code>backend/ai/__init__.py</code> 导出五个名字：配置模型、抽象基类、两个数据模型以及具体实现 <code>OpenAIProvider</code>（<code>backend/ai/__init__.py:6-9</code>）。因此上层只需要 <code>from backend.ai import AIProvider, OpenAIProvider</code> 就能拿到抽象与实现，不必知道文件布局。</p>
+<p><code>backend/ai/__init__.py</code> 导出五个名字：配置模型、抽象基类、两个数据模型以及具体实现 <code>OpenAIProvider</code>（<code>backend/ai/__init__.py</code>）。因此上层只需要 <code>from backend.ai import AIProvider, OpenAIProvider</code> 就能拿到抽象与实现，不必知道文件布局。</p>
 <p>导出具体实现意味着包初始化时会导入 <code>openai</code> SDK。如果某个环境只想用抽象而不装 SDK，导入这个包会失败。这是便利性与可裁剪性之间的取舍，当前选择偏向便利。</p>
 <h2 id="易错点">易错点</h2>
 <ol>
@@ -233,7 +243,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>必选接口</td><td>generate、generate_stream、test_connection</td><td><code>backend/ai/provider.py:51-64</code></td></tr><tr><td>可选能力</td><td>九条，默认抛未实现</td><td><code>:66-108</code></td></tr><tr><td>配置模型</td><td>三必填加三默认</td><td><code>:14-25</code></td></tr><tr><td>聚类结果</td><td>主题名、来源索引、描述</td><td><code>:28-32</code></td></tr><tr><td>生成卡片</td><td>标题、正文、来源索引、标签、置信度</td><td><code>:35-41</code></td></tr><tr><td>配置加载</td><td>从全局常量组装</td><td><code>backend/ai/config.py:11-19</code></td></tr><tr><td>包导出</td><td>抽象、实现与三个模型</td><td><code>backend/ai/__init__.py:6-9</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>必选接口</td><td>generate、generate_stream、test_connection</td><td><code>backend/ai/provider.py</code></td></tr><tr><td>可选能力</td><td>九条，默认抛未实现</td><td>—</td></tr><tr><td>配置模型</td><td>三必填加三默认</td><td>—</td></tr><tr><td>聚类结果</td><td>主题名、来源索引、描述</td><td>—</td></tr><tr><td>生成卡片</td><td>标题、正文、来源索引、标签、置信度</td><td>—</td></tr><tr><td>配置加载</td><td>从全局常量组装</td><td><code>backend/ai/config.py</code></td></tr><tr><td>包导出</td><td>抽象、实现与三个模型</td><td><code>backend/ai/__init__.py</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -309,7 +319,7 @@
 <p>调用外部模型有两个绕不开的工程问题：并发太多会被服务端限流，偶发失败又不能让上层感知。实现把这两件事都收在 Provider 内部：一个类级别的信号量控制同时在飞的请求数，一个自建的重试循环按指数退避重发。上层看到的只有“产出片段”或“最终抛错”。</p>
 <p>还有一个细节容易被忽略：OpenAI SDK 自带重试，但这里把它关掉了（<code>max_retries=0</code>），改用自建循环。这样重试间隔、并发槽位的持有策略都由自己决定。代价是要自己实现退避逻辑，好处是重试期间不会叠加 SDK 的内部等待。</p>
 <h2 id="客户端是延迟创建的">客户端是延迟创建的</h2>
-<p>构造函数只保存配置，不创建网络客户端（<code>backend/ai/openai_provider.py:123-140</code>）。实际创建发生在第一次调用：</p>
+<p>构造函数只保存配置，不创建网络客户端（<code>backend/ai/openai_provider.py</code>）。实际创建发生在第一次调用：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._http_client </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._http_client</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> AsyncOpenAI(</span></span>
@@ -318,10 +328,23 @@
 <span class="line"><span style="color:#E36209">    timeout</span><span style="color:#D73A49">=</span><span style="color:#005CC5">self</span><span style="color:#24292E">.timeout,</span></span>
 <span class="line"><span style="color:#E36209">    max_retries</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#24292E">)</span></span></code></pre>
-<p>允许注入外部客户端（<code>http_client</code> 参数），这是测试替换的入口。URL 会先经过规范化：去掉末尾的 <code>/chat/completions</code> 或 <code>/responses</code> 后缀，但保留 <code>/v1</code>（<code>:54-68</code>）。注释解释了两个方向的原因——SDK 会在 base_url 后追加 endpoint，所以 base_url 不能再带 endpoint；而 <code>/v1</code> 是 base_url 的一部分，必须保留。</p>
-<p>请求超时默认 180 秒（<code>:123-127</code>）。参数注释给出了取值理由：它约束首片段等待时间，长输入时服务端排队可能超过 30 秒，10 秒会误杀。<code>max_retries=0</code> 把 SDK 的内部重试关掉。</p>
+<p>允许注入外部客户端（<code>http_client</code> 参数），这是测试替换的入口。URL 会先经过规范化：去掉末尾的 <code>/chat/completions</code> 或 <code>/responses</code> 后缀，但保留 <code>/v1</code>。注释解释了两个方向的原因——SDK 会在 base_url 后追加 endpoint，所以 base_url 不能再带 endpoint；而 <code>/v1</code> 是 base_url 的一部分，必须保留。</p>
+<p>请求超时默认 180 秒。参数注释给出了取值理由：它约束首片段等待时间，长输入时服务端排队可能超过 30 秒，10 秒会误杀。<code>max_retries=0</code> 把 SDK 的内部重试关掉。</p>
 <h2 id="类级信号量">类级信号量</h2>
-<p>限流器写在类属性上，所有实例共享（<code>openai_provider.py:117-129</code>）：</p>
+<p>限流用信号量实现，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：信号量 + 指数退避重试</span></span>
+<span class="line"><span style="color:#24292E">sem </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.Semaphore(</span><span style="color:#005CC5">MAX_INFLIGHT</span><span style="color:#24292E">)      </span><span style="color:#6A737D"># 同时在飞的请求数上限</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> call</span><span style="color:#24292E">(payload):</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> with</span><span style="color:#24292E"> sem:                          </span><span style="color:#6A737D"># 拿不到槽位就在此排队</span></span>
+<span class="line"><span style="color:#D73A49">        for</span><span style="color:#24292E"> attempt </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">MAX_RETRY</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">            try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">                return</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> raw_call(payload)</span></span>
+<span class="line"><span style="color:#D73A49">            except</span><span style="color:#005CC5"> RETRYABLE</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#D73A49">                await</span><span style="color:#24292E"> asyncio.sleep(</span><span style="color:#005CC5">BASE</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49"> **</span><span style="color:#24292E"> attempt </span><span style="color:#D73A49">+</span><span style="color:#24292E"> jitter())  </span><span style="color:#6A737D"># 退避</span></span>
+<span class="line"><span style="color:#D73A49">        raise</span></span></code></pre>
+<p>“信号量”是一个计数锁：容量为 N 时最多允许 N 个协程同时进入临界区，多出来的排队等待。它是类级别的，因此同一个进程里的所有 Provider 实例共享同一个上限。指数退避指第 k 次重试等待<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mi>x</mi><mi>t</mi><mrow><mi>b</mi><mi>a</mi><mi>s</mi><mi>e</mi></mrow><mi>i</mi><mi>m</mi><mi>e</mi><mi>s</mi><msup><mn>2</mn><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">	ext{base}	imes 2^k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord mathnormal">e</span><span class="mord mathnormal">x</span><span class="mord mathnormal">t</span><span class="mord"><span class="mord mathnormal">ba</span><span class="mord mathnormal">se</span></span><span class="mord mathnormal">im</span><span class="mord mathnormal">es</span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span></span></span></span></span></span></span></span>，再加一点随机抖动，避免多个请求在同一时刻同时重发、形成新的尖峰。</p>
+<p>限流器写在类属性上，所有实例共享（<code>openai_provider.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> OpenAIProvider</span><span style="color:#24292E">(</span><span style="color:#6F42C1">AIProvider</span><span style="color:#24292E">):</span></span>
 <span class="line"><span style="color:#24292E">    _api_semaphore: Optional[asyncio.Semaphore] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span></span>
 <span class="line"><span style="color:#24292E">    _api_concurrency: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 10</span></span>
@@ -330,7 +353,7 @@
 <span class="line"><span style="color:#005CC5">        ...</span></span>
 <span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> OpenAIProvider._api_semaphore </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">            OpenAIProvider._api_semaphore </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.Semaphore(config.api_concurrency)</span></span></code></pre>
-<p>共享的目的是让多个流水线实例共用同一池槽位，避免每个实例各自放大并发。这里有一个从代码读出的取舍：信号量只在第一次构造时按当时的 <code>config.api_concurrency</code> 创建，之后构造的实例即使传入不同并发数也不会生效。流式方法里还有一段兜底，如果信号量仍为空就用类默认的 10 创建（<code>:174-177</code>）。因此实际并发由“第一个构造者”决定。</p>
+<p>共享的目的是让多个流水线实例共用同一池槽位，避免每个实例各自放大并发。这里有一个从代码读出的取舍：信号量只在第一次构造时按当时的 <code>config.api_concurrency</code> 创建，之后构造的实例即使传入不同并发数也不会生效。流式方法里还有一段兜底，如果信号量仍为空就用类默认的 10 创建。因此实际并发由“第一个构造者”决定。</p>
 
 
 
@@ -362,8 +385,8 @@
   G -- 是 --> H["按类默认 10 创建"]
   G -- 否 --> D</pre></div>
 <h2 id="一次调用经过哪些阶段">一次调用经过哪些阶段</h2>
-<p><code>generate</code> 是非流式的门面：它内部调用流式方法，把片段拼成完整字符串（<code>:161-166</code>）。这样只有一套请求逻辑，非流式路径自动获得重试与限流。</p>
-<p><code>generate_stream</code> 的结构是“获取信号量，再进重试循环”（<code>:168-198</code>）：</p>
+<p><code>generate</code> 是非流式的门面：它内部调用流式方法，把片段拼成完整字符串。这样只有一套请求逻辑，非流式路径自动获得重试与限流。</p>
+<p><code>generate_stream</code> 的结构是“获取信号量，再进重试循环”：</p>
 
 
 
@@ -394,7 +417,7 @@
 
 
 <table><thead><tr><th>阶段</th><th>行为</th></tr></thead><tbody><tr><td>获取槽位</td><td><code>async with sem</code></td></tr><tr><td>组装消息</td><td>单条 user 消息</td></tr><tr><td>请求</td><td>调用 <code>_create_stream</code></td></tr><tr><td>成功</td><td>逐片段产出后返回</td></tr><tr><td>失败</td><td>未超过重试上限则等待后重试，否则抛错</td></tr></tbody></table>
-<p>重试等待按 <code>5 乘以 2 的 retries 次方</code> 计算（<code>:191</code>），默认重试上限 3，因此等待序列是 5 秒、10 秒、20 秒。信号量的持有范围覆盖整个重试过程，注释写明这样做的理由：重试时不释放槽位，避免加重服务端拥塞（<code>:171-172</code>）。代价是一个卡在重试里的请求会长时间占用一个槽位。</p>
+<p>重试等待按 <code>5 乘以 2 的 retries 次方</code> 计算，默认重试上限 3，因此等待序列是 5 秒、10 秒、20 秒。信号量的持有范围覆盖整个重试过程，注释写明这样做的理由：重试时不释放槽位，避免加重服务端拥塞。代价是一个卡在重试里的请求会长时间占用一个槽位。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant C as 调用方
@@ -416,9 +439,9 @@
       P->>P: 睡眠后重试
     end
   end</pre></div>
-<p>流式请求本身很简单：<code>stream=True</code>，遍历返回对象，只取每个片段的增量内容，增量为空时跳过（<code>:200-211</code>）。这层过滤保证调用方拿到的都是非空字符串。</p>
+<p>流式请求本身很简单：<code>stream=True</code>，遍历返回对象，只取每个片段的增量内容，增量为空时跳过。这层过滤保证调用方拿到的都是非空字符串。</p>
 <h2 id="连通性测试">连通性测试</h2>
-<p><code>test_connection</code> 发一条 “Hello”，限制最多一个 token，非流式（<code>:147-159</code>）。返回值是“choices 是否非空”，任何异常都被吞掉并返回假：</p>
+<p><code>test_connection</code> 发一条 “Hello”，限制最多一个 token，非流式。返回值是“choices 是否非空”，任何异常都被吞掉并返回假：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    response </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> client.chat.completions.create(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> response.choices </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span></span>
@@ -426,7 +449,7 @@
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> False</span></span></code></pre>
 <p>这个设计适合健康检查，不适合诊断——失败原因不会出现在返回值里。排查连通性问题需要看日志。</p>
 <h2 id="从回答里抠-json">从回答里抠 JSON</h2>
-<p>模型经常会多说两句，返回内容里夹着解释、思考标签或 Markdown 代码块。解析器按这个顺序处理（<code>openai_provider.py:71-108</code>）：</p>
+<p>模型经常会多说两句，返回内容里夹着解释、思考标签或 Markdown 代码块。解析器按这个顺序处理（<code>openai_provider.py</code>）：</p>
 <ol>
 <li>去掉 <code>think</code> 标签包裹的推理过程；</li>
 <li>找 Markdown 代码块，块内是合法 JSON 就直接返回；</li>
@@ -530,7 +553,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>客户端创建</td><td>延迟，可注入</td><td><code>backend/ai/openai_provider.py:131-140</code></td></tr><tr><td>URL 规范化</td><td>去 endpoint 后缀，保留 <code>/v1</code></td><td><code>:54-68</code></td></tr><tr><td>超时</td><td>默认 180 秒</td><td><code>:123-127</code></td></tr><tr><td>SDK 重试</td><td>关闭</td><td><code>:139</code></td></tr><tr><td>限流</td><td>类级信号量，首构造者决定</td><td><code>:117-129</code></td></tr><tr><td>退避</td><td>5 秒乘 2 的 n 次方，上限 3 次</td><td><code>:188-198</code></td></tr><tr><td>流式产出</td><td>只取非空增量</td><td><code>:200-211</code></td></tr><tr><td>连通测试</td><td>一个 token，异常返回假</td><td><code>:147-159</code></td></tr><tr><td>JSON 提取</td><td>四层兼容</td><td><code>:71-108</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>客户端创建</td><td>延迟，可注入</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>URL 规范化</td><td>去 endpoint 后缀，保留 <code>/v1</code></td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>超时</td><td>默认 180 秒</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>SDK 重试</td><td>关闭</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>限流</td><td>类级信号量，首构造者决定</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>退避</td><td>5 秒乘 2 的 n 次方，上限 3 次</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>流式产出</td><td>只取非空增量</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>连通测试</td><td>一个 token，异常返回假</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>JSON 提取</td><td>四层兼容</td><td><code>backend/ai/openai_provider.py</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -607,7 +630,7 @@
 <p>提示词在这个仓库里有两处定义。一处是流水线目录下的模板文件，放着四个英文模板常量；另一处是 Provider 实现里的内联中文字符串。检索调用点会发现一个事实：模板文件的四个常量没有任何引用，被使用的都是内联提示词。这属于代码现状，不是设计声明，读的时候需要以调用点为准。</p>
 <p>内联提示词有几个共同点：中文书写、明确要求输出 JSON、对输入做字符数截断。截断上限各自不同，从 8000 到 50000 不等，与任务需要的上下文量对应。理解这些上限，才能在长文输入时预期到信息丢失的位置。</p>
 <h2 id="两处来源的实际使用">两处来源的实际使用</h2>
-<p>模板文件定义了四个常量：摘要、元数据提取、生成卡片、相关主题（<code>backend/pipeline/prompts.py:7-44</code>）。它们的写法是英文说明加占位符，例如摘要模板以 “You are KnowledgeDiver’s summarization assistant” 开头。</p>
+<p>模板文件定义了四个常量：摘要、元数据提取、生成卡片、相关主题（<code>backend/pipeline/prompts.py</code>）。它们的写法是英文说明加占位符，例如摘要模板以 “You are KnowledgeDiver’s summarization assistant” 开头。</p>
 <p>在 <code>backend</code> 范围内检索这四个常量名，只命中定义处，没有任何导入或格式化调用。因此当前生效的是 Provider 内部的中文提示词：</p>
 
 
@@ -659,7 +682,7 @@
 
 
 
-<table><thead><tr><th>任务</th><th>生效位置</th><th>模板文件对应常量</th></tr></thead><tbody><tr><td>摘要</td><td><code>backend/ai/openai_provider.py:217-232</code></td><td>无引用</td></tr><tr><td>摘要加元数据</td><td><code>:244-267</code></td><td>无引用</td></tr><tr><td>元数据提取</td><td><code>:294-305</code></td><td>无引用</td></tr><tr><td>相关主题提取</td><td><code>:332-379</code></td><td>无引用</td></tr><tr><td>翻译</td><td><code>:415-417</code></td><td>无</td></tr><tr><td>主题聚类</td><td><code>:447-466</code></td><td>无</td></tr><tr><td>卡片生成</td><td><code>:569-...</code></td><td>无引用</td></tr><tr><td>文档分析</td><td><code>:754-...</code></td><td>无</td></tr></tbody></table>
+<table><thead><tr><th>任务</th><th>生效位置</th><th>模板文件对应常量</th></tr></thead><tbody><tr><td>摘要</td><td><code>backend/ai/openai_provider.py</code></td><td>无引用</td></tr><tr><td>摘要加元数据</td><td>—</td><td>无引用</td></tr><tr><td>元数据提取</td><td>—</td><td>无引用</td></tr><tr><td>相关主题提取</td><td>—</td><td>无引用</td></tr><tr><td>翻译</td><td>—</td><td>无</td></tr><tr><td>主题聚类</td><td>—</td><td>无</td></tr><tr><td>卡片生成</td><td><code>-...</code></td><td>无引用</td></tr><tr><td>文档分析</td><td><code>-...</code></td><td>无</td></tr></tbody></table>
 <p>“无引用”是对当前代码的静态检索结论。模板文件仍保留，可能是历史遗留或为将来抽取做准备；只要没有被导入，修改它不会影响行为。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["pipeline/prompts.py 四个模板"] --> B{"有调用点吗"}
@@ -713,11 +736,11 @@
 
 
 
-<table><thead><tr><th>任务</th><th>输入上限</th><th>位置</th></tr></thead><tbody><tr><td>摘要</td><td>15000 字符</td><td><code>openai_provider.py:231</code></td></tr><tr><td>元数据提取</td><td>8000 字符</td><td><code>:303</code></td></tr><tr><td>主题提取</td><td>12000 字符</td><td><code>:377</code></td></tr><tr><td>卡片生成（每来源）</td><td>30000 字符</td><td><code>:562</code>、<code>:682</code></td></tr><tr><td>文档分析（整体）</td><td>50000 字符，超出加提示</td><td><code>:742-745</code></td></tr><tr><td>翻译</td><td>不截断</td><td><code>:415-417</code></td></tr><tr><td>聚类（每来源摘要）</td><td>500 字符</td><td><code>:442</code></td></tr></tbody></table>
-<p>切片是简单的从头截取，不保留尾部。文档分析是唯一在截断后追加提示语的路径，会在正文后加一句“文档过长，已截取”，让模型知道自己拿到的是节选（<code>:744</code>）。其它路径被截断时没有这类声明，模型会把节选当全文处理。</p>
+<table><thead><tr><th>任务</th><th>输入上限</th><th>位置</th></tr></thead><tbody><tr><td>摘要</td><td>15000 字符</td><td><code>openai_provider.py</code></td></tr><tr><td>元数据提取</td><td>8000 字符</td><td>—</td></tr><tr><td>主题提取</td><td>12000 字符</td><td>—</td></tr><tr><td>卡片生成（每来源）</td><td>30000 字符</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>文档分析（整体）</td><td>50000 字符，超出加提示</td><td>—</td></tr><tr><td>翻译</td><td>不截断</td><td>—</td></tr><tr><td>聚类（每来源摘要）</td><td>500 字符</td><td>—</td></tr></tbody></table>
+<p>切片是简单的从头截取，不保留尾部。文档分析是唯一在截断后追加提示语的路径，会在正文后加一句“文档过长，已截取”，让模型知道自己拿到的是节选。其它路径被截断时没有这类声明，模型会把节选当全文处理。</p>
 <p>翻译不截断，说明它假设输入不长；聚类把每个来源的摘要压到 500 字符，是为了让多个来源都能进上下文。</p>
 <h2 id="元数据扁平化">元数据扁平化</h2>
-<p>摘要与元数据两条路径都会把模型返回的元数据对象拍平（<code>:276-287</code>、<code>:311-321</code>）：</p>
+<p>摘要与元数据两条路径都会把模型返回的元数据对象拍平：</p>
 
 
 
@@ -745,8 +768,19 @@
 
 <table><thead><tr><th>值的类型</th><th>处理</th></tr></thead><tbody><tr><td>字符串、整数、浮点</td><td>原样保留</td></tr><tr><td>列表</td><td>每项转字符串</td></tr><tr><td>字典</td><td>转成 JSON 字符串</td></tr><tr><td>其它</td><td>转字符串</td></tr></tbody></table>
 <p>拍平的目的是让后续存储只面对标量或字符串列表，不必处理嵌套结构。代价是嵌套信息变成一段 JSON 文本，查询时无法按字段过滤。</p>
-<p>解析前还会防御“模型返回数组”的情况：如果解析结果不是字典，取数组首个字典元素，否则给空字典（<code>:271-273</code>、<code>:309-310</code>）。</p>
+<p>解析前还会防御“模型返回数组”的情况：如果解析结果不是字典，取数组首个字典元素，否则给空字典。</p>
 <h2 id="解析失败的兜底">解析失败的兜底</h2>
+<p>模型返回的是文本而不是结构，解析必须当成”可能失败”来写，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：从自由文本里取 JSON 并兜底</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> parse_json_block</span><span style="color:#24292E">(text: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, default):</span></span>
+<span class="line"><span style="color:#24292E">    start, end </span><span style="color:#D73A49">=</span><span style="color:#24292E"> text.find(</span><span style="color:#032F62">"{"</span><span style="color:#24292E">), text.rfind(</span><span style="color:#032F62">"}"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> start </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#D73A49"> or</span><span style="color:#24292E"> end </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#24292E"> start:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> default</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> json.loads(text[start:end </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#24292E"> json.JSONDecodeError:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> default</span></span></code></pre>
+<p>先按第一对花括号截出候选片段（模型常在 JSON 前后加解释性文字），再解析；失败就返回<code>default</code>而不是抛出，让调用方能继续跑完这一轮。代价是格式错误被静默吸收，因此这类兜底要配合日志计数，否则错误率无处可见。</p>
 <p>三条路径的失败行为不同：</p>
 
 
@@ -777,13 +811,7 @@
 
 
 
-
-
-
-
-
-
-<table><thead><tr><th>路径</th><th>解析失败时</th><th>位置</th></tr></thead><tbody><tr><td>摘要加元数据</td><td>把原始文本当摘要返回，元数据为空</td><td><code>:289-290</code></td></tr><tr><td>元数据提取</td><td>返回空字典</td><td><code>:322-323</code></td></tr><tr><td>主题提取</td><td>返回空列表</td><td><code>:408-409</code></td></tr><tr><td>聚类</td><td>回退按标题分组</td><td><code>:499-501</code></td></tr><tr><td>卡片生成</td><td>见相邻单元的口径</td><td>—</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>解析失败时</th></tr></thead><tbody><tr><td>摘要加元数据</td><td>把原始文本当摘要返回，元数据为空</td></tr><tr><td>元数据提取</td><td>返回空字典</td></tr><tr><td>主题提取</td><td>返回空列表</td></tr><tr><td>聚类</td><td>回退按标题分组</td></tr><tr><td>卡片生成</td><td>见相邻单元的口径</td></tr></tbody></table>
 <p>摘要路径把解析失败的原文当摘要，是“宁可留下原文也不丢内容”的选择；元数据与主题路径返回空值，因为空的标签或主题不会破坏卡片。聚类回退到标题分组，保证多来源仍能各自成卡，不会因为模型格式错误而全部丢失。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["模型回答"] --> B["去思考标签与代码块"]
@@ -797,7 +825,7 @@
   H --> I["元数据拍平"]
   I --> J["返回结果"]</pre></div>
 <h2 id="不可信内容包裹">不可信内容包裹</h2>
-<p>抓取正文、上传文档正文与文件名都可能在提示词里注入指令。实现提供一层包裹钩子（<code>openai_provider.py:23-47</code>）：</p>
+<p>抓取正文、上传文档正文与文件名都可能在提示词里注入指令。实现提供一层包裹钩子（<code>openai_provider.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _untrusted</span><span style="color:#24292E">():</span></span>
 <span class="line"><span style="color:#D73A49">    global</span><span style="color:#005CC5"> _UNTRUSTED_MODULE</span></span>
 <span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> _UNTRUSTED_MODULE</span><span style="color:#D73A49"> is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
@@ -805,7 +833,7 @@
 <span class="line"><span style="color:#005CC5">        _UNTRUSTED_MODULE</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> _impl</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> _UNTRUSTED_MODULE</span></span></code></pre>
 <p>延迟导入的理由写在注释里：质量包初始化会经改进策略反向导入本模块，如果顶层导入会把依赖环闭上。缓存到模块级全局后，后续调用开销可以忽略。</p>
-<p>包裹行为由开关决定，默认模式原样返回，只有显式打开时才加边界标记（<code>:36-38</code>）。文件名走单独的 <code>_safe_meta</code>，只在开关打开时做中和处理，保证默认路径逐字段不变（<code>:41-47</code>）。调用点包括摘要加元数据（<code>:243</code>）、卡片生成（<code>:566</code>、<code>:686</code>）与文档分析（<code>:746-748</code>）。</p>
+<p>包裹行为由开关决定，默认模式原样返回，只有显式打开时才加边界标记。文件名走单独的 <code>_safe_meta</code>，只在开关打开时做中和处理，保证默认路径逐字段不变。调用点包括摘要加元数据、卡片生成与文档分析。</p>
 
 
 
@@ -885,7 +913,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>模板文件</td><td>四个英文常量，无调用点</td><td><code>backend/pipeline/prompts.py:7-44</code></td></tr><tr><td>生效提示词</td><td>Provider 内联中文提示词</td><td><code>backend/ai/openai_provider.py:217</code> 起</td></tr><tr><td>摘断上限</td><td>8000 到 50000 按任务不同</td><td><code>:231</code>、<code>:303</code>、<code>:377</code>、<code>:562</code>、<code>:742</code></td></tr><tr><td>截断声明</td><td>仅文档分析追加提示</td><td><code>:744</code></td></tr><tr><td>元数据拍平</td><td>标量保留，列表转字符串，字典转 JSON</td><td><code>:276-287</code></td></tr><tr><td>数组防御</td><td>非字典时取首个字典元素</td><td><code>:271-273</code></td></tr><tr><td>解析失败兜底</td><td>原文、空值或标题回退</td><td><code>:289</code>、<code>:322</code>、<code>:408</code>、<code>:499</code></td></tr><tr><td>不可信包裹</td><td>延迟导入，默认原样</td><td><code>:23-47</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>模板文件</td><td>四个英文常量，无调用点</td><td><code>backend/pipeline/prompts.py</code></td></tr><tr><td>生效提示词</td><td>Provider 内联中文提示词</td><td><code>backend/ai/openai_provider.py</code> 起</td></tr><tr><td>摘断上限</td><td>8000 到 50000 按任务不同</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>截断声明</td><td>仅文档分析追加提示</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>元数据拍平</td><td>标量保留，列表转字符串，字典转 JSON</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>数组防御</td><td>非字典时取首个字典元素</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>解析失败兜底</td><td>原文、空值或标题回退</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>不可信包裹</td><td>延迟导入，默认原样</td><td><code>backend/ai/openai_provider.py</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -966,7 +994,7 @@
 <p>延申搜索要先决定搜什么，然后才轮到检索。主题提取负责从一段内容里挑出适合单独成卡的词，挑得准不准直接决定后续检索的质量。实现把这件事拆成两条约束：一条来自搜索层级，决定提什么抽象程度；另一条来自源卡标题，决定哪些词不许提。</p>
 <p>约束之后还有一层代码兜底。模型可能忽略“不许提取和源卡同名的词”这条规则，尤其是只差空格或标点的变体。代码在解析后自己做一次归一化比对，把这类词删掉。聚类的回退逻辑也是同一思路：模型输出不可用时，用标题相似度分组，保证流程不中断。</p>
 <h2 id="四种搜索层级">四种搜索层级</h2>
-<p>提示词构造器把层级规则写成字典，未知层级退回默认档（<code>backend/ai/openai_provider.py:350-370</code>）：</p>
+<p>提示词构造器把层级规则写成字典，未知层级退回默认档（<code>backend/ai/openai_provider.py</code>）：</p>
 
 
 
@@ -999,24 +1027,24 @@
 
 <table><thead><tr><th>层级</th><th>提取方向</th><th>示例</th></tr></thead><tbody><tr><td><code>default</code></td><td>与主主题不同的具体主题</td><td>“法拉利”而非“汽车品牌”</td></tr><tr><td><code>downstream</code></td><td>更细更专的下位概念</td><td>从“机器学习概述”提取“梯度下降”“反向传播”</td></tr><tr><td><code>peer</code></td><td>同层次同类主题</td><td>从“保时捷”提取“法拉利”“兰博基尼”</td></tr><tr><td><code>upstream</code></td><td>更高层的上位概念</td><td>从“机器学习”提取“人工智能”“计算机科学”</td></tr></tbody></table>
 <p>默认档强调“与当前内容的主要主题不同”，下游档强调“更具体更细化”，同级档强调“可比性”，上游档强调“父类与所属领域”。四条规则都附了具体例子，这是让模型稳定输出的一种做法：规则抽象，例子锚定。</p>
-<p>基础规则里还有一条领域约束（<code>:340</code>）：禁止提取跨领域的通用多义词或泛化短词，并明确列出“稳定性”“卷积”“注意力”在多个领域含义不同的例子。要求是提取带领域语境的具体词，例如“系统稳定性”而不是“稳定性”。</p>
+<p>基础规则里还有一条领域约束：禁止提取跨领域的通用多义词或泛化短词，并明确列出“稳定性”“卷积”“注意力”在多个领域含义不同的例子。要求是提取带领域语境的具体词，例如“系统稳定性”而不是“稳定性”。</p>
 <h2 id="源卡标题带来的两条规则">源卡标题带来的两条规则</h2>
-<p>当调用方传入源卡标题时，提示词会追加两段（<code>:342-348</code>）：</p>
+<p>当调用方传入源卡标题时，提示词会追加两段：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> exclude_title:</span></span>
 <span class="line"><span style="color:#24292E">    exclude_rule </span><span style="color:#D73A49">=</span><span style="color:#032F62"> "禁止提取与源卡标题相同、近义或属于它上位概括的主题"</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> source_title:</span></span>
 <span class="line"><span style="color:#24292E">    source_rule </span><span style="color:#D73A49">=</span><span style="color:#032F62"> "所有主题必须与源卡领域一致；歧义短词必须自带领域限定"</span></span></code></pre>
-<p>排除规则防的是重复建卡：卡片本身是“机器学习”，就不该再提取“机器学习概述”这类同义或上位主题。代码注释还特别点出只差空格、标点或大小写的变体也算相同（<code>:344</code>）。</p>
-<p>领域锚定规则解决的是检索歧义。方案调整后搜索词不再拼接源卡标题，改为在提取阶段就把领域写进主题（<code>:328-330</code>），例如输出“猎人（杀戮尖塔2）”而不是“猎人”。注释解释了理由：无领域限定的短词联网搜索会返回同名异义内容。</p>
+<p>排除规则防的是重复建卡：卡片本身是“机器学习”，就不该再提取“机器学习概述”这类同义或上位主题。代码注释还特别点出只差空格、标点或大小写的变体也算相同。</p>
+<p>领域锚定规则解决的是检索歧义。方案调整后搜索词不再拼接源卡标题，改为在提取阶段就把领域写进主题，例如输出“猎人（杀戮尖塔2）”而不是“猎人”。注释解释了理由：无领域限定的短词联网搜索会返回同名异义内容。</p>
 <h2 id="解析后的代码兜底">解析后的代码兜底</h2>
-<p><code>extract_related_topics</code> 在拿到列表后做三件事（<code>:397-409</code>）：</p>
+<p><code>extract_related_topics</code> 在拿到列表后做三件事：</p>
 <ol>
 <li>只接受列表类型，截到 <code>max_topics</code> 个；</li>
 <li>逐项转字符串并丢掉空值；</li>
 <li>若传了排除标题，用标题归一化函数再过滤一遍同名项。</li>
 </ol>
-<p>第三步有实测来源：注释记录曾提取出“Transformer架构”，与源卡“Transformer 架构”重复（<code>:401-403</code>）。归一化函数在公共工具里，规则是去空白（含全角）、统一全半角括号、转小写（<code>backend/utils/titles.py:14-17</code>）。它是精确匹配，不做模糊。</p>
-<p>这里有一个接口参数上的不一致：抽象基类把 <code>max_topics</code> 默认写成 5（<code>backend/ai/provider.py:78</code>），实现里写成 10（<code>openai_provider.py:381</code>）。调用方显式传参时不受影响，依赖默认值时会按实现取值。</p>
+<p>第三步有实测来源：注释记录曾提取出“Transformer架构”，与源卡“Transformer 架构”重复。归一化函数在公共工具里，规则是去空白（含全角）、统一全半角括号、转小写（<code>backend/utils/titles.py</code>）。它是精确匹配，不做模糊。</p>
+<p>这里有一个接口参数上的不一致：抽象基类把 <code>max_topics</code> 默认写成 5（<code>backend/ai/provider.py</code>），实现里写成 10（<code>openai_provider.py</code>）。调用方显式传参时不受影响，依赖默认值时会按实现取值。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["内容与源卡标题"] --> B["拼装基础规则与领域约束"]
   B --> C["按 search_level 选层级规则"]
@@ -1030,11 +1058,17 @@
   J --> K["按归一化标题过滤同名项"]
   K --> L["返回主题列表"]</pre></div>
 <h2 id="聚类的正常路径">聚类的正常路径</h2>
-<p><code>cluster_summaries</code> 先把每个来源压成“标题加 500 字摘要”的一段文本（<code>openai_provider.py:439-445</code>），再要求模型返回主题名、来源索引与描述。</p>
-<p>输入为零时返回空列表，输入只有一个时直接构造单来源簇，省掉一次模型调用（<code>:429-437</code>）。解析后逐项校验必须同时含主题名与来源索引，索引会被过滤到合法范围（<code>:475-481</code>）。如果没有任何合法簇，回退按标题分组（<code>:483-485</code>）。</p>
-<p>已分配的索引会被收集起来，没被任何簇覆盖的来源各自补成一个单来源簇（<code>:487-497</code>）。这一步保证“来源不丢失”：模型即使漏掉某个来源，它仍会作为独立主题出现在结果里。</p>
+<p>“聚类”指把一堆条目按语义相近程度自动分成若干组，通常用向量相似度衡量：每条文本先编码成一个向量，距离近的归为一组。示意：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：先让模型分组，失败则按标题相似度回退</span></span>
+<span class="line"><span style="color:#24292E">groups </span><span style="color:#D73A49">=</span><span style="color:#24292E"> model_cluster(items)                  </span><span style="color:#6A737D"># 正常路径</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> groups </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:                             </span><span style="color:#6A737D"># 输出不可解析或不满足约束</span></span>
+<span class="line"><span style="color:#24292E">    groups </span><span style="color:#D73A49">=</span><span style="color:#24292E"> cluster_by_title(items)           </span><span style="color:#6A737D"># 回退：不依赖模型</span></span></code></pre>
+<p>模型路径的好处是能理解语义，坏处是不保证输出结构合法；回退路径完全确定、可复现，但只能按字面相似度分组。两条路并存让流程不因一次模型输出异常而中断——这是”外部依赖都可能失败”的一般做法，与具体模型无关。</p>
+<p><code>cluster_summaries</code> 先把每个来源压成“标题加 500 字摘要”的一段文本（<code>openai_provider.py</code>），再要求模型返回主题名、来源索引与描述。</p>
+<p>输入为零时返回空列表，输入只有一个时直接构造单来源簇，省掉一次模型调用。解析后逐项校验必须同时含主题名与来源索引，索引会被过滤到合法范围。如果没有任何合法簇，回退按标题分组。</p>
+<p>已分配的索引会被收集起来，没被任何簇覆盖的来源各自补成一个单来源簇。这一步保证“来源不丢失”：模型即使漏掉某个来源，它仍会作为独立主题出现在结果里。</p>
 <h2 id="聚类失败时的标题回退">聚类失败时的标题回退</h2>
-<p>解析异常或空结果都会走标题分组（<code>:499-501</code>、<code>:503-534</code>）。回退逻辑遍历所有标题，用相似判定决定归入已有组还是新建组。相似判定有三条（<code>:544-552</code>）：</p>
+<p>解析异常或空结果都会走标题分组。回退逻辑遍历所有标题，用相似判定决定归入已有组还是新建组。相似判定有三条：</p>
 
 
 
@@ -1057,7 +1091,7 @@
 
 
 <table><thead><tr><th>判定</th><th>条件</th></tr></thead><tbody><tr><td>完全相等</td><td>归一化后相等</td></tr><tr><td>包含关系</td><td>一个标题包含另一个</td></tr><tr><td>相似度</td><td><code>SequenceMatcher</code> 比值不低于 0.7</td></tr></tbody></table>
-<p>回退用的归一化函数在 Provider 内部另写了一份（<code>:536-542</code>）：先做兼容性归一化，再小写，再去掉空白与连接符，最后去掉括号内容。它与公共工具的规则不同——公共工具保留括号内容并做精确匹配，回退版本删掉括号并允许模糊。</p>
+<p>回退用的归一化函数在 Provider 内部另写了一份：先做兼容性归一化，再小写，再去掉空白与连接符，最后去掉括号内容。它与公共工具的规则不同——公共工具保留括号内容并做精确匹配，回退版本删掉括号并允许模糊。</p>
 <p>两套规则的用途也不一样：公共工具用于“标题变体精确去重”，宁可漏判；回退版本用于“聚类兜底”，宁可合并。同名函数不同行为是这里最容易混淆的地方。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["多个来源摘要"] --> B{"来源数量"}
@@ -1137,7 +1171,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>搜索层级</td><td>default、downstream、peer、upstream</td><td><code>backend/ai/openai_provider.py:350-368</code></td></tr><tr><td>未知层级</td><td>退回 default</td><td><code>:370</code></td></tr><tr><td>领域约束</td><td>禁止跨域多义词与无领域限定的短词</td><td><code>:340</code></td></tr><tr><td>排除规则</td><td>禁止与源卡同名、近义、上位</td><td><code>:342-344</code></td></tr><tr><td>领域锚定</td><td>歧义短词自带领域限定</td><td><code>:346-348</code></td></tr><tr><td>提取上限</td><td>12000 字符</td><td><code>:377</code></td></tr><tr><td>代码兜底</td><td>归一化标题精确过滤</td><td><code>:401-405</code></td></tr><tr><td>聚类回退</td><td>标题相等、包含或相似度 0.7</td><td><code>:544-552</code></td></tr><tr><td>来源补齐</td><td>未覆盖来源各自成簇</td><td><code>:487-497</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>搜索层级</td><td>default、downstream、peer、upstream</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>未知层级</td><td>退回 default</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>领域约束</td><td>禁止跨域多义词与无领域限定的短词</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>排除规则</td><td>禁止与源卡同名、近义、上位</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>领域锚定</td><td>歧义短词自带领域限定</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>提取上限</td><td>12000 字符</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>代码兜底</td><td>归一化标题精确过滤</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>聚类回退</td><td>标题相等、包含或相似度 0.7</td><td><code>backend/ai/openai_provider.py</code></td></tr><tr><td>来源补齐</td><td>未覆盖来源各自成簇</td><td><code>backend/ai/openai_provider.py</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 

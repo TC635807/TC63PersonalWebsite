@@ -115,7 +115,7 @@
 
 
 <table><thead><tr><th>链路</th><th>方向</th><th>物理层</th><th>帧长</th><th>帧头</th><th>校验</th><th>云台板是否启用</th></tr></thead><tbody><tr><td>DBUS 遥控</td><td>遥控器 → 云台板</td><td>USART3，100000 / 8E1</td><td>固定 18 字节</td><td>无，靠长度</td><td>无</td><td>启用</td></tr><tr><td><code>UartProtocol</code></td><td>未接线</td><td>云台板 USART6 空闲，115200 / 8N1</td><td>变长，最长 32 字节</td><td>0xFE 0xEF</td><td>8 位累加和</td><td>未启用</td></tr><tr><td>视觉 SP</td><td>双向，走 USB CDC</td><td>USB 全速设备</td><td>固定 29 或 43 字节</td><td>S 与 P 两个字符</td><td>CRC16</td><td>启用</td></tr><tr><td>裁判系统</td><td>底盘板 ↔ 裁判系统</td><td>底盘板 USART6，115200 / 8N1</td><td>变长，数据段上限 200 字节</td><td>0xA5</td><td>CRC8 加 CRC16</td><td>云台板未启用</td></tr></tbody></table>
-<p>DBUS 的固定长度来自遥控器接收机的输出节奏，接收端用长度不等于 18 直接判废（<code>Communication/Src/dbus.cpp:13</code>）。其余三套都自己在字节流上找起点，差异只在于找起点之后用什么手段确认。</p>
+<p>DBUS 的固定长度来自遥控器接收机的输出节奏，接收端用长度不等于 18 直接判废（<code>Communication/Src/dbus.cpp</code>）。其余三套都自己在字节流上找起点，差异只在于找起点之后用什么手段确认。</p>
 <h2 id="2-定长与变长dbus-的-18-字节和-uartprotocol-的-5len">2. 定长与变长：DBUS 的 18 字节和 UartProtocol 的 5+len</h2>
 <p>定长帧把长度写进协议常量。接收方收到固定字节数即认为一帧结束，不需要长度域，也不依赖帧头。</p>
 
@@ -161,7 +161,7 @@
 <li>长度表示载荷长度，整帧长度等于固定开销加长度，<code>UartProtocol</code> 用这种；</li>
 <li>长度表示从帧头到校验之前的全部字节数，裁判系统用这种，SOF 后的两字节长度等于命令码加数据段的字节数。</li>
 </ul>
-<p>长度域位宽决定单帧上限。8 位长度域最多表示 255 字节载荷，但受接收缓冲区限制，实际可用值往往远小于 255。<code>UartProtocol</code> 的缓冲是 32 字节，所以长度上限被压到 27；裁判系统的缓冲是 256 字节，长度上限写死 200（<code>Communication/Src/referee_protocol.cpp:49-52</code>）。上限检查必须在写入载荷之前完成，放在收满之后再判断已经来不及，缓冲已经被覆盖。</p>
+<p>长度域位宽决定单帧上限。8 位长度域最多表示 255 字节载荷，但受接收缓冲区限制，实际可用值往往远小于 255。<code>UartProtocol</code> 的缓冲是 32 字节，所以长度上限被压到 27；裁判系统的缓冲是 256 字节，长度上限写死 200（<code>Communication/Src/referee_protocol.cpp</code>）。上限检查必须在写入载荷之前完成，放在收满之后再判断已经来不及，缓冲已经被覆盖。</p>
 <h2 id="5-四档校验强度与覆盖范围">5. 四档校验强度与覆盖范围</h2>
 <p>校验回答收到的字节是否与发出的一致。串口链路上的校验有三档强度，再加上物理层的奇偶校验：</p>
 
@@ -200,8 +200,8 @@
 
 
 <table><thead><tr><th>方式</th><th>宽度</th><th>能力</th><th>本工程位置</th></tr></thead><tbody><tr><td>奇偶校验</td><td>1 位，随每字节</td><td>只查单字节单比特错</td><td>USART3 配 8E1，硬件检查</td></tr><tr><td>累加和</td><td>8 位</td><td>查单字节错、部分多字节错，对调序不敏感</td><td><code>UartProtocol</code> 的 <code>calcChecksum</code></td></tr><tr><td>CRC8</td><td>8 位</td><td>查突发错能力优于累加和</td><td>裁判系统帧头段</td></tr><tr><td>CRC16</td><td>16 位</td><td>16 位以内突发错全部可查</td><td>SP 帧、裁判系统帧尾</td></tr></tbody></table>
-<p>累加和是最弱的一种：两个字节互换位置不会改变和，一个字节加一而另一个字节减一也不会。<code>UartProtocol</code> 用的是 8 位累加和（<code>Communication/Src/usart_protocol.cpp:47-57</code>），与同仓库的 CRC8 和 CRC16 是两套实现，不能互相替代。</p>
-<p>CRC 还需要约定覆盖范围和初值，否则两端各算一段也能得出不同结果。SP 帧的覆盖范围在 <code>Communication/Src/usb_protocol.cpp:41-45</code> 与 <code>Communication/Src/usb_decode.cpp:79-83</code> 两处分别体现，都是除校验字段之外的全部字节，初值 0xFFFF。</p>
+<p>累加和是最弱的一种：两个字节互换位置不会改变和，一个字节加一而另一个字节减一也不会。<code>UartProtocol</code> 用的是 8 位累加和（<code>Communication/Src/usart_protocol.cpp</code>），与同仓库的 CRC8 和 CRC16 是两套实现，不能互相替代。</p>
+<p>CRC 还需要约定覆盖范围和初值，否则两端各算一段也能得出不同结果。SP 帧的覆盖范围在 <code>Communication/Src/usb_protocol.cpp</code> 与 <code>Communication/Src/usb_decode.cpp</code> 两处分别体现，都是除校验字段之外的全部字节，初值 0xFFFF。</p>
 <h2 id="6-转义本工程没有启用的那条路">6. 转义：本工程没有启用的那条路</h2>
 <p>转义解决帧头、转义符与长度域出现在载荷里造成的歧义。做法是选一个转义字节，把载荷中所有与帧头或转义符相同的字节替换成转义符加映射字节的组合。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
@@ -216,7 +216,7 @@
 <p>本工程未使用转义。四套帧都靠帧头低概率命中与校验丢弃来处理歧义。若要在 <code>UartProtocol</code> 上启用转义，需要增加一个转义状态、改写 <code>input</code> 的载荷分支、让 <code>buildFrame</code> 先转义再写长度，且两端同步改。当前没有这样的代码。</p>
 <h2 id="7-空闲中断给的是段边界超时重同步要应用层做">7. 空闲中断给的是段边界，超时重同步要应用层做</h2>
 <p>逐字节状态机在等长度域或等载荷时可能永远等不到下一字节。超时重同步在接收静默超过阈值后强制把状态机复位到等待帧头。</p>
-<p>云台板的接收链路是 DMA 空闲中断触发，一次回调交付的是两帧之间收到的整段数据（<code>Communication/Src/usart_dma.cpp:81-99</code>）。空闲中断本身可以看作硬件提供的一段结束信号，但代码里没有据此复位协议状态机：<code>UartProtocol</code> 的 <code>feedDMABuffer</code> 只逐字节调用 <code>input</code>（<code>Communication/Inc/usart_protocol.h:37-41</code>），状态跨回调保留。</p>
+<p>云台板的接收链路是 DMA 空闲中断触发，一次回调交付的是两帧之间收到的整段数据（<code>Communication/Src/usart_dma.cpp</code>）。空闲中断本身可以看作硬件提供的一段结束信号，但代码里没有据此复位协议状态机：<code>UartProtocol</code> 的 <code>feedDMABuffer</code> 只逐字节调用 <code>input</code>（<code>Communication/Inc/usart_protocol.h</code>），状态跨回调保留。</p>
 <p>超时重同步的另一个作用是清除半帧：若上一段数据的尾字节停在等长度域，下一段数据的前几字节可能恰好构成一个合法长度，解析器会把两段无关数据拼成一帧。校验大概率拦住这种拼接，但拦截失败时会交付伪帧。空闲中断给出了天然的复位时机，代价只是要在回调入口加一次状态清零。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     autonumber
@@ -232,16 +232,16 @@
     Note over RX: 校验大概率失败，丢弃后回等待帧头</pre></div>
 <h2 id="8-四套帧的字段取法">8. 四套帧的字段取法</h2>
 <h3 id="81-dbus定长加无校验">8.1 DBUS：定长加无校验</h3>
-<p><code>Communication/Src/dbus.cpp:11-34</code> 做的是长度判断与逐字段移位，函数整体是 :11-34，其中长度判断在 :13，逐字段移位在 :16-32。帧结构没有帧头与校验，接收端只检查长度是否为 18。字段拼装规则在 <code>04-DBUS遥控</code> 单元展开。这套帧把省下来的字节全部给了载荷，代价是错误只能靠上位机的物理层保证。</p>
+<p><code>Communication/Src/dbus.cpp</code> 只做两件事：先确认整段长度是否为 18 字节，再逐字段做移位拼装。帧结构没有帧头与校验，接收端只检查长度是否为 18。字段拼装规则在 <code>04-DBUS遥控</code> 单元展开。这套帧把省下来的字节全部给了载荷，代价是错误只能靠上位机的物理层保证。</p>
 <h3 id="82-uartprotocol两字节帧头加-8-位累加和">8.2 UartProtocol：两字节帧头加 8 位累加和</h3>
-<p>帧格式为 <code>head1 head2 type len payload[len] checksum</code>，总长 <code>5 + len</code>。<code>FRAME_MAX_LEN</code> 为 32，载荷上限 <code>FRAME_MAX_LEN - 5 = 27</code>（<code>Communication/Inc/usart_protocol.h:17-19</code>、<code>Communication/Src/usart_protocol.cpp:32-40</code>）。</p>
+<p>帧格式为 <code>head1 head2 type len payload[len] checksum</code>，总长 <code>5 + len</code>。<code>FRAME_MAX_LEN</code> 为 32，载荷上限 <code>FRAME_MAX_LEN - 5 = 27</code>（<code>Communication/Inc/usart_protocol.h</code>、<code>Communication/Src/usart_protocol.cpp</code>）。</p>
 <p>校验值等于 <code>type</code> 与全部载荷字节的 8 位和：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><mrow><mo fence="true">(</mo><mtext>type</mtext><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>l</mi><mi>e</mi><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msubsup><mi>p</mi><mi>a</mi><mi>y</mi><mi>l</mi><mi>o</mi><mi>a</mi><msub><mi>d</mi><mi>i</mi></msub><mo fence="true">)</mo></mrow><mtext> </mtext><mo lspace="0.22em" rspace="0.22em"><mrow><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mo><mtext> </mtext><mn>256</mn></mrow><annotation encoding="application/x-tex">S = \left( \text{type} + \sum_{i=0}^{len-1} payload_i \right) \bmod 256</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord text"><span class="mord">type</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.989em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">=</span><span class="mord mtight">0</span></span></span></span><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal">o</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin"><span class="mord"><span class="mord mathrm">mod</span></span></span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">256</span></span></span></span></p>
-<p><code>buildFrame</code> 按同一公式生成校验并返回 <code>5 + len</code>（<code>usart_protocol.cpp:68-88</code>），与解析端构成对偶。该链路全工程无调用点，细节在 <code>03-UsartProtocol实现</code>。</p>
+<p><code>buildFrame</code> 按同一公式生成校验并返回 <code>5 + len</code>（<code>usart_protocol.cpp</code>），与解析端构成对偶。该链路全工程无调用点，细节在 <code>03-UsartProtocol实现</code>。</p>
 <h3 id="83-视觉-sp定长加-crc16">8.3 视觉 SP：定长加 CRC16</h3>
-<p>两种长度都是编译期常量，用结构体 <code>static_assert</code> 锁定（<code>Communication/Inc/usb_protocol.h:20-21</code>、<code>73-77</code>）。校验覆盖范围由长度常量减 2 得到，不依赖额外的范围字段。接收端用三个状态收集固定字节数，收满后再校验（<code>Communication/Src/usb_decode.cpp:45-108</code>）。定长让协议层省掉了长度域，代价是增删字段必须两端同时改。</p>
+<p>两种长度都是编译期常量，用结构体 <code>static_assert</code> 锁定（<code>Communication/Inc/usb_protocol.h</code>）。校验覆盖范围由长度常量减 2 得到，不依赖额外的范围字段。接收端用三个状态收集固定字节数，收满后再校验（<code>Communication/Src/usb_decode.cpp</code>）。定长让协议层省掉了长度域，代价是增删字段必须两端同时改。</p>
 <h3 id="84-裁判系统单字节帧头加双重校验">8.4 裁判系统：单字节帧头加双重校验</h3>
-<p><code>Communication/Src/referee_protocol.cpp:26-133</code> 是十态解析器。长度域由两个字节拼成，超过 200 直接复位；帧头加长度加序号共四字节先过 CRC8（<code>referee_protocol.cpp:64-77</code>），命令码与数据段收满后再过 CRC16（<code>referee_protocol.cpp:110-131</code>）。两段校验把帧结构字段和业务数据分开保护，早期的 CRC8 能在一帧刚开始时就丢掉明显错误的帧。</p>
+<p><code>Communication/Src/referee_protocol.cpp</code> 是十态解析器。长度域由两个字节拼成，超过 200 直接复位；帧头加长度加序号共四字节先过 CRC8（<code>referee_protocol.cpp</code>），命令码与数据段收满后再过 CRC16（<code>referee_protocol.cpp</code>）。两段校验把帧结构字段和业务数据分开保护，早期的 CRC8 能在一帧刚开始时就丢掉明显错误的帧。</p>
 <p>四套帧的字段对照：</p>
 
 
@@ -332,7 +332,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把 UART 当成有边界的接口</td><td>一次回调的数据不等于一帧</td><td><code>usart_dma.cpp:81-99</code> 交付的是两帧之间的整段</td></tr><tr><td>长度域不设上限</td><td>一个被改写的长度让解析器持续吞字节</td><td><code>usart_protocol.cpp:34</code>、<code>referee_protocol.cpp:49</code> 都设了上限</td></tr><tr><td>混淆累加和与 CRC</td><td>认为 <code>calcChecksum</code> 是 CRC8</td><td><code>usart_protocol.cpp:61-66</code> 是 8 位和，<code>Algorithm/Src/CRC8.cpp:26-33</code> 才是 CRC8</td></tr><tr><td>校验覆盖范围不一致</td><td>两端都算 CRC 却都对不上</td><td>SP 收发两侧都取长度减 2；改字段时要同步改两侧</td></tr><tr><td>单字节帧头误命中</td><td>载荷中的 0xA5 被当成新帧</td><td>裁判系统靠后续长度、序号、CRC8 逐层排除</td></tr><tr><td>依赖固定长度恢复错位</td><td>少一字节后字段整体移位</td><td>DBUS 无帧头无校验，错位只能靠后续静默恢复</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>把 UART 当成有边界的接口</td><td>一次回调的数据不等于一帧</td><td><code>usart_dma.cpp</code> 交付的是两帧之间的整段</td></tr><tr><td>长度域不设上限</td><td>一个被改写的长度让解析器持续吞字节</td><td><code>usart_protocol.cpp</code>、<code>referee_protocol.cpp</code> 都设了上限</td></tr><tr><td>混淆累加和与 CRC</td><td>认为 <code>calcChecksum</code> 是 CRC8</td><td><code>usart_protocol.cpp</code> 是 8 位和，<code>Algorithm/Src/CRC8.cpp</code> 才是 CRC8</td></tr><tr><td>校验覆盖范围不一致</td><td>两端都算 CRC 却都对不上</td><td>SP 收发两侧都取长度减 2；改字段时要同步改两侧</td></tr><tr><td>单字节帧头误命中</td><td>载荷中的 0xA5 被当成新帧</td><td>裁判系统靠后续长度、序号、CRC8 逐层排除</td></tr><tr><td>依赖固定长度恢复错位</td><td>少一字节后字段整体移位</td><td>DBUS 无帧头无校验，错位只能靠后续静默恢复</td></tr></tbody></table>
 <h2 id="10-小结">10. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -447,7 +447,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Src/dbus.cpp</code></td><td>函数 :11-34：定长 18 字节判断（:13）与字段移位（:16-32）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>帧头与上限常量（:17-19）、批量入口（:37-41）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td>长度上限（:32-40）、累加和（:47-57、:61-66）、建帧（:68-88）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>SP 帧长度常量与 <code>static_assert</code>（:20-21、:73-77）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp</code></td><td>SP 帧 CRC16 覆盖范围（:41-45）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>SP 接收状态机与校验（:45-108）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>长度上限（:49-52）、CRC8（:64-77）、CRC16（:110-131）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲中断与整段交付（:81-99）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/CRC8.cpp</code></td><td>CRC8 查表实现（:26-33）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-状态机解帧原理"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-状态机解帧原理</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/02-状态机解帧原理.md</span></div><div class="dfile__body"><h1 id="状态机解帧原理">状态机解帧原理</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Src/dbus.cpp</code></td><td>定长 18 字节判断与逐字段移位</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>帧头与上限常量、批量入口</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td>长度上限、累加和、建帧</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>SP 帧长度常量与 <code>static_assert</code></td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp</code></td><td>SP 帧 CRC16 覆盖范围</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>SP 接收状态机与校验</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>长度上限、CRC8、CRC16</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲中断与整段交付</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/CRC8.cpp</code></td><td>CRC8 查表实现</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-状态机解帧原理"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-状态机解帧原理</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/02-状态机解帧原理.md</span></div><div class="dfile__body"><h1 id="状态机解帧原理">状态机解帧原理</h1>
 <p>云台板固件（<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>）与底盘板固件（<code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）里有三套逐字节解析器：<code>UartProtocol</code> 六态、<code>USBDecode</code> 三态、<code>RefereeProtocol</code> 十态。三套装在不同字节流上，状态数量差一倍以上，但写法是同一种。</p>
 <p>解帧可以拆成「每次只吃一个字节」：状态机因此能直接放进中断，不需要缓冲。一个五态例子能走完转移、校验与失败分支；容易写错的地方是重同步——帧头第二字节判断失败时，当前字节要不要吃掉，决定了下一轮从哪里开始找。三套解析器最后并排对照。</p>
 <h2 id="1-逐字节推进与整帧缓冲两条解帧路线">1. 逐字节推进与整帧缓冲：两条解帧路线</h2>
@@ -521,7 +521,7 @@
 <li>不会因为一帧很长而阻塞整个中断；</li>
 <li>状态保存在对象成员里，跨调用、跨任务上下文都成立。</li>
 </ul>
-<p>工程里 <code>DBUS_Decode</code> 就在 USART3 中断上下文里执行（<code>Core/Src/main.c:72-76</code>、<code>Communication/Src/dbus.cpp:37-39</code>），一次处理一整段。<code>UartProtocol::feedDMABuffer</code> 也是同步循环，把一个 DMA 段内的字节全部喂完才返回（<code>Communication/Inc/usart_protocol.h:37-41</code>）。</p>
+<p>工程里 <code>DBUS_Decode</code> 就在 USART3 中断上下文里执行（<code>Core/Src/main.c</code>、<code>Communication/Src/dbus.cpp</code>），一次处理一整段。<code>UartProtocol::feedDMABuffer</code> 也是同步循环，把一个 DMA 段内的字节全部喂完才返回（<code>Communication/Inc/usart_protocol.h</code>）。</p>
 <p>每次调用一个字节的执行时间可以估：<code>UartProtocol</code> 的 <code>input</code> 最多走一个 switch 分支加一次长度判断，载荷分支是一次数组写入与一次比较，校验分支是一次长度不超过 27 的循环。校验分支是其中最长的，代价随长度线性增长。把一整个 DMA 段交给 <code>feedDMABuffer</code> 时，总时间等于段内字节数乘以单字节代价，段越长中断占用越久，这是空闲中断方案里要盯的量。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     IN[input 收到一字节] --> SW{当前状态}
@@ -546,7 +546,7 @@
 <li>回到 <code>WAIT_HEAD1</code> 后从当前字节继续判断，不丢弃当前字节。</li>
 </ol>
 <p>第二点常被写成丢弃。以序列 0xFE 0xFE 0xEF 为例：第一个 0xFE 进入 <code>WAIT_HEAD2</code>，第二个 0xFE 不等于 0xEF，若直接回到 <code>WAIT_HEAD1</code>，第二个 0xFE 就被消耗掉了；接着到达的 0xEF 不等于 0xFE，解析器停在 <code>WAIT_HEAD1</code>，一个本来从第二个 0xFE 开始的合法帧被漏掉。</p>
-<p><code>UartProtocol</code> 的 <code>WAIT_HEAD2</code> 分支正是这种写法（<code>Communication/Src/usart_protocol.cpp:22-25</code>）。若帧头第一字节在载荷中重复出现，紧跟的第二字节又不是 0xEF，就会漏掉一个潜在起点。两字节帧头的重复概率低，实际影响有限；若要严格，<code>WAIT_HEAD2</code> 失败时应重新判断当前字节是否为 0xFE，相当于不消耗该字节。代价是每个失败字节都要多做一次比较，且要保证重判路径不会把状态绕回自身形成死循环。</p>
+<p><code>UartProtocol</code> 的 <code>WAIT_HEAD2</code> 分支正是这种写法（<code>Communication/Src/usart_protocol.cpp</code>）。若帧头第一字节在载荷中重复出现，紧跟的第二字节又不是 0xEF，就会漏掉一个潜在起点。两字节帧头的重复概率低，实际影响有限；若要严格，<code>WAIT_HEAD2</code> 失败时应重新判断当前字节是否为 0xFE，相当于不消耗该字节。代价是每个失败字节都要多做一次比较，且要保证重判路径不会把状态绕回自身形成死循环。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     autonumber
     participant RX as 解析状态机
@@ -567,15 +567,15 @@
 <li>长度合法时不立即改状态，而是在收载荷分支里用计数判断；</li>
 <li>长度合法时按零与非零分别跳到校验态或载荷态。</li>
 </ul>
-<p><code>UartProtocol</code> 用第二种：在 <code>WAIT_LEN</code> 里把 <code>data_index_</code> 清零，按 <code>data_len_ == 0</code> 选择下一态（<code>usart_protocol.cpp:32-40</code>）。<code>RefereeProtocol</code> 把数据段长度与命令码分开，收到命令码高位后再决定进入数据态还是直接进校验态（<code>Communication/Src/referee_protocol.cpp:86-94</code>）。</p>
-<p>状态数与协议字段数正相关：字段越多，显式状态越多。裁判系统有帧头、两字节长度、序号、CRC8、两字节命令码、数据段、两字节 CRC16，对应十个状态（<code>Communication/Inc/referee_protocol.h:25-37</code>）。字段一多，状态枚举本身就成了一份协议文档，读代码时先看枚举比先看 switch 更快。</p>
+<p><code>UartProtocol</code> 用第二种：在 <code>WAIT_LEN</code> 里把 <code>data_index_</code> 清零，按 <code>data_len_ == 0</code> 选择下一态（<code>usart_protocol.cpp</code>）。<code>RefereeProtocol</code> 把数据段长度与命令码分开，收到命令码高位后再决定进入数据态还是直接进校验态（<code>Communication/Src/referee_protocol.cpp</code>）。</p>
+<p>状态数与协议字段数正相关：字段越多，显式状态越多。裁判系统有帧头、两字节长度、序号、CRC8、两字节命令码、数据段、两字节 CRC16，对应十个状态（<code>Communication/Inc/referee_protocol.h</code>）。字段一多，状态枚举本身就成了一份协议文档，读代码时先看枚举比先看 switch 更快。</p>
 <h2 id="6-工程内三套解析器六态三态十态">6. 工程内三套解析器：六态、三态、十态</h2>
 <h3 id="61-uartprotocol六态">6.1 UartProtocol：六态</h3>
-<p>状态枚举为 <code>WAIT_HEAD1</code>、<code>WAIT_HEAD2</code>、<code>WAIT_TYPE</code>、<code>WAIT_LEN</code>、<code>WAIT_PAYLOAD</code>、<code>WAIT_CHECKSUM</code>（<code>Communication/Inc/usart_protocol.h:44-51</code>）。<code>WAIT_TYPE</code> 不做任何判断，收到字节即保存并进入下一态。校验失败与成功都回到 <code>WAIT_HEAD1</code>，回调只在成功时触发（<code>usart_protocol.cpp:47-57</code>）。</p>
+<p>状态枚举为 <code>WAIT_HEAD1</code>、<code>WAIT_HEAD2</code>、<code>WAIT_TYPE</code>、<code>WAIT_LEN</code>、<code>WAIT_PAYLOAD</code>、<code>WAIT_CHECKSUM</code>（<code>Communication/Inc/usart_protocol.h</code>）。<code>WAIT_TYPE</code> 不做任何判断，收到字节即保存并进入下一态。校验失败与成功都回到 <code>WAIT_HEAD1</code>，回调只在成功时触发（<code>usart_protocol.cpp</code>）。</p>
 <h3 id="62-usbdecode三态">6.2 USBDecode：三态</h3>
-<p>状态为 <code>WAIT_HEAD_0</code>、<code>WAIT_HEAD_1</code>、<code>COLLECT</code>（<code>Communication/Inc/usb_decode.h:27-31</code>）。因为帧长固定，进入 <code>COLLECT</code> 后没有长度判断，只按 <code>index_</code> 计数，收满 29 字节后统一算 CRC 并回到 <code>WAIT_HEAD_0</code>（<code>Communication/Src/usb_decode.cpp:45-108</code>，收满与校验在 :66-104）。固定长度让状态数从六降到三，省掉的不只是长度态，还有长度上限检查。</p>
+<p>状态为 <code>WAIT_HEAD_0</code>、<code>WAIT_HEAD_1</code>、<code>COLLECT</code>（<code>Communication/Inc/usb_decode.h</code>）。因为帧长固定，进入 <code>COLLECT</code> 后没有长度判断，只按 <code>index_</code> 计数，收满 29 字节后统一算 CRC 并回到 <code>WAIT_HEAD_0</code>（<code>Communication/Src/usb_decode.cpp</code> 的收满分支与校验段）。固定长度让状态数从六降到三，省掉的不只是长度态，还有长度上限检查。</p>
 <h3 id="63-refereeprotocol十态">6.3 RefereeProtocol：十态</h3>
-<p>状态枚举见 <code>Communication/Inc/referee_protocol.h:25-37</code>，处理逻辑在 <code>Communication/Src/referee_protocol.cpp:26-133</code>。它在两处提前复位：长度超过 200 时（<code>:49-52</code>）与 CRC8 不匹配时（<code>:69-72</code>）。校验通过后回调拿到的数据段指针是 <code>buffer_[7]</code>（<code>referee_protocol.cpp:125-126</code>）。</p>
+<p>状态枚举见 <code>Communication/Inc/referee_protocol.h</code>，处理逻辑在 <code>Communication/Src/referee_protocol.cpp</code>。它在两处提前复位：长度超过 200 时与 CRC8 不匹配时。校验通过后回调拿到的数据段指针是 <code>buffer_[7]</code>（<code>referee_protocol.cpp</code>）。</p>
 <p>三套解析器的性质对照：</p>
 
 
@@ -653,7 +653,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>帧头第二字节判断失败时丢弃当前字节</td><td>形如 0xFE 0xFE 0xEF 的帧被漏掉</td><td><code>usart_protocol.cpp:22-25</code></td></tr><tr><td>长度为零时没有从长度态直接进校验态</td><td>零载荷帧永远收不到校验</td><td><code>usart_protocol.cpp:39</code> 做了处理</td></tr><tr><td>校验失败后不回等待帧头</td><td>半帧状态残留，下一帧被拼坏</td><td>三套解析器都在失败后回第一态</td></tr><tr><td>状态变量未初始化</td><td>上电第一次调用就落在错误状态</td><td><code>usart_protocol.h:53</code> 有初值，<code>referee_protocol.h:39</code> 有初值</td></tr><tr><td>在载荷分支里做重活</td><td>中断执行时间随载荷增长</td><td>本工程载荷分支只做写入与计数</td></tr><tr><td>把回调当异步交付</td><td>回调在中断上下文里执行</td><td><code>UartProtocol</code> 的回调由 <code>input</code> 同步调用</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>帧头第二字节判断失败时丢弃当前字节</td><td>形如 0xFE 0xFE 0xEF 的帧被漏掉</td><td><code>usart_protocol.cpp</code></td></tr><tr><td>长度为零时没有从长度态直接进校验态</td><td>零载荷帧永远收不到校验</td><td><code>usart_protocol.cpp</code> 做了处理</td></tr><tr><td>校验失败后不回等待帧头</td><td>半帧状态残留，下一帧被拼坏</td><td>三套解析器都在失败后回第一态</td></tr><tr><td>状态变量未初始化</td><td>上电第一次调用就落在错误状态</td><td><code>usart_protocol.h</code> 有初值，<code>referee_protocol.h</code> 有初值</td></tr><tr><td>在载荷分支里做重活</td><td>中断执行时间随载荷增长</td><td>本工程载荷分支只做写入与计数</td></tr><tr><td>把回调当异步交付</td><td>回调在中断上下文里执行</td><td><code>UartProtocol</code> 的回调由 <code>input</code> 同步调用</td></tr></tbody></table>
 <h2 id="8-小结">8. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -763,7 +763,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>六态枚举（:44-51）、状态初值（:53）、批量入口（:37-41）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td><code>input</code> 全部转移（:14-59）、校验交付（:47-57）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_decode.h</code></td><td>三态枚举（:27-31）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>固定长度收集与校验（:45-108）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_protocol.h</code></td><td>十态枚举（:25-37）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>提前复位（:49-52、:69-72）、命令码后分支（:86-94）、交付（:125-126）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>USART3 回调注册与中断上下文（:72-76）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/dbus.cpp</code></td><td>C 接口包装（:37-39）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-UsartProtocol实现"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-UsartProtocol实现</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/03-UsartProtocol实现.md</span></div><div class="dfile__body"><h1 id="usartprotocol-实现">UsartProtocol 实现</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>六态枚举、状态初值、批量入口</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td><code>input</code> 全部转移、校验交付</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_decode.h</code></td><td>三态枚举</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>固定长度收集与校验</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/referee_protocol.h</code></td><td>十态枚举</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp</code></td><td>提前复位、命令码后分支、交付</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>USART3 回调注册与中断上下文</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/dbus.cpp</code></td><td>C 接口包装</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-UsartProtocol实现"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-UsartProtocol实现</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/03-UsartProtocol实现.md</span></div><div class="dfile__body"><h1 id="usartprotocol-实现">UsartProtocol 实现</h1>
 <p>云台板固件（<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>）与底盘板固件（<code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）里各有一份相同的 <code>UartProtocol</code> 与配套的 <code>UartDecode</code>。这套代码把 0xFE 0xEF 帧的解析、建帧与命令分派都写好了，但在两块板子上都没有被注册到任何串口上。</p>
 <p>这条链路的实现可以按接口约定、帧布局、状态转移、校验公式、建帧对偶与组装方式六段读完。它在当前固件里没有调用点，证据在文末；把它接起来需要改哪些地方属于推断，未经实机验证。</p>
 <h2 id="1-协议层与应用层的分工">1. 协议层与应用层的分工</h2>
@@ -820,13 +820,13 @@
 
 
 <table><thead><tr><th>偏移</th><th>长度</th><th>字段</th><th>取值</th></tr></thead><tbody><tr><td>0</td><td>1</td><td><code>head1</code></td><td>0xFE</td></tr><tr><td>1</td><td>1</td><td><code>head2</code></td><td>0xEF</td></tr><tr><td>2</td><td>1</td><td><code>type</code></td><td>命令码，当前只定义 0x01</td></tr><tr><td>3</td><td>1</td><td><code>len</code></td><td>载荷字节数，上限 27</td></tr><tr><td>4</td><td><code>len</code></td><td><code>payload</code></td><td>载荷</td></tr><tr><td><code>4 + len</code></td><td>1</td><td><code>checksum</code></td><td>8 位累加和</td></tr></tbody></table>
-<p>整帧长度为 <code>5 + len</code>。三个常量在头文件里：<code>FRAME_HEAD_1 = 0xFE</code>、<code>FRAME_HEAD_2 = 0xEF</code>、<code>FRAME_MAX_LEN = 32</code>（<code>Communication/Inc/usart_protocol.h:17-19</code>）。</p>
-<p>长度上限由接收缓冲决定，而不是由 8 位长度域决定。缓冲区 <code>recv_buf_[FRAME_MAX_LEN]</code> 是 32 字节（<code>usart_protocol.h:54</code>），扣除帧头两字节、类型、长度、校验共 5 字节，载荷上限是 27。把上限从 255 压到 27 换来的是一条可以直接数组索引的定长缓冲，不需要动态分配，也不需要溢出检查之外的边界处理。</p>
+<p>整帧长度为 <code>5 + len</code>。三个常量在头文件里：<code>FRAME_HEAD_1 = 0xFE</code>、<code>FRAME_HEAD_2 = 0xEF</code>、<code>FRAME_MAX_LEN = 32</code>（<code>Communication/Inc/usart_protocol.h</code>）。</p>
+<p>长度上限由接收缓冲决定，而不是由 8 位长度域决定。缓冲区 <code>recv_buf_[FRAME_MAX_LEN]</code> 是 32 字节（<code>usart_protocol.h</code>），扣除帧头两字节、类型、长度、校验共 5 字节，载荷上限是 27。把上限从 255 压到 27 换来的是一条可以直接数组索引的定长缓冲，不需要动态分配，也不需要溢出检查之外的边界处理。</p>
 <h2 id="3-六态里与帧长有关的两处转移">3. 六态里与帧长有关的两处转移</h2>
-<p>状态为 <code>WAIT_HEAD1</code>、<code>WAIT_HEAD2</code>、<code>WAIT_TYPE</code>、<code>WAIT_LEN</code>、<code>WAIT_PAYLOAD</code>、<code>WAIT_CHECKSUM</code>（<code>usart_protocol.h:44-51</code>），初值为 <code>WAIT_HEAD1</code>（<code>:53</code>）。转移细节在 <code>02-状态机解帧原理</code> 已展开，这里只列帧长相关的两处：</p>
+<p>状态为 <code>WAIT_HEAD1</code>、<code>WAIT_HEAD2</code>、<code>WAIT_TYPE</code>、<code>WAIT_LEN</code>、<code>WAIT_PAYLOAD</code>、<code>WAIT_CHECKSUM</code>（<code>usart_protocol.h</code>），初值为 <code>WAIT_HEAD1</code>。转移细节在 <code>02-状态机解帧原理</code> 已展开，这里只列帧长相关的两处：</p>
 <ul>
-<li><code>WAIT_LEN</code> 收到长度后，若大于 <code>FRAME_MAX_LEN - 5</code> 则回 <code>WAIT_HEAD1</code>，否则把 <code>data_index_</code> 清零，并按长度是否为零跳到校验态或载荷态（<code>Communication/Src/usart_protocol.cpp:32-40</code>）；</li>
-<li><code>WAIT_PAYLOAD</code> 每收一字节写入 <code>recv_buf_</code> 并自增 <code>data_index_</code>，计数到达长度后进校验态（<code>:42-45</code>）。</li>
+<li><code>WAIT_LEN</code> 收到长度后，若大于 <code>FRAME_MAX_LEN - 5</code> 则回 <code>WAIT_HEAD1</code>，否则把 <code>data_index_</code> 清零，并按长度是否为零跳到校验态或载荷态（<code>Communication/Src/usart_protocol.cpp</code>）；</li>
+<li><code>WAIT_PAYLOAD</code> 每收一字节写入 <code>recv_buf_</code> 并自增 <code>data_index_</code>，计数到达长度后进校验态。</li>
 </ul>
 <p>两处合起来构成一条完整的长度约束：进入载荷态之前先限幅，进入之后只按计数收字节。校验态不读长度，只读缓冲与类型。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
@@ -851,15 +851,15 @@
 <h2 id="4-8-位累加和解析端与建帧端的对偶">4. 8 位累加和：解析端与建帧端的对偶</h2>
 <p>校验值是 <code>type</code> 与全部载荷字节之和取低 8 位：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><mrow><mo fence="true">(</mo><mtext>type</mtext><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>l</mi><mi>e</mi><mi>n</mi><mo>−</mo><mn>1</mn></mrow></msubsup><mi>p</mi><mi>a</mi><mi>y</mi><mi>l</mi><mi>o</mi><mi>a</mi><msub><mi>d</mi><mi>i</mi></msub><mo fence="true">)</mo></mrow><mtext> </mtext><mo lspace="0.22em" rspace="0.22em"><mrow><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow></mo><mtext> </mtext><mn>256</mn></mrow><annotation encoding="application/x-tex">S = \left( \text{type} + \sum_{i=0}^{len-1} payload_i \right) \bmod 256</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord text"><span class="mord">type</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.989em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">=</span><span class="mord mtight">0</span></span></span></span><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal">o</span><span class="mord mathnormal">a</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin"><span class="mord"><span class="mord mathrm">mod</span></span></span><span class="mspace" style="margin-right:0.0556em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">256</span></span></span></span></p>
-<p>解析端在 <code>WAIT_CHECKSUM</code> 里现算（<code>usart_protocol.cpp:47-57</code>）。建帧端在 <code>buildFrame</code> 里用同一公式（<code>:82-86</code>）。两端对称，不涉及查表，算一次校验的代价是一次长度不超过 27 的循环。</p>
-<p>头文件还导出一个静态函数 <code>calcChecksum</code>（<code>usart_protocol.h:31</code>，实现见 <code>usart_protocol.cpp:61-66</code>）。它只对传入的 <code>data</code> 求和，不把 <code>type</code> 算进去。解析与建帧都没有调用它，全工程也没有其它调用点。直接用它算帧校验会得到与 <code>buildFrame</code> 不同的结果，因为少了类型字节这一项。</p>
+<p>解析端在 <code>WAIT_CHECKSUM</code> 里现算（<code>usart_protocol.cpp</code>）。建帧端在 <code>buildFrame</code> 里用同一公式。两端对称，不涉及查表，算一次校验的代价是一次长度不超过 27 的循环。</p>
+<p>头文件还导出一个静态函数 <code>calcChecksum</code>（<code>usart_protocol.h</code>，实现见 <code>usart_protocol.cpp</code>）。它只对传入的 <code>data</code> 求和，不把 <code>type</code> 算进去。解析与建帧都没有调用它，全工程也没有其它调用点。直接用它算帧校验会得到与 <code>buildFrame</code> 不同的结果，因为少了类型字节这一项。</p>
 <p>这不是一个纯风格问题：函数名与帧校验同名，放在同一份头文件里，接线时很容易被当成“现成的校验函数”拿去用。两端的对偶关系因此要写成注释或者干脆让 <code>calcChecksum</code> 接受一个初值参数，把类型字节作为初值传入。</p>
 <h2 id="5-buildframe-的逐字段对偶与失败分支">5. buildFrame 的逐字段对偶与失败分支</h2>
-<p><code>buildFrame</code> 的签名是 <code>uint8_t buildFrame(uint8_t* out_buf, uint8_t frame_type, const uint8_t* payload, uint8_t len)</code>（<code>usart_protocol.h:34</code>）。行为：</p>
+<p><code>buildFrame</code> 的签名是 <code>uint8_t buildFrame(uint8_t* out_buf, uint8_t frame_type, const uint8_t* payload, uint8_t len)</code>（<code>usart_protocol.h</code>）。行为：</p>
 <ol>
 <li>若 <code>out_buf</code> 为空或 <code>len > FRAME_MAX_LEN - 5</code>，返回 0；</li>
 <li>依次写帧头、类型、长度；</li>
-<li>把载荷复制到偏移 4 起（<code>usart_protocol.cpp:80</code>）；</li>
+<li>把载荷复制到偏移 4 起（<code>usart_protocol.cpp</code>）；</li>
 <li>计算校验写在第 <code>4 + len</code> 字节；</li>
 <li>返回 <code>5 + len</code>。</li>
 </ol>
@@ -875,18 +875,18 @@
     G --> H[返回 5 加长度]
     H --> I[调用方发送或交给 Uart_Transmit_DMA]</pre></div>
 <h2 id="6-feeddmabuffer-与-proto6decoder6-的组装">6. feedDMABuffer 与 proto6、decoder6 的组装</h2>
-<p>DMA 回调交付的是一整段数据，协议层需要逐字节处理。头文件提供内联的 <code>feedDMABuffer(volatile uint8_t* buf, int len)</code>，内部就是一个 <code>for</code> 循环调用 <code>input</code>（<code>usart_protocol.h:37-41</code>）。它是唯一把 DMA 段接进状态机的入口，放在头文件里，除了省一次函数调用，也让调用方不必关心状态机内部。</p>
+<p>DMA 回调交付的是一整段数据，协议层需要逐字节处理。头文件提供内联的 <code>feedDMABuffer(volatile uint8_t* buf, int len)</code>，内部就是一个 <code>for</code> 循环调用 <code>input</code>（<code>usart_protocol.h</code>）。它是唯一把 DMA 段接进状态机的入口，放在头文件里，除了省一次函数调用，也让调用方不必关心状态机内部。</p>
 <p>调用链是这样接起来的：</p>
 <ol>
-<li>全局实例 <code>proto6</code> 与 <code>decoder6</code> 在 <code>Communication/Src/usart_decode.cpp:14-15</code> 定义，<code>proto6</code> 先用空回调构造；</li>
-<li><code>UartDecode</code> 的构造函数调用 <code>proto.setCallback</code>，把 <code>onFrame</code> 注册进 <code>proto6</code>（<code>usart_decode.cpp:18-23</code>），于是 <code>proto6</code> 的回调指向 <code>decoder6</code> 的成员函数；</li>
-<li>C 接口 <code>MyUartCallback</code> 调 <code>proto6.feedDMABuffer</code>（<code>usart_decode.cpp:48-52</code>），它是把 USART 接收段接进 <code>proto6</code> 的桥梁。</li>
+<li>全局实例 <code>proto6</code> 与 <code>decoder6</code> 在 <code>Communication/Src/usart_decode.cpp</code> 定义，<code>proto6</code> 先用空回调构造；</li>
+<li><code>UartDecode</code> 的构造函数调用 <code>proto.setCallback</code>，把 <code>onFrame</code> 注册进 <code>proto6</code>（<code>usart_decode.cpp</code>），于是 <code>proto6</code> 的回调指向 <code>decoder6</code> 的成员函数；</li>
+<li>C 接口 <code>MyUartCallback</code> 调 <code>proto6.feedDMABuffer</code>（<code>usart_decode.cpp</code>），它是把 USART 接收段接进 <code>proto6</code> 的桥梁。</li>
 </ol>
 <p>三步里只有最后一步需要外部调用者，前两步在静态初始化阶段完成。也就是说，只要有人调用 <code>Uart_Init(&#x26;huart, MyUartCallback)</code>，整条链路就会开始工作。</p>
 <h2 id="7-无调用点的证据链">7. 无调用点的证据链</h2>
-<p><code>Uart_Init</code> 是注册接收回调的唯一接口（<code>Communication/Inc/usart_dma.h:72-73</code>）。云台板的调用点只有一处：</p>
+<p><code>Uart_Init</code> 是注册接收回调的唯一接口（<code>Communication/Inc/usart_dma.h</code>）。云台板的调用点只有一处：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6F42C1">Uart_Init</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">huart3, MyUartCallbackFun);</span><span style="color:#6A737D"> // huart3是连接遥控器的UART实例</span></span></code></pre>
-<p>出处是 <code>Core/Src/main.c:125</code>，回调 <code>MyUartCallbackFun</code> 的函数体只有 <code>DBUS_Decode(buf, len)</code>（<code>main.c:72-76</code>）。工程里没有 <code>Uart_Init(&#x26;huart6, MyUartCallback)</code>，也没有任何地方调用 <code>MyUartCallback</code>。底盘板同样只注册了 <code>huart3</code> 与裁判系统的 <code>huart6</code>（底盘 <code>Core/Src/main.c:131-132</code>），<code>MyUartCallback</code> 同样无调用点。</p>
+<p>出处是 <code>Core/Src/main.c</code>，回调 <code>MyUartCallbackFun</code> 的函数体只有 <code>DBUS_Decode(buf, len)</code>（<code>main.c</code>）。工程里没有 <code>Uart_Init(&#x26;huart6, MyUartCallback)</code>，也没有任何地方调用 <code>MyUartCallback</code>。底盘板同样只注册了 <code>huart3</code> 与裁判系统的 <code>huart6</code>（底盘 <code>Core/Src/main.c</code>），<code>MyUartCallback</code> 同样无调用点。</p>
 <p>连带的三处死代码：</p>
 
 
@@ -913,8 +913,8 @@
 
 
 
-<table><thead><tr><th>位置</th><th>内容</th><th>状态</th></tr></thead><tbody><tr><td><code>usart_decode.cpp:16</code></td><td><code>bool motor_cmd_triggered</code></td><td>只写不读</td></tr><tr><td><code>usart_decode.cpp:44</code></td><td><code>float speed = raw_speed</code></td><td>局部变量，赋值后未使用</td></tr><tr><td><code>usart_decode.h:20</code></td><td><code>extern ControlCommand g_control_cmd</code></td><td>只有声明，全工程无定义、无引用</td></tr></tbody></table>
-<p><code>UartDecode::handleMotorCmd</code> 解析出小端 <code>int16_t</code> 速度后转成 <code>float</code> 就没有下文（<code>usart_decode.cpp:35-46</code>）。发送侧 <code>UartProtocol::buildFrame</code> 与 <code>Uart_Transmit_DMA</code> 也都没有调用点。整条链路从注入数据到发出应答均未接通。</p>
+<table><thead><tr><th>位置</th><th>内容</th><th>状态</th></tr></thead><tbody><tr><td><code>usart_decode.cpp</code></td><td><code>bool motor_cmd_triggered</code></td><td>只写不读</td></tr><tr><td><code>usart_decode.cpp</code></td><td><code>float speed = raw_speed</code></td><td>局部变量，赋值后未使用</td></tr><tr><td><code>usart_decode.h</code></td><td><code>extern ControlCommand g_control_cmd</code></td><td>只有声明，全工程无定义、无引用</td></tr></tbody></table>
+<p><code>UartDecode::handleMotorCmd</code> 解析出小端 <code>int16_t</code> 速度后转成 <code>float</code> 就没有下文（<code>usart_decode.cpp</code>）。发送侧 <code>UartProtocol::buildFrame</code> 与 <code>Uart_Transmit_DMA</code> 也都没有调用点。整条链路从注入数据到发出应答均未接通。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     autonumber
     participant DMA as USART DMA 空闲中断
@@ -932,12 +932,12 @@
 <p>以下为设计建议，未经实机验证，属推断。按链路选择分两种：</p>
 <p>方案一：把 0xFE 0xEF 帧跑在 USART6 上。云台板 USART6 已由 CubeMX 初始化为 115200 8N1，TX 与 RX 都配了（<code>Core/Src/usart.c</code>），当前在云台板上没有接收注册。接线步骤：</p>
 <ol>
-<li>在 <code>main.c</code> 的 <code>MX_USART6_UART_Init()</code> 之后调用 <code>Uart_Init(&#x26;huart6, MyUartCallback)</code>；</li>
-<li>确认 <code>DT7DMA_MAX_INSTANCES</code> 为 3，当前只用了 <code>huart3</code> 一个实例，容量足够（<code>usart_dma.h:12-14</code>）；</li>
+<li>在 <code>main.c</code> 的 <code>MX_USART6_UART_Init</code> 之后调用 <code>Uart_Init(&#x26;huart6, MyUartCallback)</code>；</li>
+<li>确认 <code>DT7DMA_MAX_INSTANCES</code> 为 3，当前只用了 <code>huart3</code> 一个实例，容量足够（<code>usart_dma.h</code>）；</li>
 <li>把 <code>handleMotorCmd</code> 的结果写入实际控制目标，例如 <code>control_target</code>，而不是无引用的 <code>speed</code>；</li>
 <li>若需要应答，用 <code>buildFrame</code> 组帧后调 <code>Uart_Transmit_DMA(&#x26;huart6, frame, len)</code>，并检查返回状态。</li>
 </ol>
-<p>方案二：复用 USB CDC 已建的字节通路。视觉小电脑的字节已经在 <code>UsbConnectTask::run</code> 里被逐个取出（<code>Task/Src/UsbConnectTask.cpp:82-100</code>）。把 <code>usb_decoder.feed</code> 换成 <code>proto6.input</code> 可以把 0xFE 0xEF 帧接到同一通路，但 SP 帧与 0xFE 0xEF 帧不能共用同一个解析器，需要按帧头分派或只保留一种。</p>
+<p>方案二：复用 USB CDC 已建的字节通路。视觉小电脑的字节已经在 <code>UsbConnectTask::run</code> 里被逐个取出（<code>Task/Src/UsbConnectTask.cpp</code>）。把 <code>usb_decoder.feed</code> 换成 <code>proto6.input</code> 可以把 0xFE 0xEF 帧接到同一通路，但 SP 帧与 0xFE 0xEF 帧不能共用同一个解析器，需要按帧头分派或只保留一种。</p>
 <p>方案一的一个前提是 USART6 的用途不与裁判系统冲突。云台板当前没有裁判系统接收通路，<code>huart6</code> 处于空闲；底盘板的 <code>huart6</code> 已注册给裁判系统，不能复用。</p>
 <h2 id="9-易错点">9. 易错点</h2>
 
@@ -980,7 +980,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>认为这条链路在运行</td><td>调试时等不到 <code>onFrame</code> 触发</td><td><code>main.c:125</code> 注册的是 DBUS 回调</td></tr><tr><td>用 <code>calcChecksum</code> 算帧校验</td><td>结果比 <code>buildFrame</code> 少一个类型字节</td><td><code>usart_protocol.cpp:61-66</code> 只对入参求和</td></tr><tr><td>把 8 位累加和当 CRC8</td><td>按 CRC8 查表去比对</td><td><code>usart_protocol.cpp:47-57</code> 是求和，CRC8 在 <code>Algorithm/Src/CRC8.cpp</code></td></tr><tr><td>长度上限写错</td><td>允许 28 到 255 的载荷</td><td>上限是 <code>FRAME_MAX_LEN - 5 = 27</code>，两端都有检查</td></tr><tr><td>依赖 <code>g_control_cmd</code> 保存结果</td><td>引用后链接报未定义</td><td><code>usart_decode.h:20</code> 只有声明</td></tr><tr><td>认为 <code>buildFrame</code> 一定成功</td><td>忽略返回 0 的情况</td><td>返回值 0 表示无效帧，需判断</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>认为这条链路在运行</td><td>调试时等不到 <code>onFrame</code> 触发</td><td><code>main.c</code> 注册的是 DBUS 回调</td></tr><tr><td>用 <code>calcChecksum</code> 算帧校验</td><td>结果比 <code>buildFrame</code> 少一个类型字节</td><td><code>usart_protocol.cpp</code> 只对入参求和</td></tr><tr><td>把 8 位累加和当 CRC8</td><td>按 CRC8 查表去比对</td><td><code>usart_protocol.cpp</code> 是求和，CRC8 在 <code>Algorithm/Src/CRC8.cpp</code></td></tr><tr><td>长度上限写错</td><td>允许 28 到 255 的载荷</td><td>上限是 <code>FRAME_MAX_LEN - 5 = 27</code>，两端都有检查</td></tr><tr><td>依赖 <code>g_control_cmd</code> 保存结果</td><td>引用后链接报未定义</td><td><code>usart_decode.h</code> 只有声明</td></tr><tr><td>认为 <code>buildFrame</code> 一定成功</td><td>忽略返回 0 的情况</td><td>返回值 0 表示无效帧，需判断</td></tr></tbody></table>
 <h2 id="10-小结">10. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -1094,7 +1094,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>常量（:17-19）、接口与内联批量入口（:28-41）、状态枚举（:44-53）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td>状态转移（:14-59）、校验（:47-57、:61-66）、建帧（:68-88）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_decode.h</code></td><td><code>ControlCommand</code> 与全局声明（:12-20）、<code>proto6</code> 声明（:33）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_decode.cpp</code></td><td>实例与回调注册（:14-23）、命令分派（:25-33）、未用变量（:16、:44）、C 接口（:48-52）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>唯一 <code>Uart_Init</code> 调用点（:125）与 DBUS 回调（:72-76）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_dma.h</code></td><td>注册接口（:72-73）、实例容量（:12-14）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td><code>Uart_Init</code> 与 <code>Uart_Transmit_DMA</code> 实现（:182-201）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>USB 字节取出循环（:82-100）</td></tr><tr><td><code>2026OmniSentryChassis/2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘两处注册（:131-132）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-视觉链路SP协议"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-视觉链路SP协议</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/04-视觉链路SP协议.md</span></div><div class="dfile__body"><h1 id="视觉链路-sp-协议">视觉链路 SP 协议</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>常量、接口与内联批量入口、状态枚举</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td>状态转移、校验、建帧</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_decode.h</code></td><td><code>ControlCommand</code> 与全局声明、<code>proto6</code> 声明</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_decode.cpp</code></td><td>实例与回调注册、命令分派、未用变量、C 接口</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>唯一 <code>Uart_Init</code> 调用点与 DBUS 回调</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_dma.h</code></td><td>注册接口、实例容量</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td><code>Uart_Init</code> 与 <code>Uart_Transmit_DMA</code> 实现</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>USB 字节取出循环</td></tr><tr><td><code>2026OmniSentryChassis/2026OmniSentryChassis/Core/Src/main.c</code></td><td>底盘两处注册</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-视觉链路SP协议"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-视觉链路SP协议</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/04-视觉链路SP协议.md</span></div><div class="dfile__body"><h1 id="视觉链路-sp-协议">视觉链路 SP 协议</h1>
 <p>云台板固件（<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>）与视觉小电脑之间的链路走 USB CDC，不走 USART。协议在仓库根目录的 <code>云台串口协议.md</code> 里描述，固件侧实现在 <code>Communication/Inc/usb_protocol.h</code> 与 <code>Communication/Src/usb_decode.cpp</code>。</p>
 <p>链路两端的分工是固定的：视觉小电脑做 USB 主机，云台板做设备；视觉发目标角，云台回姿态与弹量。两个方向的数据量差别明显，帧长因此不同，一个是 29 字节，另一个是 43 字节。载体、帧头、两种布局、模式取值、CRC16 与收发链路按这个顺序看下来，最后对照文档记下差异。</p>
 <h2 id="1-视觉链路的载体usb-cdc-上的字节流">1. 视觉链路的载体：USB CDC 上的字节流</h2>
@@ -1125,11 +1125,11 @@
 <table><thead><tr><th>方向</th><th>常量</th><th>长度</th><th>内容</th></tr></thead><tbody><tr><td>视觉 → 云台</td><td><code>VISION_TO_GIMBAL_LEN</code></td><td>29</td><td>控制模式、三轴目标角与角速度</td></tr><tr><td>云台 → 视觉</td><td><code>GIMBAL_TO_VISION_LEN</code></td><td>43</td><td>云台模式、四元数、实际角与角速度、弹速、弹量</td></tr></tbody></table>
 <p>链路载体是 USB 全速 CDC 设备，主机侧表现为一个虚拟串口。云台板做设备，视觉小电脑做主机。USB 本身有包边界与 CRC，但协议层仍然自己加了帧头与 CRC16，原因是 CDC 在主机侧只暴露字节流，USB 的包边界不会传给应用。上层应用看到的仍然是一串无边界字节，与 USART 面临的问题相同。</p>
 <h2 id="2-sp-帧头与两个方向的定长约定">2. SP 帧头与两个方向的定长约定</h2>
-<p>两字节帧头取 ASCII 的 <code>'S'</code> 与 <code>'P'</code>，十六进制是 0x53 与 0x50（<code>Communication/Inc/usb_protocol.h:18-19</code>）。两个方向共用同一帧头，靠长度区分：接收方固定收 29 字节，发送方固定发 43 字节。</p>
+<p>两字节帧头取 ASCII 的 <code>'S'</code> 与 <code>'P'</code>，十六进制是 0x53 与 0x50（<code>Communication/Inc/usb_protocol.h</code>）。两个方向共用同一帧头，靠长度区分：接收方固定收 29 字节，发送方固定发 43 字节。</p>
 <p>帧头不参与方向编码，意味着同一条 CDC 链路上如果两端同时发，接收方无法只凭帧头判断这一帧来自哪个方向。当前实现里云台板只收 29 字节帧、只发 43 字节帧，方向由角色固定。定长加上角色固定，让解析器只需三个状态；代价是任何一端改了字段，另一端必须在同一轮改动里跟上。</p>
 <h2 id="3-两种帧长的逐字段布局">3. 两种帧长的逐字段布局</h2>
 <h3 id="31-视觉到云台29-字节">3.1 视觉到云台：29 字节</h3>
-<p>字段顺序在 <code>usb_protocol.h:39-52</code>：</p>
+<p>字段顺序在 <code>usb_protocol.h</code>：</p>
 
 
 
@@ -1215,7 +1215,7 @@
 <table><thead><tr><th>偏移</th><th>长度</th><th>字段</th><th>类型</th><th>含义</th></tr></thead><tbody><tr><td>0</td><td>1</td><td><code>head[0]</code></td><td><code>uint8_t</code></td><td>0x53</td></tr><tr><td>1</td><td>1</td><td><code>head[1]</code></td><td><code>uint8_t</code></td><td>0x50</td></tr><tr><td>2</td><td>1</td><td><code>mode</code></td><td><code>uint8_t</code></td><td>控制模式</td></tr><tr><td>3</td><td>4</td><td><code>yaw</code></td><td><code>float</code></td><td>目标 yaw 角</td></tr><tr><td>7</td><td>4</td><td><code>yaw_vel</code></td><td><code>float</code></td><td>目标 yaw 角速度</td></tr><tr><td>11</td><td>4</td><td><code>yaw_acc</code></td><td><code>float</code></td><td>目标 yaw 角加速度</td></tr><tr><td>15</td><td>4</td><td><code>pitch</code></td><td><code>float</code></td><td>目标 pitch 角</td></tr><tr><td>19</td><td>4</td><td><code>pitch_vel</code></td><td><code>float</code></td><td>目标 pitch 角速度</td></tr><tr><td>23</td><td>4</td><td><code>pitch_acc</code></td><td><code>float</code></td><td>目标 pitch 角加速度</td></tr><tr><td>27</td><td>2</td><td><code>crc16</code></td><td><code>uint16_t</code></td><td>校验值</td></tr></tbody></table>
 <p>长度 3 加 6 乘 4 加 2 等于 29。CRC16 覆盖前 27 字节，即偏移 0 到 26。</p>
 <h3 id="32-云台到视觉43-字节">3.2 云台到视觉：43 字节</h3>
-<p>字段顺序在 <code>usb_protocol.h:55-70</code>：</p>
+<p>字段顺序在 <code>usb_protocol.h</code>：</p>
 
 
 
@@ -1307,7 +1307,7 @@
 
 <table><thead><tr><th>偏移</th><th>长度</th><th>字段</th><th>类型</th><th>含义</th></tr></thead><tbody><tr><td>0</td><td>1</td><td><code>head[0]</code></td><td><code>uint8_t</code></td><td>0x53</td></tr><tr><td>1</td><td>1</td><td><code>head[1]</code></td><td><code>uint8_t</code></td><td>0x50</td></tr><tr><td>2</td><td>1</td><td><code>mode</code></td><td><code>uint8_t</code></td><td>云台模式</td></tr><tr><td>3</td><td>16</td><td><code>q[4]</code></td><td>4 个 <code>float</code></td><td>姿态四元数，顺序 w x y z</td></tr><tr><td>19</td><td>4</td><td><code>yaw</code></td><td><code>float</code></td><td>实际 yaw 角</td></tr><tr><td>23</td><td>4</td><td><code>yaw_vel</code></td><td><code>float</code></td><td>实际 yaw 角速度</td></tr><tr><td>27</td><td>4</td><td><code>pitch</code></td><td><code>float</code></td><td>实际 pitch 角</td></tr><tr><td>31</td><td>4</td><td><code>pitch_vel</code></td><td><code>float</code></td><td>实际 pitch 角速度</td></tr><tr><td>35</td><td>4</td><td><code>bullet_speed</code></td><td><code>float</code></td><td>弹速</td></tr><tr><td>39</td><td>2</td><td><code>bullet_count</code></td><td><code>uint16_t</code></td><td>累计弹量</td></tr><tr><td>41</td><td>2</td><td><code>crc16</code></td><td><code>uint16_t</code></td><td>校验值</td></tr></tbody></table>
 <p>长度 3 加 16 加 20 加 2 加 2 等于 43。CRC16 覆盖前 41 字节，即偏移 0 到 40。</p>
-<p>两个结构体都标了 <code>__attribute__((packed))</code>，并用 <code>static_assert</code> 在编译期锁定长度（<code>usb_protocol.h:73-77</code>）。字段顺序或类型改动导致长度变化时编译立即失败。字节序是本机小端：发送侧直接写 <code>float</code>，接收侧用 <code>memcpy</code> 与 <code>reinterpret_cast</code> 还原，两侧依赖同一套小端约定。</p>
+<p>两个结构体都标了 <code>__attribute__((packed))</code>，并用 <code>static_assert</code> 在编译期锁定长度（<code>usb_protocol.h</code>）。字段顺序或类型改动导致长度变化时编译立即失败。字节序是本机小端：发送侧直接写 <code>float</code>，接收侧用 <code>memcpy</code> 与 <code>reinterpret_cast</code> 还原，两侧依赖同一套小端约定。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     subgraph V2G[视觉到云台 29 字节]
         A1[0x53 0x50] --> A2[模式 1 字节] --> A3[六个 float 24 字节] --> A4[CRC16 2 字节]
@@ -1316,7 +1316,7 @@
         B1[0x53 0x50] --> B2[模式 1 字节] --> B3[四元数 16 字节] --> B4[五个 float 20 字节] --> B5[弹量 2 字节] --> B6[CRC16 2 字节]
     end</pre></div>
 <h2 id="4-控制模式与云台模式的枚举漂移">4. 控制模式与云台模式的枚举漂移</h2>
-<p><code>usb_protocol.h:24-36</code> 定义了两个枚举：</p>
+<p><code>usb_protocol.h</code> 定义了两个枚举：</p>
 
 
 
@@ -1363,16 +1363,16 @@
 
 
 <table><thead><tr><th>枚举</th><th>取值</th><th>含义</th></tr></thead><tbody><tr><td><code>ControlMode</code></td><td>0</td><td>不控制</td></tr><tr><td><code>ControlMode</code></td><td>1</td><td>控制但不开火</td></tr><tr><td><code>ControlMode</code></td><td>2</td><td>控制且开火</td></tr><tr><td><code>GimbalMode</code></td><td>0</td><td>空闲</td></tr><tr><td><code>GimbalMode</code></td><td>1</td><td>自瞄</td></tr><tr><td><code>GimbalMode</code></td><td>2</td><td>小符</td></tr><tr><td><code>GimbalMode</code></td><td>3</td><td>大符</td></tr></tbody></table>
-<p>两个枚举都是 <code>enum class</code>，全工程没有以枚举类型的变量引用它们。视觉侧的模式值由 <code>VisionToGimbalData::mode</code> 保存，它是 <code>float</code>（<code>Task/Inc/UsbConnectTask.h:56-64</code>）；发送侧用的是宏 <code>GIMBAL_MODE_IDLE</code> 与 <code>GIMBAL_MODE_AIM</code> 或者原始整数，不是 <code>GimbalMode</code>（<code>Task/Src/UsbConnectTask.cpp:118-122</code>）。枚举因此只是一份取值文档，改动枚举值不会改变任何运行期行为。核对协议时要以实际比较的整数为准，不能以枚举为准。</p>
+<p>两个枚举都是 <code>enum class</code>，全工程没有以枚举类型的变量引用它们。视觉侧的模式值由 <code>VisionToGimbalData::mode</code> 保存，它是 <code>float</code>（<code>Task/Inc/UsbConnectTask.h</code>）；发送侧用的是宏 <code>GIMBAL_MODE_IDLE</code> 与 <code>GIMBAL_MODE_AIM</code> 或者原始整数，不是 <code>GimbalMode</code>（<code>Task/Src/UsbConnectTask.cpp</code>）。枚举因此只是一份取值文档，改动枚举值不会改变任何运行期行为。核对协议时要以实际比较的整数为准，不能以枚举为准。</p>
 <h2 id="5-crc16-查表与覆盖范围的常量绑定">5. CRC16 查表与覆盖范围的常量绑定</h2>
-<p>CRC16 是查表实现，表在 <code>Algorithm/Src/CRC16.cpp:7-29</code>，函数签名是 <code>uint16_t crc16_calc(const uint8_t *data, uint32_t len, uint16_t init)</code>（<code>Algorithm/Inc/CRC16.h:15</code>）。计算过程每字节一次异或与一次查表（<code>CRC16.cpp:31-41</code>）：</p>
+<p>CRC16 是查表实现，表在 <code>Algorithm/Src/CRC16.cpp</code>，函数签名是 <code>uint16_t crc16_calc(const uint8_t *data, uint32_t len, uint16_t init)</code>（<code>Algorithm/Inc/CRC16.h</code>）。计算过程每字节一次异或与一次查表（<code>CRC16.cpp</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#D73A49">uint8_t</span><span style="color:#24292E"> index </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (crc </span><span style="color:#D73A49">^</span><span style="color:#D73A49"> *</span><span style="color:#24292E">data</span><span style="color:#D73A49">++</span><span style="color:#24292E">) </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> 0x</span><span style="color:#005CC5">FF</span><span style="color:#24292E">;</span></span>
 <span class="line"><span style="color:#24292E">crc </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (crc </span><span style="color:#D73A49">>></span><span style="color:#005CC5"> 8</span><span style="color:#24292E">) </span><span style="color:#D73A49">^</span><span style="color:#24292E"> CRC16_TABLE[index];</span></span></code></pre>
-<p>这是反射式 CRC-16 的常见写法。发送侧初值取 0xFFFF，覆盖 41 字节（<code>Communication/Src/usb_protocol.cpp:38-47</code>）；接收侧同样初值，覆盖 27 字节（<code>Communication/Src/usb_decode.cpp:79-83</code>）。两处覆盖长度分别写成 <code>GIMBAL_TO_VISION_LEN - 2</code> 与 <code>VISION_TO_GIMBAL_LEN - 2</code>，与长度常量绑定。改字段时只要长度常量跟着走，覆盖范围自动正确，这是把长度写成常量表达式的好处。</p>
-<p>发送侧在算 CRC 之前把 <code>pkt.crc16</code> 清零（<code>usb_protocol.cpp:38</code>）。覆盖范围本来就排除了最后两字节，清零是冗余步骤，但保留了“未初始化结构体也能算对”的性质。</p>
+<p>这是反射式 CRC-16 的常见写法。发送侧初值取 0xFFFF，覆盖 41 字节（<code>Communication/Src/usb_protocol.cpp</code>）；接收侧同样初值，覆盖 27 字节（<code>Communication/Src/usb_decode.cpp</code>）。两处覆盖长度分别写成 <code>GIMBAL_TO_VISION_LEN - 2</code> 与 <code>VISION_TO_GIMBAL_LEN - 2</code>，与长度常量绑定。改字段时只要长度常量跟着走，覆盖范围自动正确，这是把长度写成常量表达式的好处。</p>
+<p>发送侧在算 CRC 之前把 <code>pkt.crc16</code> 清零（<code>usb_protocol.cpp</code>）。覆盖范围本来就排除了最后两字节，清零是冗余步骤，但保留了“未初始化结构体也能算对”的性质。</p>
 <h2 id="6-从-cdc-中断到-vision_data-的接收链路">6. 从 CDC 中断到 vision_data 的接收链路</h2>
-<p>USB 数据到达时，<code>CDC_Receive_FS</code> 在中断上下文里把每个字节放进 <code>usbRxQueue</code>（<code>USB_DEVICE/App/usbd_cdc_if.c:261-284</code>），队列长度 128 字节，创建于 <code>Core/Src/freertos.c:114</code>，每项 1 字节。任务侧 <code>StartUsbConnectTask::run</code> 循环取出字节并喂给 <code>usb_decoder.feed</code>（<code>Task/Src/UsbConnectTask.cpp:82-100</code>），解析成功后把七个字段复制进 <code>vision_data</code>。</p>
-<p><code>USBDecode</code> 的状态机只有三态：<code>WAIT_HEAD_0</code>、<code>WAIT_HEAD_1</code>、<code>COLLECT</code>（<code>Communication/Inc/usb_decode.h:27-31</code>）。进入 <code>COLLECT</code> 后按 <code>index_</code> 计数，收满 29 字节后重置状态，再算 CRC 并检查模式是否不超过 2（<code>Communication/Src/usb_decode.cpp:45-108</code>，收满与校验在 :66-104）。把状态重置放在校验之前，保证下一帧的第一字节无论何时到达都能进入等待帧头状态，不会因为本轮校验失败而滞留。</p>
+<p>USB 数据到达时，<code>CDC_Receive_FS</code> 在中断上下文里把每个字节放进 <code>usbRxQueue</code>（<code>USB_DEVICE/App/usbd_cdc_if.c</code>），队列长度 128 字节，创建于 <code>Core/Src/freertos.c</code>，每项 1 字节。任务侧 <code>StartUsbConnectTask::run</code> 循环取出字节并喂给 <code>usb_decoder.feed</code>（<code>Task/Src/UsbConnectTask.cpp</code>），解析成功后把七个字段复制进 <code>vision_data</code>。</p>
+<p><code>USBDecode</code> 的状态机只有三态：<code>WAIT_HEAD_0</code>、<code>WAIT_HEAD_1</code>、<code>COLLECT</code>（<code>Communication/Inc/usb_decode.h</code>）。进入 <code>COLLECT</code> 后按 <code>index_</code> 计数，收满 29 字节后重置状态，再算 CRC 并检查模式是否不超过 2（<code>Communication/Src/usb_decode.cpp</code> 的收集计数与校验分支）。把状态重置放在校验之前，保证下一帧的第一字节无论何时到达都能进入等待帧头状态，不会因为本轮校验失败而滞留。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
     H0 : 等待帧头 S
     H1 : 等待帧头 P
@@ -1384,7 +1384,7 @@
     CO --> H0 : 收满 29 字节后校验
     CO --> CO : 每收到一字节</pre></div>
 <h2 id="7-每-10-ms-一帧的发送链路">7. 每 10 ms 一帧的发送链路</h2>
-<p>发送侧每 10 ms 组一帧并调 <code>CDC_Transmit_FS</code>（<code>UsbConnectTask.cpp:105-150</code>）。发送前用 <code>USBProtocol::buildFrame</code> 填充 <code>tx_pkt</code>，再检查设备状态是否为 <code>USBD_STATE_CONFIGURED</code>（<code>:105</code>）。<code>CDC_Transmit_FS</code> 返回 <code>USBD_BUSY</code> 时循环内 <code>osDelay(5)</code> 等待（<code>:143-149</code>）。任务周期 10 ms 与重试间隔 5 ms 是同一量级的两个数，重试一次就会吃掉半个周期，因此这一处更接近“等一个空窗口”，谈不上重传。</p>
+<p>发送侧每 10 ms 组一帧并调 <code>CDC_Transmit_FS</code>（<code>UsbConnectTask.cpp</code>）。发送前用 <code>USBProtocol::buildFrame</code> 填充 <code>tx_pkt</code>，再检查设备状态是否为 <code>USBD_STATE_CONFIGURED</code>。<code>CDC_Transmit_FS</code> 返回 <code>USBD_BUSY</code> 时循环内 <code>osDelay(5)</code> 等待。任务周期 10 ms 与重试间隔 5 ms 是同一量级的两个数，重试一次就会吃掉半个周期，因此这一处更接近“等一个空窗口”，谈不上重传。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     autonumber
     participant V as 视觉小电脑
@@ -1403,12 +1403,12 @@
     C->>C: 按 mode 更新 control_target
     T->>V: 每 10 ms 发 43 字节反馈帧</pre></div>
 <h2 id="8-应用层映射与协议文档的差异">8. 应用层映射与协议文档的差异</h2>
-<p><code>vision_data.mode</code> 在 <code>ControlCenterTask</code> 里被判断：等于 1 或 2 时把 <code>vision_data.yaw</code> 与 <code>pitch</code> 乘弧度转角度系数写入 <code>control_target</code>（<code>Task/Src/ControlCenterTask.cpp:68-75</code>）；等于 2 时参与摩擦轮与拨弹盘使能（<code>:79-102</code>）。模式 0 时保留遥控器叠加路径。</p>
-<p>发送侧的云台模式由 <code>control_target.friction_ready</code> 决定：为真发 1，否则发 0（<code>UsbConnectTask.cpp:118-122</code>）。小符与大符两个模式值在当前发送逻辑里没有出现。</p>
-<p>仓库根目录的 <code>云台串口协议.md</code> 给出同样的偏移表，并写明 CRC 覆盖除校验字段外的全部字节、字节序为小端（<code>云台串口协议.md:44-47</code>）。代码与这份文档在覆盖范围上一致。差异在两处：</p>
+<p><code>vision_data.mode</code> 在 <code>ControlCenterTask</code> 里被判断：等于 1 或 2 时把 <code>vision_data.yaw</code> 与 <code>pitch</code> 乘弧度转角度系数写入 <code>control_target</code>（<code>Task/Src/ControlCenterTask.cpp</code>）；等于 2 时参与摩擦轮与拨弹盘使能。模式 0 时保留遥控器叠加路径。</p>
+<p>发送侧的云台模式由 <code>control_target.friction_ready</code> 决定：为真发 1，否则发 0（<code>UsbConnectTask.cpp</code>）。小符与大符两个模式值在当前发送逻辑里没有出现。</p>
+<p>仓库根目录的 <code>云台串口协议.md</code> 给出同样的偏移表，并写明 CRC 覆盖除校验字段外的全部字节、字节序为小端（<code>云台串口协议.md</code>）。代码与这份文档在覆盖范围上一致。差异在两处：</p>
 <ol>
-<li><code>usb_decode.cpp:13-34</code> 有一个未被调用的辅助函数 <code>parse_vision_to_gimbal_manual</code>，它按大端读取 CRC（<code>pkt.crc16 = (data[27] &#x3C;&#x3C; 8) | data[28]</code>），注释里写着协议可能是小端、需要确认。实际使用的 <code>reinterpret_cast</code> 路径按本机小端读，与发送侧一致。这个未调用函数描述的字节序与生效代码相反。</li>
-<li><code>Task/Inc/UsbConnectTask.h:41-79</code> 另有一套 <code>vision_to_gimbal_t</code> 与 <code>gimbal_to_vision_t</code> 结构体，与 <code>USBProtocol</code> 里的结构体字段相同。两套定义并存，改字段时要同步。</li>
+<li><code>usb_decode.cpp</code> 有一个未被调用的辅助函数 <code>parse_vision_to_gimbal_manual</code>，它按大端读取 CRC（<code>pkt.crc16 = (data[27] &#x3C;&#x3C; 8) | data[28]</code>），注释里写着协议可能是小端、需要确认。实际使用的 <code>reinterpret_cast</code> 路径按本机小端读，与发送侧一致。这个未调用函数描述的字节序与生效代码相反。</li>
+<li><code>Task/Inc/UsbConnectTask.h</code> 另有一套 <code>vision_to_gimbal_t</code> 与 <code>gimbal_to_vision_t</code> 结构体，与 <code>USBProtocol</code> 里的结构体字段相同。两套定义并存，改字段时要同步。</li>
 </ol>
 <h2 id="9-易错点">9. 易错点</h2>
 
@@ -1456,7 +1456,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>按大端解析 CRC</td><td>校验始终不通过</td><td>生效路径用 <code>reinterpret_cast</code> 小端，<code>usb_decode.cpp:31</code> 注释里的写法未被调用</td></tr><tr><td>把 <code>errorCount</code> 当累计错误数</td><td>成功一帧后计数归零</td><td><code>usb_decode.cpp:91</code> 校验成功时清零</td></tr><tr><td>修改帧长只改一端</td><td><code>static_assert</code> 编译失败</td><td><code>usb_protocol.h:73-77</code> 锁长度，收发两侧都要改覆盖范围</td></tr><tr><td>认为 <code>ControlMode</code> 枚举在参与判断</td><td>改动枚举值不影响行为</td><td>实际比较的是 <code>vision_data.mode</code> 的整数</td></tr><tr><td>忽略队列容量</td><td>高频接收时字节被丢，CRC 失败</td><td>队列 128 字节（<code>freertos.c:114</code>），队列满时丢弃</td></tr><tr><td>误用 <code>USB_Data_Received</code></td><td>期望它转发数据</td><td>它的函数体只读入参并丢弃（<code>UsbConnectTask.cpp:165-174</code>）</td></tr><tr><td>四元数顺序写错</td><td>视觉侧姿态反了</td><td>结构体注释与文档都写 w x y z（<code>usb_protocol.h:59</code>）</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>对应位置</th></tr></thead><tbody><tr><td>按大端解析 CRC</td><td>校验始终不通过</td><td>生效路径用 <code>reinterpret_cast</code> 小端，<code>usb_decode.cpp</code> 注释里的写法未被调用</td></tr><tr><td>把 <code>errorCount</code> 当累计错误数</td><td>成功一帧后计数归零</td><td><code>usb_decode.cpp</code> 校验成功时清零</td></tr><tr><td>修改帧长只改一端</td><td><code>static_assert</code> 编译失败</td><td><code>usb_protocol.h</code> 锁长度，收发两侧都要改覆盖范围</td></tr><tr><td>认为 <code>ControlMode</code> 枚举在参与判断</td><td>改动枚举值不影响行为</td><td>实际比较的是 <code>vision_data.mode</code> 的整数</td></tr><tr><td>忽略队列容量</td><td>高频接收时字节被丢，CRC 失败</td><td>队列 128 字节（<code>freertos.c</code>），队列满时丢弃</td></tr><tr><td>误用 <code>USB_Data_Received</code></td><td>期望它转发数据</td><td>它的函数体只读入参并丢弃（<code>UsbConnectTask.cpp</code>）</td></tr><tr><td>四元数顺序写错</td><td>视觉侧姿态反了</td><td>结构体注释与文档都写 w x y z（<code>usb_protocol.h</code>）</td></tr></tbody></table>
 <h2 id="10-小结">10. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -1589,7 +1589,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>长度常量与帧头（:18-21）、模式枚举（:24-36）、两种结构体（:39-77）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp</code></td><td><code>buildFrame</code> 与 CRC16 覆盖（:11-49）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_decode.h</code></td><td>三态枚举（:27-31）、缓冲与错误计数（:33-38）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>未调用的大端辅助函数（:13-34）、解析与校验（:45-108）、计数清零（:91）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Inc/CRC16.h</code></td><td><code>crc16_calc</code> 声明（:15）</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp</code></td><td>查表实现（:7-41）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>收发主循环（:71-156）、未用桩函数（:165-174）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h</code></td><td><code>VisionToGimbalData</code>（:56-64）、并行结构体定义（:41-79）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>视觉模式到控制目标的映射（:68-102）</td></tr><tr><td><code>2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>CDC 接收入队（:261-284）、发送（:297-313）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/freertos.c</code></td><td>队列创建（:114）</td></tr><tr><td><code>2026OmniSentryGimbal/云台串口协议.md</code></td><td>协议字段表与 CRC 约定（:1-47）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="协议解帧的易错点与调试">协议解帧的易错点与调试</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>长度常量与帧头、模式枚举、两种结构体</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp</code></td><td><code>buildFrame</code> 与 CRC16 覆盖</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_decode.h</code></td><td>三态枚举、缓冲与错误计数</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>未调用的大端辅助函数、解析与校验、计数清零</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Inc/CRC16.h</code></td><td><code>crc16_calc</code> 声明</td></tr><tr><td><code>2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp</code></td><td>查表实现</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>收发主循环、未用桩函数</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h</code></td><td><code>VisionToGimbalData</code>、并行结构体定义</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp</code></td><td>视觉模式到控制目标的映射</td></tr><tr><td><code>2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c</code></td><td>CDC 接收入队、发送</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/freertos.c</code></td><td>队列创建</td></tr><tr><td><code>2026OmniSentryGimbal/云台串口协议.md</code></td><td>协议字段表与 CRC 约定</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/04-串口通信与协议/02-协议状态机解帧/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="协议解帧的易错点与调试">协议解帧的易错点与调试</h1>
 <p>云台板固件（<code>/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal</code>）与底盘板固件（<code>/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis</code>）上的解帧故障集中在三类：收不到帧、收到错帧、收到帧但业务不生效。三类的排查顺序不同，前两类要先看链路，第三类要一路查到应用层的落点。</p>
 <p>三类故障按层次列开，每条链路给出对应的观测手段，末尾汇总本单元核实出的十项缺陷。排查动作都以源码位置为坐标，不依赖运行期猜测。</p>
 <h2 id="1-两套帧格式的对照">1. 两套帧格式的对照</h2>
@@ -1659,7 +1659,7 @@
 <li>帧头不匹配：发送方帧头与解析器常量不一致。</li>
 </ol>
 <p>第三层在本工程里有一个具体的分支：<code>UartProtocol</code> 的两个帧头常量是 0xFE 与 0xEF，视觉 SP 是 0x53 与 0x50。若把 SP 帧喂给 <code>UartProtocol</code>，解析器会一直停在 <code>WAIT_HEAD1</code>。</p>
-<p>第二层的检查动作很直接：搜索 <code>Uart_Init</code> 的调用点，确认回调函数是谁。云台板只有 <code>Core/Src/main.c:125</code> 一处，传的是 <code>MyUartCallbackFun</code>，而它内部只调 <code>DBUS_Decode</code>。这一条查完就能排除“以为接了但没接”的情况。</p>
+<p>第二层的检查动作很直接：搜索 <code>Uart_Init</code> 的调用点，确认回调函数是谁。云台板只有 <code>Core/Src/main.c</code> 一处，传的是 <code>MyUartCallbackFun</code>，而它内部只调 <code>DBUS_Decode</code>。这一条查完就能排除“以为接了但没接”的情况。</p>
 <h2 id="3-收到错帧的四个检查点">3. 收到错帧的四个检查点</h2>
 <p>收到错帧指回调触发了，但字段值不合理。排查点：</p>
 <ul>
@@ -1670,7 +1670,7 @@
 </ul>
 <p>本工程的两个结构体都加了 packed，并用 <code>static_assert</code> 锁长度，填充问题在编译期暴露。SP 帧的字节序是本机小端，发送侧直接写 <code>float</code>，接收侧用 <code>memcpy</code> 与 <code>reinterpret_cast</code> 还原，两侧都依赖本机小端。字节序与覆盖范围这两项都是“两端约好才有意义”的约定，单看一端无法判断对错。</p>
 <h2 id="4-帧解出来了业务不动handlemotorcmd-断在哪">4. 帧解出来了业务不动：handleMotorCmd 断在哪</h2>
-<p>回调触发后业务没有变化，原因在应用层。<code>UartDecode::handleMotorCmd</code> 是典型：它解析出速度写进局部变量 <code>speed</code>，该变量随后被丢弃（<code>Communication/Src/usart_decode.cpp:35-46</code>）；模块级变量 <code>motor_cmd_triggered</code> 只写不读（<code>:16、:37</code>）；头文件声明的 <code>g_control_cmd</code> 在全工程没有定义（<code>usart_decode.h:20</code>）。解析成功与业务生效之间没有连起来。</p>
+<p>回调触发后业务没有变化，原因在应用层。<code>UartDecode::handleMotorCmd</code> 是典型：它解析出速度写进局部变量 <code>speed</code>，该变量随后被丢弃（<code>Communication/Src/usart_decode.cpp</code>）；模块级变量 <code>motor_cmd_triggered</code> 只写不读；头文件声明的 <code>g_control_cmd</code> 在全工程没有定义（<code>usart_decode.h</code>）。解析成功与业务生效之间没有连起来。</p>
 <p>这类故障的表现是“日志里能看到帧，机器不动”。区分它与校验失败的办法是看回调是否进入：回调进入说明帧已经通过校验，问题在回调内部；回调没进入才回到前两节的链路与校验。</p>
 <h2 id="5-排查顺序的分叉">5. 排查顺序的分叉</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
@@ -1692,19 +1692,19 @@
 <p>分叉的顺序是按“排除代价从小到大”排的：先确认链路上有没有数据，再看注册，再看帧头，最后看校验与业务。反过来查会把大量时间花在 CRC 与字节序上，而问题可能只是回调没注册。</p>
 <h2 id="6-观测手段debuguartdma-段长errorcount">6. 观测手段：DebugUART、DMA 段长、errorCount</h2>
 <h3 id="61-debuguart">6.1 DebugUART</h3>
-<p>云台板把 USART1 配成 <code>DebugUART</code>，115200 8N1，在 <code>Task/Src/ImuTask.cpp:34</code> 初始化。它没有开 NVIC，适合单向输出调试文本。在解析回调或任务里打印帧头、长度、校验与失败原因，可以看到帧的到达情况。</p>
+<p>云台板把 USART1 配成 <code>DebugUART</code>，115200 8N1，在 <code>Task/Src/ImuTask.cpp</code> 初始化。它没有开 NVIC，适合单向输出调试文本。在解析回调或任务里打印帧头、长度、校验与失败原因，可以看到帧的到达情况。</p>
 <p>在中断上下文里打印需要注意两点：<code>printf</code> 本身可能阻塞，且 DMA 发送可能与空闲中断嵌套。可取的顺序是只在任务上下文打印，中断里只置标志或计数。计数器用 <code>volatile</code> 修饰，读的时候先关中断或做一次快照，避免读到半个更新。</p>
 <h3 id="62-逐段观测-dma-交付">6.2 逐段观测 DMA 交付</h3>
-<p>接收链路一次交付的是两帧之间的整段数据。<code>UsartDma::uartRxIdleCallback</code> 在空闲中断里算出段长并切换缓冲区，随后调用注册的回调（<code>Communication/Src/usart_dma.cpp:81-116</code>）。<code>callback_busy_</code> 只保护空闲回调的重入（<code>:61-63</code>），解析本身仍在中断上下文里同步执行。</p>
+<p>接收链路一次交付的是两帧之间的整段数据。<code>UsartDma::uartRxIdleCallback</code> 在空闲中断里算出段长并切换缓冲区，随后调用注册的回调（<code>Communication/Src/usart_dma.cpp</code>）。<code>callback_busy_</code> 只保护空闲回调的重入，解析本身仍在中断上下文里同步执行。</p>
 <p>观测段长可以判断两件事：段长是否稳定（发送节奏是否规律）、段长是否等于整帧长度（是否发生了粘包或拆包）。<code>UartProtocol::feedDMABuffer</code> 按字节处理，粘包不会导致丢帧，但一段内混入两帧时回调会触发两次。</p>
 <h3 id="63-usb-侧观测">6.3 USB 侧观测</h3>
 <p>接收侧可观测的量有三个：</p>
 <ul>
-<li><code>usb_decoder.errorCount()</code>：连续失败计数，成功后归零（<code>Communication/Src/usb_decode.cpp:91、:115-118</code>）；</li>
+<li><code>usb_decoder.errorCount</code>：连续失败计数，成功后归零（<code>Communication/Src/usb_decode.cpp</code> 的错误计数分支）；</li>
 <li><code>usbRxQueue</code> 的长度：队列满表示字节被丢，帧会被破坏；</li>
 <li><code>vision_data.mode</code> 与角度字段：判断解析结果是否进入应用层。</li>
 </ul>
-<p><code>USBDecode::feed</code> 在模式字段超过 2 时也计入错误并返回 false（<code>usb_decode.cpp:88-97</code>），因此 <code>errorCount</code> 的上升既可能是 CRC 失败，也可能是模式非法。区分两者需要临时打印分支。</p>
+<p><code>USBDecode::feed</code> 在模式字段超过 2 时也计入错误并返回 false（<code>usb_decode.cpp</code>），因此 <code>errorCount</code> 的上升既可能是 CRC 失败，也可能是模式非法。区分两者需要临时打印分支。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     autonumber
     participant PC as 视觉小电脑
@@ -1782,7 +1782,7 @@
 
 
 
-<table><thead><tr><th>缺陷</th><th>位置</th><th>性质</th></tr></thead><tbody><tr><td>UartProtocol 链路全工程无调用点</td><td><code>main.c:125</code> 只注册 DBUS</td><td>未接线代码</td></tr><tr><td><code>MyUartCallback</code> 无调用点</td><td><code>usart_decode.cpp:48-52</code></td><td>死代码</td></tr><tr><td><code>handleMotorCmd</code> 的 <code>speed</code> 未使用</td><td><code>usart_decode.cpp:44</code></td><td>编译告警级缺陷</td></tr><tr><td><code>g_control_cmd</code> 只有声明无定义</td><td><code>usart_decode.h:20</code></td><td>引用会链接失败</td></tr><tr><td><code>calcChecksum</code> 只对入参求和，与帧校验差一个类型字节</td><td><code>usart_protocol.cpp:61-66</code></td><td>约定不一致</td></tr><tr><td>未调用辅助函数按大端读 CRC</td><td><code>usb_decode.cpp:31</code></td><td>与生效路径相反</td></tr><tr><td><code>USB_Data_Received</code> 是空桩</td><td><code>UsbConnectTask.cpp:165-174</code></td><td>未接线代码</td></tr><tr><td><code>Uart_Transmit_DMA</code> 无调用点</td><td><code>usart_dma.cpp:192-201</code></td><td>发送路径未使用</td></tr><tr><td><code>ControlMode</code> 与 <code>GimbalMode</code> 枚举未被引用</td><td><code>usb_protocol.h:24-36</code></td><td>文档级定义</td></tr><tr><td>两套 SP 结构体定义并存</td><td><code>UsbConnectTask.h:41-79</code> 与 <code>usb_protocol.h:39-70</code></td><td>需同步维护</td></tr></tbody></table>
+<table><thead><tr><th>缺陷</th><th>位置</th><th>性质</th></tr></thead><tbody><tr><td>UartProtocol 链路全工程无调用点</td><td><code>main.c</code> 只注册 DBUS</td><td>未接线代码</td></tr><tr><td><code>MyUartCallback</code> 无调用点</td><td><code>usart_decode.cpp</code></td><td>死代码</td></tr><tr><td><code>handleMotorCmd</code> 的 <code>speed</code> 未使用</td><td><code>usart_decode.cpp</code></td><td>编译告警级缺陷</td></tr><tr><td><code>g_control_cmd</code> 只有声明无定义</td><td><code>usart_decode.h</code></td><td>引用会链接失败</td></tr><tr><td><code>calcChecksum</code> 只对入参求和，与帧校验差一个类型字节</td><td><code>usart_protocol.cpp</code></td><td>约定不一致</td></tr><tr><td>未调用辅助函数按大端读 CRC</td><td><code>usb_decode.cpp</code></td><td>与生效路径相反</td></tr><tr><td><code>USB_Data_Received</code> 是空桩</td><td><code>UsbConnectTask.cpp</code></td><td>未接线代码</td></tr><tr><td><code>Uart_Transmit_DMA</code> 无调用点</td><td><code>usart_dma.cpp</code></td><td>发送路径未使用</td></tr><tr><td><code>ControlMode</code> 与 <code>GimbalMode</code> 枚举未被引用</td><td><code>usb_protocol.h</code></td><td>文档级定义</td></tr><tr><td>两套 SP 结构体定义并存</td><td><code>UsbConnectTask.h</code> 与 <code>usb_protocol.h</code></td><td>需同步维护</td></tr></tbody></table>
 <h2 id="8-易错点清单">8. 易错点清单</h2>
 
 
@@ -1956,4 +1956,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td>帧头与校验实现（:14-88）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>帧头与上限常量（:17-19）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_decode.cpp</code></td><td>未用变量与死代码（:16、:37、:44、:48-52）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_decode.h</code></td><td><code>g_control_cmd</code> 声明（:20）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>校验与错误计数（:45-118）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>SP 常量与模式枚举（:18-36、:39-77）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>收发主循环与空桩（:71-174）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h</code></td><td>并行 SP 结构体（:41-79）</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>唯一 <code>Uart_Init</code> 调用点（:125）</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲回调与发送接口（:81-116、:192-201）</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>DebugUART 初始化（:34）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/01-UART%2BDMA%E6%94%B6%E5%8F%91/"><span class="k">← 上一篇</span><span class="t">UART+DMA收发</span><span class="d">串口通信与协议 · 5 个文件</span></a><a class="next" href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/03-CRC8%E4%B8%8ECRC16%E6%A0%A1%E9%AA%8C/"><span class="k">下一篇 →</span><span class="t">CRC8与CRC16校验</span><span class="d">串口通信与协议 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp</code></td><td>帧头与校验实现</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_protocol.h</code></td><td>帧头与上限常量</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_decode.cpp</code></td><td>未用变量与死代码</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usart_decode.h</code></td><td><code>g_control_cmd</code> 声明</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usb_decode.cpp</code></td><td>校验与错误计数</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Inc/usb_protocol.h</code></td><td>SP 常量与模式枚举</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp</code></td><td>收发主循环与空桩</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h</code></td><td>并行 SP 结构体</td></tr><tr><td><code>2026OmniSentryGimbal/Core/Src/main.c</code></td><td>唯一 <code>Uart_Init</code> 调用点</td></tr><tr><td><code>2026OmniSentryGimbal/Communication/Src/usart_dma.cpp</code></td><td>空闲回调与发送接口</td></tr><tr><td><code>2026OmniSentryGimbal/Task/Src/ImuTask.cpp</code></td><td>DebugUART 初始化</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/01-UART%2BDMA%E6%94%B6%E5%8F%91/"><span class="k">← 上一篇</span><span class="t">UART+DMA收发</span><span class="d">串口通信与协议 · 5 个文件</span></a><a class="next" href="/tc63/docs/04-%E4%B8%B2%E5%8F%A3%E9%80%9A%E4%BF%A1%E4%B8%8E%E5%8D%8F%E8%AE%AE/03-CRC8%E4%B8%8ECRC16%E6%A0%A1%E9%AA%8C/"><span class="k">下一篇 →</span><span class="t">CRC8与CRC16校验</span><span class="d">串口通信与协议 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

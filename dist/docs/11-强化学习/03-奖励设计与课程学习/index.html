@@ -2,8 +2,33 @@
 <p>对象是 <code>envs/go1_walk.py</code> 里 <code>default_config()</code> 的 <code>reward_config</code>，以及 <code>train/train_go1.py</code> 对这些权重的开关式覆盖。前者给出分项的全集、默认值与量纲，后者决定某次训练实际启用哪些项。两处的分工要分清：默认表是基准面，开关是版本差异，出现异常时先确认这次运行到底加了哪些项，再去看权重。</p>
 <p>下面的顺序是先给一条从状态到奖励标量的通路，再分三类过一遍分项与量纲，然后讨论三个必须与观测口径绑定的目标值，最后落到相位奖励的区分度与总奖励截断。</p>
 <h2 id="从控制量到每步奖励标量的通路">从控制量到每步奖励标量的通路</h2>
-<p>环境的时间步长与回合长度在配置开头就固定：<code>ctrl_dt=0.02</code>（50 Hz 控制）、<code>sim_dt=0.002</code>、<code>episode_length=750</code>，对应 15 s 回合（<code>envs/go1_walk.py:65-67</code>）。控制频率决定每个回合只有 750 个决策点，奖励分项的时间常数如果接近这个量级，策略很难在回合内看到效果。</p>
-<p>权重表写在 <code>envs/go1_walk.py:108-173</code>，紧跟其后的 <code>:174-262</code> 是各项的参数与目标值。每步的总奖励按权重求和，求和顺序对结果没有影响，但两项口径要记住：负成本以负权重进入，正奖励以正权重进入；总奖励最后要过一次下限截断（下一节展开）。</p>
+<p>环境的时间步长与回合长度在配置开头就固定：<code>ctrl_dt=0.02</code>（50 Hz 控制）、<code>sim_dt=0.002</code>、<code>episode_length=750</code>，对应 15 s 回合（<code>envs/go1_walk.py</code>）。控制频率决定每个回合只有 750 个决策点，奖励分项的时间常数如果接近这个量级，策略很难在回合内看到效果。</p>
+<p>权重表写在 <code>envs/go1_walk.py</code> 的 <code>default_config()</code> 里，紧跟 <code>scales</code> 之后是各项的参数与目标值。这段就是权重表的开头（中间的大段注释省略）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">reward_config</span><span style="color:#D73A49">=</span><span style="color:#24292E">config_dict.create(</span></span>
+<span class="line"><span style="color:#E36209">    scales</span><span style="color:#D73A49">=</span><span style="color:#24292E">config_dict.create(</span></span>
+<span class="line"><span style="color:#E36209">        linear_vel_tracking</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        angular_vel_tracking</span><span style="color:#D73A49">=</span><span style="color:#005CC5">1.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        feet_airtime</span><span style="color:#D73A49">=</span><span style="color:#005CC5">1.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        torque</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">0.0002</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        vertical_vel</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">2.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        xy_angular_vel</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">0.05</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        action_rate</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">0.01</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        joint_limit</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">10.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        joint_velocity</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">,          </span><span style="color:#6A737D"># 参考实现漏加，保留代码路径当诊断量</span></span>
+<span class="line"><span style="color:#E36209">        joint_acceleration</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">2.5e-7</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        orientation</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">1.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        collision</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">        default_joint_position</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">0.1</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">        ...</span></span>
+<span class="line"><span style="color:#E36209">        feet_slip</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">,               </span><span style="color:#6A737D"># v16 起由 --natural_gait 打开</span></span>
+<span class="line"><span style="color:#E36209">        feet_phase</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">,              </span><span style="color:#6A737D"># v20 起由 --gait_phase 打开</span></span>
+<span class="line"><span style="color:#E36209">        ascent</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">,                  </span><span style="color:#6A737D"># v22 起由 --ascent 打开</span></span>
+<span class="line"><span style="color:#24292E">    ),</span></span>
+<span class="line"><span style="color:#E36209">    tracking_velocity_sigma</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.25</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">    air_time_threshold</span><span style="color:#D73A49">=</span><span style="color:#005CC5">1.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">    ...</span></span>
+<span class="line"><span style="color:#24292E">),</span></span></code></pre>
+<p><code>config_dict.create</code> 是 brax 的小工具，把一组关键字参数包成支持嵌套读取的配置对象（写 <code>cfg.reward_config.scales.torque</code> 这样访问）。每步的总奖励按权重求和，求和顺序对结果没有影响，但两项口径要记住：负成本以负权重进入，正奖励以正权重进入；总奖励最后要过一次下限截断（下一节展开）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["状态与指令 (obs)"] --> B["策略输出动作"]
   B --> C["mjx 前进一步"]
@@ -40,12 +65,12 @@
     S5["body_contact / ascent / symmetry"]
   end</pre></div>
 <h2 id="三项正奖励的权重与物理含义">三项正奖励的权重与物理含义</h2>
-<p>正奖励只有三项，分别是线速度跟踪、角速度跟踪与足端腾空时长，权重 2.0、1.0、1.0（<code>envs/go1_walk.py:110-112</code>）。线速度跟踪的权重最高，因为它直接对应任务目标“按指令速度走”。</p>
-<p>跟踪项的形状由 <code>tracking_velocity_sigma=0.25</code> 控制（<code>:174</code>）。这个 0.25 沿用了参考仓库的 <code>_tracking_velocity_sigma</code>，是一个指数核的宽度参数，不是速度误差的容差上限。误差超过这个量级后奖励衰减很快，但不会归零，所以“慢一点走”仍然有分，策略不会因为误差大就彻底拿不到梯度。</p>
-<p>足端腾空奖励带一个指令门限 <code>cmd_threshold=0.1</code>（<code>:190</code>）：指令速度低于 0.1 时不给这项分。这个门限的作用是让“站着不动”不靠抬脚刷分，同时避免速度指令接近零时策略靠抖动拿腾空奖励。</p>
+<p>正奖励只有三项，分别是线速度跟踪、角速度跟踪与足端腾空时长，权重 2.0、1.0、1.0（<code>envs/go1_walk.py</code>）。线速度跟踪的权重最高，因为它直接对应任务目标“按指令速度走”。</p>
+<p>跟踪项的形状由 <code>tracking_velocity_sigma=0.25</code> 控制。这里的“指数核”指把误差平方取负、除以 σ 后再取指数：误差为 0 时得 1，误差越大越接近 0 但不等于 0。这个 0.25 沿用了参考仓库的 <code>_tracking_velocity_sigma</code>，是核的宽度参数，不是速度误差的容差上限。误差超过这个量级后奖励衰减很快，但不会归零，所以“慢一点走”仍然有分，策略不会因为误差大就彻底拿不到梯度。</p>
+<p>足端腾空奖励带一个指令门限 <code>cmd_threshold=0.1</code>：指令速度低于 0.1 时不给这项分。这个门限的作用是让“站着不动”不靠抬脚刷分，同时避免速度指令接近零时策略靠抖动拿腾空奖励。</p>
 <h2 id="负成本的量纲与量级">负成本的量纲与量级</h2>
-<p>八项负成本里，量级差别很大，看权重数字时必须同时看分项公式的单位。力矩项的权重是 <code>-0.0002</code>，因为力矩本身在 N·m 量级，平方后更大；姿态项 <code>orientation=-1.0</code> 与关节限位项 <code>joint_limit=-10.0</code> 的量纲都接近“每次违反扣一分”；关节加速度项 <code>joint_acceleration=-2.5e-7</code> 的权重极小，原因是加速度是二阶差分量，数值可以达到几百（<code>envs/go1_walk.py:114-127</code>）。</p>
-<p><code>joint_velocity</code> 与 <code>collision</code> 两项权重被显式写成 0.0，注释给了原因：参考仓库 <code>go1_mujoco_env.py</code> 的 <code>_calc_reward</code> 把这两项算出来了，但求和时漏加，属于参考实现里的失效项。为了与参考“实际生效”的奖励面逐位一致，这里保持权重 0，代码路径保留下来当诊断量（<code>:119-126</code>）。这条记录说明权重为零不等于分项不存在，读表时要区分“没实现”和“实现了但没进总奖励”。</p>
+<p>八项负成本里，量级差别很大，看权重数字时必须同时看分项公式的单位。力矩项的权重是 <code>-0.0002</code>，因为力矩本身在 N·m 量级，平方后更大；姿态项 <code>orientation=-1.0</code> 与关节限位项 <code>joint_limit=-10.0</code> 的量纲都接近“每次违反扣一分”；关节加速度项 <code>joint_acceleration=-2.5e-7</code> 的权重极小，原因是加速度是二阶差分量，数值可以达到几百（<code>envs/go1_walk.py</code>）。</p>
+<p><code>joint_velocity</code> 与 <code>collision</code> 两项权重被显式写成 0.0，注释给了原因：参考仓库 <code>go1_mujoco_env.py</code> 的 <code>_calc_reward</code> 把这两项算出来了，但求和时漏加，属于参考实现里的失效项。为了与参考“实际生效”的奖励面逐位一致，这里保持权重 0，代码路径保留下来当诊断量。这条记录说明权重为零不等于分项不存在，读表时要区分“没实现”和“实现了但没进总奖励”。</p>
 
 
 
@@ -199,12 +224,12 @@
 
 
 <table><thead><tr><th>分项</th><th>默认</th><th>开关</th><th>权重</th></tr></thead><tbody><tr><td><code>feet_slip</code></td><td>0.0</td><td><code>--natural_gait</code></td><td>-0.5</td></tr><tr><td><code>feet_height</code></td><td>0.0</td><td><code>--natural_gait</code></td><td>-1.0</td></tr><tr><td><code>feet_dangle</code></td><td>0.0</td><td><code>--dangle_penalty</code></td><td>-0.5</td></tr><tr><td><code>base_height</code></td><td>0.0</td><td><code>--climb_reward</code></td><td>-200.0</td></tr><tr><td><code>feet_impact</code></td><td>0.0</td><td><code>--soft_landing</code></td><td>-2.0</td></tr><tr><td><code>feet_phase</code></td><td>0.0</td><td><code>--gait_phase</code></td><td>2.0</td></tr><tr><td><code>body_contact</code></td><td>0.0</td><td><code>--body_contact</code></td><td>-150.0</td></tr><tr><td><code>ascent</code></td><td>0.0</td><td><code>--ascent</code></td><td>2.0</td></tr><tr><td><code>symmetry</code></td><td>0.0</td><td><code>--symmetry</code></td><td>-0.4</td></tr></tbody></table>
-<p>表里的权重与开关的对应关系在 <code>train/train_go1.py:445-651</code> 一段内逐条赋值，每个开关都有对应的打印语句把生效值写进日志（<code>:451</code>、<code>:576</code>、<code>:601</code>）。日志里能看到权重，是排查“开关加了但没生效”的第一手证据。</p>
+<p>表里的权重与开关的对应关系在 <code>train/train_go1.py</code> 一段内逐条赋值，每个开关都有对应的打印语句把生效值写进日志。日志里能看到权重，是排查“开关加了但没生效”的第一手证据。</p>
 <h2 id="与观测口径绑定的三个目标值">与观测口径绑定的三个目标值</h2>
 <p>奖励目标值如果与观测里的同一物理量用了不同定义，两处会互相打架。源码里明确点出了这种绑定关系的有三处。</p>
-<p>第一处是躯干站高：<code>base_height_target=0.28</code>（<code>envs/go1_walk.py:201</code>）。注释写明必须与 <code>height_scan.base</code> 一致，否则观测说标称站高 0.28、奖励却要求 0.3。0.28 这个值来自 Go1 沉降后躯干中心距足下地面的实测 z，约 0.2779。</p>
-<p>第二处是抬脚目标高度：<code>max_foot_height=0.08</code>（<code>:182-184</code>）配合球足半径 0.023，抬到 0.08 时净空约 0.06。v20 引入相位奖励后，这个值默认跟随 <code>gait_swing_height</code>，两者不一致时策略被两个目标撕扯（<code>train/train_go1.py:572-575</code>）。</p>
-<p>第三处是空距结算参数：默认 <code>air_time_threshold=1.0</code>、<code>air_time_max</code> 为无穷（<code>:175-181</code>），<code>--natural_gait</code> 把门限覆盖成 0.2 并给出 0.5 s 的封顶（<code>train/train_go1.py:449-450</code>）。参考仓库用 1.0 作为门限，对正常摆动 0.2 到 0.4 s 是倒扣，这是 v16 之前的一项口径偏差。</p>
+<p>第一处是躯干站高：<code>base_height_target=0.28</code>（<code>envs/go1_walk.py</code>）。注释写明必须与 <code>height_scan.base</code> 一致，否则观测说标称站高 0.28、奖励却要求 0.3。0.28 这个值来自 Go1 沉降后躯干中心距足下地面的实测 z，约 0.2779。</p>
+<p>第二处是抬脚目标高度：<code>max_foot_height=0.08</code>配合球足半径 0.023，抬到 0.08 时净空约 0.06。v20 引入相位奖励后，这个值默认跟随 <code>gait_swing_height</code>，两者不一致时策略被两个目标撕扯（<code>train/train_go1.py</code>）。</p>
+<p>第三处是空距结算参数：默认 <code>air_time_threshold=1.0</code>、<code>air_time_max</code> 为无穷，<code>--natural_gait</code> 把门限覆盖成 0.2 并给出 0.5 s 的封顶（<code>train/train_go1.py</code>）。参考仓库用 1.0 作为门限，对正常摆动 0.2 到 0.4 s 是倒扣，这是 v16 之前的一项口径偏差。</p>
 
 
 
@@ -282,11 +307,15 @@
 
 
 
-<table><thead><tr><th>参数</th><th>值</th><th>绑定对象</th><th>位置</th></tr></thead><tbody><tr><td><code>base_height_target</code></td><td>0.28</td><td><code>height_scan.base</code></td><td><code>envs/go1_walk.py:201</code></td></tr><tr><td><code>max_foot_height</code></td><td>0.08</td><td><code>gait_swing_height</code></td><td><code>envs/go1_walk.py:184</code></td></tr><tr><td><code>air_time_threshold</code></td><td>1.0 默认 / 0.2 打开</td><td>摆动相时长</td><td><code>envs/go1_walk.py:178</code></td></tr><tr><td><code>air_time_max</code></td><td>inf 默认 / 0.5 打开</td><td>空距封顶</td><td><code>envs/go1_walk.py:181</code></td></tr><tr><td><code>air_time_limit</code></td><td>0.8</td><td>单足连续悬空上限</td><td><code>envs/go1_walk.py:189</code></td></tr><tr><td><code>impact_vel_limit</code></td><td>0.5</td><td>落地无惩罚下界</td><td><code>envs/go1_walk.py:230</code></td></tr><tr><td><code>impact_height</code></td><td>0.09</td><td>冲击结算的过渡高度</td><td><code>envs/go1_walk.py:233</code></td></tr><tr><td><code>ascent_cap</code></td><td>0.35</td><td>地形最高 0.30 的余量</td><td><code>envs/go1_walk.py:204</code></td></tr><tr><td><code>ascent_gate</code></td><td>0.2</td><td>行进门控的速度阈值</td><td><code>envs/go1_walk.py:209</code></td></tr><tr><td><code>symmetry_beta</code></td><td>0.01</td><td>EMA 时间常数 100 步</td><td><code>envs/go1_walk.py:212</code></td></tr><tr><td><code>symmetry_cap</code></td><td>2.0</td><td>负项封顶，防总奖励被压到 0</td><td><code>envs/go1_walk.py:215</code></td></tr></tbody></table>
+<table><thead><tr><th>参数</th><th>值</th><th>绑定对象</th><th>位置</th></tr></thead><tbody><tr><td><code>base_height_target</code></td><td>0.28</td><td><code>height_scan.base</code></td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>max_foot_height</code></td><td>0.08</td><td><code>gait_swing_height</code></td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>air_time_threshold</code></td><td>1.0 默认 / 0.2 打开</td><td>摆动相时长</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>air_time_max</code></td><td>inf 默认 / 0.5 打开</td><td>空距封顶</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>air_time_limit</code></td><td>0.8</td><td>单足连续悬空上限</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>impact_vel_limit</code></td><td>0.5</td><td>落地无惩罚下界</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>impact_height</code></td><td>0.09</td><td>冲击结算的过渡高度</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>ascent_cap</code></td><td>0.35</td><td>地形最高 0.30 的余量</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>ascent_gate</code></td><td>0.2</td><td>行进门控的速度阈值</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>symmetry_beta</code></td><td>0.01</td><td>EMA 时间常数 100 步</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>symmetry_cap</code></td><td>2.0</td><td>负项封顶，防总奖励被压到 0</td><td><code>envs/go1_walk.py</code></td></tr></tbody></table>
 <h2 id="相位奖励的期望值与区分度">相位奖励的期望值与区分度</h2>
-<p>v20 的对角步态相位奖励形式为 <code>exp(-Σ(z_foot - rz)²/σ)</code>（<code>envs/go1_walk.py:242-246</code>）。四足目标相位取 trot 的 [0, π, π, 0]，相位循环推进，由 <code>get_rz</code> 给出该相位下应有的目标足高。步频默认 1.8 Hz（<code>:247</code>），v19 实测主周期 0.52 到 0.56 s，换算约 1.9 Hz。</p>
-<p>初版参数沿用了 playground 的 <code>sigma=0.1</code> 与 <code>swing_height=0.08</code>，结果奖励面几乎是平的：理想 trot 得 1.0000，四足全贴地不动得 0.9583，只差 0.04。策略在 5M 步时退化成“四足贴地不动”，前腿占空比 8.7%，后腿 96% 到 99%，对角同步 10% 到 20%（<code>:248-255</code>）。</p>
-<p>修正方式是把抬脚目标提到 0.15、把 <code>sigma</code> 收紧到 0.02（<code>:260-261</code>）。参数扫描给出的三个参照点：理想 trot 1.0000、四足全贴地 0.3371、四足全悬 0.1880，区分度 <code>gap=</code> 0.6629，原来的配置只有 0.0417。<code>train/train_go1.py:584-585</code> 把这三个数写进了启动打印，作为“奖励面是否推得动步态”的自检。</p>
+<p>v20 的对角步态相位奖励形式为 <code>exp(-Σ(z_foot - rz)²/σ)</code>（<code>envs/go1_walk.py</code>）。四足目标相位取 trot 的 [0, π, π, 0]，相位循环推进，由 <code>get_rz</code> 给出该相位下应有的目标足高。用一段简化示意说明这个形式（真实实现见 <code>envs/go1_walk.py</code> 的 <code>_reward_feet_phase</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：只保留形状，变量名与真实实现一致</span></span>
+<span class="line"><span style="color:#24292E">err </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> sum</span><span style="color:#24292E">((foot_z[i] </span><span style="color:#D73A49">-</span><span style="color:#24292E"> get_rz(phase[i], phi)) </span><span style="color:#D73A49">**</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49"> for</span><span style="color:#24292E"> i </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">4</span><span style="color:#24292E">))</span></span>
+<span class="line"><span style="color:#24292E">reward_phase </span><span style="color:#D73A49">=</span><span style="color:#24292E"> math.exp(</span><span style="color:#D73A49">-</span><span style="color:#24292E">err </span><span style="color:#D73A49">/</span><span style="color:#24292E"> sigma)   </span><span style="color:#6A737D"># sigma：初版 0.1，修正后 0.02</span></span></code></pre>
+<p>四项的误差平方和越小、整项越接近 1：理想 trot 得满分，四足贴地不动或全悬空都离目标轨迹远、得分低。步频默认 1.8 Hz，v19 实测主周期 0.52 到 0.56 s，换算约 1.9 Hz。</p>
+<p>初版参数沿用了 playground 的 <code>sigma=0.1</code> 与 <code>swing_height=0.08</code>，结果奖励面几乎是平的：理想 trot 得 1.0000，四足全贴地不动得 0.9583，只差 0.04。策略在 5M 步时退化成“四足贴地不动”，前腿占空比 8.7%，后腿 96% 到 99%，对角同步 10% 到 20%。</p>
+<p>修正方式是把抬脚目标提到 0.15、把 <code>sigma</code> 收紧到 0.02。参数扫描给出的三个参照点：理想 trot 1.0000、四足全贴地 0.3371、四足全悬 0.1880，区分度 <code>gap=</code> 0.6629，原来的配置只有 0.0417。<code>train/train_go1.py</code> 把这三个数写进了启动打印，作为“奖励面是否推得动步态”的自检。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
   state "支撑相" as Stance
   state "摆动相" as Swing
@@ -296,10 +325,17 @@
   note right of Swing : 目标足高从 swing_height 落回 0
   note left of Stance : 目标足高从 0 升到 swing_height</pre></div>
 <h2 id="总奖励的截断与负项封顶">总奖励的截断与负项封顶</h2>
-<p>总奖励有一个下限参数 <code>reward_clip_min</code>，默认 0.0，语义来自 SB3 的 max(0, r-c)（<code>envs/go1_walk.py:68-73</code>）。对行走任务这套语义可以工作，对起身任务有害：随机策略早期“两个宽高斯减小正则”的总和接近 0，一旦为负就被夹成 0，奖励恒零、PPO 完全没有梯度。v2 实测随机动作平均每步只有 +0.008，正是这个原因。<code>getup_v2</code> 把下限设成 -1e6 保留负奖励。</p>
-<p>另一条相关的口径是负项封顶。总奖励在 <code>step()</code> 里被截到 0 以上时，单个负项如果压过所有正项，梯度同样会归零，所以两项被显式封顶：<code>body_contact_max</code> 与 <code>symmetry_cap=2.0</code>（<code>:213-215</code>）。这条经验来自 v20 阶段“负项吃满总奖励”的实测。</p>
+<p>总奖励有一个下限参数 <code>reward_clip_min</code>，默认 0.0，语义来自 SB3 的 max(0, r-c)。截断与 NaN 回填就写在 <code>step()</code> 里（<code>envs/go1_walk.py</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">rewards </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#24292E">    k: v </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._config.reward_config.scales[k] </span><span style="color:#D73A49">for</span><span style="color:#24292E"> k, v </span><span style="color:#D73A49">in</span><span style="color:#24292E"> rewards.items()</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#24292E">total </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> sum</span><span style="color:#24292E">(rewards.values())</span></span>
+<span class="line"><span style="color:#24292E">total </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.where(jp.isfinite(total), total, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">)   </span><span style="color:#6A737D"># 非有限值回填，别让 NaN 进梯度</span></span>
+<span class="line"><span style="color:#24292E">reward </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.clip(total, </span><span style="color:#005CC5">self</span><span style="color:#24292E">._config.reward_clip_min, </span><span style="color:#005CC5">10000.0</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>jp.where(条件, 真值, 假值)</code> 是向量化的三目选择：这里把非有限的总奖励换成 0，因为物理求解器在极端自碰撞下可能吐出 NaN，一个 NaN 会污染整批梯度。对行走任务下限 0 可以工作，对起身任务有害：随机策略早期“两个宽高斯减小正则”的总和接近 0，一旦为负就被夹成 0，奖励恒零、PPO 完全没有梯度。v2 实测随机动作平均每步只有 +0.008，正是这个原因。<code>getup_v2</code> 把下限设成 -1e6 保留负奖励。</p>
+<p>另一条相关的口径是负项封顶。总奖励在 <code>step()</code> 里被截到 0 以上时，单个负项如果压过所有正项，梯度同样会归零，所以两项被显式封顶：<code>body_contact_max</code> 与 <code>symmetry_cap=2.0</code>。这条经验来自 v20 阶段“负项吃满总奖励”的实测。</p>
 <h2 id="权重改动的单变量原则">权重改动的单变量原则</h2>
-<p><code>base_height_ref</code> 默认取 <code>mean5</code>，即躯干加四足的 5 点均值（<code>envs/go1_walk.py:216-224</code>）。注释解释了为什么 v22 不顺手把它改成 <code>trunk</code>：实测量化显示 <code>mean5</code> 的额外惩罚是随足端落点的振荡噪声（与爬升的斜率相关系数 +0.13，均值 -0.034 每步，峰值是走路的 4.7%），不是定向对抗爬升的力量；既然它不是失败原因，就不该和 <code>ascent</code> 一起改，否则 40M 步的改善无法归因。单变量原则在这份配置里是硬约束，注释里反复出现。</p>
+<p><code>base_height_ref</code> 默认取 <code>mean5</code>，即躯干加四足的 5 点均值（<code>envs/go1_walk.py</code>）。注释解释了为什么 v22 不顺手把它改成 <code>trunk</code>：实测量化显示 <code>mean5</code> 的额外惩罚是随足端落点的振荡噪声（与爬升的斜率相关系数 +0.13，均值 -0.034 每步，峰值是走路的 4.7%），不是定向对抗爬升的力量；既然它不是失败原因，就不该和 <code>ascent</code> 一起改，否则 40M 步的改善无法归因。单变量原则在这份配置里是硬约束，注释里反复出现。</p>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -356,13 +392,13 @@
 <h2 id="练习">练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
-<li>从 <code>envs/go1_walk.py:108-173</code> 抄出三项正奖励与八项负成本的权重，按量纲分成“平方量”“一次量”“秒”三类。</li>
+<li>从 <code>envs/go1_walk.py</code> 抄出三项正奖励与八项负成本的权重，按量纲分成“平方量”“一次量”“秒”三类。</li>
 <li>找出 <code>feet_airtime</code>、<code>feet_slip</code>、<code>feet_height</code>、<code>feet_dangle</code> 四项的结算频率，说明哪一项只在触地帧结算。</li>
 <li>用 <code>base_height_target</code> 与 <code>height_scan.base</code> 的绑定关系解释：如果两处取值不一致，训练会出现什么现象。</li>
 </ol>
 <h3 id="挑战题">挑战题</h3>
 <ol>
-<li>假设把 <code>base_height</code> 的权重从 -200 改成 -2000，用 <code>train/train_go1.py:527-529</code> 的实测数字估算每步惩罚，并判断总奖励是否会被压到 0。</li>
+<li>假设把 <code>base_height</code> 的权重从 -200 改成 -2000，用 <code>train/train_go1.py</code> 的实测数字估算每步惩罚，并判断总奖励是否会被压到 0。</li>
 <li>相位奖励的 gap 从 0.0417 提到 0.6629 只改了两个参数，说明这两个参数各自改变了误差的哪一部分，并给出一组你认为同样能拉开 gap 的参数。</li>
 <li>参考仓库漏加 <code>joint_velocity</code> 与 <code>collision</code> 两项成本。如果把它们按量级估计补上权重（给出你的估值依据），预测策略的步态会有什么变化。</li>
 </ol>
@@ -396,7 +432,19 @@
 <p>开关之间不是彼此独立的关系。有的开关会自动打开另一个（<code>--fwd_turn</code> 打开指令采样），有的开关要求另一个已经打开（<code>--height_scan</code> 与 <code>--ascent</code> 都要求 <code>--terrain</code>），还有的开关会改动一个被别处分项使用的参数（<code>--gait_phase</code> 会改写抬脚目标高度）。忽略这些联动，就会出现“命令写了但实际没生效”或“生效了却和预期不同”的两种偏差。</p>
 <p>覆盖按命令行顺序执行，先出现的开关把值定下去，后出现的只改其中两项；三组隐式联动与两类依赖前置都是这一事实的表现。</p>
 <h2 id="开关覆盖权重的执行顺序">开关覆盖权重的执行顺序</h2>
-<p>开关到配置的写入集中在 <code>train/train_go1.py:415-651</code>。这段代码按版本顺序排列：先是指令条件化与观测开关（v11 到 v15），然后是 v16 的步态塑形、v17 的悬空惩罚、v19 的地形与鲁棒项、v20 的相位引导、v21 与 v23 的撞地与对称项。顺序有实际后果：后面的开关可以看到前面开关改过的值，例如 <code>--natural_gait</code> 先写 <code>feet_slip</code>，随后独立的 <code>--slip_penalty</code> 又能覆盖同一个字段（<code>:463-465</code>）。</p>
+<p>开关到配置的写入集中在 <code>train/train_go1.py</code> 的一段 <code>if</code> 序列里，按版本顺序排列：先是指令条件化与观测开关（v11 到 v15），然后是 v16 的步态塑形、v17 的悬空惩罚、v19 的地形与鲁棒项、v20 的相位引导、v21 与 v23 的撞地与对称项。顺序有实际后果：后面的开关能看到前面开关改过的值，例如 <code>--natural_gait</code> 先写 <code>feet_slip</code>，随后独立的 <code>--slip_penalty</code> 又能覆盖同一个字段。原文就是一组条件赋值（片段）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> args.dangle_penalty:</span></span>
+<span class="line"><span style="color:#24292E">    args.natural_gait </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> True</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> args.natural_gait:</span></span>
+<span class="line"><span style="color:#24292E">    env_cfg.reward_config.scales.feet_slip </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">0.5</span></span>
+<span class="line"><span style="color:#24292E">    env_cfg.reward_config.scales.feet_height </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">1.0</span></span>
+<span class="line"><span style="color:#24292E">    env_cfg.reward_config.air_time_threshold </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0.2</span></span>
+<span class="line"><span style="color:#24292E">    env_cfg.reward_config.air_time_max </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0.5</span></span>
+<span class="line"><span style="color:#005CC5">...</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> args.slip_penalty </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    env_cfg.reward_config.scales.feet_slip </span><span style="color:#D73A49">=</span><span style="color:#24292E"> args.slip_penalty</span></span>
+<span class="line"><span style="color:#005CC5">    print</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"覆盖 feet_slip=</span><span style="color:#005CC5">{</span><span style="color:#24292E">args.slip_penalty</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>args</code> 是 argparse 解析出的命令行命名空间，<code>env_cfg</code> 是环境配置对象；每个开关只对它做条件赋值，并在赋值后打印，所以日志能反推出这次运行改了哪些字段。</p>
 <p>覆盖采用“开关存在就赋值”的写法，每处赋值后面配一条打印。默认值留在环境配置里，开关只处理差异，这个分工让 <code>envs/go1_walk.py</code> 保持基准面，也让“某次运行到底改了什么”可以从日志回答。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["命令行参数"] --> B["env_cfg = default_config()"]
@@ -411,9 +459,9 @@
   G --> H
   H --> I["启动打印全部生效值"]</pre></div>
 <h2 id="三组隐式联动的开关">三组隐式联动的开关</h2>
-<p>第一组是指令条件化：<code>--fwd_turn</code> 会先把 <code>--sample_cmd</code> 置真，再补上默认指令区间 <code>[0,0,-1]</code> 到 <code>[0.5,0,1]</code>（<code>train/train_go1.py:418-421</code>）。单独用 <code>--sample_cmd</code> 时需要自己给 <code>--cmd_low</code> 与 <code>--cmd_high</code>，否则采样区间取默认值。</p>
-<p>第二组是步态项：<code>--dangle_penalty</code> 先把 <code>--natural_gait</code> 置真（<code>:443-444</code>），因为悬空惩罚依赖滑移惩罚与抬脚高度塑形作为前置。反过来不成立，打开 <code>--natural_gait</code> 不会启用悬空惩罚。</p>
-<p>第三组是爬升项：<code>--base_height_w</code> 在写入权重之后会把 <code>--climb_reward</code> 置真（<code>:532-534</code>），保证后续判断生效；<code>--gait_phase</code> 打开相位奖励时，除非显式加 <code>--keep_foot_height</code>，否则会把 <code>max_foot_height</code> 改成 <code>gait_swing_height</code>（<code>:574-575</code>）。这一处联动在注释里被写成硬要求：相位奖励要求抬到 swing_height，抬脚高度项惩罚偏离 max_foot_height，两者不一致时策略被两个目标撕扯。</p>
+<p>第一组是指令条件化：<code>--fwd_turn</code> 会先把 <code>--sample_cmd</code> 置真，再补上默认指令区间 <code>[0,0,-1]</code> 到 <code>[0.5,0,1]</code>（<code>train/train_go1.py</code>）。单独用 <code>--sample_cmd</code> 时需要自己给 <code>--cmd_low</code> 与 <code>--cmd_high</code>，否则采样区间取默认值。</p>
+<p>第二组是步态项：<code>--dangle_penalty</code> 先把 <code>--natural_gait</code> 置真，因为悬空惩罚依赖滑移惩罚与抬脚高度塑形作为前置。反过来不成立，打开 <code>--natural_gait</code> 不会启用悬空惩罚。</p>
+<p>第三组是爬升项：<code>--base_height_w</code> 在写入权重之后会把 <code>--climb_reward</code> 置真，保证后续判断生效；<code>--gait_phase</code> 打开相位奖励时，除非显式加 <code>--keep_foot_height</code>，否则会把 <code>max_foot_height</code> 改成 <code>gait_swing_height</code>。这一处联动在注释里被写成硬要求：相位奖励要求抬到 swing_height，抬脚高度项惩罚偏离 max_foot_height，两者不一致时策略被两个目标撕扯。</p>
 
 
 
@@ -444,11 +492,20 @@
 
 
 
-<table><thead><tr><th>触发开关</th><th>联动结果</th><th>位置</th></tr></thead><tbody><tr><td><code>--fwd_turn</code></td><td>打开 <code>--sample_cmd</code>，补默认指令区间</td><td><code>train/train_go1.py:418-421</code></td></tr><tr><td><code>--dangle_penalty</code></td><td>打开 <code>--natural_gait</code></td><td><code>train/train_go1.py:443-444</code></td></tr><tr><td><code>--base_height_w</code></td><td>视同打开 <code>--climb_reward</code></td><td><code>train/train_go1.py:532-534</code></td></tr><tr><td><code>--gait_phase</code></td><td>改写 <code>max_foot_height</code> 跟随 <code>gait_swing_height</code></td><td><code>train/train_go1.py:574-575</code></td></tr></tbody></table>
+<table><thead><tr><th>触发开关</th><th>联动结果</th><th>位置</th></tr></thead><tbody><tr><td><code>--fwd_turn</code></td><td>打开 <code>--sample_cmd</code>，补默认指令区间</td><td><code>train/train_go1.py</code></td></tr><tr><td><code>--dangle_penalty</code></td><td>打开 <code>--natural_gait</code></td><td><code>train/train_go1.py</code></td></tr><tr><td><code>--base_height_w</code></td><td>视同打开 <code>--climb_reward</code></td><td><code>train/train_go1.py</code></td></tr><tr><td><code>--gait_phase</code></td><td>改写 <code>max_foot_height</code> 跟随 <code>gait_swing_height</code></td><td><code>train/train_go1.py</code></td></tr></tbody></table>
 <h2 id="地形与高度扫描的依赖前置">地形与高度扫描的依赖前置</h2>
-<p><code>--height_scan</code> 要求 <code>--terrain</code>，否则直接报错退出而不是静默降级（<code>train/train_go1.py:477-480</code>）。原因写在注释里：平地档没有高度场，采样器不初始化，35 维高度特征会恒为 0，等于白占观测维度。报错的设计意图是避免训出一个“以为有地形输入”的假对照。</p>
-<p><code>--ascent</code> 同样要求 <code>--terrain</code>（<code>:596-600</code>），理由更直接：平地上地形高度恒为零，<code>ascent</code> 项无信息。</p>
-<p><code>--terrain</code> 还会隐式打开随机出生（<code>:481-489</code>）。<code>reset</code> 默认把机器人放在原点，而地形生成在原点周围做了压平，8192 个环境会全部落在平地上，见不到台阶。需要调试时就加 <code>--no_random_init</code> 从原点出生做基线对照。</p>
+<p><code>--height_scan</code> 要求 <code>--terrain</code>，否则直接报错退出而不是静默降级：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> args.height_scan </span><span style="color:#D73A49">and</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> args.terrain:</span></span>
+<span class="line"><span style="color:#6A737D">    # 平地档没有 hfield, 采样器不初始化; 高度特征会是常数 0 -> 白占 35 维。</span></span>
+<span class="line"><span style="color:#6A737D">    # 直接报错而不是静默降级, 避免训出一个"以为有地形输入"的假对照。</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#005CC5"> SystemExit</span><span style="color:#24292E">(</span><span style="color:#032F62">"--height_scan 需要 --terrain (平地上高度特征恒为 0)"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> args.terrain:</span></span>
+<span class="line"><span style="color:#24292E">    env_cfg.terrain </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> True</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> args.no_random_init:</span></span>
+<span class="line"><span style="color:#24292E">        env_cfg.random_init.enable </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> True</span></span></code></pre>
+<p><code>raise SystemExit(...)</code> 会立即终止进程并打印那句话——这是有意选的”响亮失败”：报错的设计意图是避免训出一个“以为有地形输入”的假对照。<code>--terrain</code> 同时把随机出生打开，理由见下一节。</p>
+<p><code>--ascent</code> 同样要求 <code>--terrain</code>，理由更直接：平地上地形高度恒为零，<code>ascent</code> 项无信息。</p>
+<p><code>--terrain</code> 还会隐式打开随机出生。<code>reset</code> 默认把机器人放在原点，而地形生成在原点周围做了压平，8192 个环境会全部落在平地上，见不到台阶。需要调试时就加 <code>--no_random_init</code> 从原点出生做基线对照。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   T["--terrain"] --> H["--height_scan 允许"]
   T --> A["--ascent 允许"]
@@ -457,8 +514,14 @@
   R --> S["出生点覆盖台阶区"]
   N["--no_random_init"] -->|"覆盖随机出生"| R</pre></div>
 <h2 id="站桩套利的算术上界">站桩套利的算术上界</h2>
-<p><code>ascent</code> 是状态型奖励，站在台顶不动也持续收钱，所以权重不能用直觉定。注释给出一组实数：正常走路每步 +1.776，站着不动 +0.347，站台顶每步为 <code>0.347 + W × 0.30</code>，其中 0.30 m 是地形最大升高（<code>train/train_go1.py:611-621</code>）。代入三档权重得到的结果是 W=2 时 +0.947（走路的 53%，安全）、W=4 时 +1.547（88%，偏险）、W=8 时 +2.747（154%，站着比走着好，策略会退化）。</p>
-<p>实验记录里的同一张表把 W=2 标成采用值，并注明走路与站着不动的分项均值都来自实测（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4506-4515</code>）。两处数字一致，属于同一组标定结果在两份文档里的引用。</p>
+<p><code>ascent</code> 是状态型奖励（只由当前状态给分，不由动作触发），站在台顶不动也持续收钱，所以权重不能用直觉定。反套利算术的输入是实测的每步均值，可以写成一段示意：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：反套利算术，数字取自实测</span></span>
+<span class="line"><span style="color:#24292E">walk, stand, climb </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.776</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.347</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.30</span><span style="color:#6A737D">     # 走路 / 站着 / 地形最大升高</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> W </span><span style="color:#D73A49">in</span><span style="color:#24292E"> (</span><span style="color:#005CC5">2</span><span style="color:#24292E">, </span><span style="color:#005CC5">4</span><span style="color:#24292E">, </span><span style="color:#005CC5">8</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    exploit </span><span style="color:#D73A49">=</span><span style="color:#24292E"> stand </span><span style="color:#D73A49">+</span><span style="color:#24292E"> W </span><span style="color:#D73A49">*</span><span style="color:#24292E"> climb             </span><span style="color:#6A737D"># 站台顶不动的每步收益</span></span>
+<span class="line"><span style="color:#005CC5">    print</span><span style="color:#24292E">(W, exploit, exploit </span><span style="color:#D73A49">/</span><span style="color:#24292E"> walk)       </span><span style="color:#6A737D"># 相对走路的比例</span></span></code></pre>
+<p>正常走路每步 +1.776，站着不动 +0.347，站台顶每步为 <code>0.347 + W × 0.30</code>。代入三档权重得到 W=2 时 +0.947（走路的 53%，安全）、W=4 时 +1.547（88%，偏险）、W=8 时 +2.747（154%，站着比走着好，策略会退化）。</p>
+<p>实验记录里的同一张表把 W=2 标成采用值，并注明走路与站着不动的分项均值都来自实测（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。两处数字一致，属于同一组标定结果在两份文档里的引用。</p>
 
 
 
@@ -489,9 +552,9 @@
 
 
 <table><thead><tr><th>权重 W</th><th>站台顶每步</th><th>相对走路 +1.776</th><th>判定</th></tr></thead><tbody><tr><td>2</td><td>+0.947</td><td>53%</td><td>采用</td></tr><tr><td>4</td><td>+1.547</td><td>88%</td><td>偏险</td></tr><tr><td>8</td><td>+2.747</td><td>154%</td><td>会退化</td></tr></tbody></table>
-<p>v23 给 <code>ascent</code> 加了行进门控 <code>clip(|v_body|/gate, 0, 1)</code>，<code>gate=0.2</code>（<code>envs/go1_walk.py:205-209</code>）。静止时该项归零，站桩套利消失，权重才有提高空间。门控为 0 时退化成 v22 的行为。</p>
+<p>v23 给 <code>ascent</code> 加了行进门控 <code>clip(|v_body|/gate, 0, 1)</code>，<code>gate=0.2</code>（<code>envs/go1_walk.py</code>）。静止时该项归零，站桩套利消失，权重才有提高空间。门控为 0 时退化成 v22 的行为。</p>
 <h2 id="依赖联动的三处封顶">依赖联动的三处封顶</h2>
-<p>负项封顶与门控解决的是同一类问题：某一项在特定行为下可以无限累积，压过其他所有项。三处封顶分别是 <code>body_contact_max</code>（<code>train/train_go1.py:656-657</code>）、<code>symmetry_cap=2.0</code>（<code>envs/go1_walk.py:213-215</code>）与 <code>ascent_cap=0.35</code>（<code>:202-204</code>）。封顶值都直接由量级估算给出：地形最高 0.30 m，就取 0.35 留余量；对称偏差是 EMA 量，取 2.0 保证它不会单独把总奖励压到截断线以下。</p>
+<p>负项封顶与门控解决的是同一类问题：某一项在特定行为下可以无限累积，压过其他所有项。三处封顶分别是 <code>body_contact_max</code>（<code>train/train_go1.py</code>）、<code>symmetry_cap=2.0</code>（<code>envs/go1_walk.py</code>）与 <code>ascent_cap=0.35</code>。这里的 EMA 指指数滑动平均：每一步用一个小系数把新观测混进历史均值，用来滤掉周期波动（trot 的左右腿天然反相，瞬时镜像差恒不为零，只能用时间平均衡量对称性）。封顶值都直接由量级估算给出：地形最高 0.30 m，就取 0.35 留余量；对称偏差取 2.0 保证它不会单独把总奖励压到截断线以下。</p>
 <h2 id="版本批次年表">版本批次年表</h2>
 <p>分项是按版本逐项补上的，每一批修补的都是上一批暴露出来的漏洞。把开关按引入版本排列，可以看出每一批修补的都是上一批暴露出来的漏洞。</p>
 
@@ -554,11 +617,11 @@
 
 
 <table><thead><tr><th>批次</th><th>开关</th><th>新增分项或改动</th><th>对应记录</th></tr></thead><tbody><tr><td>v16</td><td><code>--natural_gait</code></td><td><code>feet_slip</code> -0.5、<code>feet_height</code> -1.0、空距门限 0.2 与封顶 0.5</td><td>实验记录 12.3 到 12.4</td></tr><tr><td>v17</td><td><code>--dangle_penalty</code></td><td><code>feet_dangle</code> -0.5、<code>air_time_limit</code> 0.8</td><td>实验记录 12.8</td></tr><tr><td>v19</td><td><code>--terrain --height_scan --push --obs_noise</code></td><td>地形、随机出生、推力、观测噪声</td><td>实验记录 17.16</td></tr><tr><td>v19</td><td><code>--climb_reward --soft_landing</code></td><td><code>base_height</code> -200、<code>feet_impact</code> -2.0</td><td>实验记录 17.16.2 到 17.16.4</td></tr><tr><td>v20</td><td><code>--gait_phase</code></td><td><code>feet_phase</code> 2.0、<code>sigma</code> 0.02、抬脚 0.15</td><td>实验记录 19.8</td></tr><tr><td>v21</td><td><code>--body_contact</code></td><td><code>body_contact</code> -150.0</td><td>实验记录 20 章</td></tr><tr><td>v22</td><td><code>--ascent</code></td><td><code>ascent</code> 2.0、<code>ascent_cap</code> 0.35</td><td>实验记录 24.6</td></tr><tr><td>v23</td><td><code>--symmetry</code></td><td><code>symmetry</code> -0.4、EMA 系数 0.01、封顶 2.0</td><td>实验记录 27 章</td></tr></tbody></table>
-<p><code>--trunk_height_ref</code> 属实验性对照，不参与版本编号：它把 <code>base_height</code> 的参考面从 5 点均值换成躯干正下方，默认保持 <code>mean5</code> 以便 v22 成为单变量实验（<code>train/train_go1.py:624-634</code>）。</p>
+<p><code>--trunk_height_ref</code> 属实验性对照，不参与版本编号：它把 <code>base_height</code> 的参考面从 5 点均值换成躯干正下方，默认保持 <code>mean5</code> 以便 v22 成为单变量实验（<code>train/train_go1.py</code>）。</p>
 <h2 id="观测与鲁棒性开关的取值">观测与鲁棒性开关的取值</h2>
-<p>地形与鲁棒性开关各自带一组配套参数，默认值集中在 <code>envs/go1_walk.py:344-398</code>。<code>--height_scan</code> 打开的是 7 乘 5 共 35 点的高度网格（<code>:349-372</code>）：前向范围 -0.3 到 0.9 m，侧向正负 0.4 m，前向分辨率高于侧向，因为台阶需要预判。特征是 <code>clip(躯干z - 地面h - base, ±clip_m) * scale</code>，其中 <code>base=0.28</code> 与奖励里的站高目标对齐，<code>clip_m=0.35</code> 大于地形总高差 0.30 m，保证正常行走时特征不饱和，<code>scale=5.0</code> 把米制差值变成与关节角可比的量。0.02 m 的地面高度噪声只加在 actor 的输入上。</p>
-<p><code>--terrain</code> 隐式打开的随机出生参数在 <code>:376-382</code>：xy 范围正负 5 m、随机朝向、出生高度为地面加 0.35 m、出生速度正负 0.3。<code>--push</code> 对应 <code>:384-388</code>：每 250 步（50 Hz 下 5 s）给基座叠加正负 0.5 m/s 的水平速度冲量。<code>--obs_noise</code> 对应 <code>:391-398</code>：线速度与角速度各 0.05、重力分量 0.02、关节位置 0.01 rad、关节速度 0.15 rad/s，同样只加在 actor 侧，critic 保持无噪。</p>
-<p><code>--tilt_deg</code> 改的是终止阈值（<code>:307-308</code>），默认两轴各 10 度，入口脚本会同时改横滚与俯仰并打印等效倾角（<code>train/train_go1.py:438-442</code>）。</p>
+<p>地形与鲁棒性开关各自带一组配套参数，默认值集中在 <code>envs/go1_walk.py</code>。<code>--height_scan</code> 打开的是 7 乘 5 共 35 点的高度网格：前向范围 -0.3 到 0.9 m，侧向正负 0.4 m，前向分辨率高于侧向，因为台阶需要预判。特征是 <code>clip(躯干z - 地面h - base, ±clip_m) * scale</code>，其中 <code>base=0.28</code> 与奖励里的站高目标对齐，<code>clip_m=0.35</code> 大于地形总高差 0.30 m，保证正常行走时特征不饱和，<code>scale=5.0</code> 把米制差值变成与关节角可比的量。0.02 m 的地面高度噪声只加在 actor 的输入上。</p>
+<p>这三组参数都写在 <code>envs/go1_walk.py</code> 的配置里，由入口脚本打开：<code>--terrain</code> 隐式打开的随机出生是 xy 范围正负 5 m、随机朝向、出生高度为地面加 0.35 m、出生速度正负 0.3；<code>--push</code> 每 250 步（50 Hz 下 5 s）给基座叠加正负 0.5 m/s 的水平速度冲量；<code>--obs_noise</code> 给线速度与角速度各 0.05、重力分量 0.02、关节位置 0.01 rad、关节速度 0.15 rad/s 的噪声，只加在 actor 侧，critic 保持无噪。</p>
+<p><code>--tilt_deg</code> 改的是终止阈值，默认两轴各 10 度，入口脚本会同时改横滚与俯仰并打印等效倾角（<code>train/train_go1.py</code>）。</p>
 
 
 
@@ -600,7 +663,7 @@
 
 
 
-<table><thead><tr><th>开关</th><th>配套参数</th><th>默认值</th><th>位置</th></tr></thead><tbody><tr><td><code>--height_scan</code></td><td>网格与特征参数</td><td>7×5、-0.3 到 0.9、正负 0.4、0.28、0.35、5.0、0.02</td><td><code>envs/go1_walk.py:349-372</code></td></tr><tr><td><code>--terrain</code></td><td>随机出生</td><td>xy 正负 5.0、随机 yaw、z 偏移 0.35、速度 0.3</td><td><code>envs/go1_walk.py:376-382</code></td></tr><tr><td><code>--push</code></td><td>扰动间隔与幅度</td><td>250 步、0.5 m/s</td><td><code>envs/go1_walk.py:384-388</code></td></tr><tr><td><code>--obs_noise</code></td><td>五路噪声</td><td>0.05、0.05、0.02、0.01、0.15</td><td><code>envs/go1_walk.py:391-398</code></td></tr><tr><td><code>--tilt_deg</code></td><td>终止倾角</td><td>10 度两轴</td><td><code>envs/go1_walk.py:307-308</code></td></tr></tbody></table>
+<table><thead><tr><th>开关</th><th>配套参数</th><th>默认值</th><th>位置</th></tr></thead><tbody><tr><td><code>--height_scan</code></td><td>网格与特征参数</td><td>7×5、-0.3 到 0.9、正负 0.4、0.28、0.35、5.0、0.02</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>--terrain</code></td><td>随机出生</td><td>xy 正负 5.0、随机 yaw、z 偏移 0.35、速度 0.3</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>--push</code></td><td>扰动间隔与幅度</td><td>250 步、0.5 m/s</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>--obs_noise</code></td><td>五路噪声</td><td>0.05、0.05、0.02、0.01、0.15</td><td><code>envs/go1_walk.py</code></td></tr><tr><td><code>--tilt_deg</code></td><td>终止倾角</td><td>10 度两轴</td><td><code>envs/go1_walk.py</code></td></tr></tbody></table>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant P as push_config
   participant E as mjx 环境
@@ -611,10 +674,10 @@
   E->>N: 原始状态向量
   N->>A: 加噪后的 obs
   E->>C: 无噪 obs 与特权信息</pre></div>
-<p>还有一条与奖励无关但会影响结论的约束：换地形后不能从平地策略热启动。地形改变足端可达性与接触面，属换任务，v18 是在平地上训的，不能直接续训（<code>envs/go1_walk.py:342-343</code>，实验记录 9.2 节记录了热启动失败的经过）。</p>
+<p>还有一条与奖励无关但会影响结论的约束：换地形后不能从平地策略热启动。地形改变足端可达性与接触面，属换任务，v18 是在平地上训的，不能直接续训（<code>envs/go1_walk.py</code>，实验记录 9.2 节记录了热启动失败的经过）。</p>
 <h2 id="启动打印承担通路验证">启动打印承担通路验证</h2>
-<p>每个开关生效后都会打印一行，这些行合并起来就是这次实验的配置摘要。v19 的一次 200K 步端到端冒烟把“开关生效”和“训练在走”一起验证：日志里有 <code>climb_reward</code> 与 <code>soft_landing</code> 的生效行，有观测维度 <code>state=83</code> 与 <code>privileged_state=154</code>，还有 <code>eval_reward</code> 从 0.313 升到 2.380、回合长度从 35.1 升到 52.8 的曲线（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2490-2500</code>）。</p>
-<p>这段流程的动机是另一次教训：开关写错时训练照常启动，奖励面缺项要到长跑结束才被发现。冒烟步数取 200K、环境数取 1024，成本可控，能看到奖励单调上升且无 NaN（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2488-2500</code>）。同一节还记了一个入口脚本的问题：<code>argparse</code> 的 <code>help</code> 串里出现单个百分号会被当格式符，报 <code>ValueError</code>，必须写成两个百分号（<code>:2502-2504</code>）。</p>
+<p>每个开关生效后都会打印一行，这些行合并起来就是这次实验的配置摘要。v19 的一次 200K 步端到端冒烟把“开关生效”和“训练在走”一起验证：日志里有 <code>climb_reward</code> 与 <code>soft_landing</code> 的生效行，有观测维度 <code>state=83</code> 与 <code>privileged_state=154</code>，还有 <code>eval_reward</code> 从 0.313 升到 2.380、回合长度从 35.1 升到 52.8 的曲线（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>这段流程的动机是另一次教训：开关写错时训练照常启动，奖励面缺项要到长跑结束才被发现。冒烟步数取 200K、环境数取 1024，成本可控，能看到奖励单调上升且无 NaN（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。同一节还记了一个入口脚本的问题：<code>argparse</code> 的 <code>help</code> 串里出现单个百分号会被当格式符，报 <code>ValueError</code>，必须写成两个百分号。</p>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -707,9 +770,15 @@
 <p>两种做法都不涉及“训练中途自动加难”。行走侧曾经讨论过出生半径从 1.5 m 逐步扩到 5 m、台阶从单级混到连续爬升这类方案，但都没有执行；起身侧试过在 <code>progress_fn</code> 里改难度，被编译器行为挡了回来，最后改成多次运行推进。把“打算做”和“已经做”分开写清楚，才能解释为什么这里的课程推进靠多次运行而不是自动加难。</p>
 <p>下面先讲地形高度场从参数到文件的链路，再讲压平半径、分辨率与尺寸同步三个容易读错的取值，然后落到随机出生这个地形训练的前提，最后用起身任务的双轴课程说明多阶段推进的机制与优先级判断。</p>
 <h2 id="地形生成器的两组参数与总高差">地形生成器的两组参数与总高差</h2>
-<p>高度场由 <code>sim/gen_terrain.py</code> 的 <code>make_terrain()</code> 生成，默认参数写在 <code>:175-178</code>：网格 128 乘 128、半边长 6.0 m、起伏幅度 0.05、噪声尺度 2.0 格、单级台阶 0.06 m、阶梯 5 级、两条楼梯、梯距 0.55 m、踏步面缓坡 2 格、侧壁目标坡度 30 度。函数文档串给出的值域是 0 到 <code>step_height × stair_steps</code>，即 0 到 0.30 m（<code>:179</code>）。</p>
-<p>参数在 2026-09-14 整体加过一档：起伏幅度从 0.02 提到 0.05，单级台阶从 0.04 提到 0.06，阶梯从“3 段等高平台”改成 5 级真爬升（<code>:184-190</code>）。旧实现的平台不爬升，机器人走上走下高度不变，测不出爬升能力。</p>
-<p>踏步面缓坡的格数直接决定地形性质：2 格在 18.8 cm 长度内抬升 6 cm，约 17.7 度，接近真实楼梯；如果用 4 格，坡度降到约 9 度，就变成斜坡，失去阶梯的判别力（<code>:190-191</code>）。侧壁按 30 度目标坡度淡出，保证侧面是可走的缓坡而不是垂直墙（<code>:192-193</code>）。</p>
+<p>高度场由 <code>sim/gen_terrain.py</code> 的 <code>make_terrain()</code> 生成，默认参数就是函数签名：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> make_terrain</span><span style="color:#24292E">(n</span><span style="color:#D73A49">=</span><span style="color:#005CC5">128</span><span style="color:#24292E">, ext</span><span style="color:#D73A49">=</span><span style="color:#005CC5">6.0</span><span style="color:#24292E">, bump_amp</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.05</span><span style="color:#24292E">, sigma</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">                 step_height</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.06</span><span style="color:#24292E">, seed</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0</span><span style="color:#24292E">, n_steps</span><span style="color:#D73A49">=</span><span style="color:#005CC5">6</span><span style="color:#24292E">, stairs</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">                 flat_origin</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">, stair_steps</span><span style="color:#D73A49">=</span><span style="color:#005CC5">5</span><span style="color:#24292E">, n_staircases</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">                 stair_pitch</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.55</span><span style="color:#24292E">, stair_ramp</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2</span><span style="color:#24292E">, side_deg</span><span style="color:#D73A49">=</span><span style="color:#005CC5">30.0</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#032F62">    """生成高度场 (米), 形状 (n,n), 值域 [0, ~step_height*stair_steps]。..."""</span></span></code></pre>
+<p>即网格 128 乘 128、半边长 6.0 m、起伏幅度 0.05、噪声尺度 2.0 格、单级台阶 0.06 m、阶梯 5 级、两条楼梯、梯距 0.55 m、踏步面缓坡 2 格、侧壁目标坡度 30 度。函数文档串给出的值域是 0 到 <code>step_height × stair_steps</code>，即 0 到 0.30 m。默认值写在签名里而不是全局常量，改默认值会直接影响生成结果。</p>
+<p>参数在 2026-09-14 整体加过一档：起伏幅度从 0.02 提到 0.05，单级台阶从 0.04 提到 0.06，阶梯从“3 段等高平台”改成 5 级真爬升。旧实现的平台不爬升，机器人走上走下高度不变，测不出爬升能力。</p>
+<p>踏步面缓坡的格数直接决定地形性质：2 格在 18.8 cm 长度内抬升 6 cm，约 17.7 度，接近真实楼梯；如果用 4 格，坡度降到约 9 度，就变成斜坡，失去阶梯的判别力。侧壁按 30 度目标坡度淡出，保证侧面是可走的缓坡而不是垂直墙。</p>
 
 
 
@@ -781,16 +850,22 @@
 
 
 
-<table><thead><tr><th>参数</th><th>默认值</th><th>物理含义</th><th>位置</th></tr></thead><tbody><tr><td><code>n</code></td><td>128</td><td>网格分辨率</td><td><code>sim/gen_terrain.py:175</code></td></tr><tr><td><code>ext</code></td><td>6.0</td><td>半边长，米</td><td><code>sim/gen_terrain.py:175</code></td></tr><tr><td><code>bump_amp</code></td><td>0.05</td><td>随机起伏幅度</td><td><code>sim/gen_terrain.py:175</code></td></tr><tr><td><code>sigma</code></td><td>2.0</td><td>噪声尺度，单位是格</td><td><code>sim/gen_terrain.py:175</code></td></tr><tr><td><code>step_height</code></td><td>0.06</td><td>单级台阶高，米</td><td><code>sim/gen_terrain.py:176</code></td></tr><tr><td><code>stair_steps</code></td><td>5</td><td>阶梯级数</td><td><code>sim/gen_terrain.py:177</code></td></tr><tr><td><code>n_staircases</code></td><td>2</td><td>楼梯条数，沿 x 与沿 y 各一</td><td><code>sim/gen_terrain.py:177</code></td></tr><tr><td><code>stair_pitch</code></td><td>0.55</td><td>梯距，米</td><td><code>sim/gen_terrain.py:178</code></td></tr><tr><td><code>stair_ramp</code></td><td>2</td><td>踏步面缓坡格数</td><td><code>sim/gen_terrain.py:178</code></td></tr><tr><td><code>side_deg</code></td><td>30.0</td><td>侧壁目标坡度，度</td><td><code>sim/gen_terrain.py:178</code></td></tr></tbody></table>
+<table><thead><tr><th>参数</th><th>默认值</th><th>物理含义</th><th>位置</th></tr></thead><tbody><tr><td><code>n</code></td><td>128</td><td>网格分辨率</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>ext</code></td><td>6.0</td><td>半边长，米</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>bump_amp</code></td><td>0.05</td><td>随机起伏幅度</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>sigma</code></td><td>2.0</td><td>噪声尺度，单位是格</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>step_height</code></td><td>0.06</td><td>单级台阶高，米</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>stair_steps</code></td><td>5</td><td>阶梯级数</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>n_staircases</code></td><td>2</td><td>楼梯条数，沿 x 与沿 y 各一</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>stair_pitch</code></td><td>0.55</td><td>梯距，米</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>stair_ramp</code></td><td>2</td><td>踏步面缓坡格数</td><td><code>sim/gen_terrain.py</code></td></tr><tr><td><code>side_deg</code></td><td>30.0</td><td>侧壁目标坡度，度</td><td><code>sim/gen_terrain.py</code></td></tr></tbody></table>
 <h2 id="原点压平半径的取值链">原点压平半径的取值链</h2>
-<p><code>flatten_origin()</code> 的函数签名默认半径是 0.7、混合长度 1.2（<code>sim/gen_terrain.py:95</code>），但生成路径实际调用时传的是半径 0.5、混合 0.9（<code>:261</code>），命令行参数的默认值也是 0.5 与 0.9（<code>:367-369</code>）。行走环境注释里写的“原点周围半径 0.5 m 的压平区”（<code>envs/go1_walk.py:375</code>）与训练入口注释里的“半径 0.5 m”（<code>train/train_go1.py:484</code>）都对应调用点，不是函数签名。读源码时只看签名默认值会把这一处判错。</p>
-<p>压平的作用有两个层面。数值上，它保证原点高度为 0，让地形场景的 <code>geom</code> 高度偏移天然对齐，不需要额外标定（<code>models/go1/scene_mjx_terrain.xml:75-77</code>）。功能上，它给出了一块平整的出生区，但随机出生范围是正负 5 m，远远超出压平区，所以出生点大部分落在起伏与台阶上。</p>
+<p><code>flatten_origin()</code> 的函数签名默认半径是 0.7、混合长度 1.2（<code>sim/gen_terrain.py</code>），但生成路径实际调用时传的是半径 0.5、混合 0.9，命令行参数的默认值也是 0.5 与 0.9。行走环境注释里写的“原点周围半径 0.5 m 的压平区”（<code>envs/go1_walk.py</code>）与训练入口注释里的“半径 0.5 m”（<code>train/train_go1.py</code>）都对应调用点，不是函数签名。读源码时只看签名默认值会把这一处判错。</p>
+<p>压平的作用有两个层面。数值上，它保证原点高度为 0，让地形场景的 <code>geom</code> 高度偏移天然对齐，不需要额外标定（<code>models/go1/scene_mjx_terrain.xml</code>）。功能上，它给出了一块平整的出生区，但随机出生范围是正负 5 m，远远超出压平区，所以出生点大部分落在起伏与台阶上。</p>
+<p>这里说的 <code>hfield</code> 是 MuJoCo 的高度场几何：一张二维高度图直接当路面用，比铺很多块几何体省算力，地形任务靠它把 0.30 m 的起伏与台阶塞进一个 <code>geom</code>。</p>
 <h2 id="分辨率格距与每对接触上限">分辨率、格距与每对接触上限</h2>
-<p>MuJoCo 对每个 <code>geom</code> 与高度场组合的接触点数量有上限，注释给出的数字是 50（<code>models/go1/scene_mjx_terrain.xml:18-20</code>）。分辨率太高会让格距接近足端尺寸，接触点被截断，反而失真。脚本默认取 <code>n=128</code>，对应格距约 9.4 cm，注释明确说 128 可以、更高的分辨率不行。</p>
-<p><code>sigma</code> 的单位是格数而不是米，换 <code>n</code> 时必须按比例改：<code>n=384</code> 配 <code>sigma=6</code> 才与 <code>n=128</code> 配 <code>sigma=2</code> 是同一物理尺度（<code>sim/gen_terrain.py:181-182</code>）。这条约束在调分辨率时最容易漏。</p>
+<p>MuJoCo 对每个 <code>geom</code> 与高度场组合的接触点数量有上限，注释给出的数字是 50（<code>models/go1/scene_mjx_terrain.xml</code>）。分辨率太高会让格距接近足端尺寸，接触点被截断，反而失真。脚本默认取 <code>n=128</code>，对应格距约 9.4 cm，注释明确说 128 可以、更高的分辨率不行。</p>
+<p><code>sigma</code> 的单位是格数而不是米，函数文档串专门警告过这一点：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#032F62">"""...</span></span>
+<span class="line"><span style="color:#032F62">注意 sigma 是**格数**单位: 换 n 时必须按比例调, 否则起伏尺度会变</span></span>
+<span class="line"><span style="color:#032F62">(n=384 配 sigma=6 与 n=128 配 sigma=2 才是同一物理尺度)。</span></span>
+<span class="line"><span style="color:#032F62">..."""</span></span></code></pre>
+<p>所以换 <code>n</code> 时 <code>sigma</code> 必须等比例改：<code>n=384</code> 配 <code>sigma=6</code> 才与 <code>n=128</code> 配 <code>sigma=2</code> 是同一物理尺度。这条约束在调分辨率时最容易漏。</p>
 <h2 id="高度场与-xml-尺寸的同步">高度场与 XML 尺寸的同步</h2>
-<p>生成的 PNG 与元数据由脚本写出，地形场景里的 <code>hfield</code> 尺寸必须跟着变。当前 <code>size</code> 是 <code>"6 6 0.3000 0.0960"</code>（<code>models/go1/scene_mjx_terrain.xml:67</code>），其中前两个数对应半边长 6 m，第三个数 0.3000 是生成时的最大高度（来自 <code>terrain.json</code>），第四个数 0.0960 是 <code>z</code> 方向偏移。注释写明尺寸与 <code>geom</code> 高度偏移必须成套标定，换地形后最大高度会变，<code>pos.z</code> 要复测（<code>:13-14</code>、<code>:49-51</code>）。</p>
-<p>当前配置的总高差是 0.30 m，注释注明是旧版的 3.7 倍（<code>:59</code>）。重新生成地形的命令是 <code>sim/gen_terrain.py</code>，它会自动同步 <code>size</code>（<code>:28</code>）。生成过程是确定性的：固定 <code>seed</code>，训练与可视化共用同一份 XML，保证两边看到的地形严格一致（<code>:21</code>）。</p>
+<p>生成的 PNG 与元数据由脚本写出，地形场景里的 <code>hfield</code> 尺寸必须跟着变。当前 <code>size</code> 是 <code>"6 6 0.3000 0.0960"</code>（<code>models/go1/scene_mjx_terrain.xml</code>），其中前两个数对应半边长 6 m，第三个数 0.3000 是生成时的最大高度（来自 <code>terrain.json</code>），第四个数 0.0960 是 <code>z</code> 方向偏移。注释写明尺寸与 <code>geom</code> 高度偏移必须成套标定，换地形后最大高度会变，<code>pos.z</code> 要复测。</p>
+<p>当前配置的总高差是 0.30 m，注释注明是旧版的 3.7 倍。重新生成地形的命令是 <code>sim/gen_terrain.py</code>，它会自动同步 <code>size</code>。生成过程是确定性的：固定 <code>seed</code>，训练与可视化共用同一份 XML，保证两边看到的地形严格一致。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["make_terrain 参数 (n, ext, step_height, stair_steps)"] --> B["高度场 h (n×n), 值域 0 到 0.30m"]
   B --> C["flatten_origin radius=0.5 blend=0.9"]
@@ -799,16 +874,20 @@
   E --> F["scene_mjx_terrain.xml"]
   F --> G["envs/go1_walk.py TERRAIN_XML_PATH"]</pre></div>
 <h2 id="地形训练必须随机出生">地形训练必须随机出生</h2>
-<p><code>terrain</code> 默认关闭（<code>envs/go1_walk.py:344</code>），打开后环境改用 <code>models/go1/scene_mjx_terrain.xml</code>（<code>:413</code>）。训练入口在地形打开时会隐式打开随机出生（<code>train/train_go1.py:481-489</code>），理由在注释里写得很直白：<code>reset</code> 默认把机器人放原点，而原点周围是压平区，8192 个环境会全部落在平地上，见不到台阶，学不会爬梯。</p>
-<p>出生参数的范围是 xy 正负 5 m、随机朝向、出生高度为地面加 0.35 m、出生速度正负 0.3（<code>envs/go1_walk.py:376-382</code>）。调试时可以加 <code>--no_random_init</code> 回到原点出生，入口脚本会把 <code>random_init.enable</code> 显式置假并打印（<code>train/train_go1.py:494-496</code>）。</p>
-<p>换地形不能热启动。地形改变足端可达性与接触面，属换任务；v18 是在平地上训出来的，不能直接续训到地形场景（<code>envs/go1_walk.py:342-343</code>）。</p>
+<p><code>terrain</code> 默认关闭（<code>envs/go1_walk.py</code>），打开后环境改用 <code>models/go1/scene_mjx_terrain.xml</code>。训练入口在地形打开时会隐式打开随机出生（<code>train/train_go1.py</code>），理由在注释里写得很直白：<code>reset</code> 默认把机器人放原点，而原点周围是压平区，8192 个环境会全部落在平地上，见不到台阶，学不会爬梯。</p>
+<p>出生参数的范围是 xy 正负 5 m、随机朝向、出生高度为地面加 0.35 m、出生速度正负 0.3（<code>envs/go1_walk.py</code>）。调试时可以加 <code>--no_random_init</code> 回到原点出生，入口脚本会把 <code>random_init.enable</code> 显式置假并打印（<code>train/train_go1.py</code>）。</p>
+<p>换地形不能热启动。地形改变足端可达性与接触面，属换任务；v18 是在平地上训出来的，不能直接续训到地形场景（<code>envs/go1_walk.py</code>）。</p>
 <h2 id="尚未执行的地形课程候选">尚未执行的地形课程候选</h2>
-<p>实验记录里出现过三次地形课程方案，都停留在建议状态。第一次提出把出生半径从 1.5 m 逐步扩到 5 m，或先用低台阶再上高台阶（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2332</code>）。第二次指出当时把 0.06 m 单级台阶与 0.30 m 连续爬升混在一起学，建议按难度拆开（<code>:2717</code>）。第三次给了相反的判断：摔倒主要发生在平地，说明瓶颈是基础步态而不是地形难度，所以课程化的优先级应低于步态相关的改动（<code>:2964-2965</code>）。</p>
+<p>实验记录里出现过三次地形课程方案，都停留在建议状态。第一次提出把出生半径从 1.5 m 逐步扩到 5 m，或先用低台阶再上高台阶（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。第二次指出当时把 0.06 m 单级台阶与 0.30 m 连续爬升混在一起学，建议按难度拆开。第三次给了相反的判断：摔倒主要发生在平地，说明瓶颈是基础步态而不是地形难度，所以课程化的优先级应低于步态相关的改动。</p>
 <p>这三次记录的时间顺序说明同一个方案会被新证据推翻，引用时要点明是哪一版的结论。当前工程里地形难度是单档的：一份固定 seed 生成的高度场，没有分级文件，也没有运行期切换难度的开关。</p>
 <h2 id="起身任务的两根课程轴">起身任务的两根课程轴</h2>
-<p>起身任务的难度做在出生姿态里。<code>envs/go1_getup.py</code> 的配置给出两根轴：第一根是出生难度 <code>difficulty</code>，取值 0 到 1，只插值关节构型；第二根是朝向随机程度，控制身体竖直出生的比例（<code>envs/go1_getup.py:94-105</code>）。<code>drop_prob=0.75</code> 决定摔倒姿态在出生样本中的占比，其余是站立出生，用来学“别乱动”（<code>:76</code>）。</p>
-<p>第一根轴只插值关节，不是随手选的。注释记录了 v26 第一版的教训：如果按“站到躺”插值整体姿态，中间档的姿态一落地就被重力塌回地面，课程轴选错了；换成腿部构型之后才出现连续过渡（<code>:179-189</code>）。朝向轴不能插值，只能在站立与躺倒之间二选一，因为中间角度的出生姿态同样不稳定（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:5647</code>）。</p>
-<p><code>envs/go1_getup_v2.py</code> 里还有一根对应的残差课程轴 <code>joint_alpha</code>，默认 1.0 表示公开配方原样全随机，取小值相当于 HumanUP 第一阶段的“规范姿态加弱正则”（<code>envs/go1_getup_v2.py:99-101</code>、<code>:203</code>）。</p>
+<p>起身任务的难度做在出生姿态里。<code>envs/go1_getup.py</code> 的配置给出两根轴：第一根是出生难度 <code>difficulty</code>，取值 0 到 1，只插值关节构型；第二根是朝向随机程度，控制身体竖直出生的比例。<code>drop_prob=0.75</code> 决定摔倒姿态在出生样本中的占比，其余是站立出生，用来学“别乱动”。难度轴的作用可以写成一段示意：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：难度 α 在"规范关节构型"与"全随机构型"之间插值</span></span>
+<span class="line"><span style="color:#24292E">joints </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#005CC5">1.0</span><span style="color:#D73A49"> -</span><span style="color:#24292E"> alpha) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> stand_joints </span><span style="color:#D73A49">+</span><span style="color:#24292E"> alpha </span><span style="color:#D73A49">*</span><span style="color:#24292E"> random_joints</span></span>
+<span class="line"><span style="color:#6A737D"># alpha=0 -> 站立出生（先学站住）；alpha=1 -> 全随机（公开配方）</span></span></code></pre>
+<p>为什么只插值关节而不是整体姿态、为什么朝向轴只能二选一，原因写在下一段。</p>
+<p>第一根轴只插值关节，不是随手选的。注释记录了 v26 第一版的教训：如果按“站到躺”插值整体姿态，中间档的姿态一落地就被重力塌回地面，课程轴选错了；换成腿部构型之后才出现连续过渡。朝向轴不能插值，只能在站立与躺倒之间二选一，因为中间角度的出生姿态同样不稳定（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p><code>envs/go1_getup_v2.py</code> 里还有一根对应的残差课程轴 <code>joint_alpha</code>，默认 1.0 表示公开配方原样全随机，取小值相当于 HumanUP 第一阶段的“规范姿态加弱正则”（<code>envs/go1_getup_v2.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["出生样本"] --> B{"drop_prob=0.75"}
   B -->|"摔倒姿态"| C["关节构型按 difficulty α 插值"]
@@ -819,9 +898,9 @@
   F --> G["训练一个固定难度的策略"]
   G --> H["下次运行 --restore 并提高 α"]</pre></div>
 <h2 id="课程只能靠多次运行推进">课程只能靠多次运行推进</h2>
-<p>难度参数是每次运行的常量，不能在训练中途改。原因是 JIT 的编译行为：曾经把课程写在 <code>progress_fn</code> 里，指望 <code>reset</code> 重编译，结果不生效。结论被记录为：课程只能靠多次运行加 <code>--restore</code>，每次运行一个固定难度（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:5623-5635</code>）。</p>
-<p>入口脚本把这一点写进了参数说明：<code>--difficulty</code> 的注释直接写“课程用多次运行手动推进（配 <code>--restore</code> 续训），因为它是 trace 期常量”（<code>train/train_getup.py:164-167</code>）。朝向轴的参数说明同样给出两次运行的顺序：先朝向 0 再朝向 1（<code>:171-173</code>）。<code>--joint_alpha</code> 的说明也点明“课程用多次运行推进”（<code>:196-198</code>）。</p>
-<p>每次运行的难度值会在启动时打印成一行 guard 信息（<code>train/train_getup.py:301-313</code>），续训时要把上一次的权重路径与新的难度值一起写进命令。</p>
+<p>难度参数是每次运行的常量，不能在训练中途改。原因在 JIT 的编译行为：JAX 会把训练循环”即时编译”（JIT）成一张静态图，被编译进图里的常量叫 trace 期常量，运行期改它不会触发重编译、改了也不生效。曾经把课程写在 <code>progress_fn</code> 里、指望 <code>reset</code> 重编译，结果不生效。结论被记录为：课程只能靠多次运行加 <code>--restore</code>，每次运行一个固定难度（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>入口脚本把这一点写进了参数说明：<code>--difficulty</code> 的注释直接写“课程用多次运行手动推进（配 <code>--restore</code> 续训），因为它是 trace 期常量”（<code>train/train_getup.py</code>）。朝向轴的参数说明同样给出两次运行的顺序：先朝向 0 再朝向 1。<code>--joint_alpha</code> 的说明也点明“课程用多次运行推进”。</p>
+<p>每次运行的难度值会在启动时打印成一行 guard 信息（<code>train/train_getup.py</code>），续训时要把上一次的权重路径与新的难度值一起写进命令。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
   state "运行 1: α=0 站立出生" as R1
   state "运行 2: α=0.5 中间构型" as R2
@@ -831,8 +910,8 @@
   R2 --> R3: --restore 权重, 提高 difficulty
   note right of R1 : 每次运行内难度是 trace 期常量</pre></div>
 <h2 id="课程优先级的实测判断">课程优先级的实测判断</h2>
-<p>课程排在哪一步做，用的是实测证据而不是直觉。记录里给出的判断链是：先确认摔倒位置，再决定要不要课程化。当时统计出摔倒主要发生在平地，于是把基础步态相关的改动排在前面，地形课程排在后面（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2964-2965</code>）。</p>
-<p>另一条相关记录否掉了“用出生高度做连续课程”的早期想法：出生姿态多样性改由两轴课程提供，单一高度轴取 0（<code>:5417</code>、<code>:5499</code>）。这两条合起来说明课程设计要与失败模式对齐，难度轴选错了还不如不做。</p>
+<p>课程排在哪一步做，用的是实测证据而不是直觉。记录里给出的判断链是：先确认摔倒位置，再决定要不要课程化。当时统计出摔倒主要发生在平地，于是把基础步态相关的改动排在前面，地形课程排在后面（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>另一条相关记录否掉了“用出生高度做连续课程”的早期想法：出生姿态多样性改由两轴课程提供，单一高度轴取 0。这两条合起来说明课程设计要与失败模式对齐，难度轴选错了还不如不做。</p>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -939,14 +1018,23 @@
 
 
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>sim/gen_terrain.py</code></td><td>高度场生成、原点压平与元数据写出</td></tr><tr><td><code>models/go1/scene_mjx_terrain.xml</code></td><td>hfield 尺寸、geom 偏移与分辨率约束</td></tr><tr><td><code>envs/go1_walk.py</code></td><td>地形开关、随机出生参数与热启动约束</td></tr><tr><td><code>envs/go1_getup.py</code></td><td>起身任务的双轴课程配置</td></tr><tr><td><code>envs/go1_getup_v2.py</code></td><td>残差课程轴 joint_alpha</td></tr><tr><td><code>train/train_getup.py</code></td><td>难度参数入口与多次运行推进的说明</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>地形课程建议、双轴课程定位与优先级判断</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-激励缺口与奖励标定方法"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-激励缺口与奖励标定方法</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/11-强化学习/03-奖励设计与课程学习/04-激励缺口与奖励标定方法.md</span></div><div class="dfile__body"><p>奖励设计的问题很少是“权重写错了”，多数情况是奖励面里存在一条收益更高的旁路。策略总能找到它：贴地滑行能拿满速度跟踪，吊着一条腿能躲开只在触地帧结算的惩罚，绕开楼梯与爬上去的收益完全相同。这些旁路都有一个共同特征，它们在原本的奖励公式里完全合法。</p>
-<p>发现这类问题不能只读公式，还要把策略的实际行为拆成可测量的量：足端占空比、对角同步率、抬脚净空、每步分项均值。mjx-go1-getup 的版本记录里，每一版修补都先给出一个实测数字，再给出一个探针脚本；补丁写完之后还要用区分度扫描确认新奖励面真的能推动行为。</p>
+<p>发现这类问题不能只读公式，还要把策略的实际行为拆成可测量的量：足端占空比（一只脚处于触地相的时间占比）、对角同步率（对角两足是否同相摆动）、抬脚净空、每步分项均值。mjx-go1-getup 的版本记录里，每一版修补都先给出一个实测数字，再给出一个探针脚本；补丁写完之后还要用区分度扫描确认新奖励面真的能推动行为。</p>
 <p>五类激励缺口的结论都来自实测，出处集中在实验记录里。引用探针脚本时要注意：不少脚本已经被删除，留下的结论在实验记录里，正文会标明哪些文件当前不存在。</p>
 <h2 id="滑行与贴地跟踪奖励被滑移绕开">滑行与贴地：跟踪奖励被滑移绕开</h2>
-<p>v10 到 v15 的步态是贴地滑行。速度跟踪项只关心基座速度，不关心足端怎么移动，于是“脚不动、靠摩擦力滑”与“脚迈出去推地”拿到的分一样多，而前者更容易稳定（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:781</code>）。权重表里 <code>feet_slip</code> 默认 0.0 的注释把这件事写得很直接：没有这一项时贴地滑行能拿满速度跟踪奖励，是 v10 到 v15 滑行步态的直接原因（<code>envs/go1_walk.py:129-131</code>）。</p>
-<p>v16 的修补照搬了 playground 的配方（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:789</code>）：接触相足端速度平方惩罚 <code>feet_slip=-0.5</code>，摆动相抬脚高度塑形 <code>feet_height=-1.0</code>，两项在 <code>train/train_go1.py:446-456</code> 一起启用。修补效果用实测打滑量验收，记录里给的是“打滑消除”（<code>:846</code>）。</p>
+<p>v10 到 v15 的步态是贴地滑行。速度跟踪项只关心基座速度，不关心足端怎么移动，于是“脚不动、靠摩擦力滑”与“脚迈出去推地”拿到的分一样多，而前者更容易稳定（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。权重表里 <code>feet_slip</code> 默认 0.0 的注释把这件事写得很直接：没有这一项时贴地滑行能拿满速度跟踪奖励，是 v10 到 v15 滑行步态的直接原因（<code>envs/go1_walk.py</code>）。</p>
+<p>v16 的修补照搬了 playground 的配方（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）：接触相足端速度平方惩罚 <code>feet_slip=-0.5</code>，摆动相抬脚高度塑形 <code>feet_height=-1.0</code>，两项在 <code>train/train_go1.py</code> 一起启用。惩罚的形状写成简化示意是：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：只在触地帧结算的足端滑移惩罚</span></span>
+<span class="line"><span style="color:#24292E">slip </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.where(contact, jp.sum(foot_vel_xy </span><span style="color:#D73A49">**</span><span style="color:#005CC5"> 2</span><span style="color:#24292E">, </span><span style="color:#E36209">axis</span><span style="color:#D73A49">=-</span><span style="color:#005CC5">1</span><span style="color:#24292E">), </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6A737D"># 摆动相抬脚高度塑形：离目标高度越远扣得越多</span></span>
+<span class="line"><span style="color:#24292E">height </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.where(swing, </span><span style="color:#D73A49">-</span><span style="color:#24292E">(max_foot_height </span><span style="color:#D73A49">-</span><span style="color:#24292E"> foot_z) </span><span style="color:#D73A49">**</span><span style="color:#005CC5"> 2</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>jp.where(条件, 真值, 假值)</code> 让这一项只在触地帧非零——这正是”只在事件上结算”的来源。修补效果用实测打滑量验收，记录里给的是“打滑消除”。</p>
 <h2 id="单腿吊挂只在触地帧结算的漏洞">单腿吊挂：只在触地帧结算的漏洞</h2>
-<p><code>feet_slip</code> 与 <code>feet_height</code> 都只在触地帧结算，一条永远不落地的腿同时躲开了两项惩罚。v16 之后出现的现象是 FL 足占空比 0.01、连续悬空 14.7 s（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:864</code>）。这不是参数调错，是结算时机决定的漏洞。</p>
-<p>v17 的修补是加一项逐步结算的悬空惩罚 <code>feet_dangle=-0.5</code>，按 <code>clip(air_time - air_time_limit, ...)</code> 每步扣分，<code>air_time_limit</code> 取 0.8 s，是正常摆动 0.2 到 0.4 s 的两倍余量（<code>envs/go1_walk.py:136-140</code>、<code>:185-189</code>）。同一次修补还给空距奖励加了封顶 <code>air_time_max=0.5</code>：不封顶时“吊腿 10 s 再落地”能拿 +9.8，与正常步态每秒收益相当（<code>:179-181</code>）。</p>
+<p><code>feet_slip</code> 与 <code>feet_height</code> 都只在触地帧结算，一条永远不落地的腿同时躲开了两项惩罚。v16 之后出现的现象是 FL 足占空比 0.01、连续悬空 14.7 s（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。这不是参数调错，是结算时机决定的漏洞。</p>
+<p>v17 的修补是加一项逐步结算的悬空惩罚 <code>feet_dangle=-0.5</code>，按 <code>clip(air_time - air_time_limit, ...)</code> 每步扣分：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：悬空超过上限后逐步扣分（真实实现见 _cost_feet_dangle）</span></span>
+<span class="line"><span style="color:#24292E">over </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.maximum(air_time </span><span style="color:#D73A49">-</span><span style="color:#24292E"> air_time_limit, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">reward_dangle </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#24292E">over</span></span></code></pre>
+<p><code>jp.maximum(x, 0.0)</code> 是”只取超出量”的写法：没超上限时为 0，超过多少就扣多少、每一步都扣，所以吊着不放的那条腿躲不掉。<code>air_time_limit</code> 取 0.8 s，是正常摆动 0.2 到 0.4 s 的两倍余量（<code>envs/go1_walk.py</code>）。同一次修补还给空距奖励加了封顶 <code>air_time_max=0.5</code>：不封顶时“吊腿 10 s 再落地”能拿 +9.8，与正常步态每秒收益相当。</p>
 
 
 
@@ -990,11 +1078,11 @@
 
 <table><thead><tr><th>分项</th><th>结算时机</th><th>被绕开的方式</th><th>对应修补</th></tr></thead><tbody><tr><td><code>feet_slip</code></td><td>触地帧</td><td>脚不落地</td><td>v17 <code>feet_dangle</code></td></tr><tr><td><code>feet_height</code></td><td>摆动相</td><td>脚不抬起</td><td>v20 改成摆动相均值结算</td></tr><tr><td><code>feet_airtime</code></td><td>触地帧</td><td>一次吊很久再落地</td><td><code>air_time_max</code> 封顶</td></tr><tr><td><code>feet_impact</code></td><td>落地帧（初版）</td><td>不落地</td><td>v20 改成净空低于阈值时结算</td></tr><tr><td><code>ascent</code></td><td>每步</td><td>站在台顶不动</td><td>v23 行进门控</td></tr></tbody></table>
 <h2 id="三足与前后成对仅靠惩罚推不出步态">三足与前后成对：仅靠惩罚推不出步态</h2>
-<p>v19 的策略退化成“前腿占空比 13%、后腿 78%、对角同步 13%”，前腿基本吊着不落地（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2812</code>、<code>:2844</code>）。机制被描述成“后腿独撑加前腿悬空”，并给出一个可解释的恶性激励假设：前腿悬空可以同时躲开接触相惩罚（<code>:2867</code>）。</p>
-<p>这里的关键判断是，惩罚项只能排除坏行为，推不出目标行为。要得到对角 trot，需要显式的相位引导。这条判断直接导致 v20 引入 <code>feet_phase</code> 相位奖励（<code>envs/go1_walk.py:238-240</code>）。同一节记录还纠正了一个观察偏差：当时摔的地方在平地，不在台阶，走不快的原因是速度与稳定性的权衡崩了（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2890</code>、<code>:2910</code>）。</p>
+<p>v19 的策略退化成“前腿占空比 13%、后腿 78%、对角同步 13%”，前腿基本吊着不落地（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。机制被描述成“后腿独撑加前腿悬空”，并给出一个可解释的恶性激励假设：前腿悬空可以同时躲开接触相惩罚。</p>
+<p>这里的关键判断是，惩罚项只能排除坏行为，推不出目标行为。要得到对角 trot，需要显式的相位引导。这条判断直接导致 v20 引入 <code>feet_phase</code> 相位奖励（<code>envs/go1_walk.py</code>）。同一节记录还纠正了一个观察偏差：当时摔的地方在平地，不在台阶，走不快的原因是速度与稳定性的权衡崩了（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <h2 id="相位奖励面过平区分度只有-004">相位奖励面过平：区分度只有 0.04</h2>
-<p>v20 的第一版相位奖励用了 playground 的 <code>sigma=0.1</code> 与 <code>swing_height=0.08</code>，在真实 rollout 里给分几乎为零，而且偏袒“不抬腿”（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:3155</code>、<code>:3170</code>）。量化后的三个参照点是：理想 trot 1.0000、四足全贴地不动 0.9583，只差 0.04（<code>envs/go1_walk.py:248-255</code>）。策略在 5M 步时确实朝“四足贴地不动”退化，前腿占空比 8.7%。</p>
-<p>修补是把 <code>swing_height</code> 从 0.08 提到 0.15、<code>sigma</code> 从 0.1 收到 0.02，重新扫描得到 A 理想 1.0000、B 贴地 0.3371、C 全悬 0.1880，区分度 <code>gap=0.6629</code>（<code>:256-261</code>）。扫描用的探针 <code>sim/probe_v20_phase_flatness.py</code> 已删除，数值结论保留在实验记录里（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:3196</code>）。</p>
+<p>v20 的第一版相位奖励用了 playground 的 <code>sigma=0.1</code> 与 <code>swing_height=0.08</code>，在真实 rollout 里给分几乎为零，而且偏袒“不抬腿”（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。量化后的三个参照点是：理想 trot 1.0000、四足全贴地不动 0.9583，只差 0.04（<code>envs/go1_walk.py</code>）。策略在 5M 步时确实朝“四足贴地不动”退化，前腿占空比 8.7%。</p>
+<p>修补是把 <code>swing_height</code> 从 0.08 提到 0.15、<code>sigma</code> 从 0.1 收到 0.02，重新扫描得到 A 理想 1.0000、B 贴地 0.3371、C 全悬 0.1880，区分度 <code>gap=0.6629</code>。扫描用的探针 <code>sim/probe_v20_phase_flatness.py</code> 已删除，数值结论保留在实验记录里（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["策略退化现象"] --> B["统计占空比与相位同步率"]
   B --> C{"找到收益更高的旁路"}
@@ -1005,16 +1093,21 @@
   F --> H["短冒烟验证奖励趋势"]
   G --> H</pre></div>
 <h2 id="绕开楼梯奖励面缺少爬升项">绕开楼梯：奖励面缺少爬升项</h2>
-<p>v21 的策略放在楼梯脚下正对楼梯，走 2.0 m 却横向漂移 1.4 m 绕开，最大爬升只有 4.7 cm（<code>train/train_go1.py:607-608</code>）。原因是原奖励面没有任何一项随“站得更高”增加：<code>base_height</code> 是相对量，速度跟踪、相位、各项成本都与地形高度无关，于是绕开与爬上去收益完全相同，而绕行更容易（<code>:603-606</code>）。</p>
-<p>v22 加了 <code>ascent</code>：每步奖励为 <code>W × clip(h_now - h_spawn, 0, 0.35)</code>，权重 2.0（<code>train/train_go1.py:588-602</code>）。用绝对地形高度差而不是躯干相对地面，是因为后者在地形上是常量，补不上缺口；下坡不扣分由 <code>feet_impact</code> 负责；上限 0.35 m 防止某个环境爬上天花板后靠一项吃满（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4501-4504</code>）。</p>
-<p>标定 <code>ascent</code> 权重用的是探针 <code>sim/probe_v22_reward_terms.py</code> 的实测每步均值：速度跟踪 +1.76、相位 +1.59、<code>base_height</code> -0.30（<code>train/train_go1.py:609-610</code>）。这几个数是后面反套利算术的输入。</p>
+<p>v21 的策略放在楼梯脚下正对楼梯，走 2.0 m 却横向漂移 1.4 m 绕开，最大爬升只有 4.7 cm（<code>train/train_go1.py</code>）。原因是原奖励面没有任何一项随“站得更高”增加：<code>base_height</code> 是相对量，速度跟踪、相位、各项成本都与地形高度无关，于是绕开与爬上去收益完全相同，而绕行更容易。</p>
+<p>v22 加了 <code>ascent</code>：每步奖励为 <code>W × clip(h_now - h_spawn, 0, 0.35)</code>，权重 2.0（<code>train/train_go1.py</code>）。用绝对地形高度差而不是躯干相对地面，是因为后者在地形上是常量，补不上缺口；下坡不扣分由 <code>feet_impact</code> 负责；上限 0.35 m 防止某个环境爬上天花板后靠一项吃满（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>标定 <code>ascent</code> 权重用的是探针 <code>sim/probe_v22_reward_terms.py</code> 的实测每步均值：速度跟踪 +1.76、相位 +1.59、<code>base_height</code> -0.30（<code>train/train_go1.py</code>）。这几个数是后面反套利算术的输入。</p>
 <h2 id="站桩套利状态型奖励的算术上界">站桩套利：状态型奖励的算术上界</h2>
-<p><code>ascent</code> 是状态型奖励，站在台顶不动也持续收钱，所以权重不能靠扫参拍出来，要用算术定。走路每步 +1.776，站着不动 +0.347，站台顶每步是 <code>0.347 + W × 0.30</code>；代入 W=2 得 +0.947（走路的 53%），W=4 得 +1.547（88%），W=8 得 +2.747（154%，会退化）（<code>train/train_go1.py:611-621</code>、<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4506-4515</code>）。</p>
-<p>v23 给这一项加了行进门控 <code>clip(|v_body|/0.2, 0, 1)</code>，静止时归零，套利路径消失（<code>envs/go1_walk.py:205-209</code>）。门控的思想可以推广：任何按状态持续给分的项，都要检查“保持该状态不动”的收益是否超过正常行为。</p>
+<p><code>ascent</code> 是状态型奖励，站在台顶不动也持续收钱，所以权重不能靠扫参拍出来，要用算术定。走路每步 +1.776，站着不动 +0.347，站台顶每步是 <code>0.347 + W × 0.30</code>；代入 W=2 得 +0.947（走路的 53%），W=4 得 +1.547（88%），W=8 得 +2.747（154%，会退化）（<code>train/train_go1.py</code>、<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>v23 给这一项加了行进门控 <code>clip(|v_body|/0.2, 0, 1)</code>，静止时归零，套利路径消失。爬升奖励与门控写成简化示意是：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：爬升奖励 + 行进门控</span></span>
+<span class="line"><span style="color:#24292E">gain </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.clip(terrain_h_now </span><span style="color:#D73A49">-</span><span style="color:#24292E"> terrain_h_spawn, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, ascent_cap)   </span><span style="color:#6A737D"># 0 ~ 0.35 m</span></span>
+<span class="line"><span style="color:#24292E">gate </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.clip(jp.linalg.norm(v_body) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> ascent_gate, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">)     </span><span style="color:#6A737D"># 静止 -> 0</span></span>
+<span class="line"><span style="color:#24292E">reward_ascent </span><span style="color:#D73A49">=</span><span style="color:#24292E"> W </span><span style="color:#D73A49">*</span><span style="color:#24292E"> gain </span><span style="color:#D73A49">*</span><span style="color:#24292E"> gate</span></span></code></pre>
+<p><code>jp.clip(..., 0, cap)</code> 把单步爬升限制在 0 到 0.35 m（下坡不奖、也不会让某项吃满），<code>gate</code> 在速度接近 0 时把整项压到 0——这正是门控消除套利的机制。门控的思想可以推广：任何按状态持续给分的项，都要检查“保持该状态不动”的收益是否超过正常行为。</p>
 <h2 id="标定流程探针单变量与通路验证">标定流程：探针、单变量与通路验证</h2>
-<p>三步流程在这份工程里反复出现。第一步是探针标定，先量出分项在真实 rollout 里的每步均值，再定权重；用过的探针包括 <code>sim/probe_v19_reward_scale.py</code>（量 <code>base_height</code> 的平方误差分布，已删除，结论见实验记录 <code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2392</code>）、<code>sim/diag_v16_reward.py</code>（区分度验证，<code>:809</code>）、<code>sim/probe_v22_reward_terms.py</code>（分项均值，<code>train/train_go1.py:609</code>）。</p>
-<p>第二步是单变量实验。v22 的注释专门说明 <code>base_height_ref</code> 保持 <code>mean5</code> 默认值，为的是让这一轮唯一变量是 <code>ascent</code>，否则 40M 步的改善无法归因（<code>envs/go1_walk.py:219-223</code>、<code>train/train_go1.py:624-634</code>）。</p>
-<p>第三步是通路验证，用 200K 步、1024 环境的短跑确认每个开关的生效行、观测维度、奖励曲线与 NaN 状态（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2488-2500</code>）。</p>
+<p>三步流程在这份工程里反复出现。第一步是探针标定，先量出分项在真实 rollout 里的每步均值，再定权重；用过的探针包括 <code>sim/probe_v19_reward_scale.py</code>（量 <code>base_height</code> 的平方误差分布，已删除，结论见实验记录 <code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）、<code>sim/diag_v16_reward.py</code>（区分度验证）、<code>sim/probe_v22_reward_terms.py</code>（分项均值，<code>train/train_go1.py</code>）。</p>
+<p>第二步是单变量实验。v22 的注释专门说明 <code>base_height_ref</code> 保持 <code>mean5</code> 默认值，为的是让这一轮唯一变量是 <code>ascent</code>，否则 40M 步的改善无法归因（<code>envs/go1_walk.py</code>、<code>train/train_go1.py</code>）。</p>
+<p>第三步是通路验证，用 200K 步、1024 环境的短跑确认每个开关的生效行、观测维度、奖励曲线与 NaN 状态（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant P as 探针脚本
   participant W as 权重
@@ -1027,9 +1120,13 @@
   S->>L: 通过后进入长跑
   L->>P: 新现象回到探针</pre></div>
 <h2 id="平方项权重的实测纠正">平方项权重的实测纠正</h2>
-<p>v19 的 <code>base_height</code> 权重定标有过一次典型误估。第一版按线性直觉取 -20.0，并宣称偏差 3 cm 时惩罚 -1.8；实测公式是平方误差，-20.0 乘 0.03 的平方只有 -0.018，差了 20 倍（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2394-2399</code>）。</p>
-<p>探针 <code>sim/probe_v19_reward_scale.py</code> 用 512 环境乘 400 步量出分布：躯干相对高度均值 0.2590、标准差 0.0630、中位数 0.2761、95 分位 0.2889；相对目标 0.28 的偏差均值 0.0280 m、95 分位 0.2181 m；平方误差的中位数 1.9e-5，95 分位 0.0476，最大 0.0527（<code>:2401-2408</code>）。中位数与 95 分位相差约 2500 倍，分布极长尾，长尾由摔倒样本贡献。</p>
-<p>按 95 分位量级选 -200.0，得到偏差 2 cm 惩罚 -0.08、5 cm 惩罚 -0.50、10 cm 惩罚 -2.00（<code>:2413-2419</code>）。排除 -2000 的理由是它给到每步均值 -8.83，是 v18 每步奖励 2.46 的 3.6 倍，会把总奖励压到截断线以下，PPO 失去梯度，正是 v1 到 v7 的失败模式（<code>:2421-2422</code>）。结论写在记录里：平方项的权重不能靠线性外推，必须实测分布。</p>
+<p>v19 的 <code>base_height</code> 权重定标有过一次典型误估。第一版按线性直觉取 -20.0，并宣称偏差 3 cm 时惩罚 -1.8；实测公式是平方误差，-20.0 乘 0.03 的平方只有 -0.018，差了 20 倍（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>探针 <code>sim/probe_v19_reward_scale.py</code> 用 512 环境乘 400 步量出分布：躯干相对高度均值 0.2590、标准差 0.0630、中位数 0.2761、95 分位 0.2889；相对目标 0.28 的偏差均值 0.0280 m、95 分位 0.2181 m；平方误差的中位数 1.9e-5，95 分位 0.0476，最大 0.0527。中位数与 95 分位相差约 2500 倍，分布极长尾，长尾由摔倒样本贡献。</p>
+<p>按 95 分位量级选 -200.0，得到偏差 2 cm 惩罚 -0.08、5 cm 惩罚 -0.50、10 cm 惩罚 -2.00：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：平方误差在不同偏差下的惩罚（权重 -200）</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> d </span><span style="color:#D73A49">in</span><span style="color:#24292E"> (</span><span style="color:#005CC5">0.02</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.05</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.10</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#005CC5">    print</span><span style="color:#24292E">(d, </span><span style="color:#D73A49">-</span><span style="color:#005CC5">200.0</span><span style="color:#D73A49"> *</span><span style="color:#24292E"> d </span><span style="color:#D73A49">*</span><span style="color:#24292E"> d)     </span><span style="color:#6A737D"># -0.08 / -0.50 / -2.00</span></span></code></pre>
+<p>偏差翻倍、惩罚翻四倍——这就是不能用线性直觉定权重的原因：-20.0 乘 0.03 的平方只有 -0.018。排除 -2000 的理由是它给到每步均值 -8.83，是 v18 每步奖励 2.46 的 3.6 倍，会把总奖励压到截断线以下，PPO 失去梯度，正是 v1 到 v7 的失败模式。结论写在记录里：平方项的权重不能靠线性外推，必须实测分布。</p>
 
 
 
@@ -1057,10 +1154,10 @@
 
 <table><thead><tr><th>偏差</th><th>-200 权重下的惩罚</th><th>说明</th></tr></thead><tbody><tr><td>2 cm</td><td>-0.08</td><td>正常步态的抖动区间</td></tr><tr><td>5 cm</td><td>-0.50</td><td>明显塌腰</td></tr><tr><td>10 cm</td><td>-2.00</td><td>拖地或摔倒</td></tr></tbody></table>
 <h2 id="总奖励归零占比的验证">总奖励归零占比的验证</h2>
-<p>总奖励的形式是 <code>clip(total, 0, 10000)</code>，下限 0 由 <code>reward_clip_min</code> 给出（<code>envs/go1_walk.py:68-73</code>）。任何负项一旦把总奖励压到 0，该步梯度为零，所以加权重项之前要量一下归零占比。探针 <code>sim/probe_v19_reward_total.py</code> 给出的对照是：基线每步总奖励 1.708、归零步数占比 7.2%、存活率 86.9%；加上 <code>base_height=-200</code> 后每步 1.635、归零占比 10.8%、存活率不变；再叠 <code>feet_impact=-2</code> 数字完全不变（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2465-2472</code>）。</p>
-<p>两项叠加没有进一步影响，原因是归零步都出现在已经摔倒的样本里，惩罚本来就被截断吸收。每步总奖励只降 4.3%，判定为权重合适（<code>:2471-2473</code>）。这套验证的口径可以复用：新增负项后同时看每步均值、归零占比与存活率，只看均值会漏掉长尾。</p>
+<p>总奖励的形式是 <code>clip(total, 0, 10000)</code>，下限 0 由 <code>reward_clip_min</code> 给出（<code>envs/go1_walk.py</code>）。任何负项一旦把总奖励压到 0，该步梯度为零，所以加权重项之前要量一下归零占比。探针 <code>sim/probe_v19_reward_total.py</code> 给出的对照是：基线每步总奖励 1.708、归零步数占比 7.2%、存活率 86.9%；加上 <code>base_height=-200</code> 后每步 1.635、归零占比 10.8%、存活率不变；再叠 <code>feet_impact=-2</code> 数字完全不变（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>两项叠加没有进一步影响，原因是归零步都出现在已经摔倒的样本里，惩罚本来就被截断吸收。每步总奖励只降 4.3%，判定为权重合适。这套验证的口径可以复用：新增负项后同时看每步均值、归零占比与存活率，只看均值会漏掉长尾。</p>
 <h2 id="奖励依赖的内部状态必须可观测">奖励依赖的内部状态必须可观测</h2>
-<p>相位奖励的目标轨迹 <code>rz(phi)</code> 随相位周期变化。策略如果看不到自己处在哪个相位，这条轨迹对它就是一个无法预测的时变目标，等价于在奖励里注入噪声，梯度方向随机，学不会。实测表现是奖励与行为的相关系数接近 0，修正办法是在 <code>_get_obs</code> 里加入相位编码（仅当相位奖励打开时）（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:3370-3382</code>）。</p>
+<p>相位奖励的目标轨迹 <code>rz(phi)</code> 随相位周期变化。策略如果看不到自己处在哪个相位，这条轨迹对它就是一个无法预测的时变目标，等价于在奖励里注入噪声，梯度方向随机，学不会。实测表现是奖励与行为的相关系数接近 0，修正办法是在 <code>_get_obs</code> 里加入相位编码（仅当相位奖励打开时）（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <p>这条约束适用于所有依赖内部状态的奖励项：相位、时钟、课程等级。写奖励函数时容易默认“当然知道当前相位”，而 actor 的观测里未必有。检查办法是列出奖励函数读取的每一个状态量，逐个确认它是否出现在 actor 的观测向量里。</p>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>

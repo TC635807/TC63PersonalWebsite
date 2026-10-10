@@ -38,14 +38,29 @@
 
 
 <table><thead><tr><th>结局</th><th>触发方式</th><th>基类的动作</th><th>是否触发回退</th></tr></thead><tbody><tr><td>正常返回</td><td><code>_do_search()</code> 返回非空列表</td><td>直接返回</td><td>否</td></tr><tr><td>空结果</td><td><code>_do_search()</code> 返回 <code>[]</code></td><td>直接返回空列表</td><td>否（Hybrid 层会自行判断）</td></tr><tr><td>瞬态失败</td><td><code>_do_search()</code> 抛普通异常</td><td>退避重试，用尽后返回 <code>[]</code></td><td>否</td></tr><tr><td>致命失败</td><td><code>_do_search()</code> 抛 <code>FatalSearchError</code></td><td>不重试，原样上抛</td><td>是</td></tr></tbody></table>
-<p>两类自定义异常在 <code>backend/search/base.py:26</code> 与 <code>:30</code> 定义。<code>RateLimitError</code> 表示子类遇到了 429，基类会按同一个退避逻辑重试；<code>FatalSearchError</code> 表示认证失效、额度不足或服务不可用，基类不重试也不吞掉，交给外层的回退包装器切换来源。这个划分是整条链路的枢纽：异常类型决定了这次失败能否被重试掩盖，以及会不会触发换源。</p>
+<p>两类自定义异常在 <code>backend/search/base.py</code> 里定义，都只继承 <code>Exception</code>、不带额外字段，全靠类型区分：<code>RateLimitError</code> 表示子类遇到了 429，基类会按同一个退避逻辑重试；<code>FatalSearchError</code> 表示认证失效、额度不足或服务不可用，基类不重试也不吞掉，交给外层的回退包装器切换来源。这个划分是整条链路的枢纽：异常类型决定了这次失败能否被重试掩盖，以及会不会触发换源。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/base.py</span></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> RateLimitError</span><span style="color:#24292E">(</span><span style="color:#005CC5">Exception</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#032F62">    """子类遇到 429 限速时抛出，基类会以指数退避重试。"""</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> FatalSearchError</span><span style="color:#24292E">(</span><span style="color:#005CC5">Exception</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#032F62">    """致命搜索错误（认证失败/额度不足/服务不可用）。"""</span></span></code></pre>
+<p>429 是 HTTP 的「请求过多」状态码，表示被服务端限速、等一下通常就好，所以归入可重试；<code>FatalSearchError</code> 则意味着继续重试同一个源没有意义。这个划分是整条链路的枢纽：异常类型决定了这次失败能否被重试掩盖，以及会不会触发换源。</p>
 <h2 id="2-构造函数里的四个旋钮">2. 构造函数里的四个旋钮</h2>
-<p><code>BaseSearchClient.__init__()</code>（<code>backend/search/base.py:46</code>）接收四个只读参数，并据此建立三件状态：</p>
+<p><code>BaseSearchClient.__init__()</code>（<code>backend/search/base.py</code>）接收四个参数并据此建立三件状态。签名里的 <code>*</code> 表示这些参数只能按关键字传入，避免调用时把几个数字传错位置：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._semaphore </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.Semaphore(max_concurrent)</span></span>
 <span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._lock </span><span style="color:#D73A49">=</span><span style="color:#24292E"> asyncio.Lock()</span></span>
 <span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._last_ts: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 0.0</span></span>
 <span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._min_interval </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> /</span><span style="color:#24292E"> rate_per_sec </span><span style="color:#D73A49">if</span><span style="color:#24292E"> rate_per_sec </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0</span><span style="color:#D73A49"> else</span><span style="color:#005CC5"> 0.0</span></span></code></pre>
-<p>四个参数的默认值是 <code>max_concurrent=5</code>、<code>rate_per_sec=2.0</code>、<code>max_retries=2</code>、<code>base_delay=1.0</code>。<code>rate_per_sec</code> 并不表示「每秒固定发几次」，它被换算成两次请求之间的最小间隔 <code>1.0 / rate_per_sec</code>；传 0 表示不做间隔约束。博查这一路把 <code>rate_per_sec</code> 设成 0（<code>backend/search/bocha.py:58</code>），因为它的限速由服务端返回 429 表达，客户端再加一层间隔只会拖慢批量搜索。</p>
+<p>四个参数的默认值是 <code>max_concurrent=5</code>、<code>rate_per_sec=2.0</code>、<code>max_retries=2</code>、<code>base_delay=1.0</code>。<code>rate_per_sec</code> 并不表示「每秒固定发几次」，它被换算成两次请求之间的最小间隔 <code>1.0 / rate_per_sec</code>；传 0 表示不做间隔约束。博查这一路把 <code>rate_per_sec</code> 设成 0（<code>backend/search/bocha.py</code> 的 <code>BochaSearchClient</code>），因为它的限速由服务端返回 429 表达，客户端再加一层间隔只会拖慢批量搜索。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/bocha.py（节选）</span></span>
+<span class="line"><span style="color:#005CC5">super</span><span style="color:#24292E">().</span><span style="color:#005CC5">__init__</span><span style="color:#24292E">(</span></span>
+<span class="line"><span style="color:#E36209">    max_concurrent</span><span style="color:#D73A49">=</span><span style="color:#24292E">max_concurrent,</span></span>
+<span class="line"><span style="color:#E36209">    rate_per_sec</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">,      </span><span style="color:#6A737D"># 限速交给服务端的 429 表达</span></span>
+<span class="line"><span style="color:#E36209">    max_retries</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">    base_delay</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">)</span></span></code></pre>
+<p>它的重试底数 <code>base_delay</code> 取 2.0 秒而不是默认的 1.0，因为博查是远端商业 API，抖动通常不会在 1 秒内恢复。</p>
 <p>并发与间隔解决的是两个不同的问题。信号量限制同时在飞的请求数，避免瞬时打满连接池；最小间隔限制请求的发起节奏，避免被服务端判定为爬取。两者都在基类里实现，子类拿到的 <code>search()</code> 已经是一个被约束过的入口。</p>
 <h2 id="3-一次-search-的完整路径">3. 一次 search() 的完整路径</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
@@ -61,12 +76,37 @@
   I -->|"未用尽"| J["sleep base_delay * 2^attempt"] --> E
   I -->|"已用尽"| K["记 warning 返回空列表"]
   G -->|"正常返回"| L["返回结果列表"]</pre></div>
-<p><code>search()</code> 本身只有三行有效逻辑（<code>backend/search/base.py:62</code>）：空查询直接返回空列表、用信号量包住一次重试流程、把结果原样返回。信号量在 <code>async with</code> 里获取，意味着同一时刻在飞的请求数受 <code>max_concurrent</code> 限制，而许可的释放在异常路径上也成立——这正是把整段重试放在 <code>async with</code> 内部的原因。</p>
+<p><code>search()</code> 本身就是这三行：空查询直接返回空列表、用信号量包住一次重试流程、把结果原样返回。信号量在 <code>async with</code> 里获取，意味着同一时刻在飞的请求数受 <code>max_concurrent</code> 限制，而许可的释放在异常路径上也成立——这正是把整段重试放在 <code>async with</code> 内部的原因。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/base.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> search</span><span style="color:#24292E">(self, query: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, max_results: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 10</span><span style="color:#24292E">) -> List[SearchResult]:</span></span>
+<span class="line"><span style="color:#032F62">    """带限流、重试的搜索入口。"""</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> query:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> []</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> with</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._semaphore:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._search_with_retry(query, max_results)</span></span></code></pre>
+<p><code>async with</code> 是 Python 的异步上下文管理器语法：进入时获取信号量许可、退出时自动释放，包括中途抛异常的情况——这正是把整段重试包在里面的原因。</p>
 <h2 id="4-指数退避只重试一类错误">4. 指数退避只重试一类错误</h2>
-<p><code>_search_with_retry()</code>（<code>backend/search/base.py:79</code>）的循环次数是 <code>max_retries + 1</code>，也就是默认最多尝试 3 次。循环体里的顺序决定了两件事：</p>
+<p><code>_search_with_retry()</code> 的循环次数是 <code>max_retries + 1</code>，也就是默认最多尝试 3 次，主体只有十来行：的循环次数是 <code>max_retries + 1</code>，也就是默认最多尝试 3 次。循环体里的顺序决定了两件事：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/base.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> attempt </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.max_retries </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._rate_limit()</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._do_search(query, max_results)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#24292E"> FatalSearchError:</span></span>
+<span class="line"><span style="color:#D73A49">        raise</span><span style="color:#6A737D">                          # 不重试，交给回退层</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> attempt </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.max_retries:</span></span>
+<span class="line"><span style="color:#24292E">            logger.warning(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">            return</span><span style="color:#24292E"> []                  </span><span style="color:#6A737D"># 重试用尽，返回空列表</span></span>
+<span class="line"><span style="color:#24292E">        delay </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.base_delay </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (</span><span style="color:#005CC5">2</span><span style="color:#D73A49"> **</span><span style="color:#24292E"> attempt)</span></span>
+<span class="line"><span style="color:#24292E">        logger.warning(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">        await</span><span style="color:#24292E"> asyncio.sleep(delay)</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> []</span></span></code></pre>
+<p>循环体里的顺序决定了两件事：</p>
 <ol>
-<li>每次尝试之前先调 <code>_rate_limit()</code>（<code>backend/search/base.py:84</code>），把间隔约束套在每次真实请求上，而不是只在第一次。</li>
-<li><code>FatalSearchError</code> 在第一个 <code>except</code> 分支就被重新抛出（<code>backend/search/base.py:86</code>），既不记重试日志也不等待。其余异常进入退避分支：第 <code>attempt</code> 次失败后的等待时间是 <code>base_delay * (2 ** attempt)</code>（<code>backend/search/base.py:95</code>），默认 1 秒、2 秒；超过重试上限时记一条 warning 并返回空列表（<code>backend/search/base.py:89</code>）。返回空列表而不是继续上抛，是为了让「搜索源暂时抖动」不打断整条流水线——上层的空结果处理会把它当作没有找到来源。</li>
+<li>每次尝试之前先调 <code>_rate_limit()</code>，把间隔约束套在每次真实请求上，而不是只在第一次。</li>
+<li><code>FatalSearchError</code> 在第一个 <code>except</code> 分支就被重新抛出，既不记重试日志也不等待。其余异常进入退避分支：第 <code>attempt</code> 次失败后的等待时间是 <code>base_delay * 2^attempt</code>，默认 1 秒、2 秒；超过重试上限时记一条 warning 并返回空列表。返回空列表而不是继续上抛，是为了让「搜索源暂时抖动」不打断整条流水线——上层的空结果处理会把它当作没有找到来源。</li>
 </ol>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
   state "尝试请求" as Try
@@ -80,43 +120,59 @@
   Try --> Raise: FatalSearchError
   Try --> [*]: 返回结果</pre></div>
 <h2 id="5-限流器保证的是最小间隔">5. 限流器保证的是最小间隔</h2>
-<p><code>_rate_limit()</code>（<code>backend/search/base.py:103</code>）用 <code>time.monotonic()</code> 而不是墙上时钟，避免系统时间被调整后间隔计算出现负值。实现是三行：算出距上次请求的间隔、不足则睡掉差额、把本次时刻写回。整段代码在 <code>asyncio.Lock</code> 保护下，因此多个协程并发调用时，间隔约束仍然成立，不会出现「同时判断都没超时、然后同时发出去」。</p>
+<p><code>_rate_limit()</code> 的完整实现如下：用 <code>time.monotonic()</code> 而不是墙上时钟，避免系统时间被调整后间隔计算出现负值。实现是三行：算出距上次请求的间隔、不足则睡掉差额、把本次时刻写回。整段代码在 <code>asyncio.Lock</code> 保护下，因此多个协程并发调用时，间隔约束仍然成立，不会出现「同时判断都没超时、然后同时发出去」。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/base.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> _rate_limit</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#032F62">    """令请求间至少间隔 _min_interval 秒，避免触发限速。"""</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._min_interval </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> with</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._lock:</span></span>
+<span class="line"><span style="color:#24292E">        elapsed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.monotonic() </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._last_ts</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> elapsed </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._min_interval:</span></span>
+<span class="line"><span style="color:#D73A49">            await</span><span style="color:#24292E"> asyncio.sleep(</span><span style="color:#005CC5">self</span><span style="color:#24292E">._min_interval </span><span style="color:#D73A49">-</span><span style="color:#24292E"> elapsed)</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._last_ts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.monotonic()</span></span></code></pre>
+<p><code>time.monotonic()</code> 是只会向前走的单调时钟，不受系统时间被手动调整或用 NTP 对时的影响，用它算间隔不会出现负值。整段在 <code>asyncio.Lock</code> 保护下，因此多个协程并发调用时判断与写入是原子的，不会出现「都没超时、然后同时发出去」。</p>
 <p>一个容易忽略的后果是：等待期间协程持有锁，但 <code>_semaphore</code> 许可已经拿到。也就是说，间隔约束发生在并发闸门之内，被等待的请求仍然占用一个并发额度。把 <code>rate_per_sec</code> 设得过小会同时压低吞吐与并发利用率：百度反代与 Exa 两条实现都受这一份限流器约束，限速值调小后并发额度被等待中的请求占住，两者的并发利用率会一起下降。</p>
 <h2 id="6-空查询不进网络">6. 空查询不进网络</h2>
 <p><code>search()</code> 开头判断 <code>if not query: return []</code>。这条短路看起来只是防御性代码，实际上改变了下游语义：空查询不消耗信号量、不触发限流、不产生日志，也不会被算作一次失败。调用方在拼接关键词时如果产生了空串，拿到的是空列表而不是异常，需要在上层自行区分「没搜到」和「没搜」。</p>
 <h2 id="7-两套-searchresult-模型与它们的转换">7. 两套 SearchResult 模型与它们的转换</h2>
-<p>适配层内部存在两个同名模型：</p>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<table><thead><tr><th>模型</th><th>位置</th><th>形态</th><th>使用方</th></tr></thead><tbody><tr><td><code>SearchResult</code></td><td><code>backend/search/exa.py:23</code></td><td>Pydantic <code>BaseModel</code></td><td>Exa 客户端，以及 <code>backend/search/__init__.py</code> 对外导出的公共名</td></tr><tr><td><code>SearchResult</code></td><td><code>backend/pipeline/stages.py:34</code></td><td><code>dataclass</code></td><td>百度与博查客户端直接构造它，流水线内部也用它</td></tr></tbody></table>
-<p><code>__init__.py</code> 把 Pydantic 版本导出为公共名（<code>backend/search/__init__.py:1</code>），流水线阶段另有一个字段相同的 <code>dataclass</code> 版本，百度与博查两条实现直接构造后者（<code>backend/search/baidu.py:45</code>、<code>backend/search/bocha.py:70</code>）。两套模型字段一致（<code>url</code> / <code>title</code> / <code>snippet</code>），归一发生在 <code>SourceProvider</code> 里：<code>ExaSourceProvider</code>、<code>BaiduSourceProvider</code>、<code>BochaSourceProvider</code> 各自把客户端返回的对象逐条转成流水线版本（<code>backend/pipeline/defaults.py:42</code>、<code>:70</code>、<code>:97</code>）。</p>
+<p>适配层内部存在两个同名模型，字段一样、类型不同：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/exa.py（节选）· 搜索侧：Pydantic 模型</span></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> SearchResult</span><span style="color:#24292E">(</span><span style="color:#6F42C1">BaseModel</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#032F62">    """搜索结果条目。"""</span></span>
+<span class="line"><span style="color:#24292E">    url: </span><span style="color:#005CC5">str</span></span>
+<span class="line"><span style="color:#24292E">    title: </span><span style="color:#005CC5">str</span></span>
+<span class="line"><span style="color:#24292E">    snippet: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> ""</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># backend/pipeline/stages.py（节选）· 流水线侧：dataclass</span></span>
+<span class="line"><span style="color:#6F42C1">@dataclass</span></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> SearchResult</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    url: </span><span style="color:#005CC5">str</span></span>
+<span class="line"><span style="color:#24292E">    title: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> ""</span></span>
+<span class="line"><span style="color:#24292E">    snippet: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> ""</span></span></code></pre>
+<p>Pydantic 的 <code>BaseModel</code> 会在构造时做类型校验、并把 JSON 字段解析成 Python 值，适合直接承接 API 返回；<code>dataclass</code> 是标准库的轻量数据容器，没有校验开销。<code>__init__.py</code> 把 Pydantic 版本导出为对外的公共名，百度与博查两条实现则直接构造 <code>dataclass</code> 版本。</p>
+<p>归一发生在 <code>SourceProvider</code> 里：三家的 Provider 各自把客户端返回的对象逐条转成流水线版本，<code>ExaSourceProvider</code> 是这样：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/pipeline/defaults.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> search</span><span style="color:#24292E">(self, query: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, max_results: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 5</span><span style="color:#24292E">) -> List[SearchResult]:</span></span>
+<span class="line"><span style="color:#24292E">    raw </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.search_client.search(query, max_results)</span></span>
+<span class="line"><span style="color:#24292E">    results </span><span style="color:#D73A49">=</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> r </span><span style="color:#D73A49">in</span><span style="color:#24292E"> raw:</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#005CC5"> isinstance</span><span style="color:#24292E">(r, SearchResult):</span></span>
+<span class="line"><span style="color:#D73A49">            if</span><span style="color:#24292E"> r.url </span><span style="color:#D73A49">and</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> _dq().is_blocked(r.url):</span></span>
+<span class="line"><span style="color:#24292E">                results.append(r)</span></span>
+<span class="line"><span style="color:#D73A49">        elif</span><span style="color:#005CC5"> hasattr</span><span style="color:#24292E">(r, </span><span style="color:#032F62">"url"</span><span style="color:#24292E">):          </span><span style="color:#6A737D"># 别的对象：按字段名取值再转</span></span>
+<span class="line"><span style="color:#24292E">            results.append(SearchResult(</span></span>
+<span class="line"><span style="color:#E36209">                url</span><span style="color:#D73A49">=</span><span style="color:#24292E">url, </span><span style="color:#E36209">title</span><span style="color:#D73A49">=</span><span style="color:#005CC5">getattr</span><span style="color:#24292E">(r, </span><span style="color:#032F62">"title"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#E36209">                snippet</span><span style="color:#D73A49">=</span><span style="color:#005CC5">getattr</span><span style="color:#24292E">(r, </span><span style="color:#032F62">"snippet"</span><span style="color:#24292E">, </span><span style="color:#005CC5">getattr</span><span style="color:#24292E">(r, </span><span style="color:#032F62">"description"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)),</span></span>
+<span class="line"><span style="color:#24292E">            ))</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> results</span></span></code></pre>
+<p><code>isinstance</code> 分支同时兼容「已经是流水线模型」与「还是客户端对象」两种输入；<code>_dq().is_blocked(url)</code> 是域名质量分模块给出的拉黑判断，转进来的每个 URL 都要先过这一关。</p>
 <p>分开的理由是依赖方向：搜索模块不想依赖流水线，流水线也不想被搜索库的 Pydantic 版本绑住。代价是每新增一个搜索源，都要在 <code>defaults.py</code> 里多写一个 <code>SourceProvider</code> 适配器，字段映射要重抄一遍。三份实现的字段处理几乎相同，只有缺字段时的默认值略有差别。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 <ul>
 <li>把 <code>rate_per_sec</code> 当成「每秒请求数上限」。它换算的是最小间隔，实际速率还受并发数与单次请求耗时影响；要限制 QPS 需要同时看这两个量。</li>
 <li>子类里自己吞异常。基类的重试与回退判定完全依赖异常类型：<code>_do_search()</code> 里如果先 <code>try/except</code> 再返回 <code>[]</code>，瞬态失败会被伪装成「无结果」，回退层永远看不到。</li>
-<li>在 <code>_do_search()</code> 里做客户端截断。百度与博查两条实现都刻意保留全量候选（<code>backend/search/baidu.py:68</code>、<code>backend/search/bocha.py:149</code>），把挑来源的职责留给下游的加权选择。</li>
+<li>在 <code>_do_search()</code> 里做客户端截断。百度与博查两条实现都刻意保留全量候选（<code>backend/search/baidu.py</code> 与 <code>backend/search/bocha.py</code>），把挑来源的职责留给下游的加权选择。</li>
 <li>忘记 <code>FatalSearchError</code> 与 <code>RateLimitError</code> 的区别。429 应该抛前者之外的那一个，交给基类退避；抛成 <code>FatalSearchError</code> 会直接熔断主源，把可恢复的限速放大成一次换源。</li>
 <li>认为空查询也会走限流。<code>search()</code> 的短路在信号量之前，空查询既不占额度也不留日志，排查时不要在限流日志里找它。</li>
 </ul>
@@ -243,18 +299,30 @@
 <p>同样是「按关键词拿一批 URL」，博查与 Exa 用了两种完全不同的接口形态。博查是普通的 HTTP POST：一个 JSON 请求体、一个 JSON 响应体，额度与鉴权都用状态码表达。Exa 走的是 MCP 端点，请求与响应都包在 JSON-RPC 里，服务端还可能以 SSE 流的形式回数据。两条实现都继承 <code>BaseSearchClient</code>，因此重试、限流、异常分类的写法一致，差异全部集中在 <code>_do_search()</code> 与各自的解析函数里。</p>
 <p>两条实现放在一起读，关注点落在同一个抽象面对不同协议时要处理的额外情况：状态码怎么翻译成异常、候选池取多大、响应结构不固定时怎么兜底。</p>
 <h2 id="1-博查的请求体与固定候选池">1. 博查的请求体与固定候选池</h2>
-<p>博查的请求体在 <code>backend/search/bocha.py:78</code> 附近拼装，字段有四个：<code>query</code>、<code>freshness</code>、<code>summary</code> 与 <code>count</code>。前两个是查询语义，<code>count</code> 被硬编码为 60，注释给出了理由：候选池必须远大于目标来源数（本仓库默认 <code>max_sources=2</code>，<code>backend/config.py:98</code>），下游的加权筛选才有选择余地。</p>
+<p>博查的请求体在 <code>backend/search/bocha.py</code> 附近拼装，字段有四个：<code>query</code>、<code>freshness</code>、<code>summary</code> 与 <code>count</code>。前两个是查询语义，<code>count</code> 被硬编码为 60，注释给出了理由：候选池必须远大于目标来源数（本仓库默认 <code>max_sources=2</code>，<code>backend/config.py</code>），下游的加权筛选才有选择余地。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">payload </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#032F62">    "query"</span><span style="color:#24292E">: query,</span></span>
 <span class="line"><span style="color:#032F62">    "freshness"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">._freshness,</span></span>
 <span class="line"><span style="color:#032F62">    "summary"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">._summary,</span></span>
 <span class="line"><span style="color:#032F62">    "count"</span><span style="color:#24292E">: </span><span style="color:#005CC5">60</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>与之配套的注释记录了一处历史问题：早期按 <code>max_results</code> 截断返回条数，当目标来源数是 5 时 API 只回 3 到 5 条，筛选环节无米下锅，低质 URL 直接进入抓取（<code>backend/search/bocha.py:82</code>）。因此博查这条实现刻意不做客户端截断，<code>max_results</code> 参数在解析函数里也没有被使用（<code>backend/search/bocha.py:124</code>）。</p>
-<p>同样地，百度实现保留了全量候选（<code>backend/search/baidu.py:68</code>）。两条实现的选择一致：适配层只负责拿到尽可能全的候选，挑哪几条交给下游。</p>
+<p>与之配套的注释记录了一处历史问题：早期按 <code>max_results</code> 截断返回条数，当目标来源数是 5 时 API 只回 3 到 5 条，筛选环节无米下锅，低质 URL 直接进入抓取（<code>backend/search/bocha.py</code>）。因此博查这条实现刻意不做客户端截断，<code>max_results</code> 参数在解析函数里也没有被使用（<code>backend/search/bocha.py</code>）。</p>
+<p>同样地，百度实现保留了全量候选（<code>backend/search/baidu.py</code>）。两条实现的选择一致：适配层只负责拿到尽可能全的候选，挑哪几条交给下游。</p>
 <p><code>count</code> 与 <code>max_results</code> 的关系容易读错。<code>max_results</code> 是调用方希望拿到几条，<code>count</code> 是向服务端要几条。博查按次计费，返回条数不额外计费，所以放大候选池不会增加成本；服务端在超过上限时会自行钳制。</p>
 <h2 id="2-博查的状态码到异常类型的映射">2. 博查的状态码到异常类型的映射</h2>
-<p><code>_do_search()</code> 把 HTTP 状态码翻译成三类语义（<code>backend/search/bocha.py:96</code>）：</p>
+<p><code>_do_search()</code> 把 HTTP 状态码翻译成三类语义，映射就是几个连续的 <code>if</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/bocha.py（节选）</span></span>
+<span class="line"><span style="color:#24292E">response </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> client.post(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.api_url, </span><span style="color:#E36209">json</span><span style="color:#D73A49">=</span><span style="color:#24292E">payload)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> response.status_code </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 429</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> RateLimitError(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Bocha] 限速 429 for </span><span style="color:#005CC5">{</span><span style="color:#24292E">query</span><span style="color:#D73A49">!r</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> response.status_code </span><span style="color:#D73A49">in</span><span style="color:#24292E"> (</span><span style="color:#005CC5">401</span><span style="color:#24292E">, </span><span style="color:#005CC5">403</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> FatalSearchError(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Bocha] 认证失败 (HTTP </span><span style="color:#005CC5">{</span><span style="color:#24292E">response.status_code</span><span style="color:#005CC5">}</span><span style="color:#032F62">)"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> response.status_code </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 402</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> FatalSearchError(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Bocha] 余额/额度不足 (HTTP 402) for </span><span style="color:#005CC5">{</span><span style="color:#24292E">query</span><span style="color:#D73A49">!r</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> response.is_success:</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#005CC5"> RuntimeError</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Bocha] HTTP </span><span style="color:#005CC5">{</span><span style="color:#24292E">response.status_code</span><span style="color:#005CC5">}</span><span style="color:#032F62"> for </span><span style="color:#005CC5">{</span><span style="color:#24292E">query</span><span style="color:#D73A49">!r</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>response.is_success</code> 是 httpx 对「状态码落在 2xx」的判断，最后一条因此兜住了所有未预期的非 2xx，按瞬态交给基类重试。</p>
 
 
 
@@ -302,22 +370,100 @@
   H -->|"否 且 msg 含额度关键词"| E
   H -->|"否"| I["记 warning 返回空列表"]
   H -->|"是"| J["解析 webPages.value"]</pre></div>
-<p>业务层的错误还要再判一次：响应体里的 <code>code</code> 不等于 200 时，<code>msg</code> 中若含有「额度」「余额」「欠费」或对应英文关键词，同样按致命错误上抛（<code>backend/search/bocha.py:130</code>）；其余业务错误记一条 warning 后返回空列表。HTTP 层与业务层都参与分类，是因为额度不足既可能以 402 出现，也可能以 200 加错误码的形式返回。</p>
+<p>业务层的错误还要再判一次：响应体里的 <code>code</code> 不等于 200 时，<code>msg</code> 中若含有「额度」「余额」「欠费」或对应英文关键词，同样按致命错误上抛（<code>backend/search/bocha.py</code>）；其余业务错误记一条 warning 后返回空列表。HTTP 层与业务层都参与分类，是因为额度不足既可能以 402 出现，也可能以 200 加错误码的形式返回。</p>
 <h2 id="3-黑名单域名的-60-秒缓存">3. 黑名单域名的 60 秒缓存</h2>
-<p>博查支持 <code>exclude</code> 参数排除指定域名。本仓库的黑名单来自域名质量模块，读取路径是 <code>backend/scraper/domain_quality.py</code> 的 <code>list_blocked()</code>，上限 100 个（<code>backend/search/bocha.py:27</code>）。每次搜索都查一次 SQLite 会带来额外延迟，因此模块级用两个全局变量做 60 秒内存缓存（<code>backend/search/bocha.py:22</code>）：</p>
+<p>博查支持 <code>exclude</code> 参数排除指定域名。本仓库的黑名单来自域名质量模块，读取路径是 <code>backend/scraper/domain_quality.py</code> 的 <code>list_blocked()</code>，上限 100 个（<code>backend/search/bocha.py</code>）。每次搜索都查一次 SQLite 会带来额外延迟，因此模块级用两个全局变量做 60 秒内存缓存（<code>backend/search/bocha.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">_blocked_cache: list[</span><span style="color:#005CC5">str</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> []</span></span>
 <span class="line"><span style="color:#24292E">_blocked_cache_ts: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 0.0</span></span>
 <span class="line"><span style="color:#005CC5">_BLOCKED_CACHE_TTL</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 60.0</span></span></code></pre>
-<p>缓存读取失败时把结果置空并刷新时间戳（<code>backend/search/bocha.py:37</code>），也就是故障期间不会反复重试读取，而是按空黑名单继续搜索。这个取舍偏向可用性：宁可暂时放行被拉黑的域名，也不让搜索因黑名单读取失败而中断。缓存是模块级的，多个客户端实例共享，因此 <code>list_blocked()</code> 的调用频率与实例数无关。</p>
+<p>缓存读取失败时把结果置空并刷新时间戳（<code>backend/search/bocha.py</code>），也就是故障期间不会反复重试读取，而是按空黑名单继续搜索。这个取舍偏向可用性：宁可暂时放行被拉黑的域名，也不让搜索因黑名单读取失败而中断。缓存是模块级的，多个客户端实例共享，因此 <code>list_blocked()</code> 的调用频率与实例数无关。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/bocha.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _get_excluded_domains</span><span style="color:#24292E">() -> list[</span><span style="color:#005CC5">str</span><span style="color:#24292E">]:</span></span>
+<span class="line"><span style="color:#032F62">    """读取 DomainQualityCache 当前封禁域名列表，60s 内存缓存。Bocha exclude 上限 100 个。"""</span></span>
+<span class="line"><span style="color:#D73A49">    global</span><span style="color:#24292E"> _blocked_cache, _blocked_cache_ts</span></span>
+<span class="line"><span style="color:#24292E">    now </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.time()</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> _blocked_cache </span><span style="color:#D73A49">and</span><span style="color:#24292E"> now </span><span style="color:#D73A49">-</span><span style="color:#24292E"> _blocked_cache_ts </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> _BLOCKED_CACHE_TTL</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> _blocked_cache</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        from</span><span style="color:#24292E"> backend.scraper.domain_quality </span><span style="color:#D73A49">import</span><span style="color:#24292E"> get_domain_quality</span></span>
+<span class="line"><span style="color:#24292E">        _blocked_cache </span><span style="color:#D73A49">=</span><span style="color:#24292E"> get_domain_quality().list_blocked(</span><span style="color:#E36209">limit</span><span style="color:#D73A49">=</span><span style="color:#005CC5">100</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">        _blocked_cache_ts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> now</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#24292E">        logger.debug(</span><span style="color:#032F62">"[Bocha] Failed to load blocked domains: </span><span style="color:#005CC5">%s</span><span style="color:#032F62">"</span><span style="color:#24292E">, e)</span></span>
+<span class="line"><span style="color:#24292E">        _blocked_cache </span><span style="color:#D73A49">=</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#24292E">        _blocked_cache_ts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> now</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> _blocked_cache</span></span></code></pre>
+<p><code>global</code> 声明让函数直接改写模块级变量，缓存因此是所有实例共用的一份；失败分支同样刷新时间戳，等于把故障也缓存 60 秒。<code>limit=100</code> 对应博查 <code>exclude</code> 参数能接受的上限。</p>
 <h2 id="4-从响应字段到结果列表">4. 从响应字段到结果列表</h2>
-<p>解析函数 <code>_parse_response()</code>（<code>backend/search/bocha.py:124</code>）沿着 <code>data → webPages → value</code> 逐层取字段，每一层都先判类型再取下一层，遇到不符合预期的结构就返回空列表。条目级只取三个字段：<code>url</code>、<code>name</code>、<code>snippet</code>（<code>backend/search/bocha.py:158</code>），其中 <code>title</code> 来自 <code>name</code> 而不是 <code>title</code>，这是与 Exa 最直接的字段口径差异。</p>
-<p><code>totalEstimatedMatches</code> 只用于日志（<code>backend/search/bocha.py:164</code>），不参与结果构造。</p>
+<p>解析函数 <code>_parse_response()</code>（<code>backend/search/bocha.py</code>）沿着 <code>data → webPages → value</code> 逐层取字段，每一层都先判类型再取下一层，遇到不符合预期的结构就返回空列表。条目级只取三个字段：<code>url</code>、<code>name</code>、<code>snippet</code>（<code>backend/search/bocha.py</code>），其中 <code>title</code> 来自 <code>name</code> 而不是 <code>title</code>，这是与 Exa 最直接的字段口径差异。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/bocha.py（节选）</span></span>
+<span class="line"><span style="color:#24292E">results_data </span><span style="color:#D73A49">=</span><span style="color:#24292E"> data.get(</span><span style="color:#032F62">"data"</span><span style="color:#24292E">, {})</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> isinstance</span><span style="color:#24292E">(results_data, </span><span style="color:#005CC5">dict</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#24292E">web_pages </span><span style="color:#D73A49">=</span><span style="color:#24292E"> results_data.get(</span><span style="color:#032F62">"webPages"</span><span style="color:#24292E">, {})</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> isinstance</span><span style="color:#24292E">(web_pages, </span><span style="color:#005CC5">dict</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#24292E">items </span><span style="color:#D73A49">=</span><span style="color:#24292E"> web_pages.get(</span><span style="color:#032F62">"value"</span><span style="color:#24292E">, [])</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> isinstance</span><span style="color:#24292E">(items, </span><span style="color:#005CC5">list</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> []</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">results </span><span style="color:#D73A49">=</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> item </span><span style="color:#D73A49">in</span><span style="color:#24292E"> items:</span></span>
+<span class="line"><span style="color:#005CC5">    ...</span></span>
+<span class="line"><span style="color:#24292E">    results.append(SearchResult(</span></span>
+<span class="line"><span style="color:#E36209">        url</span><span style="color:#D73A49">=</span><span style="color:#24292E">url,</span></span>
+<span class="line"><span style="color:#E36209">        title</span><span style="color:#D73A49">=</span><span style="color:#24292E">item.get(</span><span style="color:#032F62">"name"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">),      </span><span style="color:#6A737D"># 博查的标题字段叫 name</span></span>
+<span class="line"><span style="color:#E36209">        snippet</span><span style="color:#D73A49">=</span><span style="color:#24292E">item.get(</span><span style="color:#032F62">"snippet"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#24292E">    ))</span></span></code></pre>
+<p><code>isinstance</code> 检查是逐层的防御：上游某层返回了字符串或 <code>null</code>，函数就退回空列表，而不是在下一层 <code>.get()</code> 上抛 <code>AttributeError</code>。</p>
+<p><code>totalEstimatedMatches</code> 只用于日志（<code>backend/search/bocha.py</code>），不参与结果构造。</p>
 <h2 id="5-exa-走-mcp-端点">5. Exa 走 MCP 端点</h2>
-<p>Exa 客户端的 <code>EXA_MCP_URL</code> 固定为 <code>https://mcp.exa.ai/mcp</code>（<code>backend/search/exa.py:36</code>），请求体是标准 JSON-RPC 调用 <code>tools/call</code>，工具名 <code>web_search_exa</code>，参数包含 <code>query</code>、<code>numResults</code>、<code>type=auto</code> 与 <code>livecrawl=fallback</code>（<code>backend/search/exa.py:48</code>）。</p>
-<p>与博查相比，这里多了一层协议：HTTP 状态码只用来判 429，其余语义都在 JSON-RPC 的 <code>result</code> 里。请求头声明同时接受 <code>application/json</code> 与 <code>text/event-stream</code>（<code>backend/search/exa.py:68</code>），因为 MCP 服务端可能以 SSE 流式返回。<code>numResults</code> 直接使用调用方传入的 <code>max_results</code>，这一点与博查的固定候选池不同：Exa 这条实现不放大候选池。</p>
+<p>Exa 客户端的 <code>EXA_MCP_URL</code> 固定为 <code>https://mcp.exa.ai/mcp</code>（<code>backend/search/exa.py</code>），请求体是标准 JSON-RPC 调用 <code>tools/call</code>，工具名 <code>web_search_exa</code>，参数包含 <code>query</code>、<code>numResults</code>、<code>type=auto</code> 与 <code>livecrawl=fallback</code>（<code>backend/search/exa.py</code>）。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/exa.py（节选）</span></span>
+<span class="line"><span style="color:#24292E">payload </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#032F62">    "jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">    "id"</span><span style="color:#24292E">: </span><span style="color:#005CC5">1</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">    "method"</span><span style="color:#24292E">: </span><span style="color:#032F62">"tools/call"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">    "params"</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#032F62">        "name"</span><span style="color:#24292E">: </span><span style="color:#032F62">"web_search_exa"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">        "arguments"</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#032F62">            "query"</span><span style="color:#24292E">: query,</span></span>
+<span class="line"><span style="color:#032F62">            "numResults"</span><span style="color:#24292E">: max_results,</span></span>
+<span class="line"><span style="color:#032F62">            "type"</span><span style="color:#24292E">: </span><span style="color:#032F62">"auto"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">            "livecrawl"</span><span style="color:#24292E">: </span><span style="color:#032F62">"fallback"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">        },</span></span>
+<span class="line"><span style="color:#24292E">    },</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">response </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> client.post(</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.</span><span style="color:#005CC5">EXA_MCP_URL</span><span style="color:#24292E">, </span><span style="color:#E36209">json</span><span style="color:#D73A49">=</span><span style="color:#24292E">payload,</span></span>
+<span class="line"><span style="color:#E36209">    headers</span><span style="color:#D73A49">=</span><span style="color:#24292E">{</span><span style="color:#032F62">"Accept"</span><span style="color:#24292E">: </span><span style="color:#032F62">"application/json, text/event-stream"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">             "Content-Type"</span><span style="color:#24292E">: </span><span style="color:#032F62">"application/json"</span><span style="color:#24292E">},</span></span>
+<span class="line"><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> response.status_code </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 429</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> RateLimitError(</span><span style="color:#032F62">"Exa API rate limit exceeded"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>JSON-RPC 是「用统一信封调用远端方法」的协议：<code>method</code> 指定要调的函数、<code>params</code> 放参数、<code>id</code> 用来把响应与请求对上。<code>Accept</code> 头同时声明接受 JSON 与 <code>text/event-stream</code>，因为服务端可能以 SSE 流式返回。</p>
+<p>与博查相比，这里多了一层协议：HTTP 状态码只用来判 429，其余语义都在 JSON-RPC 的 <code>result</code> 里。请求头声明同时接受 <code>application/json</code> 与 <code>text/event-stream</code>（<code>backend/search/exa.py</code>），因为 MCP 服务端可能以 SSE 流式返回。<code>numResults</code> 直接使用调用方传入的 <code>max_results</code>，这一点与博查的固定候选池不同：Exa 这条实现不放大候选池。</p>
 <h2 id="6-sse-与直连-json-两条解析路径">6. SSE 与直连 JSON 两条解析路径</h2>
-<p><code>_parse_exa_response()</code>（<code>backend/search/exa.py:87</code>）先尝试从 SSE 行里提取 <code>content</code>，失败再按普通 JSON 解析。SSE 分支逐行扫描以 <code>data:</code> 开头的行，把冒号后的内容按 JSON 解析，取出 <code>result.content</code>（<code>backend/search/exa.py:97</code>）。</p>
-<p>直连分支直接解析整个响应体，取 <code>result.content</code> 列表（<code>backend/search/exa.py:113</code>）。两条路径最后都汇入 <code>_extract_results()</code>，把 <code>content</code> 每一项的 <code>text</code> 字段交给文本解析。</p>
+<p><code>_parse_exa_response()</code>先尝试从 SSE 行里提取 <code>content</code>，失败再按普通 JSON 解析。SSE 分支逐行扫描以 <code>data:</code> 开头的行，把冒号后的内容按 JSON 解析，取出 <code>result.content</code>（<code>backend/search/exa.py</code>）。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/exa.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _extract_content</span><span style="color:#24292E">(self, text: </span><span style="color:#005CC5">str</span><span style="color:#24292E">) -> Optional[</span><span style="color:#005CC5">list</span><span style="color:#24292E">]:</span></span>
+<span class="line"><span style="color:#032F62">    """从 SSE data: 行中提取 content 字段。"""</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> line </span><span style="color:#D73A49">in</span><span style="color:#24292E"> text.strip().split(</span><span style="color:#032F62">"</span><span style="color:#005CC5">\n</span><span style="color:#032F62">"</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">        line </span><span style="color:#D73A49">=</span><span style="color:#24292E"> line.strip()</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> line.startswith(</span><span style="color:#032F62">"data:"</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">            continue</span></span>
+<span class="line"><span style="color:#24292E">        json_str </span><span style="color:#D73A49">=</span><span style="color:#24292E"> line[</span><span style="color:#005CC5">5</span><span style="color:#24292E">:].strip()</span></span>
+<span class="line"><span style="color:#D73A49">        try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">            parsed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> json.loads(json_str)</span></span>
+<span class="line"><span style="color:#24292E">            result </span><span style="color:#D73A49">=</span><span style="color:#24292E"> parsed.get(</span><span style="color:#032F62">"result"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">            if</span><span style="color:#24292E"> result </span><span style="color:#D73A49">and</span><span style="color:#032F62"> "content"</span><span style="color:#D73A49"> in</span><span style="color:#24292E"> result:</span></span>
+<span class="line"><span style="color:#D73A49">                return</span><span style="color:#24292E"> result[</span><span style="color:#032F62">"content"</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#D73A49">        except</span><span style="color:#24292E"> (json.JSONDecodeError, </span><span style="color:#005CC5">KeyError</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">            continue</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> None</span></span></code></pre>
+<p>SSE（Server-Sent Events）是服务端按行持续推送文本的格式，每行自带 <code>data:</code> 前缀；<code>line[5:]</code> 就是切掉这个前缀后的 JSON 片段。</p>
+<p>直连分支直接解析整个响应体，取 <code>result.content</code> 列表（<code>backend/search/exa.py</code>）。两条路径最后都汇入 <code>_extract_results()</code>，把 <code>content</code> 每一项的 <code>text</code> 字段交给文本解析。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["POST mcp.exa.ai/mcp"] --> B{"status_code == 429?"}
   B -->|"是"| C["RateLimitError"]
@@ -335,10 +481,10 @@
   L --> N["结果列表"]
   M --> N</pre></div>
 <h2 id="7-文本响应的两种格式">7. 文本响应的两种格式</h2>
-<p>Exa 返回的是人可读文本，格式并不固定。<code>_parse_text_results()</code>（<code>backend/search/exa.py:133</code>）用「是否含 <code>Title:</code> 或 <code>URL:</code>」作为分派条件：</p>
+<p>Exa 返回的是人可读文本，格式并不固定。<code>_parse_text_results()</code>（<code>backend/search/exa.py</code>）用「是否含 <code>Title:</code> 或 <code>URL:</code>」作为分派条件：</p>
 <ul>
-<li>结构化格式逐行推进，<code>Title:</code> 开启一条新结果，<code>URL:</code> 记录地址，<code>Highlights:</code> 之后的非空行累加进 <code>snippet</code>，<code>Published:</code> / <code>Author:</code> / <code>ID:</code> / <code>Score:</code> 一律跳过（<code>backend/search/exa.py:177</code>）。最后一行结果在循环外补收（<code>backend/search/exa.py:185</code>）。</li>
-<li>简单格式按空行切块，要求每块至少两行且第二行以 <code>http</code> 开头，第一行作为标题、第二行作为地址、其余合并成摘要（<code>backend/search/exa.py:194</code>）。两种格式都可能解析出零条结果。这种情况不抛异常，基类因此不会重试，也不会触发回退——「格式没匹配上」与「确实没有结果」在当前实现里无法区分，这是一处已知的口径模糊。</li>
+<li>结构化格式逐行推进，<code>Title:</code> 开启一条新结果，<code>URL:</code> 记录地址，<code>Highlights:</code> 之后的非空行累加进 <code>snippet</code>，<code>Published:</code> / <code>Author:</code> / <code>ID:</code> / <code>Score:</code> 一律跳过（<code>backend/search/exa.py</code>）。最后一行结果在循环外补收（<code>backend/search/exa.py</code>）。</li>
+<li>简单格式按空行切块，要求每块至少两行且第二行以 <code>http</code> 开头，第一行作为标题、第二行作为地址、其余合并成摘要（<code>backend/search/exa.py</code>）。两种格式都可能解析出零条结果。这种情况不抛异常，基类因此不会重试，也不会触发回退——「格式没匹配上」与「确实没有结果」在当前实现里无法区分，这是一处已知的口径模糊。</li>
 </ul>
 <h2 id="8-两个来源的字段口径对照">8. 两个来源的字段口径对照</h2>
 
@@ -386,8 +532,8 @@
 
 
 
-<table><thead><tr><th>维度</th><th>博查</th><th>Exa</th></tr></thead><tbody><tr><td>协议</td><td>HTTP POST，JSON 请求与响应</td><td>MCP JSON-RPC，响应可能是 SSE</td></tr><tr><td>认证</td><td><code>Authorization: Bearer</code> 头（<code>backend/search/bocha.py:117</code>）</td><td>无显式鉴权头</td></tr><tr><td>候选池</td><td>固定 <code>count=60</code></td><td>透传 <code>numResults</code></td></tr><tr><td>标题字段</td><td><code>name</code></td><td>文本里的 <code>Title:</code> 行</td></tr><tr><td>摘要字段</td><td><code>snippet</code></td><td><code>Highlights:</code> 段拼接</td></tr><tr><td>致命错误来源</td><td>状态码 401/403/402 与业务错误码</td><td>仅 429 有专门分支</td></tr><tr><td>超时</td><td><code>BOCHA_TIMEOUT=30</code>（<code>backend/config.py:78</code>）</td><td><code>EXA_TIMEOUT=30</code>（<code>backend/config.py:87</code>）</td></tr></tbody></table>
-<p>两条实现都自带 <code>httpx.AsyncClient</code> 的懒加载与所有权标记：外部传入客户端时不关闭，自己创建的在 <code>close()</code> 里关闭（<code>backend/search/bocha.py:110</code>、<code>backend/search/exa.py:80</code>）。这让测试可以注入假客户端而不泄漏连接。</p>
+<table><thead><tr><th>维度</th><th>博查</th><th>Exa</th></tr></thead><tbody><tr><td>协议</td><td>HTTP POST，JSON 请求与响应</td><td>MCP JSON-RPC，响应可能是 SSE</td></tr><tr><td>认证</td><td><code>Authorization: Bearer</code> 头（<code>backend/search/bocha.py</code>）</td><td>无显式鉴权头</td></tr><tr><td>候选池</td><td>固定 <code>count=60</code></td><td>透传 <code>numResults</code></td></tr><tr><td>标题字段</td><td><code>name</code></td><td>文本里的 <code>Title:</code> 行</td></tr><tr><td>摘要字段</td><td><code>snippet</code></td><td><code>Highlights:</code> 段拼接</td></tr><tr><td>致命错误来源</td><td>状态码 401/403/402 与业务错误码</td><td>仅 429 有专门分支</td></tr><tr><td>超时</td><td><code>BOCHA_TIMEOUT=30</code>（<code>backend/config.py</code>）</td><td><code>EXA_TIMEOUT=30</code>（<code>backend/config.py</code>）</td></tr></tbody></table>
+<p>两条实现都自带 <code>httpx.AsyncClient</code> 的懒加载与所有权标记：外部传入客户端时不关闭，自己创建的在 <code>close()</code> 里关闭（<code>backend/search/bocha.py</code>、<code>backend/search/exa.py</code>）。这让测试可以注入假客户端而不泄漏连接。</p>
 <h2 id="9-易错点">9. 易错点</h2>
 <ul>
 <li>以为 <code>max_results</code> 会限制博查返回条数。解析函数不读这个参数，返回的是 <code>count</code> 条候选。</li>
@@ -515,10 +661,21 @@
 <p>百度这一路的实现形态和前两条不同：底层库是同步的，客户端要用 <code>asyncio.to_thread()</code> 把它搬进事件循环；它又是博查的兜底来源，只有在上游认证失效或额度耗尽时才会被用到。围绕它的代码因此分成两块——一块是 <code>backend/search/baidu.py</code> 里的同步到异步适配与业务码处理，另一块是 <code>backend/search/fallback.py</code> 里的熔断式回退包装器。</p>
 <p>熔断这一层解决的问题很具体：主源连续致命失败之后，每一次搜索仍然先打一次主源，失败再换源，白白增加一次网络往返。计数达到阈值后把开关置开、后续请求直走备用源，这就是包装器引入状态的全部理由。</p>
 <h2 id="1-百度实现把同步库接进异步链路">1. 百度实现把同步库接进异步链路</h2>
-<p><code>BaiduSearchClient</code>（<code>backend/search/baidu.py:18</code>）的构造函数只暴露三个参数：<code>max_concurrent</code>、<code>rate_limit</code>、<code>retry_limit</code>，默认 3、1.0、2（<code>backend/search/baidu.py:24</code>）。它们被翻译成基类的 <code>max_concurrent=3</code>、<code>rate_per_sec=1.0</code>、<code>max_retries=2</code>，而 <code>base_delay</code> 固定为 2.0 秒（<code>backend/search/baidu.py:34</code>）。</p>
-<p>比基类默认值更保守的并发与间隔，是因为反代接口对访问频率更敏感。适配只发生在一行：<code>_do_search()</code> 用 <code>asyncio.to_thread(client.search, query)</code> 调用同步库（<code>backend/search/baidu.py:48</code>），把阻塞调用挪到线程池。<code>BaiduPc</code> 实例懒加载并缓存在 <code>self._client</code> 上（<code>backend/search/baidu.py:38</code>），进程内复用。这条路径没有连接池概念，客户端的并发上限由 <code>_semaphore</code> 控制，线程池的大小交给运行时的默认值。</p>
+<p><code>BaiduSearchClient</code>（<code>backend/search/baidu.py</code>）的构造函数只暴露三个参数：<code>max_concurrent</code>、<code>rate_limit</code>、<code>retry_limit</code>，默认 3、1.0、2（<code>backend/search/baidu.py</code>）。它们被翻译成基类的 <code>max_concurrent=3</code>、<code>rate_per_sec=1.0</code>、<code>max_retries=2</code>，而 <code>base_delay</code> 固定为 2.0 秒（<code>backend/search/baidu.py</code>）。</p>
+<p>比基类默认值更保守的并发与间隔，是因为反代接口对访问频率更敏感。适配只发生在一行：<code>_do_search()</code> 用 <code>asyncio.to_thread(client.search, query)</code> 调用同步库（<code>backend/search/baidu.py</code>），把阻塞调用挪到线程池。<code>BaiduPc</code> 实例懒加载并缓存在 <code>self._client</code> 上（<code>backend/search/baidu.py</code>），进程内复用。这条路径没有连接池概念，客户端的并发上限由 <code>_semaphore</code> 控制，线程池的大小交给运行时的默认值。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/baidu.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _get_client</span><span style="color:#24292E">(self):</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._client </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        from</span><span style="color:#24292E"> baidu_serp_api </span><span style="color:#D73A49">import</span><span style="color:#24292E"> BaiduPc</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._client </span><span style="color:#D73A49">=</span><span style="color:#24292E"> BaiduPc()</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._client</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> _do_search</span><span style="color:#24292E">(self, query: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, max_results: </span><span style="color:#005CC5">int</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">list</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    client </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._get_client()</span></span>
+<span class="line"><span style="color:#24292E">    raw </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> asyncio.to_thread(client.search, query)</span></span></code></pre>
+<p><code>asyncio.to_thread()</code> 把同步函数丢进线程池执行、再用 await 等结果，事件循环因此不会被阻塞。第三方库的导入写在函数内部，只有真正要用百度时才要求它存在。</p>
 <h2 id="2-百度业务码的处理会吞掉两类失败">2. 百度业务码的处理会吞掉两类失败</h2>
-<p>返回体不是字典时记一条 warning 并返回空列表（<code>backend/search/baidu.py:50</code>）。业务码不等于 200 时同样返回空列表，只在日志里区分 501 与 429（<code>backend/search/baidu.py:56</code>）：</p>
+<p>返回体不是字典时记一条 warning 并返回空列表（<code>backend/search/baidu.py</code>）。业务码不等于 200 时同样返回空列表，只在日志里区分 501 与 429（<code>backend/search/baidu.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> code </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> 200</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    logger.warning(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Baidu] </span><span style="color:#005CC5">{</span><span style="color:#24292E">query</span><span style="color:#D73A49">!r</span><span style="color:#005CC5">}</span><span style="color:#032F62"> 错误: code=</span><span style="color:#005CC5">{</span><span style="color:#24292E">code</span><span style="color:#005CC5">}</span><span style="color:#032F62">, msg=</span><span style="color:#005CC5">{</span><span style="color:#24292E">msg</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> code </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 501</span><span style="color:#24292E">:</span></span>
@@ -526,9 +683,9 @@
 <span class="line"><span style="color:#D73A49">    elif</span><span style="color:#24292E"> code </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 429</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">        logger.warning(</span><span style="color:#032F62">"[Baidu] 限速 429"</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> []</span></span></code></pre>
-<p>对照博查的实现可以看出差别：博查把 429 抛成 <code>RateLimitError</code>，基类随后按 <code>base_delay * 2^attempt</code> 退避重试（<code>backend/search/bocha.py:96</code>）；百度把 429 和 501 都写成日志加空列表，两者都不会被基类重试，也不会被回退包装器看见。后果是百度作为备用源时，一旦触发安全验证或限速，这一次搜索直接以零来源结束，没有任何补偿动作。这是一处可以从代码直接读出的行为差异，修改前需要先决定这两类失败应该算可重试还是该换源。</p>
+<p>对照博查的实现可以看出差别：博查把 429 抛成 <code>RateLimitError</code>，基类随后按 <code>base_delay * 2^attempt</code> 退避重试（<code>backend/search/bocha.py</code>）；百度把 429 和 501 都写成日志加空列表，两者都不会被基类重试，也不会被回退包装器看见。后果是百度作为备用源时，一旦触发安全验证或限速，这一次搜索直接以零来源结束，没有任何补偿动作。这是一处可以从代码直接读出的行为差异，修改前需要先决定这两类失败应该算可重试还是该换源。</p>
 <h2 id="3-回退包装器的构造参数与状态字段">3. 回退包装器的构造参数与状态字段</h2>
-<p><code>AutoFallbackSearchClient</code>（<code>backend/search/fallback.py:24</code>）接收主源、备用源、阈值、复位时间与名字，并初始化五个状态字段（<code>backend/search/fallback.py:42</code>）：</p>
+<p><code>AutoFallbackSearchClient</code>（<code>backend/search/fallback.py</code>）接收主源、备用源、阈值、复位时间与名字，并初始化五个状态字段（<code>backend/search/fallback.py</code>）：</p>
 
 
 
@@ -565,7 +722,19 @@
 
 
 <table><thead><tr><th>字段</th><th>含义</th><th>初值</th></tr></thead><tbody><tr><td><code>_fatal_count</code></td><td>连续致命失败计数</td><td>0</td></tr><tr><td><code>_circuit_open</code></td><td>熔断开关</td><td><code>False</code></td></tr><tr><td><code>_circuit_opened_at</code></td><td>打开时刻（<code>time.monotonic()</code>）</td><td><code>None</code></td></tr><tr><td><code>_fallback_hits</code></td><td>实际走到备用源的次数</td><td>0</td></tr><tr><td><code>_last_trigger</code></td><td>最近一次触发原因</td><td><code>None</code></td></tr></tbody></table>
-<p>构造时它调用基类的方式需要留意：<code>max_concurrent</code> 取自 <code>max(primary._semaphore._value, 1)</code>，<code>rate_per_sec=0.0</code>、<code>max_retries=0</code>（<code>backend/search/fallback.py:35</code>）。包装器自身不做限流也不做重试，因为它把活干在内部的 <code>primary.search()</code> 上，限流与重试由主源自己完成。并发上限沿用主源的信号量当前值，读的是私有属性，主源信号量被并发占用时这个值会偏小，属于实现上的已知粗糙处。</p>
+<p>构造时它调用基类的方式需要留意：<code>max_concurrent</code> 取自 <code>max(primary._semaphore._value, 1)</code>，<code>rate_per_sec=0.0</code>、<code>max_retries=0</code>（<code>backend/search/fallback.py</code>）。包装器自身不做限流也不做重试，因为它把活干在内部的 <code>primary.search()</code> 上，限流与重试由主源自己完成。并发上限沿用主源的信号量当前值，读的是私有属性，主源信号量被并发占用时这个值会偏小，属于实现上的已知粗糙处。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/fallback.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> AutoFallbackSearchClient</span><span style="color:#24292E">(</span><span style="color:#6F42C1">BaseSearchClient</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    def</span><span style="color:#005CC5"> __init__</span><span style="color:#24292E">(self, primary, fallback, fallback_threshold: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 3</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">                 circuit_reset_seconds: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 1800.0</span><span style="color:#24292E">, name: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> "AutoFallback"</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#005CC5">        super</span><span style="color:#24292E">().</span><span style="color:#005CC5">__init__</span><span style="color:#24292E">(</span><span style="color:#E36209">max_concurrent</span><span style="color:#D73A49">=</span><span style="color:#005CC5">max</span><span style="color:#24292E">(primary._semaphore._value, </span><span style="color:#005CC5">1</span><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#E36209">                         rate_per_sec</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#E36209">max_retries</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._fatal_count </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._circuit_open </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> False</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._circuit_opened_at: Optional[</span><span style="color:#005CC5">float</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._fallback_hits </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._last_trigger: Optional[</span><span style="color:#005CC5">str</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span></span></code></pre>
+<p><code>primary._semaphore._value</code> 读的是对方信号量此刻还剩几个许可；下划线前缀表示它是私有属性，跨对象读取属于实现上的将就。</p>
 <h2 id="4-一次致命失败的完整回退时序">4. 一次致命失败的完整回退时序</h2>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant C as 调用方
@@ -581,9 +750,39 @@
   B-->>F: 结果列表
   F-->>C: 结果列表
   Note over F: 计数达到阈值后 _circuit_open 置位</pre></div>
-<p>主源路径的异常处理分两支（<code>backend/search/fallback.py:101</code>）：捕获到 <code>FatalSearchError</code> 时先 <code>_trip()</code> 再调用备用源，备用源自身抛异常则记一条 error 并返回空列表；捕获到其他异常时只记 warning 并返回空列表，不做回退。熔断打开之后 <code>_do_search()</code> 的第一分支直接调用备用源（<code>backend/search/fallback.py:91</code>），不再尝试主源。</p>
+<p>主源路径的异常处理分两支（<code>backend/search/fallback.py</code>）：捕获到 <code>FatalSearchError</code> 时先 <code>_trip()</code> 再调用备用源，备用源自身抛异常则记一条 error 并返回空列表；捕获到其他异常时只记 warning 并返回空列表，不做回退。熔断打开之后 <code>_do_search()</code> 的第一分支直接调用备用源（<code>backend/search/fallback.py</code>），不再尝试主源。</p>
+<p>下面是 <code>_do_search()</code> 的简化版（省去备用源自身失败的 try/except 与 <code>_fallback_hits</code> 计数）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/fallback.py（简化）</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> _do_search</span><span style="color:#24292E">(self, query: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, max_results: </span><span style="color:#005CC5">int</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">list</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._maybe_reopen()</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._circuit_open:                      </span><span style="color:#6A737D"># 熔断打开：直走备用源</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._fallback.search(query, max_results)</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._primary.search(query, max_results)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#24292E"> FatalSearchError </span><span style="color:#D73A49">as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._trip(</span><span style="color:#005CC5">str</span><span style="color:#24292E">(e))                      </span><span style="color:#6A737D"># 计数，达阈值则打开开关</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._fallback.search(query, max_results)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:                      </span><span style="color:#6A737D"># 非致命异常：不回退</span></span>
+<span class="line"><span style="color:#24292E">        logger.warning(</span><span style="color:#032F62">"[</span><span style="color:#005CC5">%s</span><span style="color:#032F62">] 主源搜索异常: </span><span style="color:#005CC5">%s</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#005CC5">self</span><span style="color:#24292E">._name, e)</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> []</span></span></code></pre>
+<p>两支 <code>except</code> 的顺序很关键：<code>FatalSearchError</code> 在前，其余异常落到后一支，这正是「只有换源才有意义的失败才回退」这条规则的落点。</p>
 <h2 id="5-熔断的打开与半开试探">5. 熔断的打开与半开试探</h2>
-<p><code>_trip()</code>（<code>backend/search/fallback.py:77</code>）只做三件事：计数加一、记录原因、在计数达到阈值且开关尚未打开时把开关置位并记录打开时刻。阈值默认 3，即连续三次致命失败之后才切换。<code>_maybe_reopen()</code>（<code>backend/search/fallback.py:69</code>）在每次搜索开头被调用，若开关已打开且距打开时刻超过 <code>circuit_reset_seconds</code>（默认 1800 秒），就把开关与计数一起清零，下一次搜索重新尝试主源。</p>
+<p><code>_trip()</code>（<code>backend/search/fallback.py</code>）只做三件事：计数加一、记录原因、在计数达到阈值且开关尚未打开时把开关置位并记录打开时刻。阈值默认 3，即连续三次致命失败之后才切换。<code>_maybe_reopen()</code>（<code>backend/search/fallback.py</code>）在每次搜索开头被调用，若开关已打开且距打开时刻超过 <code>circuit_reset_seconds</code>（默认 1800 秒），就把开关与计数一起清零，下一次搜索重新尝试主源。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/fallback.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _maybe_reopen</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#032F62">    """熔断后经过足够时间自动试探复位（半开）。"""</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">._circuit_open </span><span style="color:#D73A49">and</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._circuit_opened_at</span></span>
+<span class="line"><span style="color:#D73A49">            and</span><span style="color:#24292E"> time.monotonic() </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._circuit_opened_at </span><span style="color:#D73A49">></span><span style="color:#005CC5"> self</span><span style="color:#24292E">._reset_seconds):</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._circuit_open </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> False</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._fatal_count </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _trip</span><span style="color:#24292E">(self, reason: </span><span style="color:#005CC5">str</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._fatal_count </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._last_trigger </span><span style="color:#D73A49">=</span><span style="color:#24292E"> reason</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._circuit_open </span><span style="color:#D73A49">and</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._fatal_count </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._threshold:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._circuit_open </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> True</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._circuit_opened_at </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.monotonic()</span></span></code></pre>
+<p>「半开」是熔断器的经典状态：完全打开会永久拒绝主源，半开指到时间后放一次试探过去，成功就闭合、失败就重新累计。打开时刻同样用 <code>time.monotonic()</code> 记录，理由与限流器一致。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
   state "闭合：主源优先" as Closed
   state "打开：直走备用源" as Open
@@ -593,13 +792,29 @@
   Open --> Open: 每次搜索直接调用备用源
   Open --> Closed: 超过 circuit_reset_seconds 计数清零
   Closed --> Open: 试探后重新累计到阈值</pre></div>
-<p>复位把计数清零这一点决定了试探的语义：1800 秒之后第一次尝试主源，即使再次致命失败，计数也只是从 1 重新开始，开关不会立刻回到打开状态。也就是说熔断打开一次之后，每次复位都需要重新累计三次失败才会再次打开。<code>reset()</code> 提供了手动复位入口（<code>backend/search/fallback.py:53</code>），用于确认主源已经恢复之后立即切回。</p>
+<p>复位把计数清零这一点决定了试探的语义：1800 秒之后第一次尝试主源，即使再次致命失败，计数也只是从 1 重新开始，开关不会立刻回到打开状态。也就是说熔断打开一次之后，每次复位都需要重新累计三次失败才会再次打开。<code>reset()</code> 提供了手动复位入口（<code>backend/search/fallback.py</code>），用于确认主源已经恢复之后立即切回。</p>
 <h2 id="6-非致命异常为什么不触发回退">6. 非致命异常为什么不触发回退</h2>
-<p>主源的非致命异常已经在它自己的基类里重试过并返回空列表，走到包装器时通常只剩「服务端返回了空结果」或「重试仍然超时但按主源语义返回空」两种情况。此时切换备用源会把一次普通的空结果放大成两次网络请求，而空结果本身在中文查询里很常见，所以包装器选择记一条 warning 后返回空列表（<code>backend/search/fallback.py:113</code>）。这条规则和基类的异常分类是配套的：可恢复的失败应该在主源内部消化，只有认证、额度、服务不可用这类「换源才有意义」的失败才向上冒泡成 <code>FatalSearchError</code>。</p>
-<p>两条实现里会抛 <code>FatalSearchError</code> 的只有博查（<code>backend/search/bocha.py:100</code>），百度实现目前一条都不抛，作为备用源时它没有更下一层的来源可以接替。</p>
+<p>主源的非致命异常已经在它自己的基类里重试过并返回空列表，走到包装器时通常只剩「服务端返回了空结果」或「重试仍然超时但按主源语义返回空」两种情况。此时切换备用源会把一次普通的空结果放大成两次网络请求，而空结果本身在中文查询里很常见，所以包装器选择记一条 warning 后返回空列表（<code>backend/search/fallback.py</code>）。这条规则和基类的异常分类是配套的：可恢复的失败应该在主源内部消化，只有认证、额度、服务不可用这类「换源才有意义」的失败才向上冒泡成 <code>FatalSearchError</code>。</p>
+<p>两条实现里会抛 <code>FatalSearchError</code> 的只有博查（<code>backend/search/bocha.py</code>），百度实现目前一条都不抛，作为备用源时它没有更下一层的来源可以接替。</p>
 <h2 id="7-hybridsearchclient-是更早的一条回退链">7. HybridSearchClient 是更早的一条回退链</h2>
-<p><code>HybridSearchClient</code>（<code>backend/search/hybrid.py:20</code>）与包装器解决同一个问题，实现方式不同：它把百度放在前面、Exa 放在后面，百度返回空列表或抛异常时切换 Exa（<code>backend/search/hybrid.py:31</code>）。区别有两点。第一，它没有继承 <code>BaseSearchClient</code>，因此本身不带限流与重试，两个成员各自带；第二，它没有熔断状态，每次搜索都先试百度，不会因为连续失败而跳过。</p>
-<p>它仍然被使用：工厂在 <code>search_provider</code> 取 <code>"baidu"</code> 时构造 <code>BaiduSourceProvider(HybridSearchClient())</code>（<code>backend/pipeline/factory.py:47</code>）。也就是说这条链是「百度主用」时代留下的路径，而 <code>AutoFallbackSearchClient</code> 是「博查主用」时代的路径，两者在仓库里并存。</p>
+<p><code>HybridSearchClient</code>（<code>backend/search/hybrid.py</code>）与包装器解决同一个问题，实现方式不同：它把百度放在前面、Exa 放在后面，百度返回空列表或抛异常时切换 Exa（<code>backend/search/hybrid.py</code>）。区别有两点。第一，它没有继承 <code>BaseSearchClient</code>，因此本身不带限流与重试，两个成员各自带；第二，它没有熔断状态，每次搜索都先试百度，不会因为连续失败而跳过。</p>
+<p>它的 <code>search()</code> 主体是两个串起来的 try 块（日志行有省略）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/search/hybrid.py（简化）</span></span>
+<span class="line"><span style="color:#D73A49">async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> search</span><span style="color:#24292E">(self, query: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, max_results: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 10</span><span style="color:#24292E">) -> List[SearchResult]:</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        results </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.baidu.search(query, max_results)</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> results:</span></span>
+<span class="line"><span style="color:#D73A49">            return</span><span style="color:#24292E"> results</span></span>
+<span class="line"><span style="color:#6A737D">        # 空结果同样继续往下试</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#24292E">        logger.warning(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Hybrid] Baidu failed ..."</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> await</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.exa.search(query, max_results)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> e:</span></span>
+<span class="line"><span style="color:#24292E">        logger.warning(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[Hybrid] Exa also failed ..."</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> []</span></span></code></pre>
+<p>把「百度返回空列表」也当成需要回退的情况，是它与 <code>AutoFallbackSearchClient</code> 最直接的行为差别——后者只认 <code>FatalSearchError</code>。</p>
+<p>它仍然被使用：工厂在 <code>search_provider</code> 取 <code>"baidu"</code> 时构造 <code>BaiduSourceProvider(HybridSearchClient())</code>（<code>backend/pipeline/factory.py</code>）。也就是说这条链是「百度主用」时代留下的路径，而 <code>AutoFallbackSearchClient</code> 是「博查主用」时代的路径，两者在仓库里并存。</p>
 
 
 
@@ -640,10 +855,10 @@
 
 
 
-<table><thead><tr><th>维度</th><th><code>HybridSearchClient</code></th><th><code>AutoFallbackSearchClient</code></th></tr></thead><tbody><tr><td>继承基类</td><td>否</td><td>是</td></tr><tr><td>主源</td><td>百度</td><td>博查</td></tr><tr><td>备用源</td><td>Exa</td><td>百度</td></tr><tr><td>触发条件</td><td>空结果或任意异常</td><td>仅 <code>FatalSearchError</code></td></tr><tr><td>熔断</td><td>无</td><td>有，默认阈值 3、复位 1800 秒</td></tr><tr><td>使用位置</td><td><code>backend/pipeline/factory.py:47</code></td><td><code>backend/pipeline/factory.py:53</code></td></tr></tbody></table>
+<table><thead><tr><th>维度</th><th><code>HybridSearchClient</code></th><th><code>AutoFallbackSearchClient</code></th></tr></thead><tbody><tr><td>继承基类</td><td>否</td><td>是</td></tr><tr><td>主源</td><td>百度</td><td>博查</td></tr><tr><td>备用源</td><td>Exa</td><td>百度</td></tr><tr><td>触发条件</td><td>空结果或任意异常</td><td>仅 <code>FatalSearchError</code></td></tr><tr><td>熔断</td><td>无</td><td>有，默认阈值 3、复位 1800 秒</td></tr><tr><td>使用位置</td><td><code>backend/pipeline/factory.py</code></td><td><code>backend/pipeline/factory.py</code></td></tr></tbody></table>
 <h2 id="8-观测点">8. 观测点</h2>
-<p>包装器提供两个只读入口：<code>active_provider</code> 返回当前生效来源的字符串（<code>backend/search/fallback.py:48</code>），<code>stats()</code> 返回熔断开关、致命计数、备用命中次数、当前来源与最近触发原因（<code>backend/search/fallback.py:60</code>）。排查搜索质量下降时，先看 <code>fallback_hits</code> 是否在增长：它增长说明主源在持续失败，返回的结果其实来自百度反代，字段口径与博查不同。</p>
-<p>日志侧的关键行有三处：主源回退时的 warning（<code>backend/search/fallback.py:105</code>）、熔断打开时的 error（<code>backend/search/fallback.py:83</code>）、以及备用源也失败时的 error（<code>backend/search/fallback.py:111</code>）。三者都带包装器名字，默认名字是调用时传入的 <code>"Bocha->Baidu"</code>（<code>backend/pipeline/factory.py:56</code>）。</p>
+<p>包装器提供两个只读入口：<code>active_provider</code> 返回当前生效来源的字符串（<code>backend/search/fallback.py</code>），<code>stats()</code> 返回熔断开关、致命计数、备用命中次数、当前来源与最近触发原因（<code>backend/search/fallback.py</code>）。排查搜索质量下降时，先看 <code>fallback_hits</code> 是否在增长：它增长说明主源在持续失败，返回的结果其实来自百度反代，字段口径与博查不同。</p>
+<p>日志侧的关键行有三处：主源回退时的 warning（<code>backend/search/fallback.py</code>）、熔断打开时的 error（<code>backend/search/fallback.py</code>）、以及备用源也失败时的 error（<code>backend/search/fallback.py</code>）。三者都带包装器名字，默认名字是调用时传入的 <code>"Bocha->Baidu"</code>（<code>backend/pipeline/factory.py</code>）。</p>
 <h2 id="9-易错点">9. 易错点</h2>
 <ul>
 <li>以为百度的 429 会重试。它只写日志并返回空列表，不会触发基类退避。</li>
@@ -770,9 +985,40 @@
 <table><thead><tr><th>路径</th><th>作用</th></tr></thead><tbody><tr><td><code>backend/search/baidu.py</code></td><td>百度客户端、同步库适配、业务码处理</td></tr><tr><td><code>backend/search/fallback.py</code></td><td>熔断式回退包装器与统计</td></tr><tr><td><code>backend/search/hybrid.py</code></td><td>百度优先、Exa 兜底的历史回退链</td></tr><tr><td><code>backend/search/bocha.py</code></td><td>会抛 <code>FatalSearchError</code> 的主源实现</td></tr><tr><td><code>backend/pipeline/factory.py</code></td><td>两条回退链的装配位置</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-工厂装配与选择策略"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-工厂装配与选择策略</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/25-搜索聚合/01-多引擎适配/04-工厂装配与选择策略.md</span></div><div class="dfile__body"><h1 id="工厂装配与选择策略">工厂装配与选择策略</h1>
 <p>搜索源的装配集中在 <code>backend/pipeline/factory.py</code>。调用方给出用户名、会话、探索深度与一个 <code>search_provider</code> 字符串，工厂返回一条已经接好搜索、抓取、卡片生成与持久化的流水线。搜索这一环的差异被压进三个分支：<code>"baidu"</code> 走百度加 Exa 的回退链，<code>"bocha"</code> 走博查（可选带熔断回退），其余取值走 Exa。装配侧的代码与配置常量放在一起读，要回答两个问题：一次请求最终用了哪个来源，以及返回结果在进入流水线之前被改写了什么。</p>
 <h2 id="1-provider-的三个取值与默认值">1. provider 的三个取值与默认值</h2>
-<p><code>backend/config.py:67</code> 的注释列出可选值 <code>"bocha" | "baidu" | "exa"</code>，默认值由环境变量 <code>DEFAULT_SEARCH_PROVIDER</code> 覆盖，取不到时使用 <code>"bocha"</code>（<code>backend/config.py:69</code>）。注释同时说明本环境需要经 <code>WSLENV</code> 透传环境变量，这与项目在 WSL 下运行有关。默认值是博查而不是 Exa，与后续的回退开关配套：博查是主源，百度是兜底，Exa 只在显式选择或历史配置里出现。</p>
+<p><code>backend/config.py</code> 的注释列出可选值 <code>"bocha" | "baidu" | "exa"</code>，默认值由环境变量 <code>DEFAULT_SEARCH_PROVIDER</code> 覆盖，取不到时使用 <code>"bocha"</code>（<code>backend/config.py</code>）。注释同时说明本环境需要经 <code>WSLENV</code> 透传环境变量，这与项目在 WSL 下运行有关。默认值是博查而不是 Exa，与后续的回退开关配套：博查是主源，百度是兜底，Exa 只在显式选择或历史配置里出现。</p>
+<p>两个开关在配置里就是两行 <code>os.getenv</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/config.py（节选）</span></span>
+<span class="line"><span style="color:#6A737D"># 搜索自动回退开关："1" 时 bocha 认证/额度/不可用自动切百度反代</span></span>
+<span class="line"><span style="color:#005CC5">SEARCH_AUTO_FALLBACK</span><span style="color:#24292E">: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> os.getenv(</span><span style="color:#032F62">"SEARCH_AUTO_FALLBACK"</span><span style="color:#24292E">, </span><span style="color:#032F62">"1"</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>os.getenv(名字, 默认值)</code> 的第二个参数是环境变量缺失时的兜底值；<code>WSLENV</code> 是 Windows 与 WSL 之间传递环境变量的机制，跨这两个环境跑服务时要显式声明透传哪些变量。</p>
 <h2 id="2-create_pipeline-的三条分支">2. create_pipeline 的三条分支</h2>
-<p><code>create_pipeline()</code> 的签名里 <code>search_provider: str = DEFAULT_SEARCH_PROVIDER</code>（<code>backend/pipeline/factory.py:36</code>），分支判断从 <code>backend/pipeline/factory.py:46</code> 开始：</p>
+<p><code>create_pipeline()</code> 的签名里 <code>search_provider: str = DEFAULT_SEARCH_PROVIDER</code>，真正做分支的是它调用的 <code>build_search_source()</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/pipeline/factory.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> build_search_source</span><span style="color:#24292E">(search_provider: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> DEFAULT_SEARCH_PROVIDER</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    name </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (search_provider </span><span style="color:#D73A49">or</span><span style="color:#032F62"> ""</span><span style="color:#24292E">).strip().lower()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> name </span><span style="color:#D73A49">==</span><span style="color:#032F62"> "free"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> FreeSourceProvider(FreeSearchClient())</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> name </span><span style="color:#D73A49">==</span><span style="color:#032F62"> "baidu"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> BaiduSourceProvider(HybridSearchClient())</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> name </span><span style="color:#D73A49">==</span><span style="color:#032F62"> "bocha"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        bocha_client </span><span style="color:#D73A49">=</span><span style="color:#24292E"> BochaSearchClient()</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#005CC5"> SEARCH_AUTO_FALLBACK</span><span style="color:#D73A49"> ==</span><span style="color:#032F62"> "1"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">            bocha_client </span><span style="color:#D73A49">=</span><span style="color:#24292E"> AutoFallbackSearchClient(</span></span>
+<span class="line"><span style="color:#E36209">                primary</span><span style="color:#D73A49">=</span><span style="color:#24292E">bocha_client,</span></span>
+<span class="line"><span style="color:#E36209">                fallback</span><span style="color:#D73A49">=</span><span style="color:#24292E">BaiduSearchClient(),</span></span>
+<span class="line"><span style="color:#E36209">                name</span><span style="color:#D73A49">=</span><span style="color:#032F62">"Bocha->Baidu"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">            )</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> BochaSourceProvider(bocha_client)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> name </span><span style="color:#D73A49">==</span><span style="color:#032F62"> "exa"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> ExaSourceProvider(SearchClient())</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">    logger.warning(</span><span style="color:#032F62">"[Pipeline] 未知 search_provider=</span><span style="color:#005CC5">%r</span><span style="color:#032F62"> ... 按 free 处理"</span><span style="color:#24292E">, search_provider)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> FreeSourceProvider(FreeSearchClient())</span></span></code></pre>
+<p>注意当前源码与本页归纳的三分支有出入：它多一条 <code>free</code> 分支，<code>exa</code> 也已经是显式判断，未知取值会先记一条 warning 再按 <code>free</code> 处理，而不是静默落到 Exa。读代码时以源码为准。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["create_pipeline(search_provider)"] --> B{"取值"}
   B -->|"baidu"| C["BaiduSourceProvider(HybridSearchClient())"]
@@ -786,12 +1032,12 @@
   H --> I
   B -->|"其他任意值"| J["ExaSourceProvider(SearchClient())"]
   J --> I</pre></div>
-<p>三条分支的处理器相同，都是 <code>ScrapeAndSummarizeProcessor(fetcher, early_stop=2)</code>（<code>backend/pipeline/factory.py:48</code>、<code>:59</code>、<code>:62</code>）。差别只在来源与客户端包装方式。分支写法上有一个需要留意的点：第三条分支是 <code>else</code>，任何拼错或未支持的取值都会静默落到 Exa，而不会报错。</p>
-<p>配置里写 <code>"bochaa"</code> 时不会得到博查，也不会得到提示。每次调用 <code>create_pipeline()</code> 都会新建客户端实例（<code>backend/pipeline/factory.py:50</code>、<code>:61</code>）。流水线对象通常与一次生成任务同生命周期，因此这里没有做跨请求的客户端复用，连接池在每个任务开始时重建。</p>
+<p>三条分支的处理器相同，都是 <code>ScrapeAndSummarizeProcessor(fetcher, early_stop=2)</code>（<code>backend/pipeline/factory.py</code>）。差别只在来源与客户端包装方式。分支写法上有一个需要留意的点：第三条分支是 <code>else</code>，任何拼错或未支持的取值都会静默落到 Exa，而不会报错。</p>
+<p>配置里写 <code>"bochaa"</code> 时不会得到博查，也不会得到提示。每次调用 <code>create_pipeline()</code> 都会新建客户端实例（<code>backend/pipeline/factory.py</code>）。流水线对象通常与一次生成任务同生命周期，因此这里没有做跨请求的客户端复用，连接池在每个任务开始时重建。</p>
 <h2 id="3-文档流水线固定用博查">3. 文档流水线固定用博查</h2>
-<p><code>create_document_pipeline()</code>（<code>backend/pipeline/factory.py:78</code>）不接收 <code>search_provider</code>，来源固定为博查，回退开关同样生效（<code>backend/pipeline/factory.py:88</code>）。它使用 <code>DocumentChunkFetcher</code> 而不是网页抓取器，探索深度固定为 1。文档解析路径面向本地文件或文档内容，来源选择没有暴露给调用方。</p>
+<p><code>create_document_pipeline()</code>（<code>backend/pipeline/factory.py</code>）不接收 <code>search_provider</code>，来源固定为博查，回退开关同样生效（<code>backend/pipeline/factory.py</code>）。它使用 <code>DocumentChunkFetcher</code> 而不是网页抓取器，探索深度固定为 1。文档解析路径面向本地文件或文档内容，来源选择没有暴露给调用方。</p>
 <h2 id="4-三份-sourceprovider-的字段归一">4. 三份 SourceProvider 的字段归一</h2>
-<p>适配层在 <code>backend/pipeline/defaults.py</code>，三个 provider 都把客户端返回值转成流水线的 <code>SearchResult</code>（<code>backend/pipeline/stages.py:34</code>），并顺手过滤空 URL 与黑名单域名。</p>
+<p>适配层在 <code>backend/pipeline/defaults.py</code>，三个 provider 都把客户端返回值转成流水线的 <code>SearchResult</code>（<code>backend/pipeline/stages.py</code>），并顺手过滤空 URL 与黑名单域名。</p>
 
 
 
@@ -825,9 +1071,27 @@
 
 
 
-<table><thead><tr><th>provider</th><th>定义位置</th><th>接受的原始类型</th><th>标题字段</th><th>摘要字段</th></tr></thead><tbody><tr><td><code>ExaSourceProvider</code></td><td><code>backend/pipeline/defaults.py:42</code></td><td>流水线数据类，或任意带 <code>url</code> 属性的对象</td><td><code>title</code></td><td><code>snippet</code>，缺省回退到 <code>description</code></td></tr><tr><td><code>BaiduSourceProvider</code></td><td><code>backend/pipeline/defaults.py:70</code></td><td>流水线数据类，或 <code>dict</code></td><td><code>title</code></td><td><code>description</code></td></tr><tr><td><code>BochaSourceProvider</code></td><td><code>backend/pipeline/defaults.py:97</code></td><td>流水线数据类，或 <code>dict</code></td><td><code>title</code></td><td><code>snippet</code></td></tr></tbody></table>
-<p><code>ExaSourceProvider</code> 的转换分支用 <code>hasattr(r, "url")</code> 识别对象形态（<code>backend/pipeline/defaults.py:53</code>），字段读取写成 <code>getattr(r, "snippet", getattr(r, "description", ""))</code>（<code>backend/pipeline/defaults.py:60</code>）。</p>
-<p>百度与博查两个 provider 走字典分支，字段名直接对应各自客户端的解析结果（<code>backend/pipeline/defaults.py:81</code>、<code>:108</code>）。三份代码结构相同，差异只在字典键名。</p>
+<table><thead><tr><th>provider</th><th>定义位置</th><th>接受的原始类型</th><th>标题字段</th><th>摘要字段</th></tr></thead><tbody><tr><td><code>ExaSourceProvider</code></td><td><code>backend/pipeline/defaults.py</code></td><td>流水线数据类，或任意带 <code>url</code> 属性的对象</td><td><code>title</code></td><td><code>snippet</code>，缺省回退到 <code>description</code></td></tr><tr><td><code>BaiduSourceProvider</code></td><td><code>backend/pipeline/defaults.py</code></td><td>流水线数据类，或 <code>dict</code></td><td><code>title</code></td><td><code>description</code></td></tr><tr><td><code>BochaSourceProvider</code></td><td><code>backend/pipeline/defaults.py</code></td><td>流水线数据类，或 <code>dict</code></td><td><code>title</code></td><td><code>snippet</code></td></tr></tbody></table>
+<p><code>ExaSourceProvider</code> 的转换分支用 <code>hasattr(r, "url")</code> 识别对象形态（<code>backend/pipeline/defaults.py</code>），字段读取写成 <code>getattr(r, "snippet", getattr(r, "description", ""))</code>（<code>backend/pipeline/defaults.py</code>）。</p>
+<p>百度与博查两个 provider 走字典分支，字段名直接对应各自客户端的解析结果（<code>backend/pipeline/defaults.py</code>）。三份代码结构相同，差异只在字典键名。</p>
+<p><code>SourceProvider</code> 这个抽象本身只有一个方法和一个可选的关闭钩子：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/pipeline/stages.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> SourceProvider</span><span style="color:#24292E">(</span><span style="color:#005CC5">ABC</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#6F42C1">    @abstractmethod</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> search</span><span style="color:#24292E">(self, query: </span><span style="color:#005CC5">str</span><span style="color:#24292E">, max_results: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 5</span><span style="color:#24292E">) -> List[SearchResult]: </span><span style="color:#005CC5">...</span></span>
+<span class="line"><span style="color:#D73A49">    async</span><span style="color:#D73A49"> def</span><span style="color:#6F42C1"> close</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">: </span><span style="color:#005CC5">...</span></span></code></pre>
+<p><code>ABC</code> 加 <code>@abstractmethod</code> 表示这是接口类：只声明「要有这个方法」，不提供实现。字典分支长这样（以百度为例，摘要取的是 <code>description</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/pipeline/defaults.py（节选）</span></span>
+<span class="line"><span style="color:#D73A49">elif</span><span style="color:#005CC5"> isinstance</span><span style="color:#24292E">(r, </span><span style="color:#005CC5">dict</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    url </span><span style="color:#D73A49">=</span><span style="color:#24292E"> r.get(</span><span style="color:#032F62">"url"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> url </span><span style="color:#D73A49">or</span><span style="color:#24292E"> _dq().is_blocked(url):</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span></span>
+<span class="line"><span style="color:#24292E">    results.append(SearchResult(</span></span>
+<span class="line"><span style="color:#E36209">        url</span><span style="color:#D73A49">=</span><span style="color:#24292E">url,</span></span>
+<span class="line"><span style="color:#E36209">        title</span><span style="color:#D73A49">=</span><span style="color:#005CC5">str</span><span style="color:#24292E">(r.get(</span><span style="color:#032F62">"title"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)),</span></span>
+<span class="line"><span style="color:#E36209">        snippet</span><span style="color:#D73A49">=</span><span style="color:#005CC5">str</span><span style="color:#24292E">(r.get(</span><span style="color:#032F62">"description"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)),   </span><span style="color:#6A737D"># 百度用 description</span></span>
+<span class="line"><span style="color:#24292E">    ))</span></span></code></pre>
+<p><code>_dq()</code> 取的是域名质量单例，<code>is_blocked()</code> 负责拉黑判断；空 URL 与拉黑域名在 <code>continue</code> 处就被挡下，不进入流水线。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["客户端返回列表"] --> B{"isinstance(r, SearchResult)?"}
   B -->|"是"| C["原样使用"]
@@ -842,10 +1106,10 @@
   I -->|"是"| J["加入结果列表"]
   I -->|"否"| H</pre></div>
 <h2 id="5-黑名单过滤出现在两处">5. 黑名单过滤出现在两处</h2>
-<p>适配层通过 <code>_dq()</code> 拿到域名质量单例（<code>backend/pipeline/defaults.py:36</code>），对每条结果调用 <code>is_blocked()</code>（<code>backend/pipeline/defaults.py:51</code>、<code>:79</code>、<code>:106</code>）。与之并行的还有博查客户端里的 <code>exclude</code> 参数：它把黑名单前 100 个域名拼进请求体，交给服务端过滤（<code>backend/search/bocha.py:89</code>）。</p>
+<p>适配层通过 <code>_dq()</code> 拿到域名质量单例（<code>backend/pipeline/defaults.py</code>），对每条结果调用 <code>is_blocked()</code>（<code>backend/pipeline/defaults.py</code>）。与之并行的还有博查客户端里的 <code>exclude</code> 参数：它把黑名单前 100 个域名拼进请求体，交给服务端过滤（<code>backend/search/bocha.py</code>）。</p>
 <p>两处过滤的作用范围不同。服务端 <code>exclude</code> 只能作用于博查这一条来源，而且受 100 个上限约束；适配层的 <code>is_blocked()</code> 对三条来源都生效，并且用的是同一个单例。百度与 Exa 两条路径只依赖适配层过滤，因此黑名单读取失败时它们不会得到任何服务端侧的排除。</p>
 <h2 id="6-回退开关的取值与生效位置">6. 回退开关的取值与生效位置</h2>
-<p><code>SEARCH_AUTO_FALLBACK</code> 默认 <code>"1"</code>（<code>backend/config.py:72</code>），只被两处读取：<code>create_pipeline()</code> 的博查分支（<code>backend/pipeline/factory.py:51</code>）与 <code>create_document_pipeline()</code> 的构造（<code>backend/pipeline/factory.py:93</code>）。</p>
+<p><code>SEARCH_AUTO_FALLBACK</code> 默认 <code>"1"</code>（<code>backend/config.py</code>），只被两处读取：<code>create_pipeline()</code> 的博查分支（<code>backend/pipeline/factory.py</code>）与 <code>create_document_pipeline()</code> 的构造（<code>backend/pipeline/factory.py</code>）。</p>
 <p>它比较的是字符串 <code>"1"</code>，因此写入 <code>"true"</code>、<code>"yes"</code> 都等同于关闭。关闭之后博查客户端被直接注入 provider，主源失败时不再有兜底。</p>
 <h2 id="7-配置项清单与几个无读者的常量">7. 配置项清单与几个无读者的常量</h2>
 
@@ -931,12 +1195,23 @@
 
 
 
-<table><thead><tr><th>常量</th><th>定义行</th><th>默认值</th><th>读取位置</th></tr></thead><tbody><tr><td><code>DEFAULT_SEARCH_PROVIDER</code></td><td><code>backend/config.py:69</code></td><td><code>"bocha"</code></td><td><code>backend/pipeline/factory.py:36</code></td></tr><tr><td><code>SEARCH_AUTO_FALLBACK</code></td><td><code>backend/config.py:72</code></td><td><code>"1"</code></td><td><code>backend/pipeline/factory.py:51</code>、<code>:93</code></td></tr><tr><td><code>BOCHA_API_URL</code></td><td><code>backend/config.py:75</code></td><td>官方 web-search 地址</td><td><code>backend/search/bocha.py:63</code></td></tr><tr><td><code>BOCHA_API_KEY</code></td><td><code>backend/config.py:76</code></td><td>空字符串</td><td><code>backend/search/bocha.py:62</code></td></tr><tr><td><code>BOCHA_MAX_CONCURRENT</code></td><td><code>backend/config.py:77</code></td><td>5</td><td><code>backend/search/bocha.py:52</code></td></tr><tr><td><code>BOCHA_TIMEOUT</code></td><td><code>backend/config.py:78</code></td><td>30</td><td><code>backend/search/bocha.py:114</code></td></tr><tr><td><code>BAIDU_MAX_CONCURRENT</code></td><td><code>backend/config.py:81</code></td><td>3</td><td>无</td></tr><tr><td><code>BAIDU_RATE_LIMIT</code></td><td><code>backend/config.py:82</code></td><td>1.0</td><td>无</td></tr><tr><td><code>BAIDU_RETRY_LIMIT</code></td><td><code>backend/config.py:83</code></td><td>2</td><td>无</td></tr><tr><td><code>EXA_BASE_DELAY</code></td><td><code>backend/config.py:86</code></td><td>1.0</td><td>无</td></tr><tr><td><code>EXA_TIMEOUT</code></td><td><code>backend/config.py:87</code></td><td>30</td><td><code>backend/search/exa.py:83</code></td></tr><tr><td><code>EXA_MAX_RETRIES</code></td><td><code>backend/config.py:88</code></td><td>3</td><td><code>backend/search/exa.py:42</code></td></tr></tbody></table>
-<p>百度相关的三个常量与 <code>EXA_BASE_DELAY</code> 在仓库里没有任何导入点。百度客户端的同名参数写成了字面量默认值（<code>backend/search/baidu.py:26</code>、<code>:27</code>、<code>:28</code>），数值恰好与常量一致，但改常量不会改变运行时行为。这是一处可以从导入关系直接确认的不一致。</p>
+<table><thead><tr><th>常量</th><th>定义位置</th><th>默认值</th><th>读取位置</th></tr></thead><tbody><tr><td><code>DEFAULT_SEARCH_PROVIDER</code></td><td><code>backend/config.py</code></td><td><code>"bocha"</code></td><td><code>backend/pipeline/factory.py</code></td></tr><tr><td><code>SEARCH_AUTO_FALLBACK</code></td><td><code>backend/config.py</code></td><td><code>"1"</code></td><td><code>backend/pipeline/factory.py</code></td></tr><tr><td><code>BOCHA_API_URL</code></td><td><code>backend/config.py</code></td><td>官方 web-search 地址</td><td><code>backend/search/bocha.py</code></td></tr><tr><td><code>BOCHA_API_KEY</code></td><td><code>backend/config.py</code></td><td>空字符串</td><td><code>backend/search/bocha.py</code></td></tr><tr><td><code>BOCHA_MAX_CONCURRENT</code></td><td><code>backend/config.py</code></td><td>5</td><td><code>backend/search/bocha.py</code></td></tr><tr><td><code>BOCHA_TIMEOUT</code></td><td><code>backend/config.py</code></td><td>30</td><td><code>backend/search/bocha.py</code></td></tr><tr><td><code>BAIDU_MAX_CONCURRENT</code></td><td><code>backend/config.py</code></td><td>3</td><td>无</td></tr><tr><td><code>BAIDU_RATE_LIMIT</code></td><td><code>backend/config.py</code></td><td>1.0</td><td>无</td></tr><tr><td><code>BAIDU_RETRY_LIMIT</code></td><td><code>backend/config.py</code></td><td>2</td><td>无</td></tr><tr><td><code>EXA_BASE_DELAY</code></td><td><code>backend/config.py</code></td><td>1.0</td><td>无</td></tr><tr><td><code>EXA_TIMEOUT</code></td><td><code>backend/config.py</code></td><td>30</td><td><code>backend/search/exa.py</code></td></tr><tr><td><code>EXA_MAX_RETRIES</code></td><td><code>backend/config.py</code></td><td>3</td><td><code>backend/search/exa.py</code></td></tr></tbody></table>
+<p>百度相关的三个常量与 <code>EXA_BASE_DELAY</code> 在仓库里没有任何导入点。百度客户端的同名参数写成了字面量默认值（<code>backend/search/baidu.py</code>），数值恰好与常量一致，但改常量不会改变运行时行为。这是一处可以从导入关系直接确认的不一致。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># backend/config.py（节选）</span></span>
+<span class="line"><span style="color:#6A737D"># 百度搜索（provider="baidu" 时才需要）</span></span>
+<span class="line"><span style="color:#005CC5">BAIDU_MAX_CONCURRENT</span><span style="color:#24292E">: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 3</span></span>
+<span class="line"><span style="color:#005CC5">BAIDU_RATE_LIMIT</span><span style="color:#24292E">: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 1.0</span><span style="color:#6A737D">  # QPS</span></span>
+<span class="line"><span style="color:#005CC5">BAIDU_RETRY_LIMIT</span><span style="color:#24292E">: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 2</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Exa 搜索</span></span>
+<span class="line"><span style="color:#005CC5">EXA_BASE_DELAY</span><span style="color:#24292E">: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 1.0</span></span>
+<span class="line"><span style="color:#005CC5">EXA_TIMEOUT</span><span style="color:#24292E">: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 30</span></span>
+<span class="line"><span style="color:#005CC5">EXA_MAX_RETRIES</span><span style="color:#24292E">: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 3</span></span></code></pre>
+<p><code>BAIDU_*</code> 三个与 <code>EXA_BASE_DELAY</code> 在仓库里查不到 <code>import</code> 点，等于「只在配置里声明了默认值」；<code>EXA_TIMEOUT</code>、<code>EXA_MAX_RETRIES</code>、<code>BOCHA_*</code> 则真的被客户端导入使用。</p>
 <h2 id="8-路由层没有走-provider">8. 路由层没有走 provider</h2>
-<p><code>backend/routes/search.py:3</code> 的模块说明写着通过 Exa 搜索客户端，端点里直接构造 <code>SearchClient()</code>（<code>backend/routes/search.py:30</code>），没有读取 <code>DEFAULT_SEARCH_PROVIDER</code>，也没有经过任何 <code>SourceProvider</code>。影响有三层：该接口始终使用 Exa；返回值是搜索侧模型，不过黑名单过滤；每次请求新建客户端，文件里也没有对应的 <code>close()</code> 调用。</p>
+<p><code>backend/routes/search.py</code> 的模块说明写着通过 Exa 搜索客户端，端点里直接构造 <code>SearchClient()</code>（<code>backend/routes/search.py</code>），没有读取 <code>DEFAULT_SEARCH_PROVIDER</code>，也没有经过任何 <code>SourceProvider</code>。影响有三层：该接口始终使用 Exa；返回值是搜索侧模型，不过黑名单过滤；每次请求新建客户端，文件里也没有对应的 <code>close()</code> 调用。</p>
 <h2 id="9-未接入适配层的来源">9. 未接入适配层的来源</h2>
-<p><code>backend/search/</code> 下只有三个引擎适配器（<code>backend/search/baidu.py</code>、<code>backend/search/bocha.py</code>、<code>backend/search/exa.py</code>）与两个包装器（<code>backend/search/hybrid.py</code>、<code>backend/search/fallback.py</code>）。仓库里另有一个维基百科客户端 <code>WikipediaClient</code>（<code>backend/scraper/wikipedia_client.py:19</code>），支持多语言与 Parse API 到 Extracts API 的回退，但全仓库没有调用点，本仓库未见它接入搜索聚合链路。任务清单里提到的 <code>free</code> 引擎在 <code>backend/search/</code> 下没有对应实现，本仓库未见该引擎实现。</p>
+<p><code>backend/search/</code> 下只有三个引擎适配器（<code>backend/search/baidu.py</code>、<code>backend/search/bocha.py</code>、<code>backend/search/exa.py</code>）与两个包装器（<code>backend/search/hybrid.py</code>、<code>backend/search/fallback.py</code>）。仓库里另有一个维基百科客户端 <code>WikipediaClient</code>（<code>backend/scraper/wikipedia_client.py</code>），支持多语言与 Parse API 到 Extracts API 的回退，但全仓库没有调用点，本仓库未见它接入搜索聚合链路。任务清单里提到的 <code>free</code> 引擎在 <code>backend/search/</code> 下没有对应实现，本仓库未见该引擎实现。</p>
 <h2 id="10-易错点">10. 易错点</h2>
 <ul>
 <li>认为非法 provider 会报错。第三条分支是 <code>else</code>，未知取值静默使用 Exa。</li>
@@ -1021,9 +1296,9 @@
 <h2 id="练习">练习</h2>
 <h3 id="基础题">基础题</h3>
 <ol>
-<li><code>search_provider="x"</code> 时最终使用哪个来源？指出对应的代码行。</li>
+<li><code>search_provider="x"</code> 时最终使用哪个来源？说明它落进哪一条分支。</li>
 <li>关闭回退开关后，博查出现 402 时会怎样？结合包装器是否参与说明。</li>
-<li>列出适配层在把结果交出去之前会做的两类过滤，并各指出一处行号。</li>
+<li>列出适配层在把结果交出去之前会做的两类过滤，并各指出它们的实现位置。</li>
 </ol>
 <h3 id="挑战题">挑战题</h3>
 <ol start="4">

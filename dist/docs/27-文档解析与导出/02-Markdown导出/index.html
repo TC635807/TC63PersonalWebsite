@@ -2,7 +2,7 @@
 <p>KnowledgeDiver 把知识卡片组织成树形结构，导出功能负责把这些卡片渲染成一份可以直接带走的单页 Markdown。实现集中在 <code>backend/export/</code> 目录，HTTP 入口在 <code>backend/routes/export.py</code>，两者之间只通过一个 <code>CardStore</code> 实例连接。模块边界要看三件事：哪些数据由卡片模型提供、导出器实际依赖存储的哪几个方法、请求体允许调整哪些开关；渲染细节留给后面的小节。</p>
 <p>渲染规则、路由行为与已知缺陷分别写在 <code>02-卡片遍历与排序.md</code>、<code>03-单页Markdown生成.md</code>、<code>04-导出路由与下载.md</code> 与 <code>05-易错点与排查.md</code>。</p>
 <h2 id="1-导出器在仓库里的位置">1. 导出器在仓库里的位置</h2>
-<p>导出功能由三个文件构成。<code>backend/export/markdown_exporter.py</code> 定义 <code>ExportOptions</code> 与 <code>MarkdownExporter</code>；<code>backend/export/__init__.py:8</code> 把两者重新导出，包外只从 <code>backend.export</code> 导入；<code>backend/routes/export.py</code> 提供两个 HTTP 端点。</p>
+<p>导出功能由三个文件构成。<code>backend/export/markdown_exporter.py</code> 定义 <code>ExportOptions</code> 与 <code>MarkdownExporter</code>；<code>backend/export/__init__.py</code> 把两者重新导出，包外只从 <code>backend.export</code> 导入；<code>backend/routes/export.py</code> 提供两个 HTTP 端点。</p>
 <p>依赖方向是单向的：路由依赖导出器，导出器依赖卡片模型与存储接口，反向没有引用。导出器不知道 FastAPI 的存在，也不关心请求从哪来，这种隔离让它可以被脚本或测试直接调用。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   FE["前端页面"] -->|"当前未接入"| API
@@ -13,7 +13,7 @@
   EXP --> MD["单页 Markdown 字符串"]
   MD --> RESP["JSON 或文件响应"]</pre></div>
 <h2 id="2-卡片数据模型提供哪些字段">2. 卡片数据模型提供哪些字段</h2>
-<p>渲染一页文档需要标题、正文、元数据、来源与链接，这些字段都在 <code>backend/models/card.py:17-34</code> 的 <code>Card</code> 里定义。导出器只读取，不写回。</p>
+<p>渲染一页文档需要标题、正文、元数据、来源与链接，这些字段都在 <code>backend/models/card.py</code> 的 <code>Card</code> 里定义。导出器只读取，不写回。</p>
 
 
 
@@ -80,13 +80,13 @@
 
 
 <table><thead><tr><th>字段</th><th>类型</th><th>导出用途</th></tr></thead><tbody><tr><td><code>id</code></td><td><code>str</code>，UUID</td><td>卡片身份，排序键与映射表的键</td></tr><tr><td><code>title</code></td><td><code>str</code></td><td>标题行文本，也是锚点 slug 的原料</td></tr><tr><td><code>content</code></td><td><code>str</code></td><td>正文，按 Markdown 原样输出</td></tr><tr><td><code>metadata</code></td><td><code>dict</code></td><td>元数据块里的键值对</td></tr><tr><td><code>links</code></td><td><code>list[str]</code></td><td>尾部 Related 行的卡片 ID 列表</td></tr><tr><td><code>backlinks</code></td><td><code>list[str]</code></td><td>入链镜像，导出器未使用</td></tr><tr><td><code>parent_id</code></td><td><code>str 或 None</code></td><td>树形父卡，导出器未使用</td></tr><tr><td><code>sources</code></td><td><code>list[str]</code></td><td>来源 URL 列表</td></tr><tr><td><code>confidence</code></td><td><code>float</code>，0 到 1</td><td>置信度行</td></tr><tr><td><code>tags</code></td><td><code>list[str]</code></td><td>标签，导出器未使用</td></tr><tr><td><code>created_at</code> / <code>updated_at</code></td><td><code>datetime</code></td><td>时间戳，导出器未使用</td></tr></tbody></table>
-<p>模型自身有三处校验：<code>:36-43</code> 要求 <code>id</code> 是合法 UUID，<code>:45-56</code> 限制 <code>metadata</code> 的值只能是字符串、数值或字符串列表，<code>:58-63</code> 限制 <code>confidence</code> 落在 0 到 1 之间。校验在构造卡片时发生，导出路径上不会再次检查，所以导出器可以假定这些字段已经合法。</p>
+<p>卡片模型自身有三处校验：<code>id</code> 必须是合法 UUID，<code>metadata</code> 的值只能是字符串、数值或字符串列表，<code>confidence</code> 落在 0 到 1 之间。校验在构造卡片时发生，导出路径上不会再次检查，所以导出器可以假定这些字段已经合法。</p>
 <h2 id="3-cardstore-只被用到-list_cards-一个方法">3. CardStore 只被用到 list_cards 一个方法</h2>
-<p><code>MarkdownExporter.__init__</code> 接收一个 <code>CardStore</code> 并保存为 <code>self.store</code>（<code>backend/export/markdown_exporter.py:43-44</code>）。整个导出流程只调用 <code>self.store.list_cards()</code>（<code>:60</code>），没有调用 <code>get_card</code>、<code>update_card</code> 或任何写方法。</p>
-<p><code>list_cards</code> 在抽象基类 <code>BaseCardStore</code> 里声明（<code>backend/storage/base.py:58-61</code>），三种实现的行为一致：返回当前存储中的全部卡片。文件系统实现走 <code>CardStore</code>，SQLite 实现执行 <code>SELECT * FROM cards</code>（<code>backend/storage/sqlite_card_store.py:270-273</code>），内存实现直接取字典的值（<code>backend/storage/card_store.py:237-238</code>）。</p>
-<p><code>backend/storage/__init__.py:13-16</code> 把三者一并导出。依赖面窄带来两个后果。导出器不关心卡片存在哪里，测试可以用 <code>InMemoryCardStore</code> 构造数据；同时它也只能拿到全量列表，任何按父卡筛选的需求都无法在这一层实现。</p>
+<p><code>MarkdownExporter.__init__</code> 接收一个 <code>CardStore</code> 并保存为 <code>self.store</code>（<code>backend/export/markdown_exporter.py</code>）。整个导出流程只调用 <code>self.store.list_cards()</code>，没有调用 <code>get_card</code>、<code>update_card</code> 或任何写方法。</p>
+<p><code>list_cards</code> 在抽象基类 <code>BaseCardStore</code> 里声明（<code>backend/storage/base.py</code>），三种实现的行为一致：返回当前存储中的全部卡片。文件系统实现走 <code>CardStore</code>，SQLite 实现执行 <code>SELECT * FROM cards</code>（<code>backend/storage/sqlite_card_store.py</code>），内存实现直接取字典的值（<code>backend/storage/card_store.py</code>）。</p>
+<p><code>backend/storage/__init__.py</code> 把三者一并导出。依赖面窄带来两个后果。导出器不关心卡片存在哪里，测试可以用 <code>InMemoryCardStore</code> 构造数据；同时它也只能拿到全量列表，任何按父卡筛选的需求都无法在这一层实现。</p>
 <h2 id="4-exportoptions-的五个开关">4. ExportOptions 的五个开关</h2>
-<p><code>ExportOptions</code> 是 Pydantic 模型，五个字段都有默认值（<code>backend/export/markdown_exporter.py:18-24</code>）：</p>
+<p><code>ExportOptions</code> 是 Pydantic 模型，五个字段都有默认值（<code>backend/export/markdown_exporter.py</code>）：</p>
 
 
 
@@ -123,9 +123,21 @@
 
 
 <table><thead><tr><th>字段</th><th>默认</th><th>作用</th></tr></thead><tbody><tr><td><code>include_metadata</code></td><td><code>True</code></td><td>是否输出 <code>metadata</code> 键值对</td></tr><tr><td><code>include_sources</code></td><td><code>True</code></td><td>是否输出来源 URL 行</td></tr><tr><td><code>include_confidence</code></td><td><code>True</code></td><td>是否输出置信度行</td></tr><tr><td><code>heading_level_start</code></td><td><code>1</code></td><td>卡片标题的起始级别</td></tr><tr><td><code>include_toc</code></td><td><code>True</code></td><td>是否生成目录块</td></tr></tbody></table>
-<p>这五个开关是导出路径上唯一的可调项。<code>heading_level_start</code> 只影响卡片标题，目录标题固定为一级。请求体里的 <code>options</code> 字段直接复用这个模型（<code>backend/routes/export.py:25</code>），所以 HTTP 侧传入的 JSON 会按同一套默认值补齐。</p>
+<p>这五个开关是导出路径上唯一的可调项。<code>heading_level_start</code> 只影响卡片标题，目录标题固定为一级。请求体里的 <code>options</code> 字段直接复用这个模型（<code>backend/routes/export.py</code>），所以 HTTP 侧传入的 JSON 会按同一套默认值补齐。</p>
 <h2 id="5-从-http-请求到-markdown-的调用链">5. 从 HTTP 请求到 Markdown 的调用链</h2>
-<p>两个端点的共同步骤是：从 <code>request.app.state</code> 取出 <code>card_store</code>，用它构造 <code>MarkdownExporter</code>，再调用 <code>export_tree_with_count</code>。<code>POST /api/export</code> 把结果放进 JSON（<code>backend/routes/export.py:39-45</code>），<code>GET /api/export/download</code> 写文件后交给 <code>FileResponse</code>（<code>:48-58</code>）。</p>
+<p>调用链很短，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：路由 → 导出器 → 存储</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> export_markdown</span><span style="color:#24292E">(store, options):</span></span>
+<span class="line"><span style="color:#24292E">    cards </span><span style="color:#D73A49">=</span><span style="color:#24292E"> store.list_cards()                       </span><span style="color:#6A737D"># 唯一用到的存储方法</span></span>
+<span class="line"><span style="color:#24292E">    tree </span><span style="color:#D73A49">=</span><span style="color:#24292E"> MarkdownExporter(store).export_tree_with_options(cards, options)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> tree</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1">@router.post</span><span style="color:#24292E">(</span><span style="color:#032F62">"/export/markdown"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> route</span><span style="color:#24292E">(body, request):</span></span>
+<span class="line"><span style="color:#24292E">    store </span><span style="color:#D73A49">=</span><span style="color:#24292E"> get_store(request.app)                   </span><span style="color:#6A737D"># 从 app.state 取</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"markdown"</span><span style="color:#24292E">: export_markdown(store, body)}</span></span></code></pre>
+<p>“模块边界”在这里体现为一个很窄的接口：导出器只依赖存储的<code>list_cards</code>一个方法，其余能力（排序、成树、渲染）都在导出器内部完成。接口窄的好处是导出逻辑可以脱离数据库测试——给一个内存实现就能跑；代价是每次导出都要一次性取出全部卡片，卡片量大时内存与耗时都随总量增长。</p>
+<p>两个端点的共同步骤是：从 <code>request.app.state</code> 取出 <code>card_store</code>，用它构造 <code>MarkdownExporter</code>，再调用 <code>export_tree_with_count</code>。<code>POST /api/export</code> 把结果放进 JSON（<code>backend/routes/export.py</code>），<code>GET /api/export/download</code> 写文件后交给 <code>FileResponse</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant C as 客户端
@@ -142,9 +154,9 @@
   S-->>E: 全部卡片
   E-->>R: (markdown, card_count)
   R-->>C: JSON 两个字段</pre></div>
-<p><code>backend/main.py:35-38</code> 用 <code>try</code>/<code>except</code> 导入导出路由，导入失败时把 <code>export_router</code> 置为 <code>None</code>；<code>:143-145</code> 据此决定是否注册。这层保护让导出模块缺失时应用仍能启动，代价是路由是否可用要读启动日志才能发现。</p>
+<p><code>backend/main.py</code> 用 <code>try</code>/<code>except</code> 导入导出路由，导入失败时把 <code>export_router</code> 置为 <code>None</code>，启动时据此决定是否注册。这层保护让导出模块缺失时应用仍能启动，代价是路由是否可用要读启动日志才能发现。</p>
 <h2 id="6-单页文档的既定形状">6. 单页文档的既定形状</h2>
-<p>一次成功导出的输出形状固定为三段：可选的目录块、按 <code>id</code> 排序的卡片小节、每节之间的空行。卡片小节内部依次是标题、可选的引用式元数据块、正文、可选的 Related 行（<code>backend/export/markdown_exporter.py:98-138</code>）。</p>
+<p>一次成功导出的输出形状固定为三段：可选的目录块、按 <code>id</code> 排序的卡片小节、每节之间的空行。卡片小节内部依次是标题、可选的引用式元数据块、正文、可选的 Related 行（<code>backend/export/markdown_exporter.py</code>）。</p>
 
 
 
@@ -178,18 +190,11 @@
 
 
 
-
-
-
-
-
-
-
-<table><thead><tr><th>位置</th><th>内容</th><th>生成代码</th></tr></thead><tbody><tr><td>文档开头</td><td><code># Table of Contents</code> 与链接列表</td><td><code>:68-74</code></td></tr><tr><td>每个卡片</td><td><code>#</code> 加空格加标题</td><td><code>:107</code></td></tr><tr><td>每个卡片</td><td><code>> </code> 开头的元数据行</td><td><code>:115-121</code></td></tr><tr><td>每个卡片</td><td>原样正文</td><td><code>:125-126</code></td></tr><tr><td>每个卡片</td><td><code>Related: </code> 链接行</td><td><code>:128-136</code></td></tr><tr><td>文档结尾</td><td>统一 strip 后补一个换行</td><td><code>:80</code></td></tr></tbody></table>
-<p><code>export_tree</code> 与 <code>export_subtree</code> 都返回字符串（<code>:46-51</code>、<code>:83-87</code>），<code>export_tree_with_count</code> 额外返回卡片数量（<code>:53-56</code>）。<code>export_to_file</code> 复用同一份字符串写文件（<code>:89-96</code>）。</p>
+<table><thead><tr><th>位置</th><th>内容</th></tr></thead><tbody><tr><td>文档开头</td><td><code># Table of Contents</code> 与链接列表</td></tr><tr><td>每个卡片</td><td><code>#</code> 加空格加标题</td></tr><tr><td>每个卡片</td><td><code>> </code> 开头的元数据行</td></tr><tr><td>每个卡片</td><td>原样正文</td></tr><tr><td>每个卡片</td><td><code>Related: </code> 链接行</td></tr><tr><td>文档结尾</td><td>统一 strip 后补一个换行</td></tr></tbody></table>
+<p><code>export_tree</code> 与 <code>export_subtree</code> 都返回字符串，<code>export_tree_with_count</code> 额外返回卡片数量。<code>export_to_file</code> 复用同一份字符串写文件。</p>
 <h2 id="7-导出模块的两条边界约定">7. 导出模块的两条边界约定</h2>
-<p>第一条是「导出器不筛选数据」。<code>export_tree_with_count</code> 的 <code>root_id</code> 参数会被传给同名形参，但函数体没有用它（<code>backend/export/markdown_exporter.py:53-64</code> 到 <code>:81</code> 之间没有基于 <code>root_id</code> 的分支），实际导出的是 <code>list_cards()</code> 的全量结果。按参数名理解成子树导出会与实现不符。</p>
-<p>第二条是「路由不持有存储」。<code>backend/routes/export.py:28-36</code> 从 <code>app.state</code> 取 <code>card_store</code>，取不到就新建一个空的内存存储并写回 <code>app.state</code>。生产环境由应用启动流程注入存储，测试环境靠这条回退路径拿到空库，两个端点在存储缺失时都不会报错，只会导出空文档。</p>
+<p>第一条是「导出器不筛选数据」。<code>export_tree_with_count</code> 的 <code>root_id</code> 参数会被传给同名形参，但函数体没有用它（<code>backend/export/markdown_exporter.py</code> 里没有基于 <code>root_id</code> 的分支），实际导出的是 <code>list_cards()</code> 的全量结果。按参数名理解成子树导出会与实现不符。</p>
+<p>第二条是「路由不持有存储」。<code>backend/routes/export.py</code> 从 <code>app.state</code> 取 <code>card_store</code>，取不到就新建一个空的内存存储并写回 <code>app.state</code>。生产环境由应用启动流程注入存储，测试环境靠这条回退路径拿到空库，两个端点在存储缺失时都不会报错，只会导出空文档。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 
 
@@ -231,7 +236,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>把 <code>root_id</code> 当成子树筛选</td><td>传入某个卡片 ID 仍得到全量文档</td><td><code>backend/export/markdown_exporter.py:53-81</code></td></tr><tr><td>以为导出器依赖整套 CardStore 接口</td><td>误判替换存储的成本</td><td>只用到 <code>list_cards</code>（<code>:60</code>）</td></tr><tr><td>认为路由自带鉴权</td><td>两个端点没有依赖注入的鉴权函数</td><td><code>backend/routes/export.py:39-58</code></td></tr><tr><td>在应用启动前调用端点</td><td>得到空文档而不是报错</td><td><code>:31-36</code> 的回退分支</td></tr><tr><td>以为导出路由一定注册</td><td>导入失败时静默跳过</td><td><code>backend/main.py:35-38</code>、<code>:143-145</code></td></tr><tr><td>把 <code>backlinks</code> 与 <code>parent_id</code> 当成导出输入</td><td>输出里找不到对应行</td><td>导出器未读取这两个字段</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>把 <code>root_id</code> 当成子树筛选</td><td>传入某个卡片 ID 仍得到全量文档</td><td><code>backend/export/markdown_exporter.py</code></td></tr><tr><td>以为导出器依赖整套 CardStore 接口</td><td>误判替换存储的成本</td><td>只用到 <code>list_cards</code></td></tr><tr><td>认为路由自带鉴权</td><td>两个端点没有依赖注入的鉴权函数</td><td><code>backend/routes/export.py</code></td></tr><tr><td>在应用启动前调用端点</td><td>得到空文档而不是报错</td><td>的回退分支</td></tr><tr><td>以为导出路由一定注册</td><td>导入失败时静默跳过</td><td><code>backend/main.py</code></td></tr><tr><td>把 <code>backlinks</code> 与 <code>parent_id</code> 当成导出输入</td><td>输出里找不到对应行</td><td>导出器未读取这两个字段</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -320,7 +325,7 @@
 <p><code>ExportOptions</code> 的五个字段各控制输出的哪一段？</p>
 </li>
 <li>
-<p>说明 <code>backend/routes/export.py:31-36</code> 的回退分支在什么情况下生效。挑战题：</p>
+<p>说明 <code>backend/routes/export.py</code> 的回退分支在什么情况下生效。挑战题：</p>
 </li>
 <li>
 <p>若要按 <code>parent_id</code> 只导出某棵子树，改动最小应当落在哪一层？给出函数签名与需要使用的存储方法。</p>
@@ -383,12 +388,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>ExportOptions</code>（:18-24）、<code>MarkdownExporter</code> 与全部导出方法（:36-138）</td></tr><tr><td><code>backend/export/__init__.py</code></td><td>包级导出（:8）</td></tr><tr><td><code>backend/routes/export.py</code></td><td>请求体（:22-25）、存储获取（:28-36）、两个端点（:39-58）</td></tr><tr><td><code>backend/main.py</code></td><td>可选导入（:35-38）、条件注册（:143-145）</td></tr><tr><td><code>backend/models/card.py</code></td><td>卡片字段（:17-34）与三处校验（:36-63）</td></tr><tr><td><code>backend/storage/base.py</code></td><td><code>list_cards</code> 抽象声明（:58-61）</td></tr><tr><td><code>backend/storage/card_store.py</code></td><td><code>InMemoryCardStore</code>（:204）、<code>list_cards</code>（:237-238）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td><code>list_cards</code> 的 SQL 实现（:270-273）</td></tr><tr><td><code>backend/storage/__init__.py</code></td><td>三种卡片存储的导出（:13-16）</td></tr><tr><td><code>frontend/src/api/session.ts</code></td><td>现有下载接口只覆盖会话 ZIP（:69-84），未接入 Markdown 导出</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-卡片遍历与排序"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-卡片遍历与排序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/02-卡片遍历与排序.md</span></div><div class="dfile__body"><h1 id="卡片遍历与排序">卡片遍历与排序</h1>
-<p>一次导出从 <code>self.store.list_cards()</code> 开始，到一份字符串结束。中间有四步：拿到全量卡片、按 <code>id</code> 排序、建立两张映射表、按顺序渲染。每一步都在 <code>MarkdownExporter.export_tree_with_count</code> 里完成（<code>backend/export/markdown_exporter.py:53-81</code>），四步之间有依赖：顺序决定了目录与正文能否对上。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>ExportOptions</code>、<code>MarkdownExporter</code> 与全部导出方法</td></tr><tr><td><code>backend/export/__init__.py</code></td><td>包级导出</td></tr><tr><td><code>backend/routes/export.py</code></td><td>请求体、存储获取、两个端点</td></tr><tr><td><code>backend/main.py</code></td><td>可选导入、条件注册</td></tr><tr><td><code>backend/models/card.py</code></td><td>卡片字段与三处校验</td></tr><tr><td><code>backend/storage/base.py</code></td><td><code>list_cards</code> 抽象声明</td></tr><tr><td><code>backend/storage/card_store.py</code></td><td><code>InMemoryCardStore</code>、<code>list_cards</code></td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td><code>list_cards</code> 的 SQL 实现</td></tr><tr><td><code>backend/storage/__init__.py</code></td><td>三种卡片存储的导出</td></tr><tr><td><code>frontend/src/api/session.ts</code></td><td>现有下载接口只覆盖会话 ZIP，未接入 Markdown 导出</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-卡片遍历与排序"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-卡片遍历与排序</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/02-卡片遍历与排序.md</span></div><div class="dfile__body"><h1 id="卡片遍历与排序">卡片遍历与排序</h1>
+<p>一次导出从 <code>self.store.list_cards()</code> 开始，到一份字符串结束。中间有四步：拿到全量卡片、按 <code>id</code> 排序、建立两张映射表、按顺序渲染。每一步都在 <code>MarkdownExporter.export_tree_with_count</code> 里完成（<code>backend/export/markdown_exporter.py</code>），四步之间有依赖：顺序决定了目录与正文能否对上。</p>
 <p>渲染细节见 <code>03-单页Markdown生成.md</code>，存储侧三种 <code>list_cards</code> 实现的差异也在这里一并说明。</p>
 <h2 id="1-入口只接受两个可选参数">1. 入口只接受两个可选参数</h2>
-<p><code>export_tree_with_count</code> 的签名是 <code>(root_id=None, options=None)</code>（<code>backend/export/markdown_exporter.py:53-55</code>）。<code>options</code> 为 <code>None</code> 时用 <code>ExportOptions()</code> 补齐默认值（<code>:57-58</code>）；<code>root_id</code> 会一路传递，但函数体里没有分支读取它。</p>
-<p><code>export_tree</code> 是它的薄封装，丢弃计数只返回字符串（<code>:46-51</code>）；<code>export_subtree</code> 把 <code>card_id</code> 传进 <code>root_id</code> 后同样走全量路径（<code>:83-87</code>）。三个方法的区别只在返回值，不在筛选行为。</p>
+<p><code>export_tree_with_count</code> 的签名是 <code>(root_id=None, options=None)</code>（<code>backend/export/markdown_exporter.py</code>）。<code>options</code> 为 <code>None</code> 时用 <code>ExportOptions()</code> 补齐默认值；<code>root_id</code> 会一路传递，但函数体里没有分支读取它。</p>
+<p><code>export_tree</code> 是它的薄封装，丢弃计数只返回字符串；<code>export_subtree</code> 把 <code>card_id</code> 传进 <code>root_id</code> 后同样走全量路径。三个方法的区别只在返回值，不在筛选行为。</p>
 <h2 id="2-存储返回的列表没有约定顺序">2. 存储返回的列表没有约定顺序</h2>
 <p>导出器调用的 <code>list_cards()</code> 在三种实现里语义一致，返回顺序却不一致：</p>
 
@@ -416,12 +421,20 @@
 
 
 
-<table><thead><tr><th>实现</th><th>返回顺序</th><th>位置</th></tr></thead><tbody><tr><td>文件系统 <code>CardStore</code></td><td><code>glob("*.md")</code> 的遍历顺序，取决于文件系统</td><td><code>backend/storage/card_store.py:162-168</code></td></tr><tr><td>SQLite <code>SqliteCardStore</code></td><td><code>SELECT * FROM cards</code> 无 <code>ORDER BY</code>，通常按行号</td><td><code>backend/storage/sqlite_card_store.py:270-273</code></td></tr><tr><td>内存 <code>InMemoryCardStore</code></td><td>字典插入顺序</td><td><code>backend/storage/card_store.py:237-238</code></td></tr></tbody></table>
+<table><thead><tr><th>实现</th><th>返回顺序</th><th>位置</th></tr></thead><tbody><tr><td>文件系统 <code>CardStore</code></td><td><code>glob("*.md")</code> 的遍历顺序，取决于文件系统</td><td><code>backend/storage/card_store.py</code></td></tr><tr><td>SQLite <code>SqliteCardStore</code></td><td><code>SELECT * FROM cards</code> 无 <code>ORDER BY</code>，通常按行号</td><td><code>backend/storage/sqlite_card_store.py</code></td></tr><tr><td>内存 <code>InMemoryCardStore</code></td><td>字典插入顺序</td><td><code>backend/storage/card_store.py</code></td></tr></tbody></table>
 <p>导出器不能依赖这个顺序，所以下一步自己排序。反过来说，任何要求「按创建时间」或「按父子层级」输出文档的需求，都不会被存储层满足。</p>
 <h2 id="3-排序键是-id-的字典序">3. 排序键是 id 的字典序</h2>
-<p><code>backend/export/markdown_exporter.py:61</code> 把列表重排：</p>
+<p>排序与映射表，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：先定型顺序，再建两张表</span></span>
+<span class="line"><span style="color:#24292E">cards </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> sorted</span><span style="color:#24292E">(store.list_cards(), </span><span style="color:#E36209">key</span><span style="color:#D73A49">=lambda</span><span style="color:#24292E"> c: c.id)   </span><span style="color:#6A737D"># 字典序，稳定可复现</span></span>
+<span class="line"><span style="color:#24292E">by_id </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {c.id: c </span><span style="color:#D73A49">for</span><span style="color:#24292E"> c </span><span style="color:#D73A49">in</span><span style="color:#24292E"> cards}                          </span><span style="color:#6A737D"># 查找用</span></span>
+<span class="line"><span style="color:#24292E">children </span><span style="color:#D73A49">=</span><span style="color:#24292E"> defaultdict(</span><span style="color:#005CC5">list</span><span style="color:#24292E">)                              </span><span style="color:#6A737D"># 成树用</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> c </span><span style="color:#D73A49">in</span><span style="color:#24292E"> cards:</span></span>
+<span class="line"><span style="color:#24292E">    children[c.parent_id].append(c)</span></span></code></pre>
+<p>“字典序”是把字符串按字符编码逐个比较得到的顺序，特点是确定、可复现，但不等于创建时间或任何业务顺序。存储层返回的列表本身不保证顺序，所以导出必须先排序再渲染——否则同一份数据两次导出可能得到不同文本，无法用 diff 比较。两张映射表服务不同用途：一张按 id 查卡片内容，一张按父节点聚孩子，都是为渲染阶段的随机访问做准备。</p>
+<p><code>backend/export/markdown_exporter.py</code> 把列表重排：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">all_cards </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> sorted</span><span style="color:#24292E">(all_cards, </span><span style="color:#E36209">key</span><span style="color:#D73A49">=lambda</span><span style="color:#24292E"> c: c.id)</span></span></code></pre>
-<p><code>id</code> 在卡片模型里被校验为 UUID 字符串（<code>backend/models/card.py:36-43</code>），排序比较的是带连字符的十六进制文本。这个顺序等价于把 UUID 的每个十六进制位当字符比较，与创建时间无关，也与 <code>parent_id</code> 定义的树形结构无关。视觉上的结果是卡片在文档里的先后基本随机，只有同一批数据反复导出时才稳定。排序键可替换，替换点只有这一处。</p>
+<p><code>id</code> 在卡片模型里被校验为 UUID 字符串（<code>backend/models/card.py</code>），排序比较的是带连字符的十六进制文本。这个顺序等价于把 UUID 的每个十六进制位当字符比较，与创建时间无关，也与 <code>parent_id</code> 定义的树形结构无关。视觉上的结果是卡片在文档里的先后基本随机，只有同一批数据反复导出时才稳定。排序键可替换，替换点只有这一处。</p>
 <p>按创建时间排序用 <code>c.created_at</code>，按树形输出则要先用 <code>parent_id</code> 建邻接表再做深度优先遍历，后者的改动范围超出排序表达式本身。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["list_cards 全量卡片"] --> B["sorted key=c.id 字典序"]
@@ -432,13 +445,13 @@
   E --> G["单页 Markdown"]
   F --> G</pre></div>
 <h2 id="4-两张映射表服务两个不同用途">4. 两张映射表服务两个不同用途</h2>
-<p>排好序之后，导出器建两张以卡片 ID 为键的表（<code>backend/export/markdown_exporter.py:63-64</code>）：</p>
+<p>排好序之后，导出器建两张以卡片 ID 为键的表（<code>backend/export/markdown_exporter.py</code>）：</p>
 <ul>
-<li><code>id_to_card</code> 把 ID 映射到 <code>Card</code> 对象，渲染 <code>links</code> 时用来取被链接卡片的标题（<code>:131-133</code>）。</li>
-<li><code>slug_map</code> 把 ID 映射到标题生成的锚点，目录行与 Related 行都用它拼 <code>#锚点</code>（<code>:71</code>、<code>:133</code>）。两张表都在全量列表上构建，复杂度与卡片数量同阶。文档规模不大时这点内存可以忽略，但它意味着导出必须先把所有卡片读进内存，不能流式处理。</li>
+<li><code>id_to_card</code> 把 ID 映射到 <code>Card</code> 对象，渲染 <code>links</code> 时用来取被链接卡片的标题。</li>
+<li><code>slug_map</code> 把 ID 映射到标题生成的锚点，目录行与 Related 行都用它拼 <code>#锚点</code>。两张表都在全量列表上构建，复杂度与卡片数量同阶。文档规模不大时这点内存可以忽略，但它意味着导出必须先把所有卡片读进内存，不能流式处理。</li>
 </ul>
 <h2 id="5-目录块在渲染之前生成">5. 目录块在渲染之前生成</h2>
-<p>目录块的生成条件是 <code>include_toc</code> 为真且卡片列表非空（<code>backend/export/markdown_exporter.py:68</code>）。生成内容是固定的一级标题 <code># Table of Contents</code>、每张卡片一行链接、一条分隔线（<code>:69-74</code>）。目录行使用 <code>card.title</code> 作为显示文本，锚点取自 <code>slug_map[card.id]</code>。因为 <code>slug_map</code> 基于排序后的全量列表，目录顺序与小节顺序一致，两者不会错位。</p>
+<p>目录块的生成条件是 <code>include_toc</code> 为真且卡片列表非空（<code>backend/export/markdown_exporter.py</code>）。生成内容是固定的一级标题 <code># Table of Contents</code>、每张卡片一行链接、一条分隔线。目录行使用 <code>card.title</code> 作为显示文本，锚点取自 <code>slug_map[card.id]</code>。因为 <code>slug_map</code> 基于排序后的全量列表，目录顺序与小节顺序一致，两者不会错位。</p>
 
 
 
@@ -467,7 +480,7 @@
 <table><thead><tr><th>输出行</th><th>来源</th><th>备注</th></tr></thead><tbody><tr><td><code># Table of Contents</code></td><td>固定文本</td><td>不受 <code>heading_level_start</code> 影响</td></tr><tr><td><code>- [标题](#锚点)</code></td><td>每张卡片一行</td><td>锚点由 <code>_slugify</code> 生成</td></tr><tr><td><code>---</code></td><td>固定文本</td><td>目录与正文之间的分隔线</td></tr></tbody></table>
 <p>一个容易忽略的点：目录无条件列出全部卡片，没有深度或数量上限。卡片数量大时，目录本身会占掉相当篇幅。</p>
 <h2 id="6-正文小节按同一顺序追加">6. 正文小节按同一顺序追加</h2>
-<p>渲染循环把每张卡片格式化后追加一行空行（<code>backend/export/markdown_exporter.py:76-78</code>），最后 <code>" ".join(md_lines).strip()</code> 并补一个换行（<code>:80</code>）。<code>strip()</code> 会同时清掉目录块与末尾小节之间多余的空行，也让文档首尾没有空白。返回值是 <code>(markdown, len(all_cards))</code>（<code>:81</code>），计数就是列表长度。</p>
+<p>渲染循环把每张卡片格式化后追加一行空行（<code>backend/export/markdown_exporter.py</code>），最后 <code>" ".join(md_lines).strip()</code> 并补一个换行。<code>strip()</code> 会同时清掉目录块与末尾小节之间多余的空行，也让文档首尾没有空白。返回值是 <code>(markdown, len(all_cards))</code>，计数就是列表长度。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant E as export_tree_with_count
@@ -485,8 +498,8 @@
   E->>E: join strip 补换行
   E-->>S: 返回 markdown 与计数</pre></div>
 <h2 id="7-root_id-为什么没有筛选效果">7. root_id 为什么没有筛选效果</h2>
-<p>从调用方看，<code>export_subtree(card_id)</code> 的命名与 <code>root_id</code> 的形参都在暗示子树导出。实际执行路径是：参数进入 <code>export_tree_with_count</code>，被继续传给同名形参，然后函数体直接进入全量加载（<code>backend/export/markdown_exporter.py:57-64</code>），没有任何按 <code>root_id</code> 过滤的分支。</p>
-<p>要完整实现子树筛选，缺的不只是几个条件判断，还需要一张从卡片 ID 到其子孙的遍历结构。模型里有 <code>parent_id</code>（<code>backend/models/card.py:29</code>），但 <code>list_cards()</code> 返回的是扁平列表，子卡没有反向索引，所以筛选逻辑要么在导出器里建一次父到子的映射，要么下沉到存储层用 <code>WHERE</code> 查询。在缺陷修正之前，把这个参数当作保留字段更准确：传入值不会改变输出，也不会报错。</p>
+<p>从调用方看，<code>export_subtree(card_id)</code> 的命名与 <code>root_id</code> 的形参都在暗示子树导出。实际执行路径是：参数进入 <code>export_tree_with_count</code>，被继续传给同名形参，然后函数体直接进入全量加载（<code>backend/export/markdown_exporter.py</code>），没有任何按 <code>root_id</code> 过滤的分支。</p>
+<p>要完整实现子树筛选，缺的不只是几个条件判断，还需要一张从卡片 ID 到其子孙的遍历结构。模型里有 <code>parent_id</code>（<code>backend/models/card.py</code>），但 <code>list_cards()</code> 返回的是扁平列表，子卡没有反向索引，所以筛选逻辑要么在导出器里建一次父到子的映射，要么下沉到存储层用 <code>WHERE</code> 查询。在缺陷修正之前，把这个参数当作保留字段更准确：传入值不会改变输出，也不会报错。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 
 
@@ -528,7 +541,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为输出顺序是创建顺序</td><td>两次导入同样的卡片，顺序不同</td><td>排序键是 <code>c.id</code>（<code>:61</code>）</td></tr><tr><td>依赖存储返回顺序</td><td>换一个存储实现后目录顺序变化</td><td>三种 <code>list_cards</code> 顺序各不相同</td></tr><tr><td>传入 <code>root_id</code> 期待子树</td><td>输出仍是全量文档</td><td><code>:53-81</code> 无筛选分支</td></tr><tr><td>认为目录有层级</td><td>目录是扁平的一级列表</td><td><code>:68-74</code></td></tr><tr><td>忘记目录也占长度</td><td>大库导出时目录挤压正文</td><td>每张卡片都进目录</td></tr><tr><td>在导出器里找排序配置</td><td><code>ExportOptions</code> 没有排序字段</td><td><code>:18-24</code> 五个字段都不涉及顺序</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为输出顺序是创建顺序</td><td>两次导入同样的卡片，顺序不同</td><td>排序键是 <code>c.id</code></td></tr><tr><td>依赖存储返回顺序</td><td>换一个存储实现后目录顺序变化</td><td>三种 <code>list_cards</code> 顺序各不相同</td></tr><tr><td>传入 <code>root_id</code> 期待子树</td><td>输出仍是全量文档</td><td>无筛选分支</td></tr><tr><td>认为目录有层级</td><td>目录是扁平的一级列表</td><td>—</td></tr><tr><td>忘记目录也占长度</td><td>大库导出时目录挤压正文</td><td>每张卡片都进目录</td></tr><tr><td>在导出器里找排序配置</td><td><code>ExportOptions</code> 没有排序字段</td><td>五个字段都不涉及顺序</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -649,8 +662,8 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td>加载与排序（:57-64）、目录（:68-74）、渲染循环与返回（:76-81）、三个导出方法（:46-51、:53-56、:83-87、:89-96）</td></tr><tr><td><code>backend/models/card.py</code></td><td><code>id</code> 与 <code>parent_id</code> 字段（:23、:29）、UUID 校验（:36-43）</td></tr><tr><td><code>backend/storage/card_store.py</code></td><td>文件系统 <code>list_cards</code>（:162-168）、内存 <code>list_cards</code>（:237-238）</td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>SQLite <code>list_cards</code>（:270-273）</td></tr><tr><td><code>backend/storage/base.py</code></td><td><code>list_cards</code> 抽象声明（:58-61）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-单页Markdown生成"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-单页Markdown生成</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/03-单页Markdown生成.md</span></div><div class="dfile__body"><h1 id="单页-markdown-生成">单页 Markdown 生成</h1>
-<p>单页文档由若干个结构相同的小节拼成，每个小节对应一张卡片。<code>_format_card</code> 负责把一张 <code>Card</code> 变成若干行文本（<code>backend/export/markdown_exporter.py:98-138</code>），拼装顺序在 <code>export_tree_with_count</code> 的循环里固定下来。<code>_format_card</code> 的四段输出决定了单页的最终形态，锚点则完全取决于 <code>_slugify</code>（<code>:27-33</code>）：目录与标题能否对上就看它。卡片筛选与排序见 <code>02-卡片遍历与排序.md</code>。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td>加载与排序、目录、渲染循环与返回、三个导出方法（、）</td></tr><tr><td><code>backend/models/card.py</code></td><td><code>id</code> 与 <code>parent_id</code> 字段、UUID 校验</td></tr><tr><td><code>backend/storage/card_store.py</code></td><td>文件系统 <code>list_cards</code>、内存 <code>list_cards</code></td></tr><tr><td><code>backend/storage/sqlite_card_store.py</code></td><td>SQLite <code>list_cards</code></td></tr><tr><td><code>backend/storage/base.py</code></td><td><code>list_cards</code> 抽象声明</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-单页Markdown生成"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-单页Markdown生成</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/03-单页Markdown生成.md</span></div><div class="dfile__body"><h1 id="单页-markdown-生成">单页 Markdown 生成</h1>
+<p>单页文档由若干个结构相同的小节拼成，每个小节对应一张卡片。<code>_format_card</code> 负责把一张 <code>Card</code> 变成若干行文本（<code>backend/export/markdown_exporter.py</code>），拼装顺序在 <code>export_tree_with_count</code> 的循环里固定下来。<code>_format_card</code> 的四段输出决定了单页的最终形态，锚点则完全取决于 <code>_slugify</code>：目录与标题能否对上就看它。卡片筛选与排序见 <code>02-卡片遍历与排序.md</code>。</p>
 <h2 id="1-一个小节的四段结构">1. 一个小节的四段结构</h2>
 <p><code>_format_card</code> 依次追加四段内容，每段都有各自的开关或前置条件：</p>
 
@@ -683,13 +696,8 @@
 
 
 
-
-
-
-
-
-<table><thead><tr><th>顺序</th><th>内容</th><th>生成条件</th><th>代码位置</th></tr></thead><tbody><tr><td>1</td><td>标题行</td><td>总是输出</td><td><code>:107-109</code></td></tr><tr><td>2</td><td>元数据引用块</td><td>三个 <code>include_*</code> 中任一为真，且对应字段非空</td><td><code>:111-123</code></td></tr><tr><td>3</td><td>正文</td><td><code>card.content</code> 非空</td><td><code>:125-126</code></td></tr><tr><td>4</td><td>Related 行</td><td><code>card.links</code> 能解出至少一个已知卡片</td><td><code>:128-136</code></td></tr></tbody></table>
-<p>四段之间由换行连接，小节之间的分隔是渲染循环补的一行空行（<code>:76-78</code>），没有额外分隔线。文档整体在最后统一 <code>strip()</code>（<code>:80</code>）。</p>
+<table><thead><tr><th>顺序</th><th>内容</th><th>生成条件</th></tr></thead><tbody><tr><td>1</td><td>标题行</td><td>总是输出</td></tr><tr><td>2</td><td>元数据引用块</td><td>三个 <code>include_*</code> 中任一为真，且对应字段非空</td></tr><tr><td>3</td><td>正文</td><td><code>card.content</code> 非空</td></tr><tr><td>4</td><td>Related 行</td><td><code>card.links</code> 能解出至少一个已知卡片</td></tr></tbody></table>
+<p>四段之间由换行连接，小节之间的分隔是渲染循环补的一行空行，没有额外分隔线。文档整体在最后统一 <code>strip()</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["_format_card 输入一张 Card"] --> B["标题行 井号乘 heading_level 加空格加 title"]
   B --> C{"include_metadata 或 include_sources 或 include_confidence"}
@@ -706,19 +714,19 @@
   I -->|否| K["返回小节文本"]
   J --> K</pre></div>
 <h2 id="2-标题级别只由一个数字决定">2. 标题级别只由一个数字决定</h2>
-<p>标题行的构造是 <code>"#" * max(heading_level, 1) + " " + card.title</code>（<code>backend/export/markdown_exporter.py:107</code>）。<code>heading_level</code> 来自 <code>ExportOptions.heading_level_start</code>，默认 1，所以默认输出里每张卡片都是一个一级标题。</p>
-<p><code>max(..., 1)</code> 挡住的是非正数取值：传 0 或负数时会退化成一级标题，而不是输出零个井号加标题的非法行。传 2 则所有卡片变成二级标题，但目录标题仍固定为一级（<code>:69</code>），此时文档里会出现「一级目录 + 全二级小节」的组合。标题级别不会随卡片层级变化。模型的 <code>parent_id</code> 定义了父子关系（<code>backend/models/card.py:29</code>），导出器没有读取，所以同一次导出里所有卡片标题级别相同。</p>
+<p>标题行的构造是 <code>"#" * max(heading_level, 1) + " " + card.title</code>（<code>backend/export/markdown_exporter.py</code>）。<code>heading_level</code> 来自 <code>ExportOptions.heading_level_start</code>，默认 1，所以默认输出里每张卡片都是一个一级标题。</p>
+<p><code>max(..., 1)</code> 挡住的是非正数取值：传 0 或负数时会退化成一级标题，而不是输出零个井号加标题的非法行。传 2 则所有卡片变成二级标题，但目录标题仍固定为一级，此时文档里会出现「一级目录 + 全二级小节」的组合。标题级别不会随卡片层级变化。模型的 <code>parent_id</code> 定义了父子关系（<code>backend/models/card.py</code>），导出器没有读取，所以同一次导出里所有卡片标题级别相同。</p>
 <h2 id="3-元数据块的引用格式">3. 元数据块的引用格式</h2>
-<p>元数据最多三行，按 <code>metadata</code>、<code>sources</code>、<code>confidence</code> 的顺序收集（<code>backend/export/markdown_exporter.py:113-119</code>）：</p>
+<p>元数据最多三行，按 <code>metadata</code>、<code>sources</code>、<code>confidence</code> 的顺序收集（<code>backend/export/markdown_exporter.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">metadata_lines.append(</span><span style="color:#032F62">": Metadata: "</span><span style="color:#D73A49"> +</span><span style="color:#032F62"> ", "</span><span style="color:#24292E">.join([</span><span style="color:#D73A49">f</span><span style="color:#032F62">"</span><span style="color:#005CC5">{</span><span style="color:#24292E">k</span><span style="color:#005CC5">}</span><span style="color:#032F62">: </span><span style="color:#005CC5">{</span><span style="color:#24292E">v</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#D73A49"> for</span><span style="color:#24292E"> k, v </span><span style="color:#D73A49">in</span><span style="color:#24292E"> card.metadata.items()]))</span></span>
 <span class="line"><span style="color:#24292E">metadata_lines.append(</span><span style="color:#032F62">"Sources: "</span><span style="color:#D73A49"> +</span><span style="color:#032F62"> ", "</span><span style="color:#24292E">.join(card.sources))</span></span>
 <span class="line"><span style="color:#24292E">metadata_lines.append(</span><span style="color:#032F62">"Confidence: "</span><span style="color:#D73A49"> +</span><span style="color:#005CC5"> str</span><span style="color:#24292E">(card.confidence))</span></span></code></pre>
-<p>三行统一加 <code>> </code> 前缀变成引用块（<code>:120-121</code>），块后补一空行（<code>:122-123</code>）。几个细节需要记下来：</p>
+<p>三行统一加 <code>> </code> 前缀变成引用块，块后补一空行。几个细节需要记下来：</p>
 <ul>
 <li>元数据行以冒号开头，写作 <code>: Metadata: key: value</code>，第一个冒号在标准 Markdown 里没有特殊含义，但读起来像笔误。</li>
 <li>键值对用 <code>", "</code> 连接，值里若本身含逗号，边界就分不出来。</li>
 <li>来源是 URL 列表，直接以逗号拼接，没有做成 Markdown 链接。</li>
-<li>置信度用 <code>str()</code> 输出，浮点数的位数取决于 Python 的默认表示。三个开关各自独立：只关 <code>include_sources</code> 时，元数据与置信度照常输出。若三段都为空，整个引用块连同后面的空行都不会出现（<code>:122</code>）。</li>
+<li>置信度用 <code>str()</code> 输出，浮点数的位数取决于 Python 的默认表示。三个开关各自独立：只关 <code>include_sources</code> 时，元数据与置信度照常输出。若三段都为空，整个引用块连同后面的空行都不会出现。</li>
 </ul>
 
 
@@ -743,14 +751,22 @@
 
 <table><thead><tr><th>开关</th><th>关闭后的效果</th></tr></thead><tbody><tr><td><code>include_metadata</code></td><td>不输出 <code>metadata</code> 行，其余两行不受影响</td></tr><tr><td><code>include_sources</code></td><td>不输出来源行</td></tr><tr><td><code>include_confidence</code></td><td>不输出置信度行</td></tr></tbody></table>
 <h2 id="4-正文原样输出">4. 正文原样输出</h2>
-<p><code>card.content</code> 被直接追加，不做转义、不做缩进、不重新编号（<code>backend/export/markdown_exporter.py:125-126</code>）。卡片内容本身就是 Markdown（模型注释写明这一点，<code>backend/models/card.py:25</code>），直接拼接符合预期。代价是嵌套结构不受控：正文里若含一级标题，会与卡片标题同级，打乱文档层级；正文自带的围栏代码块也可能与文档自身的结构混淆。导出器不做检查，这类问题只能靠写入卡片时的约定避免。</p>
+<p><code>card.content</code> 被直接追加，不做转义、不做缩进、不重新编号（<code>backend/export/markdown_exporter.py</code>）。卡片内容本身就是 Markdown（模型注释写明这一点，<code>backend/models/card.py</code>），直接拼接符合预期。代价是嵌套结构不受控：正文里若含一级标题，会与卡片标题同级，打乱文档层级；正文自带的围栏代码块也可能与文档自身的结构混淆。导出器不做检查，这类问题只能靠写入卡片时的约定避免。</p>
 <h2 id="5-锚点-slug-的生成规则">5. 锚点 slug 的生成规则</h2>
-<p><code>_slugify</code> 四步转换（<code>backend/export/markdown_exporter.py:27-33</code>）：转小写、删除所有非 <code>[a-z0-9s-]</code> 字符、把空白与连字符折叠成单个连字符、去掉首尾连字符。</p>
+<p>锚点由标题转成，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：标题 → 锚点</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> slugify</span><span style="color:#24292E">(title: </span><span style="color:#005CC5">str</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">str</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    slug </span><span style="color:#D73A49">=</span><span style="color:#24292E"> re.sub(</span><span style="color:#D73A49">r</span><span style="color:#032F62">"</span><span style="color:#005CC5">[</span><span style="color:#D73A49">^</span><span style="color:#005CC5">\w\u4e00-\u9fff-]</span><span style="color:#D73A49">+</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#032F62">"-"</span><span style="color:#24292E">, title.strip().lower())</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> slug:                       </span><span style="color:#6A737D"># 全是标点或空白时得到空串</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#032F62"> ""</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#032F62"> "#"</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> slug</span></span></code></pre>
+<p>“锚点”是 Markdown 标题自动生成的页内跳转标识：<code>## 小结</code>对应<code>#小结</code>，点击目录链接就跳到那一段。它依赖标题里的字符能保留下来；只用 ASCII 规则清洗时，纯中文或标点标题会被清成空串，目录项于是退化成指向页首的裸<code>#</code>。保留汉字的<code>\u4e00-\u9fff</code>范围是让中文标题也生成可用锚点的最小改动。</p>
+<p><code>_slugify</code> 四步转换（<code>backend/export/markdown_exporter.py</code>）：转小写、删除所有非 <code>[a-z0-9s-]</code> 字符、把空白与连字符折叠成单个连字符、去掉首尾连字符。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">s </span><span style="color:#D73A49">=</span><span style="color:#24292E"> title.lower()</span></span>
 <span class="line"><span style="color:#24292E">s </span><span style="color:#D73A49">=</span><span style="color:#24292E"> re.sub(</span><span style="color:#D73A49">r</span><span style="color:#032F62">"</span><span style="color:#005CC5">[</span><span style="color:#D73A49">^</span><span style="color:#005CC5">a-z0-9s-]</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">, s)</span></span>
 <span class="line"><span style="color:#24292E">s </span><span style="color:#D73A49">=</span><span style="color:#24292E"> re.sub(</span><span style="color:#D73A49">r</span><span style="color:#032F62">"</span><span style="color:#005CC5">[s-]</span><span style="color:#D73A49">+</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#032F62">"-"</span><span style="color:#24292E">, s)</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> s.strip(</span><span style="color:#032F62">"-"</span><span style="color:#24292E">)</span></span></code></pre>
-<p>规则里的字符集只覆盖 ASCII 字母数字。中文、日文、俄文标题在第二步会被整串删除，结果为空字符串。目录行因此变成 <code>- [标题](#)</code>，点击跳到文档开头而不是对应小节。标题里的空格与连字符会被规范化，所以 <code>Hello World</code> 与 <code>hello-world</code> 生成同一个锚点，同名小节之间也会互相覆盖。锚点不参与去重：<code>slug_map</code> 以卡片 ID 为键（<code>:64</code>），两张同名卡片得到同一个锚点，目录里两条链接指向同一个位置。</p>
+<p>规则里的字符集只覆盖 ASCII 字母数字。中文、日文、俄文标题在第二步会被整串删除，结果为空字符串。目录行因此变成 <code>- [标题](#)</code>，点击跳到文档开头而不是对应小节。标题里的空格与连字符会被规范化，所以 <code>Hello World</code> 与 <code>hello-world</code> 生成同一个锚点，同名小节之间也会互相覆盖。锚点不参与去重：<code>slug_map</code> 以卡片 ID 为键，两张同名卡片得到同一个锚点，目录里两条链接指向同一个位置。</p>
 
 
 
@@ -778,8 +794,8 @@
 
 <table><thead><tr><th>标题</th><th>生成锚点</th><th>目录链接</th></tr></thead><tbody><tr><td><code>Knowledge Graph</code></td><td><code>knowledge-graph</code></td><td><code>#knowledge-graph</code></td></tr><tr><td><code>卡片树与双向链接</code></td><td>空串</td><td><code>#</code></td></tr><tr><td><code>A B</code> 与 <code>a-b</code></td><td>同为 <code>a-b</code></td><td>两条链接指向同一处</td></tr></tbody></table>
 <h2 id="6-related-行只输出能解引用的链接">6. Related 行只输出能解引用的链接</h2>
-<p><code>card.links</code> 存的是卡片 ID（<code>backend/models/card.py:27</code>）。渲染时逐个查 <code>id_to_card</code>，只有找到对象才生成 <code>[标题](#锚点)</code>（<code>backend/export/markdown_exporter.py:129-133</code>）。指向不存在卡片的 ID 被静默跳过；全部都无法解析时，连 <code>Related: </code> 行本身都不会出现（<code>:134-136</code>）。</p>
-<p>锚点优先取 <code>slug_map</code> 中该 ID 的值，取不到时用 <code>_slugify(link_id)</code> 兜底（<code>:133</code>）。因为 <code>slug_map</code> 覆盖全部卡片，兜底分支实际上走不到，除非 <code>id_to_card</code> 与 <code>slug_map</code> 的构建出现了分歧。</p>
+<p><code>card.links</code> 存的是卡片 ID（<code>backend/models/card.py</code>）。渲染时逐个查 <code>id_to_card</code>，只有找到对象才生成 <code>[标题](#锚点)</code>（<code>backend/export/markdown_exporter.py</code>）。指向不存在卡片的 ID 被静默跳过；全部都无法解析时，连 <code>Related: </code> 行本身都不会出现。</p>
+<p>锚点优先取 <code>slug_map</code> 中该 ID 的值，取不到时用 <code>_slugify(link_id)</code> 兜底。因为 <code>slug_map</code> 覆盖全部卡片，兜底分支实际上走不到，除非 <code>id_to_card</code> 与 <code>slug_map</code> 的构建出现了分歧。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant F as _format_card
@@ -863,7 +879,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>用中文标题期待可用锚点</td><td>目录链接退化为 <code>#</code></td><td><code>_slugify</code> 只保留 ASCII（<code>:31</code>）</td></tr><tr><td>认为元数据是 YAML frontmatter</td><td>输出是引用块，不是 <code>---</code> 包围的头部</td><td><code>:120-121</code></td></tr><tr><td>把 <code>: Metadata: </code> 当成语法</td><td>它是普通文本，第一个冒号无特殊含义</td><td><code>:115</code></td></tr><tr><td>认为 Related 一定出现</td><td><code>links</code> 全为悬空 ID 时整行消失</td><td><code>:134-136</code></td></tr><tr><td>认为标题级别跟随层级</td><td>只由 <code>heading_level_start</code> 决定</td><td><code>:107</code></td></tr><tr><td>正文含一级标题</td><td>与卡片标题同级，层级被打乱</td><td><code>:125-126</code> 不做检查</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>用中文标题期待可用锚点</td><td>目录链接退化为 <code>#</code></td><td><code>_slugify</code> 只保留 ASCII</td></tr><tr><td>认为元数据是 YAML frontmatter</td><td>输出是引用块，不是 <code>---</code> 包围的头部</td><td>—</td></tr><tr><td>把 <code>: Metadata: </code> 当成语法</td><td>它是普通文本，第一个冒号无特殊含义</td><td>—</td></tr><tr><td>认为 Related 一定出现</td><td><code>links</code> 全为悬空 ID 时整行消失</td><td>—</td></tr><tr><td>认为标题级别跟随层级</td><td>只由 <code>heading_level_start</code> 决定</td><td>—</td></tr><tr><td>正文含一级标题</td><td>与卡片标题同级，层级被打乱</td><td>不做检查</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -972,7 +988,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>_slugify</code>（:27-33）、标题行（:107-109）、元数据块（:111-123）、正文（:125-126）、Related（:128-136）、目录标题（:69）</td></tr><tr><td><code>backend/models/card.py</code></td><td>正文为 Markdown 的约定（:25）、<code>links</code>（:27）、<code>parent_id</code>（:29）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-导出路由与下载"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-导出路由与下载</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/04-导出路由与下载.md</span></div><div class="dfile__body"><h1 id="导出路由与下载">导出路由与下载</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>_slugify</code>、标题行、元数据块、正文、Related、目录标题</td></tr><tr><td><code>backend/models/card.py</code></td><td>正文为 Markdown 的约定、<code>links</code>、<code>parent_id</code></td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-导出路由与下载"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-导出路由与下载</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/04-导出路由与下载.md</span></div><div class="dfile__body"><h1 id="导出路由与下载">导出路由与下载</h1>
 <p>导出的 HTTP 层只有两个端点，都在 <code>backend/routes/export.py</code> 里：一个返回 Markdown 字符串，一个把同样的字符串写成文件后交给浏览器下载。两者共用同一段取存储的辅助函数与同一个导出器实例构造方式，路由自身的实现很短，风险主要来自参数语义。导出器内部的渲染规则见 <code>03-单页Markdown生成.md</code>，模块边界的整体说明见 <code>01-导出功能与模块边界.md</code>。</p>
 <h2 id="1-两个端点与各自的参数">1. 两个端点与各自的参数</h2>
 <p><code>POST /api/export</code> 接收 JSON 请求体，返回字符串与卡片计数；<code>GET /api/export/download</code> 接收查询参数，返回文件流。</p>
@@ -1000,9 +1016,9 @@
 
 
 <table><thead><tr><th>端点</th><th>方法</th><th>参数</th><th>响应</th></tr></thead><tbody><tr><td><code>/api/export</code></td><td>POST</td><td>请求体 <code>root_id</code>、<code>options</code></td><td><code>{"markdown": ..., "card_count": ...}</code></td></tr><tr><td><code>/api/export/download</code></td><td>GET</td><td>查询参数 <code>root_id</code>、<code>filename</code></td><td><code>FileResponse</code>，媒体类型 <code>text/markdown</code></td></tr></tbody></table>
-<p>请求体由 <code>ExportRequest</code> 定义，两个字段都可选（<code>backend/routes/export.py:22-25</code>）。<code>root_id</code> 会被传进导出器但不产生筛选效果（见 <code>02-卡片遍历与排序.md</code>）；<code>options</code> 为 <code>None</code> 时由 <code>ExportOptions</code> 的默认值补齐。下载端点没有请求体，参数写在查询串里，<code>filename</code> 默认 <code>export.md</code>（<code>:49</code>）。两条路径都不需要鉴权依赖，函数签名里只有 <code>request</code> 与业务参数。</p>
+<p>请求体由 <code>ExportRequest</code> 定义，两个字段都可选（<code>backend/routes/export.py</code>）。<code>root_id</code> 会被传进导出器但不产生筛选效果（见 <code>02-卡片遍历与排序.md</code>）；<code>options</code> 为 <code>None</code> 时由 <code>ExportOptions</code> 的默认值补齐。下载端点没有请求体，参数写在查询串里，<code>filename</code> 默认 <code>export.md</code>。两条路径都不需要鉴权依赖，函数签名里只有 <code>request</code> 与业务参数。</p>
 <h2 id="2-存储从-appstate-取取不到就建空库">2. 存储从 app.state 取，取不到就建空库</h2>
-<p>两个端点的第一步都是调用 <code>_get_store(request)</code>（<code>backend/routes/export.py:28-36</code>）。这段代码依次做三件事：读 <code>request.app.state.card_store</code>、判断是否为 <code>None</code>、为 <code>None</code> 时新建 <code>InMemoryCardStore(cards=[])</code> 并写回 <code>app.state</code>。</p>
+<p>两个端点的第一步都是调用 <code>_get_store(request)</code>（<code>backend/routes/export.py</code>）。这段代码依次做三件事：读 <code>request.app.state.card_store</code>、判断是否为 <code>None</code>、为 <code>None</code> 时新建 <code>InMemoryCardStore(cards=[])</code> 并写回 <code>app.state</code>。</p>
 
 
 
@@ -1024,9 +1040,9 @@
 
 
 <table><thead><tr><th>分支</th><th>条件</th><th>结果</th></tr></thead><tbody><tr><td>正常</td><td><code>app.state.card_store</code> 已注入</td><td>直接返回该实例</td></tr><tr><td>回退</td><td>属性不存在或为 <code>None</code></td><td>新建空内存存储并写回</td></tr></tbody></table>
-<p>回退分支的注释写明目的是让测试环境中的应用能继续运行（<code>:33</code>）。副作用是生产环境若忘记注入存储，端点仍然返回 200，只是文档为空。调用方无法从响应区分「没有卡片」与「没有接上数据库」。</p>
+<p>回退分支的注释写明目的是让测试环境中的应用能继续运行。副作用是生产环境若忘记注入存储，端点仍然返回 200，只是文档为空。调用方无法从响应区分「没有卡片」与「没有接上数据库」。</p>
 <h2 id="3-post-端点的执行路径">3. POST 端点的执行路径</h2>
-<p><code>backend/routes/export.py:39-45</code> 一共四步：取存储、构造 <code>MarkdownExporter</code>、调用 <code>export_tree_with_count</code>、组装返回值。<code>options</code> 原样透传，<code>root_id</code> 原样透传，返回值把字符串与计数放在两个键里。</p>
+<p><code>backend/routes/export.py</code> 一共四步：取存储、构造 <code>MarkdownExporter</code>、调用 <code>export_tree_with_count</code>、组装返回值。<code>options</code> 原样透传，<code>root_id</code> 原样透传，返回值把字符串与计数放在两个键里。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant C as 客户端
@@ -1041,14 +1057,22 @@
   Note over R,E: 导出过程为纯内存操作 没有落盘</pre></div>
 <p>端点函数声明为 <code>async def</code>，但内部调用的是同步的 <code>list_cards()</code> 与纯字符串拼接。卡片量小时没有可感知影响，卡片量大时这段同步工作会占住事件循环。</p>
 <h2 id="4-下载端点的执行路径">4. 下载端点的执行路径</h2>
-<p><code>backend/routes/export.py:48-58</code> 的过程是：取存储、构造导出器、以 <code>options=None</code> 调用导出、打开 <code>filename</code> 写入、用 <code>FileResponse</code> 返回。</p>
+<p><code>backend/routes/export.py</code> 的过程是：取存储、构造导出器、以 <code>options=None</code> 调用导出、打开 <code>filename</code> 写入、用 <code>FileResponse</code> 返回。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">path </span><span style="color:#D73A49">=</span><span style="color:#24292E"> filename</span></span>
 <span class="line"><span style="color:#D73A49">with</span><span style="color:#005CC5"> open</span><span style="color:#24292E">(path, </span><span style="color:#032F62">"w"</span><span style="color:#24292E">, </span><span style="color:#E36209">encoding</span><span style="color:#D73A49">=</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">) </span><span style="color:#D73A49">as</span><span style="color:#24292E"> f:</span></span>
 <span class="line"><span style="color:#24292E">    f.write(markdown)</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> FileResponse(path, </span><span style="color:#E36209">media_type</span><span style="color:#D73A49">=</span><span style="color:#032F62">"text/markdown"</span><span style="color:#24292E">, </span><span style="color:#E36209">filename</span><span style="color:#D73A49">=</span><span style="color:#24292E">filename)</span></span></code></pre>
-<p>三点需要注意。第一，<code>options</code> 固定为 <code>None</code>，下载路径无法关闭目录或元数据，想要不同选项只能走 POST。第二，写文件用的是同步 <code>open</code>，在事件循环里执行。第三，<code>path</code> 直接取自查询参数 <code>filename</code>，没有做目录白名单或路径规范化（<code>:55</code>），把相对路径或绝对路径当成写入目标。</p>
+<p>三点需要注意。第一，<code>options</code> 固定为 <code>None</code>，下载路径无法关闭目录或元数据，想要不同选项只能走 POST。第二，写文件用的是同步 <code>open</code>，在事件循环里执行。第三，<code>path</code> 直接取自查询参数 <code>filename</code>，没有做目录白名单或路径规范化，把相对路径或绝对路径当成写入目标。</p>
 <h2 id="5-filename-同时是写盘路径与下载名">5. filename 同时是写盘路径与下载名</h2>
-<p>文件名参数在同一个端点里承担两个角色：写文件的路径（<code>:55-56</code>）与 <code>FileResponse</code> 的 <code>filename</code>（<code>:58</code>）。后者只影响 <code>Content-Disposition</code> 中建议的保存名，前者决定服务端真实写入位置（相对进程工作目录解析）。</p>
+<p>下载端点把同一个字符串既当路径又当下载名，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：写盘 + 设置下载响应头</span></span>
+<span class="line"><span style="color:#24292E">path </span><span style="color:#D73A49">=</span><span style="color:#24292E"> os.path.join(</span><span style="color:#005CC5">TMP_DIR</span><span style="color:#24292E">, filename)          </span><span style="color:#6A737D"># 若 filename 含 ../ 就写到目录之外</span></span>
+<span class="line"><span style="color:#D73A49">with</span><span style="color:#005CC5"> open</span><span style="color:#24292E">(path, </span><span style="color:#032F62">"w"</span><span style="color:#24292E">, </span><span style="color:#E36209">encoding</span><span style="color:#D73A49">=</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">) </span><span style="color:#D73A49">as</span><span style="color:#24292E"> f:</span></span>
+<span class="line"><span style="color:#24292E">    f.write(markdown)</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> Response(</span><span style="color:#005CC5">open</span><span style="color:#24292E">(path, </span><span style="color:#032F62">"rb"</span><span style="color:#24292E">), </span><span style="color:#E36209">media_type</span><span style="color:#D73A49">=</span><span style="color:#032F62">"text/markdown"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#E36209">                headers</span><span style="color:#D73A49">=</span><span style="color:#24292E">{</span><span style="color:#032F62">"Content-Disposition"</span><span style="color:#24292E">: </span><span style="color:#D73A49">f</span><span style="color:#032F62">'attachment; filename="</span><span style="color:#005CC5">{</span><span style="color:#24292E">filename</span><span style="color:#005CC5">}</span><span style="color:#032F62">"'</span><span style="color:#24292E">})</span></span></code></pre>
+<p><code>Content-Disposition</code>是告诉浏览器”这是附件、请下载而不是直接显示”的响应头。把用户可控的字符串直接当路径使用是典型的路径穿越风险：<code>../</code>可以写到工作目录之外，留下无用文件。稳妥做法是只接受一个安全文件名（去掉分隔符）或由服务端生成名字，把下载名与磁盘路径分开。</p>
+<p>文件名参数在同一个端点里承担两个角色：写文件的路径与 <code>FileResponse</code> 的 <code>filename</code>。后者只影响 <code>Content-Disposition</code> 中建议的保存名，前者决定服务端真实写入位置（相对进程工作目录解析）。</p>
 
 
 
@@ -1086,7 +1110,7 @@
   F --> H["FileResponse 返回该路径"]
   H --> I["文件保留在磁盘 不清理"]</pre></div>
 <h2 id="6-路由的可选注册">6. 路由的可选注册</h2>
-<p>导出路由不是无条件注册的。<code>backend/main.py:35-38</code> 把导入包在 <code>try</code> / <code>except</code> 里，导入失败时把 <code>export_router</code> 置为 <code>None</code>；<code>:143-145</code> 判断非 <code>None</code> 才调用 <code>include_router</code>。</p>
+<p>导出路由不是无条件注册的。<code>backend/main.py</code> 把导入包在 <code>try</code> / <code>except</code> 里，导入失败时把 <code>export_router</code> 置为 <code>None</code>，只有非 <code>None</code> 时才调用 <code>include_router</code>。</p>
 
 
 
@@ -1107,10 +1131,10 @@
 
 
 
-<table><thead><tr><th>环节</th><th>代码</th><th>失败表现</th></tr></thead><tbody><tr><td>导入</td><td><code>backend/main.py:36</code></td><td>捕获异常，不中断应用启动</td></tr><tr><td>注册</td><td><code>backend/main.py:144</code></td><td>跳过注册，两个端点不存在</td></tr></tbody></table>
+<table><thead><tr><th>环节</th><th>代码</th><th>失败表现</th></tr></thead><tbody><tr><td>导入</td><td><code>backend/main.py</code></td><td>捕获异常，不中断应用启动</td></tr><tr><td>注册</td><td><code>backend/main.py</code></td><td>跳过注册，两个端点不存在</td></tr></tbody></table>
 <p>这种写法让导出依赖（例如 <code>pydantic</code> 版本不符）不会拖垮整个后端。代价是路由缺失只在启动阶段留下一条导入异常，没有任何启动检查或健康端点会报告它。</p>
 <h2 id="7-与相邻导出接口的对比">7. 与相邻导出接口的对比</h2>
-<p>仓库里还有一套会话级导出：<code>backend/routes/session_io.py</code> 提供 ZIP 的下载与上传，路由在 <code>backend/main.py:137</code> 注册，前端有对应的调用（<code>frontend/src/api/session.ts:69-84</code>）。Markdown 导出这一套没有前端调用方，在 <code>frontend/src</code> 下搜索端点路径没有结果。</p>
+<p>仓库里还有一套会话级导出：<code>backend/routes/session_io.py</code> 提供 ZIP 的下载与上传，路由在 <code>backend/main.py</code> 注册，前端有对应的调用（<code>frontend/src/api/session.ts</code>）。Markdown 导出这一套没有前端调用方，在 <code>frontend/src</code> 下搜索端点路径没有结果。</p>
 
 
 
@@ -1188,7 +1212,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为 <code>filename</code> 只是下载名</td><td>实际决定服务端写盘路径</td><td><code>backend/routes/export.py:55-57</code></td></tr><tr><td>传相对或绝对路径</td><td>文件写到预期之外的位置</td><td><code>:55</code> 无规范化</td></tr><tr><td>以为下载端点可配选项</td><td><code>options</code> 固定为 <code>None</code></td><td><code>:53</code></td></tr><tr><td>依赖 <code>root_id</code> 得到子树</td><td>两个端点都传了，但导出器不筛选</td><td><code>:44</code>、<code>:53</code></td></tr><tr><td>认为端点有鉴权</td><td>函数签名无鉴权依赖</td><td><code>:40</code>、<code>:49</code></td></tr><tr><td>在卡片量大时同步下载</td><td>事件循环被同步写文件占住</td><td><code>:56</code></td></tr><tr><td>认为路由一定存在</td><td>导入失败时静默跳过注册</td><td><code>backend/main.py:35-38</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>认为 <code>filename</code> 只是下载名</td><td>实际决定服务端写盘路径</td><td><code>backend/routes/export.py</code></td></tr><tr><td>传相对或绝对路径</td><td>文件写到预期之外的位置</td><td>无规范化</td></tr><tr><td>以为下载端点可配选项</td><td><code>options</code> 固定为 <code>None</code></td><td><code>backend/routes/export.py</code></td></tr><tr><td>依赖 <code>root_id</code> 得到子树</td><td>两个端点都传了，但导出器不筛选</td><td><code>backend/export/markdown_exporter.py</code></td></tr><tr><td>认为端点有鉴权</td><td>函数签名无鉴权依赖</td><td><code>backend/routes/export.py</code></td></tr><tr><td>在卡片量大时同步下载</td><td>事件循环被同步写文件占住</td><td><code>backend/routes/export.py</code></td></tr><tr><td>认为路由一定存在</td><td>导入失败时静默跳过注册</td><td><code>backend/main.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -1313,7 +1337,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/export.py</code></td><td>请求体（:22-25）、存储获取（:28-36）、POST 端点（:39-45）、GET 端点（:48-58）</td></tr><tr><td><code>backend/main.py</code></td><td>可选导入（:35-38）、会话导出注册（:137）、条件注册（:143-145）</td></tr><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>export_tree_with_count</code> 与 <code>export_to_file</code>（:53-81、:89-96）</td></tr><tr><td><code>backend/storage/card_store.py</code></td><td><code>InMemoryCardStore</code> 回退实例（:204）</td></tr><tr><td><code>backend/routes/session_io.py</code></td><td>相邻的会话级 ZIP 导出路由</td></tr><tr><td><code>frontend/src/api/session.ts</code></td><td>前端现有下载调用（:69-84），未接入 Markdown 导出</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="导出链路的易错点与排查">导出链路的易错点与排查</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/export.py</code></td><td>请求体、存储获取、POST 端点、GET 端点</td></tr><tr><td><code>backend/main.py</code></td><td>可选导入、会话导出注册、条件注册</td></tr><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>export_tree_with_count</code> 与 <code>export_to_file</code></td></tr><tr><td><code>backend/storage/card_store.py</code></td><td><code>InMemoryCardStore</code> 回退实例</td></tr><tr><td><code>backend/routes/session_io.py</code></td><td>相邻的会话级 ZIP 导出路由</td></tr><tr><td><code>frontend/src/api/session.ts</code></td><td>前端现有下载调用，未接入 Markdown 导出</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/27-文档解析与导出/02-Markdown导出/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="导出链路的易错点与排查">导出链路的易错点与排查</h1>
 <p>导出链路的代码量不大，问题集中在参数语义与实际行为不一致上：<code>root_id</code> 看起来筛选、实际不筛选；<code>filename</code> 看起来只是下载名、实际决定写盘位置；中文标题看起来能生成锚点、实际生成空串。已核实的缺陷、可观测信号与排查顺序集中在这里。模块构成见 <code>01-导出功能与模块边界.md</code>，渲染规则见 <code>03-单页Markdown生成.md</code>，端点行为见 <code>04-导出路由与下载.md</code>。以下结论除标注外均以源码为准。</p>
 <h2 id="1-缺陷清单">1. 缺陷清单</h2>
 
@@ -1387,11 +1411,11 @@
 
 
 
-<table><thead><tr><th>编号</th><th>缺陷</th><th>位置</th><th>影响</th></tr></thead><tbody><tr><td>D1</td><td><code>root_id</code> 传入但不参与筛选</td><td><code>backend/export/markdown_exporter.py:53-81</code></td><td>请求子树得到全量文档，且不报错</td></tr><tr><td>D2</td><td>中文标题锚点为空串</td><td><code>backend/export/markdown_exporter.py:27-33</code></td><td>目录链接退化为 <code>#</code>，点击跳到文首</td></tr><tr><td>D3</td><td>导出结果是扁平列表，与类注释的「卡片树」不符</td><td><code>:36-41</code> 与 <code>:60-78</code></td><td>文档结构不体现 <code>parent_id</code> 层级</td></tr><tr><td>D4</td><td>元数据行以 <code>: </code> 开头</td><td><code>:115</code></td><td>输出像笔误，不是标准 frontmatter</td></tr><tr><td>D5</td><td>下载端点把查询参数当写盘路径</td><td><code>backend/routes/export.py:55-57</code></td><td>可写到工作目录之外，文件残留</td></tr><tr><td>D6</td><td>两个端点都没有鉴权依赖</td><td><code>backend/routes/export.py:39-58</code></td><td>未登录也能导出全部卡片</td></tr><tr><td>D7</td><td>存储缺失时回退空库</td><td><code>backend/routes/export.py:31-36</code></td><td>配置错误表现为空文档</td></tr><tr><td>D8</td><td>导出路由可选注册，失败无告警</td><td><code>backend/main.py:35-38</code></td><td>端点整体缺席，只能从启动日志发现</td></tr><tr><td>D9</td><td>下载端点在事件循环里同步写文件</td><td><code>backend/routes/export.py:56</code></td><td>大文档导出期间阻塞其他请求</td></tr><tr><td>D10</td><td>导出模块没有测试覆盖</td><td><code>tests/backend/</code> 下无导出相关用例</td><td>改动无回归保护（按目录列表观察）</td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>缺陷</th><th>位置</th><th>影响</th></tr></thead><tbody><tr><td>D1</td><td><code>root_id</code> 传入但不参与筛选</td><td><code>backend/export/markdown_exporter.py</code></td><td>请求子树得到全量文档，且不报错</td></tr><tr><td>D2</td><td>中文标题锚点为空串</td><td><code>backend/export/markdown_exporter.py</code></td><td>目录链接退化为 <code>#</code>，点击跳到文首</td></tr><tr><td>D3</td><td>导出结果是扁平列表，与类注释的「卡片树」不符</td><td>与</td><td>文档结构不体现 <code>parent_id</code> 层级</td></tr><tr><td>D4</td><td>元数据行以 <code>: </code> 开头</td><td><code>backend/routes/export.py</code></td><td>输出像笔误，不是标准 frontmatter</td></tr><tr><td>D5</td><td>下载端点把查询参数当写盘路径</td><td><code>backend/routes/export.py</code></td><td>可写到工作目录之外，文件残留</td></tr><tr><td>D6</td><td>两个端点都没有鉴权依赖</td><td><code>backend/routes/export.py</code></td><td>未登录也能导出全部卡片</td></tr><tr><td>D7</td><td>存储缺失时回退空库</td><td><code>backend/routes/export.py</code></td><td>配置错误表现为空文档</td></tr><tr><td>D8</td><td>导出路由可选注册，失败无告警</td><td><code>backend/main.py</code></td><td>端点整体缺席，只能从启动日志发现</td></tr><tr><td>D9</td><td>下载端点在事件循环里同步写文件</td><td><code>backend/routes/export.py</code></td><td>大文档导出期间阻塞其他请求</td></tr><tr><td>D10</td><td>导出模块没有测试覆盖</td><td><code>tests/backend/</code> 下无导出相关用例</td><td>改动无回归保护（按目录列表观察）</td></tr></tbody></table>
 <h2 id="2-参数语义与实际行为的偏离">2. 参数语义与实际行为的偏离</h2>
 <p>D1 与 D5 属于同一类问题：参数名传达的语义比实现承诺的多。排查时先确认「这个参数在函数体里被读过吗」，比读文档更快。</p>
-<p><code>root_id</code> 在 <code>export_tree_with_count</code> 的形参列表里出现（<code>backend/export/markdown_exporter.py:54</code>），传递链上一直存在，函数体里没有用到。<code>export_subtree</code> 是它最容易被误用的调用点（<code>:83-87</code>）。</p>
-<p><code>filename</code> 在下载端点里既做路径又做响应头（<code>backend/routes/export.py:55-58</code>），查询参数没有经过任何规范化。想验证是否真的写到工作目录之外，可以传入一个相对路径再检查文件落点，这一条属可复现的本地验证，不依赖线上环境。</p>
+<p><code>root_id</code> 在 <code>export_tree_with_count</code> 的形参列表里出现（<code>backend/export/markdown_exporter.py</code>），传递链上一直存在，函数体里没有用到。<code>export_subtree</code> 是它最容易被误用的调用点。</p>
+<p><code>filename</code> 在下载端点里既做路径又做响应头（<code>backend/routes/export.py</code>），查询参数没有经过任何规范化。想验证是否真的写到工作目录之外，可以传入一个相对路径再检查文件落点，这一条属可复现的本地验证，不依赖线上环境。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["导出结果不符合预期"] --> B{"文档是空的吗"}
   B -->|是| C["查存储是否注入 app.state"]
@@ -1406,9 +1430,14 @@
   I -->|是| J["检查 filename 是否含路径分隔符"]
   J --> J1["参数原样作为写盘路径"]</pre></div>
 <h2 id="3-中文标题与锚点">3. 中文标题与锚点</h2>
-<p><code>_slugify</code> 的字符集是 <code>[a-z0-9s-]</code>（<code>backend/export/markdown_exporter.py:31</code>），中文标题经过删除后为空串，<code>slug_map</code> 里对应条目为空，目录行写成 <code>- [标题](#)</code>。验证方式不依赖运行环境：取任意中文标题，按四步规则手算即可得到空串。英文标题则正常，<code>Hello World</code> 得到 <code>hello-world</code>；大小写不同、连字符与空格混用的标题会生成相同锚点。这一缺陷影响面与卡片库的语言分布直接相关。当前仓库的卡片以中文内容为主，所以目录的可用性实际很低。</p>
+<p>中文标题在只按 ASCII 过滤的实现下会得到空锚点，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：空锚点的产生</span></span>
+<span class="line"><span style="color:#24292E">slug </span><span style="color:#D73A49">=</span><span style="color:#24292E"> re.sub(</span><span style="color:#D73A49">r</span><span style="color:#032F62">"</span><span style="color:#005CC5">[</span><span style="color:#D73A49">^</span><span style="color:#005CC5">a-zA-Z0-9-]</span><span style="color:#D73A49">+</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#032F62">"-"</span><span style="color:#24292E">, </span><span style="color:#032F62">"小结"</span><span style="color:#24292E">).strip(</span><span style="color:#032F62">"-"</span><span style="color:#24292E">)   </span><span style="color:#6A737D"># -> ""（汉字全被剔除）</span></span>
+<span class="line"><span style="color:#24292E">link </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> f</span><span style="color:#032F62">"[</span><span style="color:#005CC5">{</span><span style="color:#24292E">title</span><span style="color:#005CC5">}</span><span style="color:#032F62">](#</span><span style="color:#005CC5">{</span><span style="color:#24292E">slug</span><span style="color:#005CC5">}</span><span style="color:#032F62">)"</span><span style="color:#6A737D">                                # -> "[小结](#)"，点击回到页首</span></span></code></pre>
+<p>这类问题的特点是”不报错但结果退化”：锚点字段是空串，链接语法仍然合法，渲染器照常输出一个指向页首的<code>#</code>。它的可观测信号是”目录里点击任何中文标题都跳到文首”。修法是把汉字纳入允许字符集，或改用基于序号的锚点——后者更稳，但对外链的稳定性要求更高（插入一节会让后面所有锚点位移）。</p>
+<p><code>_slugify</code> 的字符集是 <code>[a-z0-9s-]</code>（<code>backend/export/markdown_exporter.py</code>），中文标题经过删除后为空串，<code>slug_map</code> 里对应条目为空，目录行写成 <code>- [标题](#)</code>。验证方式不依赖运行环境：取任意中文标题，按四步规则手算即可得到空串。英文标题则正常，<code>Hello World</code> 得到 <code>hello-world</code>；大小写不同、连字符与空格混用的标题会生成相同锚点。这一缺陷影响面与卡片库的语言分布直接相关。当前仓库的卡片以中文内容为主，所以目录的可用性实际很低。</p>
 <h2 id="4-下载路径与临时文件">4. 下载路径与临时文件</h2>
-<p><code>backend/routes/export.py:55-57</code> 的三行代码把 <code>filename</code> 直接用作 <code>open</code> 的路径。风险分三层：</p>
+<p><code>backend/routes/export.py</code> 的三行代码把 <code>filename</code> 直接用作 <code>open</code> 的路径。风险分三层：</p>
 
 
 
@@ -1437,7 +1466,7 @@
 <table><thead><tr><th>层次</th><th>表现</th><th>触发条件</th></tr></thead><tbody><tr><td>落点偏移</td><td>文件写到工作目录之外</td><td><code>filename</code> 含 <code>../</code> 或为绝对路径</td></tr><tr><td>并发覆盖</td><td>两个请求写同一路径，后写者覆盖前者</td><td>相同 <code>filename</code> 并发</td></tr><tr><td>文件残留</td><td>下载结束后文件仍在磁盘</td><td>每次请求都会留下一个文件</td></tr></tbody></table>
 <p><code>FileResponse</code> 只负责把文件读出去并设置 <code>Content-Disposition</code>，不决定写盘位置。修复方向是把写盘路径与下载名分开：前者由服务端生成（临时目录加随机名），后者保留用户输入但只用于响应头。</p>
 <h2 id="5-鉴权与访问面">5. 鉴权与访问面</h2>
-<p>两个端点没有引入任何鉴权依赖。对比同仓库的其他路由，<code>backend/routes/auth.py</code> 提供认证端点，业务路由通常通过 <code>Depends</code> 挂鉴权函数；导出路由的导入列表里只有 <code>APIRouter</code>、<code>Request</code>、<code>BaseModel</code> 与 <code>FileResponse</code>（<code>backend/routes/export.py:8-17</code>），没有鉴权相关符号。</p>
+<p>两个端点没有引入任何鉴权依赖。对比同仓库的其他路由，<code>backend/routes/auth.py</code> 提供认证端点，业务路由通常通过 <code>Depends</code> 挂鉴权函数；导出路由的导入列表里只有 <code>APIRouter</code>、<code>Request</code>、<code>BaseModel</code> 与 <code>FileResponse</code>（<code>backend/routes/export.py</code>），没有鉴权相关符号。</p>
 <p>后果是任何能访问后端端口的人都可以导出全部卡片。是否要补鉴权取决于部署形态：若后端只在内网由前端代理访问，风险主要来自同网络的其他主机；若直接暴露，导出接口会成为数据外带通道。这一条属部署判断，未在本仓库的配置里找到对应限制。</p>
 <h2 id="6-静默失败的三处">6. 静默失败的三处</h2>
 <p>导出链路上有三处失败不会给出明显信号：</p>
@@ -1466,7 +1495,7 @@
 
 
 
-<table><thead><tr><th>位置</th><th>失败方式</th><th>可观察到的现象</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py:129-133</code></td><td>悬空 <code>links</code> 被跳过</td><td>Related 行缺失或整行消失</td></tr><tr><td><code>backend/routes/export.py:31-36</code></td><td>存储缺失回退空库</td><td>200 与空文档</td></tr><tr><td><code>backend/main.py:35-38</code></td><td>导入失败跳过注册</td><td>端点 404，启动日志里有导入异常</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>失败方式</th><th>可观察到的现象</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td>悬空 <code>links</code> 被跳过</td><td>Related 行缺失或整行消失</td></tr><tr><td><code>backend/routes/export.py</code></td><td>存储缺失回退空库</td><td>200 与空文档</td></tr><tr><td><code>backend/main.py</code></td><td>导入失败跳过注册</td><td>端点 404，启动日志里有导入异常</td></tr></tbody></table>
 <p>共同点是调用方无法从正常响应里区分「没有数据」与「配置有问题」。排查这类问题要先确认服务是否真的注册了导出路由，再确认 <code>app.state.card_store</code> 指向哪个实现。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
@@ -1483,9 +1512,9 @@
 <h2 id="7-排查顺序">7. 排查顺序</h2>
 <p>按「先确认链路存在，再确认数据，最后看格式」推进，每一步都有一个可证伪的观测值：</p>
 <ol>
-<li>确认路由是否存在。请求 <code>/api/export</code>，返回 404 说明 <code>export_router</code> 为 <code>None</code>（<code>backend/main.py:35-38</code>）。</li>
+<li>确认路由是否存在。请求 <code>/api/export</code>，返回 404 说明 <code>export_router</code> 为 <code>None</code>（<code>backend/main.py</code>）。</li>
 <li>确认存储指向。读 <code>app.state.card_store</code> 的类型，是 <code>InMemoryCardStore</code> 还是 <code>SqliteCardStore</code>，判断数据源是否符合预期。</li>
-<li>确认卡片数量。<code>markdown</code> 与 <code>card_count</code> 同时返回（<code>backend/routes/export.py:45</code>），计数为 0 而库里有数据说明取到了另一个存储。</li>
+<li>确认卡片数量。<code>markdown</code> 与 <code>card_count</code> 同时返回（<code>backend/routes/export.py</code>），计数为 0 而库里有数据说明取到了另一个存储。</li>
 <li>确认筛选需求。需要子树时先确认 <code>root_id</code> 是否真的生效，当前的答案是不生效。</li>
 <li>确认锚点。检查目录链接是否指向 <code>#</code>，若是则命中 <code>_slugify</code> 的字符集限制。</li>
 <li>确认落盘。下载后检查工作目录，确认是否产生了预期之外的文件。</li>
@@ -1674,4 +1703,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>_slugify</code>（:27-33）、类与方法（:36-138）、悬空链接处理（:129-133）</td></tr><tr><td><code>backend/routes/export.py</code></td><td>导入表（:8-17）、存储回退（:31-36）、两个端点（:39-58）</td></tr><tr><td><code>backend/main.py</code></td><td>可选导入与条件注册（:35-38、:143-145）</td></tr><tr><td><code>backend/models/card.py</code></td><td>卡片字段与校验（:17-63）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>仓库内鉴权端点，作为对照组</td></tr><tr><td><code>tests/backend/</code></td><td>现有测试目录，未包含导出用例</td></tr><tr><td><code>frontend/src/api/session.ts</code></td><td>前端现有下载调用（:69-84），未接入 Markdown 导出</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/27-%E6%96%87%E6%A1%A3%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AF%BC%E5%87%BA/01-PDF%C2%B7DOCX%E8%A7%A3%E6%9E%90/"><span class="k">← 上一篇</span><span class="t">PDF·DOCX解析</span><span class="d">文档解析与导出 · 4 个文件</span></a><a class="next" href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/01-%E8%B7%AF%E7%94%B1%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5/"><span class="k">下一篇 →</span><span class="t">路由与依赖注入</span><span class="d">FastAPI 后端 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/export/markdown_exporter.py</code></td><td><code>_slugify</code>、类与方法、悬空链接处理</td></tr><tr><td><code>backend/routes/export.py</code></td><td>导入表、存储回退、两个端点</td></tr><tr><td><code>backend/main.py</code></td><td>可选导入与条件注册</td></tr><tr><td><code>backend/models/card.py</code></td><td>卡片字段与校验</td></tr><tr><td><code>backend/routes/auth.py</code></td><td>仓库内鉴权端点，作为对照组</td></tr><tr><td><code>tests/backend/</code></td><td>现有测试目录，未包含导出用例</td></tr><tr><td><code>frontend/src/api/session.ts</code></td><td>前端现有下载调用，未接入 Markdown 导出</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/27-%E6%96%87%E6%A1%A3%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AF%BC%E5%87%BA/01-PDF%C2%B7DOCX%E8%A7%A3%E6%9E%90/"><span class="k">← 上一篇</span><span class="t">PDF·DOCX解析</span><span class="d">文档解析与导出 · 4 个文件</span></a><a class="next" href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/01-%E8%B7%AF%E7%94%B1%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5/"><span class="k">下一篇 →</span><span class="t">路由与依赖注入</span><span class="d">FastAPI 后端 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

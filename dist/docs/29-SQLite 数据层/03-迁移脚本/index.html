@@ -46,6 +46,15 @@
   E["users.json orders Hub tokens.json"] -->|"migrate_to_sqlite"| F["全局库五张表"]
   C -->|"parent_migration"| G["parent_id 回填"]</pre></div>
 <h2 id="2-共同的幂等写法">2. 共同的幂等写法</h2>
+<p>迁移脚本都以”可重入”为前提，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：可重入的写入</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> item </span><span style="color:#D73A49">in</span><span style="color:#24292E"> iter_source():</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> already_migrated(item.id):     </span><span style="color:#6A737D"># 已处理就跳过，不报错</span></span>
+<span class="line"><span style="color:#24292E">        skipped </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span></span>
+<span class="line"><span style="color:#24292E">    insert(item)</span></span>
+<span class="line"><span style="color:#005CC5">print</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"migrated=</span><span style="color:#005CC5">{</span><span style="color:#24292E">inserted</span><span style="color:#005CC5">}</span><span style="color:#032F62"> skipped=</span><span style="color:#005CC5">{</span><span style="color:#24292E">skipped</span><span style="color:#005CC5">}</span><span style="color:#032F62"> failed=</span><span style="color:#005CC5">{</span><span style="color:#24292E">failed</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>“可重入”指脚本被中断后可以重跑，而不会重复写入或破坏已有数据；这也是它敢在真实数据上运行的前提。实现手段通常是”每条记录先判存在、再决定写”，配一份迁移完成的标记。代价是每次跑都要多做一次存在性查询，换来的是失败后可以直接重跑，不必手工回退。</p>
 <p>四个脚本的幂等判断都在「写入前查一次」这一步：</p>
 
 
@@ -372,6 +381,15 @@
 <p>老部署升级时，数据以文件形态存在：用户在一个 JSON 字典里，订单在按用户分文件的目录里，论坛每个会话一个 <code>manifest.json</code>，分享令牌一个文件，卡片是散在会话目录里的 Markdown。数据库建好了但里面是空的，<code>migrate_to_sqlite.py</code> 就是把这些文件一次性倒进去的脚本。</p>
 <p>它的模块注释列出了五组来源与目标，并声明可重复执行。脚本不依赖应用进程，直接打开数据库写入，末尾打印四张表的行数供人工核对。</p>
 <h2 id="1-执行结构与单例处理">1. 执行结构与单例处理</h2>
+<p>迁移脚本要显式重置进程内的单例，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：迁移脚本的骨架</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> main</span><span style="color:#24292E">():</span></span>
+<span class="line"><span style="color:#24292E">    DatabaseManager.reset_instance()       </span><span style="color:#6A737D"># 丢弃可能已按旧路径初始化的单例</span></span>
+<span class="line"><span style="color:#24292E">    db </span><span style="color:#D73A49">=</span><span style="color:#24292E"> DatabaseManager.instance()        </span><span style="color:#6A737D"># 用当前配置重新建</span></span>
+<span class="line"><span style="color:#24292E">    migrate_users(db)</span></span>
+<span class="line"><span style="color:#24292E">    migrate_orders(db)</span></span>
+<span class="line"><span style="color:#24292E">    verify(db)                             </span><span style="color:#6A737D"># 末尾核对</span></span></code></pre>
+<p>“单例”指全进程只有一个实例的对象；它在正常服务里省掉了重复初始化，但在脚本里会带来麻烦——如果同一进程先按默认路径建过实例，迁移时拿到的就是那个旧对象，写到的库可能不是目标库。所以脚本开头要显式重置，让它按本次的配置重建。这是单例模式的常见代价：生命周期由调用方接管。</p>
 <p><code>main</code> 先确定数据库路径并把全局单例重建一次，然后按编号依次执行五个迁移段，最后统计行数。编号从 1 到 5 却写成 <code>[x/6]</code>：脚本里实际是五段迁移加一段核对，分母是历史上六段结构的残留。</p>
 <p>数据库路径用当前工作目录拼出（<code>os.getcwd()</code> 加 <code>data/knowledgediver.db</code>），因此必须在仓库根目录执行，否则会新建一个空库并「迁移成功」。</p>
 
@@ -833,6 +851,11 @@
 <table><thead><tr><th>项</th><th>本脚本</th><th>应用侧管理器</th></tr></thead><tbody><tr><td>表</td><td>只有 <code>cards</code></td><td><code>cards</code>、<code>raw_pages</code>、<code>card_vec_map</code> 加可选向量表</td></tr><tr><td><code>parent_id</code></td><td>没有该列</td><td>补列机制会加上</td></tr><tr><td>WAL</td><td>有</td><td>有</td></tr><tr><td>权限提示</td><td>无</td><td>构造失败时给出目录归属提示</td></tr></tbody></table>
 <p>迁移出的库缺少的两张表与一列会在应用下次打开该会话时补齐，因此顺序上先跑迁移、再让应用访问是可行的。</p>
 <h2 id="4-逐张判重写入">4. 逐张判重写入</h2>
+<p>判重写入靠主键冲突来处理，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="sql"><code><span class="line"><span style="color:#6A737D">-- 示意：判重写入（主键冲突时跳过）</span></span>
+<span class="line"><span style="color:#D73A49">INSERT</span><span style="color:#D73A49"> OR</span><span style="color:#D73A49"> IGNORE</span><span style="color:#D73A49"> INTO</span><span style="color:#24292E"> cards (id, title, content, parent_id)</span></span>
+<span class="line"><span style="color:#D73A49">VALUES</span><span style="color:#24292E"> (?, ?, ?, ?);</span></span></code></pre>
+<p><code>INSERT OR IGNORE</code>在违反唯一约束时静默跳过这一行，而不是报错终止——这正好是迁移要的语义：已经搬过的卡片再遇到就跳过。它依赖<code>id</code>上有主键或唯一索引，否则判重根本不生效、同一张卡片会被插入多次。相比之下<code>INSERT OR REPLACE</code>会覆盖旧行，迁移时反而有丢失增量修改的风险。</p>
 <p>每张卡片先查目标库是否已有同 ID 行，有就跳过。写入使用 11 列显式列表，把中心表里对应列一一搬过去，不做字段改名。脚本同时累加本会话与全局的迁移数，并把每会话结果打印成一行。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
@@ -1174,6 +1197,13 @@
 <p>旧版树方向由「链接有向边加创建时间启发式」推断，模块注释指出它无法区分两种情形：后建的父卡挂载先建的子卡（Agent 重新定根），以及旧版关键词合并留下的反向污染边。两者在数据上都是双向链接，单看边分不出来。</p>
 <p>把推断结果写进 <code>parent_id</code> 之后，渲染树时直接读列，不再每次重跑启发式，也不会因为数据顺序变化而改变结果。</p>
 <h2 id="5-四条推断规则">5. 四条推断规则</h2>
+<p>推断规则按可解释性排序，逐条尝试，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：父子的推断顺序（先做最可信的，都不成立才兜底）</span></span>
+<span class="line"><span style="color:#24292E">parent </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (explicit_parent(card)          </span><span style="color:#6A737D"># 1 显式字段</span></span>
+<span class="line"><span style="color:#D73A49">          or</span><span style="color:#24292E"> link_target(card)           </span><span style="color:#6A737D"># 2 链接指向</span></span>
+<span class="line"><span style="color:#D73A49">          or</span><span style="color:#24292E"> same_session_root(card)     </span><span style="color:#6A737D"># 3 同会话的根卡片</span></span>
+<span class="line"><span style="color:#D73A49">          or</span><span style="color:#24292E"> default_root(card))         </span><span style="color:#6A737D"># 4 兜底</span></span></code></pre>
+<p>历史数据缺少明确的父子字段时，只能从其它痕迹反推；把规则按可信度排序，是为了让”高可信规则先命中”而不是被兜底规则抢先。跑这类回填前应当支持试运行（dry-run）：只统计每条规则命中多少条、不落盘，确认分布符合预期后再真正写入——否则错误的推断被写进库，回滚成本远高于重跑一次。</p>
 <p><code>infer_parent_ids</code> 对每张还没有父卡的卡片 C，遍历它的反链候选 P，按顺序套用规则：</p>
 
 
@@ -1602,6 +1632,13 @@
 <table><thead><tr><th>操作</th><th>结果</th></tr></thead><tbody><tr><td>首次迁移</td><td>全部写入</td></tr><tr><td>重复执行</td><td>全部跳过</td></tr><tr><td>来源后改、目标已存在</td><td>以目标为准</td></tr><tr><td>目标被外部删除、来源还在</td><td>会重新导入</td></tr></tbody></table>
 <p>排查「改了没生效」时先确认改的是来源还是目标：脚本只从来源流向目标，且只填补缺失的记录。</p>
 <h2 id="5-事务粒度与中断">5. 事务粒度与中断</h2>
+<p>事务粒度决定了中断后的可恢复程度，示意如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：分批提交</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> batch </span><span style="color:#D73A49">in</span><span style="color:#24292E"> chunks(items, </span><span style="color:#005CC5">500</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    with</span><span style="color:#24292E"> conn:                        </span><span style="color:#6A737D"># 进入事务：异常自动回滚</span></span>
+<span class="line"><span style="color:#24292E">        conn.executemany(</span><span style="color:#032F62">"INSERT OR IGNORE INTO cards VALUES (?,?,?,?)"</span><span style="color:#24292E">, batch)</span></span>
+<span class="line"><span style="color:#005CC5">    print</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"committed </span><span style="color:#005CC5">{len</span><span style="color:#24292E">(batch)</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)  </span><span style="color:#6A737D"># 每批结束才提交</span></span></code></pre>
+<p>“事务”是一组要么全成功、要么全回滚的操作；<code>with conn</code>在异常时自动回滚，避免留下写了一半的状态。一次事务包住全部数据可以让失败后完全回到起点，但大事务会长时间占用锁与日志空间；分批提交则牺牲”整批原子”、换来可观察的进度与更小的回滚损失。判断粒度是否合适，看的是中断后能否安全重跑——这正是幂等写法的价值。</p>
 <p>脚本按段或按会话提交，没有覆盖整次迁移的事务。中途中断会留下部分数据，但不会留下重复数据：重跑时判重会跳过已写入的部分。</p>
 
 

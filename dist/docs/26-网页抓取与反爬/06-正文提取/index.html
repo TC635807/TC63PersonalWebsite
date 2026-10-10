@@ -2,7 +2,7 @@
 <p>同一篇文章，交给不同的提取方式，拿到的结果可能相差很大：博客正文识别最好的是通用算法，而中文技术站点的正文往往藏在固定容器里；反过来，通用算法在知乎这类站点上可能只取到摘要。这个仓库的做法是同时收集多个候选，再用一条明确的决胜规则挑一个，而不是「第一个够长的就用」。</p>
 <p>候选有三条来源：通用正文算法、站点专用选择器、最大文本块。三条来源各自失败的方式不同，因此决胜规则不采用先到先得，而是带长度比较的优先级。</p>
 <h2 id="三条候选来源">三条候选来源</h2>
-<p>三条来源的分工与能力边界如下（<code>src/better_crawler/extract.py:1-15</code>）：</p>
+<p>三条来源的分工与能力边界如下（<code>src/better_crawler/extract.py</code>）：</p>
 
 
 
@@ -29,9 +29,9 @@
 
 
 <table><thead><tr><th>来源</th><th>擅长</th><th>失败方式</th></tr></thead><tbody><tr><td>trafilatura</td><td>博客与文档站正文</td><td>中文站点可能只取到摘要</td></tr><tr><td>站点选择器</td><td>已知站点的正文容器</td><td>名单没覆盖的新站点</td></tr><tr><td>最大文本块</td><td>无特征页面兜底</td><td>可能选中注释或导航的聚合块</td></tr></tbody></table>
-<p>通用算法的调用带四个选项：不含评论、包含表格、偏向精度关闭、允许内部回退（<code>extract.py:148-158</code>）。「偏向精度关闭」的意思是不为了干净而牺牲召回，宁可多留一点内容，这与后面「候选不够长才换下一级」的整体思路一致。</p>
+<p>通用算法的调用带四个选项：不含评论、包含表格、偏向精度关闭、允许内部回退（<code>extract.py</code>）。「偏向精度关闭」的意思是不为了干净而牺牲召回，宁可多留一点内容，这与后面「候选不够长才换下一级」的整体思路一致。</p>
 <h2 id="采集顺序与数据结构">采集顺序与数据结构</h2>
-<p>提取函数先做长度门槛，再收集候选，最后按规则返回（<code>extract.py:192-240</code>）：</p>
+<p>提取函数先做长度门槛，再收集候选，最后按规则返回（<code>extract.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> html </span><span style="color:#D73A49">or</span><span style="color:#005CC5"> len</span><span style="color:#24292E">(html) </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 200</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> None</span></span>
 <span class="line"><span style="color:#24292E">traf </span><span style="color:#D73A49">=</span><span style="color:#24292E"> _trafilatura_candidate(html)          </span><span style="color:#6A737D"># 候选一</span></span>
@@ -40,7 +40,7 @@
 <span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> tag </span><span style="color:#D73A49">in</span><span style="color:#24292E"> soup(</span><span style="color:#005CC5">_NOISE_TAGS</span><span style="color:#24292E">): tag.decompose()  </span><span style="color:#6A737D"># 先剪噪声</span></span>
 <span class="line"><span style="color:#24292E">selectors </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [</span><span style="color:#005CC5">...</span><span style="color:#24292E">]                            </span><span style="color:#6A737D"># 候选二</span></span>
 <span class="line"><span style="color:#24292E">largest </span><span style="color:#D73A49">=</span><span style="color:#24292E"> _largest_block(soup)               </span><span style="color:#6A737D"># 候选三</span></span></code></pre>
-<p>返回对象带三个字段：正文、标题与来源标记（<code>extract.py:70-77</code>）。来源标记的值形如 <code>trafilatura</code>、<code>selector:#content_views</code> 或 <code>largest-block</code>，调用方据此知道这次走的是哪一级。</p>
+<p>返回对象带三个字段：正文、标题与来源标记（<code>extract.py</code>）。来源标记的值形如 <code>trafilatura</code>、<code>selector:#content_views</code> 或 <code>largest-block</code>，调用方据此知道这次走的是哪一级。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["输入 HTML"] --> B{"HTML 长度是否足够"}
     B -->|"否"| C["返回空"]
@@ -50,7 +50,7 @@
     F --> G["计算最大文本块"]
     G --> H["按决胜规则挑选"]</pre></div>
 <h2 id="决胜规则长度比与阈值">决胜规则：长度比与阈值</h2>
-<p>决胜规则是整套流程里最需要记住的一段，它由四条判断按顺序组成（<code>extract.py:226-240</code>）：</p>
+<p>决胜规则是整套流程里最需要记住的一段，它由四条判断按顺序组成（<code>extract.py</code>）：</p>
 
 
 
@@ -100,7 +100,7 @@
     H -->|"是"| I["用最大文本块"]
     H -->|"否"| J["返回空"]</pre></div>
 <h2 id="噪声标签先剪掉">噪声标签先剪掉</h2>
-<p>选择器与最大文本块这两条候选都基于同一份解析后的 DOM，而 DOM 在收集之前先剪掉了十类噪声标签：脚本、样式、导航、页脚、页头、侧栏、无脚本块、内嵌框架、表单与矢量图（<code>extract.py:34-45</code>、<code>:215-216</code>）。</p>
+<p>选择器与最大文本块这两条候选都基于同一份解析后的 DOM，而 DOM 在收集之前先剪掉了十类噪声标签：脚本、样式、导航、页脚、页头、侧栏、无脚本块、内嵌框架、表单与矢量图（<code>extract.py</code>）。</p>
 
 
 
@@ -131,7 +131,7 @@
 
 
 <table><thead><tr><th>标签</th><th>为什么剪</th></tr></thead><tbody><tr><td>脚本与样式</td><td>正文里不该出现代码与样式文本</td></tr><tr><td>导航、页头、页脚、侧栏</td><td>站点公共区域，与文章无关</td></tr><tr><td>无脚本与内嵌框架</td><td>多为占位内容</td></tr><tr><td>表单</td><td>搜索框与登录提示</td></tr><tr><td>矢量图</td><td>图标文字可能混进正文</td></tr></tbody></table>
-<p>剪枝发生在解析之后，而通用算法的候选是在原始 HTML 上算的（<code>extract.py:199</code> 在 <code>:211</code> 解析之前）。也就是说，trafilatura 自己处理噪声，选择器候选拿到的是一份已经干净的结构。</p>
+<p>剪枝发生在解析之后，而通用算法的候选是在原始 HTML 上算的（<code>extract.py</code>）。也就是说，trafilatura 自己处理噪声，选择器候选拿到的是一份已经干净的结构。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["原始 HTML"] --> B["trafilatura 候选"]
     A --> C["BeautifulSoup 解析"]
@@ -139,7 +139,7 @@
     D --> E["选择器候选"]
     D --> F["最大文本块候选"]</pre></div>
 <h2 id="标题的三种来源">标题的三种来源</h2>
-<p>标题按固定顺序尝试三个位置，先命中先返回（<code>extract.py:120-145</code>）：</p>
+<p>标题按固定顺序尝试三个位置，先命中先返回（<code>extract.py</code>）：</p>
 
 
 
@@ -166,7 +166,7 @@
 
 
 <table><thead><tr><th>顺序</th><th>来源</th><th>读数方式</th></tr></thead><tbody><tr><td>1</td><td><code>og:title</code> 元信息</td><td>取 <code>content</code> 属性</td></tr><tr><td>2</td><td>页面标题标签</td><td>取节点文本</td></tr><tr><td>3</td><td>一级标题</td><td>取节点文本</td></tr></tbody></table>
-<p>元信息优先是因为它通常最干净：站点标题模板（「文章名 - 站点名」）常常出现在标题标签里。取到的文本会做空白归一化，并截到 200 字符（<code>extract.py:144</code>）。</p>
+<p>元信息优先是因为它通常最干净：站点标题模板（「文章名 - 站点名」）常常出现在标题标签里。取到的文本会做空白归一化，并截到 200 字符（<code>extract.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["查找 og:title"] --> B{"取到内容?"}
     B -->|"是"| C["归一化并截断"]
@@ -176,7 +176,7 @@
     E -->|"否"| F["查找 h1"]
     F --> G["取到则归一化截断"]</pre></div>
 <h2 id="长度阈值-200-的含义">长度阈值 200 的含义</h2>
-<p>阈值 200 是这套流程里出现次数最多的常数，它在三个位置起作用：入口的 HTML 长度门槛、每条候选是否够长、以及调用方拿到结果后的复查（<code>extract.py:26</code>、<code>:194</code>、<code>:227-237</code>、<code>fetcher.py:298</code>）。</p>
+<p>阈值 200 是这套流程里出现次数最多的常数，它在三个位置起作用：入口的 HTML 长度门槛、每条候选是否够长、以及调用方拿到结果后的复查（<code>extract.py</code>、<code>fetcher.py</code>）。</p>
 
 
 
@@ -319,12 +319,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/extract.py</code></td><td>候选收集、决胜规则、阈值与标题提取（<code>:1-15</code>、<code>:26</code>、<code>:34-67</code>、<code>:120-240</code>）</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>对提取结果的复查与后续处置（<code>:281-351</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/extract.py</code></td><td>候选收集、决胜规则、阈值与标题提取</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>对提取结果的复查与后续处置</td></tr></tbody></table>
 <p>（引用的路径以 /mnt/d/better-crawler-4-agent 为根。）</p></div></section><section class="dfile" id="file-2" data-file="02-选择器名单与最长匹配"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-选择器名单与最长匹配</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/06-正文提取/02-选择器名单与最长匹配.md</span></div><div class="dfile__body"><h1 id="选择器名单与最长匹配">选择器名单与最长匹配</h1>
 <p>知乎页面上，正文容器的类名会同时出现在多个节点上：<code>RichText ztext</code> 能匹配到三个，其中第一个往往只是摘要预览。如果按「找到就取」的写法处理，拿到的就是那几百字预览，而正文在第三个节点里。这个仓库对选择器有两条约定来避开这类问题：单个选择器取所有匹配中最长的那个，多个选择器之间再取最长的一个。</p>
 <p>名单本身是硬编码的，覆盖十来个常见中文内容站点，另加三个通用语义标签作为兜底。理解它需要同时看「取哪一个」与「怎么取最长」这两件事。</p>
 <h2 id="名单里有哪些站点">名单里有哪些站点</h2>
-<p>名单按站点分组排列，每组一到三个选择器（<code>src/better_crawler/extract.py:48-67</code>）：</p>
+<p>名单按站点分组排列，每组一到三个选择器（<code>src/better_crawler/extract.py</code>）：</p>
 
 
 
@@ -374,7 +374,7 @@
     C --> H["main"]
     C --> I["role=main"]</pre></div>
 <h2 id="每个选择器取最长匹配">每个选择器取最长匹配</h2>
-<p>第一个约定在收集函数里：对每个选择器取出全部匹配节点，逐个算文本长度，只保留最长的那个作为该选择器的候选（<code>extract.py:165-180</code>）：</p>
+<p>第一个约定在收集函数里：对每个选择器取出全部匹配节点，逐个算文本长度，只保留最长的那个作为该选择器的候选（<code>extract.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> selector </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> _SITE_SELECTORS</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    nodes </span><span style="color:#D73A49">=</span><span style="color:#24292E"> soup.select(selector)</span></span>
 <span class="line"><span style="color:#24292E">    best </span><span style="color:#D73A49">=</span><span style="color:#032F62"> ""</span></span>
@@ -394,7 +394,7 @@
     E --> G["该选择器候选确定"]
     F --> G</pre></div>
 <h2 id="跨选择器再取最长">跨选择器再取最长</h2>
-<p>第二个约定发生在收集之后：把所有选择器候选按文本长度排序，只留最长的一个，蜜罐候选在这一步就被排除（<code>extract.py:218-224</code>）：</p>
+<p>第二个约定发生在收集之后：把所有选择器候选按文本长度排序，只留最长的一个，蜜罐候选在这一步就被排除（<code>extract.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">selectors </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [(sel, txt) </span><span style="color:#D73A49">for</span><span style="color:#24292E"> sel, txt </span><span style="color:#D73A49">in</span><span style="color:#24292E"> _selector_candidates(soup)</span></span>
 <span class="line"><span style="color:#D73A49">             if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> is_honeypot(txt)]</span></span>
 <span class="line"><span style="color:#24292E">best_sel, best_sel_text </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#032F62">""</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)</span></span>
@@ -435,8 +435,8 @@
     D -->|"是"| E["用该选择器"]
     D -->|"否"| F["回到通用结果或继续回退"]</pre></div>
 <h2 id="通用语义标签作为兜底">通用语义标签作为兜底</h2>
-<p>名单最后三项是 HTML 语义标签，而不是站点专用类名：<code>article</code>、<code>main</code> 与 <code>role=main</code>（<code>extract.py:63-67</code>）。它们的作用是覆盖不在名单里的站点，只要页面结构规范就能命中。</p>
-<p>这三项与后面的最大文本块兜底有重叠但不相同：语义标签依赖页面作者用了正确的标签，最大文本块则不挑标签，直接在所有块级元素里找最长的正文（<code>extract.py:183-189</code>）。</p>
+<p>名单最后三项是 HTML 语义标签，而不是站点专用类名：<code>article</code>、<code>main</code> 与 <code>role=main</code>（<code>extract.py</code>）。它们的作用是覆盖不在名单里的站点，只要页面结构规范就能命中。</p>
+<p>这三项与后面的最大文本块兜底有重叠但不相同：语义标签依赖页面作者用了正确的标签，最大文本块则不挑标签，直接在所有块级元素里找最长的正文（<code>extract.py</code>）。</p>
 
 
 
@@ -459,7 +459,7 @@
 
 <table><thead><tr><th>手段</th><th>依赖</th><th>失败方式</th></tr></thead><tbody><tr><td>语义标签</td><td>页面用了规范标签</td><td>老站点用多层 <code>div</code></td></tr><tr><td>最大文本块</td><td>没有依赖</td><td>选中评论区或导航聚合块</td></tr></tbody></table>
 <h2 id="只取第一个匹配会漏什么">只取第一个匹配会漏什么</h2>
-<p>文件开头的注释把这条经验写得很直接：知乎页面上 <code>.RichText.ztext</code> 有三个节点，第一个可能只是摘要预览（<code>extract.py:13-14</code>）。按「找到就取」的写法，返回的将是预览而不是正文，而且长度可能刚好越过阈值，从而骗过「够长就用」的判断。</p>
+<p>文件开头的注释把这条经验写得很直接：知乎页面上 <code>.RichText.ztext</code> 有三个节点，第一个可能只是摘要预览（<code>extract.py</code>）。按「找到就取」的写法，返回的将是预览而不是正文，而且长度可能刚好越过阈值，从而骗过「够长就用」的判断。</p>
 
 
 
@@ -628,12 +628,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/extract.py</code></td><td>选择器名单、两层取最长、最大文本块与噪声剪枝（<code>:13-14</code>、<code>:34-67</code>、<code>:165-224</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/extract.py</code></td><td>选择器名单、两层取最长、最大文本块与噪声剪枝</td></tr></tbody></table>
 <p>（引用的路径以 /mnt/d/better-crawler-4-agent 为根。）</p></div></section><section class="dfile" id="file-3" data-file="03-非正文页面的识别"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-非正文页面的识别</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/06-正文提取/03-非正文页面的识别.md</span></div><div class="dfile__body"><h1 id="非正文页面的识别">非正文页面的识别</h1>
 <p>最难排查的失败是「看起来成功」而不是报错：状态码 200，正文也过了长度门槛，内容却是一段与主题无关的短文。这类页面有三种常见来源——站点注入的字体指纹蜜罐、用自己的模板渲染的错误页，以及内容没渲染出来的骨架页。仓库对三种各写了一支判据，判断结果都会影响这次抓取是重试、报错还是采用。</p>
 <p>三支判据的输入各不相同：蜜罐只看文本，错误页同时看 HTML 与正文，骨架页比较 HTML 大小与正文长度。理解它们的关键是每个判据在什么条件下才敢下结论。</p>
 <h2 id="蜜罐节点的三种特征">蜜罐节点的三种特征</h2>
-<p>蜜罐是站点为字体指纹检测注入的隐藏节点，内容形如重复上万次的短串，长度足以骗过按长度挑选的规则（<code>src/better_crawler/extract.py:85-117</code>）。判定分两步，先看有没有空白分词：</p>
+<p>蜜罐是站点为字体指纹检测注入的隐藏节点，内容形如重复上万次的短串，长度足以骗过按长度挑选的规则（<code>src/better_crawler/extract.py</code>）。判定分两步，先看有没有空白分词：</p>
 
 
 
@@ -660,7 +660,7 @@
 
 
 <table><thead><tr><th>情形</th><th>判据</th></tr></thead><tbody><tr><td>文本短于 400 字符</td><td>直接不判，返回正常</td></tr><tr><td>几乎没有空白分词</td><td>取前 3、5、8 字符片段，某片段重复占比超一半即判蜜罐</td></tr><tr><td>有正常分词</td><td>单个短词（不超过 12 字符）占比超一半即判蜜罐</td></tr><tr><td>有正常分词</td><td>去重后词种少于 5 或不足总词数的 5% 亦判蜜罐</td></tr></tbody></table>
-<p>取样的范围只有前 4000 字符（<code>extract.py:92</code>），这是刻意限制：蜜罐特征重复度极高，前几千字符足够判断，也避免对长文本做全量统计。</p>
+<p>取样的范围只有前 4000 字符（<code>extract.py</code>），这是刻意限制：蜜罐特征重复度极高，前几千字符足够判断，也避免对长文本做全量统计。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["候选文本"] --> B{"长度是否达到 400"}
     B -->|"否"| C["判为正常"]
@@ -673,7 +673,7 @@
     H -->|"否"| C
     F --> I</pre></div>
 <h2 id="错误页的固定特征">错误页的固定特征</h2>
-<p>错误页判据检查 HTML 的前两万字符，命中任何一条特征就返回一条说明（<code>extract.py:243-273</code>）：</p>
+<p>错误页判据检查 HTML 的前两万字符，命中任何一条特征就返回一条说明（<code>extract.py</code>）：</p>
 
 
 
@@ -700,7 +700,7 @@
 
 
 <table><thead><tr><th>特征</th><th>含义</th></tr></thead><tbody><tr><td>知乎沙漠插画的资源名</td><td>页面提示文章不存在或已删除</td></tr><tr><td>多种「页面不存在」类文案</td><td>站点用自己模板渲染的 200 错误页</td></tr><tr><td>正文短且出现验证码类词</td><td>疑似被反爬拦截要求人机验证</td></tr><tr><td>正文短且出现删除、违规、仅作者可见、需要登录</td><td>页面受限或已删除</td></tr></tbody></table>
-<p>判据的设计有一条边界：只在确有错误特征时返回说明，页面只是短（例如以图片为主的文章）时返回空，交给调用方按内容过短处理（<code>extract.py:249-250</code>）。这样做的原因是错误页的结论会直接写进失败原因，误报的代价比漏报高。</p>
+<p>判据的设计有一条边界：只在确有错误特征时返回说明，页面只是短（例如以图片为主的文章）时返回空，交给调用方按内容过短处理（<code>extract.py</code>）。这样做的原因是错误页的结论会直接写进失败原因，误报的代价比漏报高。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["HTML 与正文"] --> B{"是否出现特定错误资源名"}
     B -->|"是"| C["报错误页"]
@@ -712,7 +712,7 @@
     G -->|"是"| H["报反爬或受限"]
     G -->|"否"| F</pre></div>
 <h2 id="骨架页的两个阈值">骨架页的两个阈值</h2>
-<p>骨架页指 HTML 骨架已经下载、但正文靠接口异步填充、接口失败后停在导航与弹窗状态的情况。判据是「结构不小、正文极少」，两个阈值都来自实测（<code>extract.py:28-32</code>、<code>:276-291</code>）：</p>
+<p>骨架页指 HTML 骨架已经下载、但正文靠接口异步填充、接口失败后停在导航与弹窗状态的情况。判据是「结构不小、正文极少」，两个阈值都来自实测（<code>extract.py</code>）：</p>
 
 
 
@@ -734,7 +734,7 @@
 
 
 <table><thead><tr><th>阈值</th><th>取值</th><th>作用</th></tr></thead><tbody><tr><td>HTML 大小下限</td><td>30000 字符</td><td>低于此值不算骨架页</td></tr><tr><td>正文长度上限</td><td>1500 字符</td><td>高于此值视为正常</td></tr></tbody></table>
-<p>实测的两组数字说明了这个判据的由来：万方检索页在接口失败时 HTML 有 193KB 而正文只有 727 字符；成功时 HTML 481KB、正文 5720 字符（<code>extract.py:29-30</code>）。失败态的特点是结构一点没小，内容几乎清空。</p>
+<p>实测的两组数字说明了这个判据的由来：万方检索页在接口失败时 HTML 有 193KB 而正文只有 727 字符；成功时 HTML 481KB、正文 5720 字符（<code>extract.py</code>）。失败态的特点是结构一点没小，内容几乎清空。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["页面 HTML 与正文"] --> B{"HTML 是否小于 30000 字符"}
     B -->|"是"| C["按正常短页面处理"]
@@ -742,7 +742,7 @@
     D -->|"是"| E["疑似未渲染, 触发重试"]
     D -->|"否"| F["判为正常"]</pre></div>
 <h2 id="状态码与正文长度一起看">状态码与正文长度一起看</h2>
-<p>调用方不会只看长度就宣布成功，它把状态码与提取结果放在一起判断（<code>fetcher.py:289-292</code>、<code>:328-335</code>）：</p>
+<p>调用方不会只看长度就宣布成功，它把状态码与提取结果放在一起判断（<code>fetcher.py</code>）：</p>
 
 
 
@@ -774,7 +774,7 @@
 
 
 <table><thead><tr><th>状态码</th><th>正文长度</th><th>结论</th></tr></thead><tbody><tr><td>200</td><td>够长</td><td>成功</td></tr><tr><td>200</td><td>过短</td><td>先查是否错误页，否则报无有效正文</td></tr><tr><td>4xx</td><td>够长</td><td>仍算失败，文字疑似错误页内容</td></tr><tr><td>4xx</td><td>过短</td><td>用状态码解释失败原因</td></tr></tbody></table>
-<p>第二行里有一个顺序：提取失败时先问「是不是带 200 的错误页」，因为这类页面会返回正常状态码，只报「无有效正文」会把真实原因掩盖（<code>fetcher.py:298-307</code>）。第四行则是反过来，优先用状态码解释，2xx 且无正文才归为内容问题。</p>
+<p>第二行里有一个顺序：提取失败时先问「是不是带 200 的错误页」，因为这类页面会返回正常状态码，只报「无有效正文」会把真实原因掩盖（<code>fetcher.py</code>）。第四行则是反过来，优先用状态码解释，2xx 且无正文才归为内容问题。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["提取结果"] --> B{"提取是否成功且够长"}
     B -->|"否"| C["先查错误页特征"]
@@ -785,7 +785,7 @@
     G -->|"是"| F
     G -->|"否"| H["成功"]</pre></div>
 <h2 id="清理与归一化">清理与归一化</h2>
-<p>判据都在归一化后的文本上做，归一化只做三件事：把连续空格与不换行空格压成一个空格、把三个以上换行压成两个、去掉首尾空白（<code>extract.py:79-82</code>）。</p>
+<p>判据都在归一化后的文本上做，归一化只做三件事：把连续空格与不换行空格压成一个空格、把三个以上换行压成两个、去掉首尾空白（<code>extract.py</code>）。</p>
 
 
 
@@ -957,12 +957,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/extract.py</code></td><td>蜜罐、错误页与骨架页三支判据及归一化（<code>:28-32</code>、<code>:79-82</code>、<code>:85-117</code>、<code>:243-291</code>）</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>状态码与正文的联合判断、重试与兜底（<code>:150-199</code>、<code>:281-351</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/extract.py</code></td><td>蜜罐、错误页与骨架页三支判据及归一化</td></tr><tr><td><code>src/better_crawler/fetcher.py</code></td><td>状态码与正文的联合判断、重试与兜底</td></tr></tbody></table>
 <p>（引用的路径以 /mnt/d/better-crawler-4-agent 为根。）</p></div></section><section class="dfile" id="file-4" data-file="04-提取结果的判定与重试"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-提取结果的判定与重试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/26-网页抓取与反爬/06-正文提取/04-提取结果的判定与重试.md</span></div><div class="dfile__body"><h1 id="提取结果的判定与重试">提取结果的判定与重试</h1>
 <p>一次抓取返回 <code>ok: true</code> 但 <code>warning</code> 非空，说明正文是重试之后用历次最完整的一份兜底的，可能并不完整。要判断这份内容能不能用，需要读懂结果里的几个字段：来源层级、状态码、尝试记录与截断标记。</p>
 <p>这些字段由两层代码共同填写：抓取器负责选择路径与重试，提取器负责给出正文与内部来源标记。分清这两层，才能知道一个结果是「哪条路拿到的」以及「失败发生在哪一步」。</p>
 <h2 id="结果里的判断字段">结果里的判断字段</h2>
-<p>结果对象的字段可以分成三组（<code>src/better_crawler/fetcher.py:36-49</code>）：</p>
+<p>结果对象的字段可以分成三组（<code>src/better_crawler/fetcher.py</code>）：</p>
 
 
 
@@ -989,7 +989,7 @@
 
 
 <table><thead><tr><th>组</th><th>字段</th><th>作用</th></tr></thead><tbody><tr><td>内容</td><td>正文、标题、截断前长度</td><td>判断拿到什么</td></tr><tr><td>过程</td><td>来源层级、状态码、耗时、尝试记录</td><td>判断怎么拿到的</td></tr><tr><td>结论</td><td>是否成功、错误说明、警告</td><td>判断能不能用</td></tr></tbody></table>
-<p>其中三个字段需要专门解释：<code>content_length</code> 是截断前的真实长度，返回的正文可能因为字符上限被截短，<code>truncated</code> 单独标记这一点（<code>fetcher.py:51-67</code>）；<code>warning</code> 非空表示拿到了内容但可能不完整（<code>fetcher.py:47</code>）；<code>attempts</code> 是按层记录的尝试流水（<code>fetcher.py:49</code>）。</p>
+<p>其中三个字段需要专门解释：<code>content_length</code> 是截断前的真实长度，返回的正文可能因为字符上限被截短，<code>truncated</code> 单独标记这一点（<code>fetcher.py</code>）；<code>warning</code> 非空表示拿到了内容但可能不完整；<code>attempts</code> 是按层记录的尝试流水。</p>
 
 
 
@@ -1046,14 +1046,14 @@
 
 
 <table><thead><tr><th>层次</th><th>标记</th><th>取值</th></tr></thead><tbody><tr><td>抓取器</td><td><code>tier</code></td><td>浏览器、通用算法、指纹兜底或空</td></tr><tr><td>提取器</td><td>方法字段</td><td>通用算法、某个选择器、最大文本块</td></tr></tbody></table>
-<p>抓取层级说明这次走的是哪条取页面的路（<code>fetcher.py:42</code>），提取方法说明正文是哪个候选胜出的（<code>extract.py:70-77</code>）。排查质量问题时先看前者确认路径，再看后者确认候选；两者都为空时，说明这份结果不是正常路径产出的。</p>
+<p>抓取层级说明这次走的是哪条取页面的路（<code>fetcher.py</code>），提取方法说明正文是哪个候选胜出的（<code>extract.py</code>）。排查质量问题时先看前者确认路径，再看后者确认候选；两者都为空时，说明这份结果不是正常路径产出的。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["抓取器: 选择取页面路径"] --> B["tier 记下路径"]
     B --> C["提取器: 收集候选并挑选"]
     C --> D["方法字段记下候选来源"]
     D --> E["两者一起说明结果怎么来的"]</pre></div>
 <h2 id="状态码以拿到正文的那一层为准">状态码以拿到正文的那一层为准</h2>
-<p>结果里的状态码取自「实际取到正文的那一层」，而非最后一层（<code>fetcher.py:343-346</code>）。原因是浏览器层可能返回 502，而正文其实是从静态路径取到的，沿用 502 会让调用方误判。</p>
+<p>结果里的状态码取自「实际取到正文的那一层」，而非最后一层（<code>fetcher.py</code>）。原因是浏览器层可能返回 502，而正文其实是从静态路径取到的，沿用 502 会让调用方误判。</p>
 
 
 
@@ -1078,7 +1078,7 @@
 <table><thead><tr><th>情形</th><th>状态码字段</th></tr></thead><tbody><tr><td>浏览器层拿到正文</td><td>浏览器层的状态码</td></tr><tr><td>静态路径拿到正文</td><td>该次请求的状态码</td></tr><tr><td>该层没提供状态码</td><td>置空，表示未知</td></tr></tbody></table>
 <p>这条约定与上一页讲的联合判断配合：调用方拿到状态码后还要与正文长度、错误特征一起看，因此状态码的来源必须与正文来源一致，否则两个信号会互相矛盾。</p>
 <h2 id="重试与兜底">重试与兜底</h2>
-<p>浏览器路径带重试，重试是否有意义由一个函数判断（<code>fetcher.py:81-94</code>）：</p>
+<p>浏览器路径带重试，重试是否有意义由一个函数判断（<code>fetcher.py</code>）：</p>
 
 
 
@@ -1105,7 +1105,7 @@
 
 
 <table><thead><tr><th>情形</th><th>是否重试</th><th>理由</th></tr></thead><tbody><tr><td>5xx、429</td><td>是</td><td>服务端异常或限流，换个时刻可能就好</td></tr><tr><td>4xx（404、403 等）</td><td>否</td><td>确定性失败，重试只是再加载一次</td></tr><tr><td>正文过短或未渲染</td><td>是</td><td>接口概率性失败，重试常能拿到</td></tr></tbody></table>
-<p>重试时先清空已提取的正文再去取页面，清空动作保留尝试记录（<code>fetcher.py:71-78</code>、<code>:185</code>、<code>:192</code>）。如果重试用尽仍未拿到正常内容，就用历次里最完整的一份兜底，标为成功但带上警告，让调用方自己判断（<code>fetcher.py:194-199</code>）。</p>
+<p>重试时先清空已提取的正文再去取页面，清空动作保留尝试记录（<code>fetcher.py</code>）。如果重试用尽仍未拿到正常内容，就用历次里最完整的一份兜底，标为成功但带上警告，让调用方自己判断。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["浏览器取到页面"] --> B["提取正文"]
     B --> C{"提取是否成功且已渲染"}
@@ -1117,9 +1117,9 @@
     G --> H{"历次是否有可用内容"}
     H -->|"是"| I["兜底返回并带警告"]
     H -->|"否"| J["返回失败"]</pre></div>
-<p>静态路径另有一套冷却机制：某个域名上的通用算法连续失败后，会在一段时间内跳过这条路径（<code>fetcher.py:411-417</code>）。它的作用是避免在已知失效的站点上反复付出代价，代价是冷却期内该站点的静态快路径不再可用。</p>
+<p>静态路径另有一套冷却机制：某个域名上的通用算法连续失败后，会在一段时间内跳过这条路径（<code>fetcher.py</code>）。它的作用是避免在已知失效的站点上反复付出代价，代价是冷却期内该站点的静态快路径不再可用。</p>
 <h2 id="逐层尝试记录">逐层尝试记录</h2>
-<p><code>attempts</code> 是按顺序记录的尝试流水，每条包含层级、是否成功与原因（<code>fetcher.py:161-163</code>、<code>:174-177</code>、<code>:303-326</code>）。重试场景下记录由调用方统一写入，避免每次尝试都留一条成功记录（<code>fetcher.py:294-295</code>）。</p>
+<p><code>attempts</code> 是按顺序记录的尝试流水，每条包含层级、是否成功与原因（<code>fetcher.py</code>）。重试场景下记录由调用方统一写入，避免每次尝试都留一条成功记录。</p>
 
 
 
@@ -1144,7 +1144,7 @@
 <table><thead><tr><th>记录字段</th><th>含义</th></tr></thead><tbody><tr><td>层级</td><td>这次尝试走的是哪条路</td></tr><tr><td>是否成功</td><td>该层是否产出可用正文</td></tr><tr><td>原因或字数</td><td>失败原因，或成功时的字符数</td></tr></tbody></table>
 <p>读这份流水的方式是看最后一条与失败原因的组合：最后一条失败且原因是错误页，说明站点侧问题；多条同一层记录，说明发生了重试；成功记录里字数很小，说明内容可能只是刚过门槛。</p>
 <h2 id="截断与长度">截断与长度</h2>
-<p>返回内容可以按字符上限截断，但截断不改变 <code>content_length</code> 的含义（<code>fetcher.py:51-67</code>）：</p>
+<p>返回内容可以按字符上限截断，但截断不改变 <code>content_length</code> 的含义（<code>fetcher.py</code>）：</p>
 
 
 
@@ -1336,5 +1336,5 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/fetcher.py</code></td><td>结果字段、重试判据、兜底、尝试流水、静态冷却（<code>:36-94</code>、<code>:150-199</code>、<code>:281-351</code>、<code>:411-417</code>）</td></tr><tr><td><code>src/better_crawler/extract.py</code></td><td>提取方法的取值与结果结构（<code>:70-77</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/better_crawler/fetcher.py</code></td><td>结果字段、重试判据、兜底、尝试流水、静态冷却</td></tr><tr><td><code>src/better_crawler/extract.py</code></td><td>提取方法的取值与结果结构</td></tr></tbody></table>
 <p>（引用的路径以 /mnt/d/better-crawler-4-agent 为根。）</p></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/26-%E7%BD%91%E9%A1%B5%E6%8A%93%E5%8F%96%E4%B8%8E%E5%8F%8D%E7%88%AC/05-robots%E5%90%88%E8%A7%84%E4%B8%8E%E4%BB%A3%E7%90%86/"><span class="k">← 上一篇</span><span class="t">robots合规与代理</span><span class="d">网页抓取与反爬 · 4 个文件</span></a><a class="next" href="/tc63/docs/27-%E6%96%87%E6%A1%A3%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AF%BC%E5%87%BA/01-PDF%C2%B7DOCX%E8%A7%A3%E6%9E%90/"><span class="k">下一篇 →</span><span class="t">PDF·DOCX解析</span><span class="d">文档解析与导出 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

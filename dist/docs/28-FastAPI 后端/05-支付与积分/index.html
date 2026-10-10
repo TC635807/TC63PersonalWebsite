@@ -2,7 +2,7 @@
 <p>支付链路的入口是订单创建接口 <code>POST /api/pay/create</code>，它在调用支付网关之前先做商品与支付方式校验，然后写入一条 <code>pending</code> 订单。订单不存数据库，而是按用户名放在 <code>data/orders/{username}.json</code> 里。</p>
 <p>商品配置与创建流程在这里展开。网关与签名在 <code>02-支付网关与签名.md</code>，回调在 <code>03-回调与幂等.md</code>，查询与取消在 <code>04-订单查询与轮询补偿.md</code>。</p>
 <h2 id="1-三个商品">1. 三个商品</h2>
-<p>商品与定价集中在一张表里（<code>backend/storage/order_store.py:19-23</code>）：</p>
+<p>商品与定价集中在一张表里（<code>backend/storage/order_store.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">PRODUCT_CONFIG</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#032F62">    "pro"</span><span style="color:#24292E">: {</span><span style="color:#032F62">"amount"</span><span style="color:#24292E">: </span><span style="color:#032F62">"12.00"</span><span style="color:#24292E">, </span><span style="color:#032F62">"duration_days"</span><span style="color:#24292E">: </span><span style="color:#005CC5">30</span><span style="color:#24292E">},</span></span>
 <span class="line"><span style="color:#032F62">    "plus"</span><span style="color:#24292E">: {</span><span style="color:#032F62">"amount"</span><span style="color:#24292E">: </span><span style="color:#032F62">"30.00"</span><span style="color:#24292E">, </span><span style="color:#032F62">"duration_days"</span><span style="color:#24292E">: </span><span style="color:#005CC5">30</span><span style="color:#24292E">},</span></span>
@@ -38,10 +38,10 @@
 
 
 <table><thead><tr><th>商品</th><th>金额</th><th>权益</th><th>字段</th></tr></thead><tbody><tr><td><code>pro</code></td><td>12.00</td><td>Pro 会员 30 天</td><td><code>duration_days</code></td></tr><tr><td><code>plus</code></td><td>30.00</td><td>Plus 会员 30 天</td><td><code>duration_days</code></td></tr><tr><td><code>points_24</code></td><td>1.00</td><td>24 点积分</td><td><code>points</code></td></tr></tbody></table>
-<p>金额是字符串，与网关接口按字符串传参的习惯一致。<code>points_24</code> 没有 <code>duration_days</code>，<code>pro</code> 与 <code>plus</code> 没有 <code>points</code>，回调处理时按商品名分支读取对应字段。商品名在仓库里以字符串字面量出现，例如 <code>backend/routes/payment.py:196</code> 的 <code>"points_24"</code>。</p>
-<p><code>会员有效期另有配置：</code>MEMBERSHIP_DURATION_DAYS<code> 默认 30（</code>backend/config.py:158<code>），与 </code>duration_days` 是两个来源。</p>
+<p>金额是字符串，与网关接口按字符串传参的习惯一致。<code>points_24</code> 没有 <code>duration_days</code>，<code>pro</code> 与 <code>plus</code> 没有 <code>points</code>，回调处理时按商品名分支读取对应字段。商品名在仓库里以字符串字面量出现，例如 <code>backend/routes/payment.py</code> 的 <code>"points_24"</code>。</p>
+<p><code>会员有效期另有配置：</code>MEMBERSHIP_DURATION_DAYS<code> 默认 30（</code>backend/config.py<code>），与 </code>duration_days` 是两个来源。</p>
 <h2 id="2-订单模型与超时">2. 订单模型与超时</h2>
-<p>订单由 <code>OrderStore.create_order</code> 构造（<code>backend/storage/order_store.py:59-89</code>）。订单号形如 <code>ORD_</code> 加 12 位十六进制（<code>:70</code>），超时时间是当前时间加 15 分钟（<code>:25</code>、<code>:82</code>）。</p>
+<p>订单由 <code>OrderStore.create_order</code> 构造（<code>backend/storage/order_store.py</code>）。订单号形如 <code>ORD_</code> 加 12 位十六进制，超时时间是当前时间加 15 分钟。</p>
 
 
 
@@ -82,15 +82,15 @@
 
 
 
-<table><thead><tr><th>字段</th><th>来源</th><th>说明</th></tr></thead><tbody><tr><td><code>order_id</code></td><td><code>uuid4().hex[:12]</code></td><td><code>ORD_</code> 前缀</td></tr><tr><td><code>amount</code></td><td>商品配置</td><td>字符串金额</td></tr><tr><td><code>duration_days</code></td><td>商品配置</td><td>会员商品才有</td></tr><tr><td><code>status</code></td><td>固定 <code>pending</code></td><td>初始状态</td></tr><tr><td><code>expired_at</code></td><td>当前时间加 15 分钟</td><td>超时时间</td></tr><tr><td><code>created_at</code></td><td><code>datetime.utcnow()</code></td><td>创建时间</td></tr></tbody></table>
-<p><code>expired_at</code> 只是记录，仓库里没有调用 <code>mark_expired</code> 的代码（该方法定义于 <code>:127-136</code>，全仓库无调用点）。订单不会因为超过 15 分钟自动过期，仍可继续支付或取消。</p>
+<table><thead><tr><th>字段</th><th>来源</th><th>说明</th></tr></thead><tbody><tr><td><code>order_id</code></td><td><code>uuid4().hex[]</code></td><td><code>ORD_</code> 前缀</td></tr><tr><td><code>amount</code></td><td>商品配置</td><td>字符串金额</td></tr><tr><td><code>duration_days</code></td><td>商品配置</td><td>会员商品才有</td></tr><tr><td><code>status</code></td><td>固定 <code>pending</code></td><td>初始状态</td></tr><tr><td><code>expired_at</code></td><td>当前时间加 15 分钟</td><td>超时时间</td></tr><tr><td><code>created_at</code></td><td><code>datetime.utcnow()</code></td><td>创建时间</td></tr></tbody></table>
+<p><code>expired_at</code> 只是记录，仓库里没有调用 <code>mark_expired</code> 的代码（该方法定义于 ，全仓库无调用点）。订单不会因为超过 15 分钟自动过期，仍可继续支付或取消。</p>
 <h2 id="3-按用户分文件的订单存储">3. 按用户分文件的订单存储</h2>
-<p><code>OrderStore</code> 不用数据库，而是每个用户一个 JSON 文件（<code>backend/storage/order_store.py:35-57</code>）。构造时会创建目录（<code>:37</code>），写入用 <code>json.dump</code> 加 <code>ensure_ascii=False</code>（<code>:56-57</code>）。</p>
-<p>订单创建时把模型转成 JSON 字典后追加（<code>:85-87</code>）：</p>
+<p><code>OrderStore</code> 不用数据库，而是每个用户一个 JSON 文件（<code>backend/storage/order_store.py</code>）。构造时会创建目录，写入用 <code>json.dump</code> 加 <code>ensure_ascii=False</code>。</p>
+<p>订单创建时把模型转成 JSON 字典后追加：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">orders </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._load_orders(username)</span></span>
 <span class="line"><span style="color:#24292E">orders.append(order.model_dump(</span><span style="color:#E36209">mode</span><span style="color:#D73A49">=</span><span style="color:#032F62">"json"</span><span style="color:#24292E">))</span></span>
 <span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._save_orders(username, orders)</span></span></code></pre>
-<p>读回时用 <code>Order(**o)</code> 重建模型（<code>:145-148</code>）。按订单号查询要跨用户扫描：<code>_find_order</code> 遍历所有订单文件找匹配的订单号（<code>:150-157</code>），用户名列表来自目录下的 <code>*.json</code>（<code>:169-177</code>）。</p>
+<p>读回时用 <code>Order(**o)</code> 重建模型。按订单号查询要跨用户扫描：<code>_find_order</code> 遍历所有订单文件找匹配的订单号，用户名列表来自目录下的 <code>*.json</code>。</p>
 
 
 
@@ -127,7 +127,7 @@
   G --> H["写回文件"]
   H --> I["返回 Order"]</pre></div>
 <h2 id="4-创建接口的校验顺序">4. 创建接口的校验顺序</h2>
-<p><code>POST /api/pay/create</code> 用表单接收参数，先校验再落订单（<code>backend/routes/payment.py:55-85</code>）：</p>
+<p><code>POST /api/pay/create</code> 用表单接收参数，先校验再落订单（<code>backend/routes/payment.py</code>）：</p>
 
 
 
@@ -153,21 +153,17 @@
 
 
 
-
-
-
-
-<table><thead><tr><th>顺序</th><th>校验</th><th>失败响应</th><th>行号</th></tr></thead><tbody><tr><td>1</td><td>商品名在 <code>PRODUCT_CONFIG</code> 中</td><td>400，列出可选商品</td><td><code>:64-68</code></td></tr><tr><td>2</td><td>支付方式在 <code>PAY_METHOD_MAP</code> 中</td><td>400</td><td><code>:70-71</code></td></tr><tr><td>3</td><td>创建订单</td><td>数据库异常由全局处理器处理</td><td><code>:81-85</code></td></tr></tbody></table>
-<p><code>PAY_METHOD_MAP</code> 只映射两个值：<code>alipay</code> 与 <code>wxpay</code>（<code>:39-42</code>）。商品名到中文名的映射在端点内另写了一份（<code>:74-79</code>），只影响网关展示名称，与 <code>PRODUCT_CONFIG</code> 的键保持一致。</p>
+<table><thead><tr><th>顺序</th><th>校验</th><th>失败响应</th></tr></thead><tbody><tr><td>1</td><td>商品名在 <code>PRODUCT_CONFIG</code> 中</td><td>400，列出可选商品</td></tr><tr><td>2</td><td>支付方式在 <code>PAY_METHOD_MAP</code> 中</td><td>400</td></tr><tr><td>3</td><td>创建订单</td><td>数据库异常由全局处理器处理</td></tr></tbody></table>
+<p><code>PAY_METHOD_MAP</code> 只映射两个值：<code>alipay</code> 与 <code>wxpay</code>。商品名到中文名的映射在端点内另写了一份，只影响网关展示名称，与 <code>PRODUCT_CONFIG</code> 的键保持一致。</p>
 <h2 id="5-回调地址与客户端地址">5. 回调地址与客户端地址</h2>
-<p>通知地址与跳转地址由 <code>BASE_URL</code> 拼出（<code>backend/routes/payment.py:36</code>、<code>:87-88</code>）。<code>BASE_URL</code> 默认 <code>https://knowledgediver.cloud</code>，可用环境变量覆盖。通知路径来自支付服务模块的常量 <code>NOTIFY_PATH</code>（<code>backend/services/payment.py:32</code>），值是 <code>/api/pay/notify</code>。</p>
-<p>客户端地址优先取 <code>X-Forwarded-For</code> 的第一个值，缺失时退回连接的 <code>request.client.host</code>（<code>:90-92</code>）：</p>
+<p>通知地址与跳转地址由 <code>BASE_URL</code> 拼出（<code>backend/routes/payment.py</code>）。<code>BASE_URL</code> 默认 <code>https://knowledgediver.cloud</code>，可用环境变量覆盖。通知路径来自支付服务模块的常量 <code>NOTIFY_PATH</code>（<code>backend/services/payment.py</code>），值是 <code>/api/pay/notify</code>。</p>
+<p>客户端地址优先取 <code>X-Forwarded-For</code> 的第一个值，缺失时退回连接的 <code>request.client.host</code>：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">client_ip </span><span style="color:#D73A49">=</span><span style="color:#24292E"> request.headers.get(</span><span style="color:#032F62">"X-Forwarded-For"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">).split(</span><span style="color:#032F62">","</span><span style="color:#24292E">)[</span><span style="color:#005CC5">0</span><span style="color:#24292E">].strip()</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> client_ip:</span></span>
 <span class="line"><span style="color:#24292E">    client_ip </span><span style="color:#D73A49">=</span><span style="color:#24292E"> request.client.host </span><span style="color:#D73A49">if</span><span style="color:#24292E"> request.client </span><span style="color:#D73A49">else</span><span style="color:#032F62"> "127.0.0.1"</span></span></code></pre>
 <p>这个头由客户端提供，未做代理来源校验，因此客户端可以自行填写。它只用于传给网关，不影响本仓库的风控。</p>
 <h2 id="6-调用网关与失败回滚">6. 调用网关与失败回滚</h2>
-<p>订单落库后调用 <code>create_payment</code>，成功后标记为 <code>paying</code> 并返回支付链接（<code>backend/routes/payment.py:94-132</code>）：</p>
+<p>订单落库后调用 <code>create_payment</code>，成功后标记为 <code>paying</code> 并返回支付链接（<code>backend/routes/payment.py</code>）：</p>
 
 
 
@@ -189,12 +185,8 @@
 
 
 
-
-
-
-
-<table><thead><tr><th>结果</th><th>处理</th><th>行号</th></tr></thead><tbody><tr><td>成功</td><td><code>mark_paying</code> 记录网关订单号与链接</td><td><code>:122</code></td></tr><tr><td><code>PaymentError</code></td><td>取消订单，返回 502</td><td><code>:104-106</code></td></tr><tr><td>其他异常</td><td>取消订单，记日志，返回 502</td><td><code>:107-110</code></td></tr></tbody></table>
-<p>两类失败都调用 <code>cancel_order</code> 把订单置为取消，避免留下无法支付的 <code>pending</code> 记录。响应体包含订单号、网关订单号、支付链接、方式、金额、商品与超时时间（<code>:124-132</code>）。</p>
+<table><thead><tr><th>结果</th><th>处理</th></tr></thead><tbody><tr><td>成功</td><td><code>mark_paying</code> 记录网关订单号与链接</td></tr><tr><td><code>PaymentError</code></td><td>取消订单，返回 502</td></tr><tr><td>其他异常</td><td>取消订单，记日志，返回 502</td></tr></tbody></table>
+<p>两类失败都调用 <code>cancel_order</code> 把订单置为取消，避免留下无法支付的 <code>pending</code> 记录。响应体包含订单号、网关订单号、支付链接、方式、金额、商品与超时时间。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant C as 客户端
@@ -216,7 +208,7 @@
     R-->>C: 502
   end</pre></div>
 <h2 id="7-路由注册与前端调用">7. 路由注册与前端调用</h2>
-<p>支付路由在入口装配（<code>backend/main.py:33</code> 导入，<code>:141</code> 注册），注释标为订单创建、回调、查询。前端封装在 <code>frontend/src/api/payment.ts</code>：创建（<code>:37</code>）、查询（<code>:44</code>）、取消（<code>:48</code>）、列表（<code>:54</code>）四个调用，都走带令牌的封装。</p>
+<p>支付路由在入口装配（<code>backend/main.py</code>），注释标为订单创建、回调、查询。前端封装在 <code>frontend/src/api/payment.ts</code>：创建、查询、取消、列表四个调用，都走带令牌的封装。</p>
 
 
 
@@ -247,7 +239,7 @@
 
 
 
-<table><thead><tr><th>接口</th><th>前端函数</th><th>位置</th></tr></thead><tbody><tr><td><code>POST /api/pay/create</code></td><td><code>createPayment</code></td><td><code>frontend/src/api/payment.ts:37</code></td></tr><tr><td><code>GET /api/pay/query/{id}</code></td><td>查询订单</td><td><code>:44</code></td></tr><tr><td><code>POST /api/pay/cancel/{id}</code></td><td>取消订单</td><td><code>:48</code></td></tr><tr><td><code>GET /api/pay/orders</code></td><td>订单列表</td><td><code>:54</code></td></tr></tbody></table>
+<table><thead><tr><th>接口</th><th>前端函数</th><th>位置</th></tr></thead><tbody><tr><td><code>POST /api/pay/create</code></td><td><code>createPayment</code></td><td><code>frontend/src/api/payment.ts</code></td></tr><tr><td><code>GET /api/pay/query/{id}</code></td><td>查询订单</td><td>—</td></tr><tr><td><code>POST /api/pay/cancel/{id}</code></td><td>取消订单</td><td>—</td></tr><tr><td><code>GET /api/pay/orders</code></td><td>订单列表</td><td>—</td></tr></tbody></table>
 <h2 id="8-易错点">8. 易错点</h2>
 
 
@@ -289,7 +281,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为订单存在数据库</td><td>实际是按用户 JSON 文件</td><td><code>order_store.py:35-41</code></td></tr><tr><td>依赖 15 分钟自动过期</td><td><code>mark_expired</code> 无调用点</td><td><code>:127-136</code></td></tr><tr><td>按订单号查询的成本估计过低</td><td>全目录扫描</td><td><code>:150-157</code></td></tr><tr><td>认为 <code>X-Forwarded-For</code> 可信</td><td>由客户端提供</td><td><code>routes/payment.py:90</code></td></tr><tr><td>改商品名只改配置</td><td>端点内还有一份中文名映射</td><td><code>:74-79</code></td></tr><tr><td>以为时长只来自商品配置</td><td>会员另有 <code>MEMBERSHIP_DURATION_DAYS</code></td><td><code>config.py:158</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为订单存在数据库</td><td>实际是按用户 JSON 文件</td><td><code>order_store.py</code></td></tr><tr><td>依赖 15 分钟自动过期</td><td><code>mark_expired</code> 无调用点</td><td>—</td></tr><tr><td>按订单号查询的成本估计过低</td><td>全目录扫描</td><td>—</td></tr><tr><td>认为 <code>X-Forwarded-For</code> 可信</td><td>由客户端提供</td><td><code>routes/payment.py</code></td></tr><tr><td>改商品名只改配置</td><td>端点内还有一份中文名映射</td><td>—</td></tr><tr><td>以为时长只来自商品配置</td><td>会员另有 <code>MEMBERSHIP_DURATION_DAYS</code></td><td><code>config.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -414,11 +406,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/payment.py</code></td><td>商品与方式校验（:64-71）、名称映射（:74-79）、订单创建（:81-85）、回调地址与客户端地址（:87-92）、网关调用与回滚（:94-132）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>商品配置（:19-23）、超时常量（:25）、存储与创建（:35-89）、超时标记（:127-136）、查询与扫描（:138-177）</td></tr><tr><td><code>backend/services/payment.py</code></td><td><code>NOTIFY_PATH</code>（:32）</td></tr><tr><td><code>backend/config.py</code></td><td><code>MEMBERSHIP_DURATION_DAYS</code>（:158）</td></tr><tr><td><code>backend/main.py</code></td><td>路由注册（:33、:141）</td></tr><tr><td><code>frontend/src/api/payment.ts</code></td><td>四个支付接口封装（:37-54）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-支付网关与签名"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-支付网关与签名</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/02-支付网关与签名.md</span></div><div class="dfile__body"><h1 id="支付网关与签名">支付网关与签名</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/payment.py</code></td><td>商品与方式校验、名称映射、订单创建、回调地址与客户端地址、网关调用与回滚</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>商品配置、超时常量、存储与创建、超时标记、查询与扫描</td></tr><tr><td><code>backend/services/payment.py</code></td><td><code>NOTIFY_PATH</code></td></tr><tr><td><code>backend/config.py</code></td><td><code>MEMBERSHIP_DURATION_DAYS</code></td></tr><tr><td><code>backend/main.py</code></td><td>路由注册</td></tr><tr><td><code>frontend/src/api/payment.ts</code></td><td>四个支付接口封装</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-支付网关与签名"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-支付网关与签名</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/02-支付网关与签名.md</span></div><div class="dfile__body"><h1 id="支付网关与签名">支付网关与签名</h1>
 <p>网关交互集中在 <code>backend/services/payment.py</code>，共 198 行。对外只有三个动作：创建支付、查询订单、验证回调签名。三者共享同一套签名规范化规则：过滤空值与签名相关字段，按键排序，拼成 <code>k=v</code> 串，再做 RSA-SHA256。</p>
 <p>签名与两个出站请求在这里展开。订单与创建端点在 <code>01-商品配置与订单创建.md</code>，回调处理在 <code>03-回调与幂等.md</code>。</p>
 <h2 id="1-配置全部来自环境变量">1. 配置全部来自环境变量</h2>
-<p><code>PAYMENT_CONFIG</code> 在模块导入时求值（<code>backend/services/payment.py:25-30</code>）：</p>
+<p><code>PAYMENT_CONFIG</code> 在模块导入时求值（<code>backend/services/payment.py</code>）：</p>
 
 
 
@@ -473,12 +465,12 @@
 
 <table><thead><tr><th>缺失项</th><th>首次失败位置</th><th>表现</th></tr></thead><tbody><tr><td>商户私钥</td><td><code>generate_sign</code></td><td>创建订单 502</td></tr><tr><td>平台公钥</td><td><code>verify_sign</code></td><td>回调验签失败，网关收到 <code>fail</code></td></tr></tbody></table>
 <h2 id="2-密钥的-pem-包装">2. 密钥的 PEM 包装</h2>
-<p>两个加载函数把配置里的未包装 base64 内容补上 PEM 头尾再解析（<code>backend/services/payment.py:35-48</code>）：</p>
+<p>两个加载函数把配置里的未包装 base64 内容补上 PEM 头尾再解析（<code>backend/services/payment.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">pem </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> f</span><span style="color:#032F62">"-----BEGIN PRIVATE KEY-----</span><span style="color:#005CC5">\n{PAYMENT_CONFIG</span><span style="color:#24292E">[</span><span style="color:#032F62">'merchant_private_key'</span><span style="color:#24292E">]</span><span style="color:#005CC5">}\n</span><span style="color:#032F62">-----END PRIVATE KEY-----"</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> serialization.load_pem_private_key(pem.encode(), </span><span style="color:#E36209">password</span><span style="color:#D73A49">=</span><span style="color:#005CC5">None</span><span style="color:#24292E">, </span><span style="color:#E36209">backend</span><span style="color:#D73A49">=</span><span style="color:#24292E">default_backend())</span></span></code></pre>
 <p>因此环境变量里存的是不含头尾的单行内容。私钥用 <code>PRIVATE KEY</code> 标记，公钥用 <code>PUBLIC KEY</code> 标记，格式不匹配时解析异常在调用处被捕获或上抛。</p>
 <h2 id="3-签名串的规范化">3. 签名串的规范化</h2>
-<p><code>generate_sign</code> 的注释写明五步：过滤、排序、拼接、私钥签名、Base64（<code>backend/services/payment.py:51-70</code>）。</p>
+<p><code>generate_sign</code> 的注释写明五步：过滤、排序、拼接、私钥签名、Base64（<code>backend/services/payment.py</code>）。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">filtered </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {k: v </span><span style="color:#D73A49">for</span><span style="color:#24292E"> k, v </span><span style="color:#D73A49">in</span><span style="color:#24292E"> params.items()</span></span>
 <span class="line"><span style="color:#D73A49">            if</span><span style="color:#24292E"> k </span><span style="color:#D73A49">not</span><span style="color:#D73A49"> in</span><span style="color:#24292E"> (</span><span style="color:#032F62">"sign"</span><span style="color:#24292E">, </span><span style="color:#032F62">"sign_type"</span><span style="color:#24292E">) </span><span style="color:#D73A49">and</span><span style="color:#24292E"> v </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#D73A49"> and</span><span style="color:#24292E"> v </span><span style="color:#D73A49">!=</span><span style="color:#032F62"> ""</span><span style="color:#24292E">}</span></span>
 <span class="line"><span style="color:#24292E">sorted_keys </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> sorted</span><span style="color:#24292E">(filtered.keys())</span></span>
@@ -530,16 +522,16 @@
   E --> F["Base64 编码"]
   F --> G["写入 sign 参数"]</pre></div>
 <h2 id="4-验签的实现">4. 验签的实现</h2>
-<p><code>verify_sign</code> 用同一套规范化规则，然后调用平台公钥校验（<code>backend/services/payment.py:73-93</code>）。与签名的差别只在最后一步：签名是生成，验签是校验，并把任何异常收敛成 <code>False</code>。</p>
+<p><code>verify_sign</code> 用同一套规范化规则，然后调用平台公钥校验（<code>backend/services/payment.py</code>）。与签名的差别只在最后一步：签名是生成，验签是校验，并把任何异常收敛成 <code>False</code>。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    public_key.verify(base64.b64decode(sign), sign_str.encode(</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">),</span></span>
 <span class="line"><span style="color:#24292E">                      asym_padding.PKCS1v15(), hashes.SHA256())</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> True</span></span>
 <span class="line"><span style="color:#D73A49">except</span><span style="color:#005CC5"> Exception</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> False</span></span></code></pre>
-<p><code>except Exception</code> 覆盖了三类失败：Base64 解码失败、签名不匹配、公钥不可用。调用方拿到的只有一个布尔值，无法区分是密钥配置问题还是签名被篡改。回调端点对 <code>False</code> 统一返回 <code>fail</code>（<code>backend/routes/payment.py:146-148</code>）。</p>
+<p><code>except Exception</code> 覆盖了三类失败：Base64 解码失败、签名不匹配、公钥不可用。调用方拿到的只有一个布尔值，无法区分是密钥配置问题还是签名被篡改。回调端点对 <code>False</code> 统一返回 <code>fail</code>（<code>backend/routes/payment.py</code>）。</p>
 <h2 id="5-创建支付请求">5. 创建支付请求</h2>
-<p><code>create_payment</code> 组装固定参数后签名并 POST（<code>backend/services/payment.py:96-152</code>）：</p>
+<p><code>create_payment</code> 组装固定参数后签名并 POST（<code>backend/services/payment.py</code>）：</p>
 
 
 
@@ -606,7 +598,7 @@
 
 
 <table><thead><tr><th>参数</th><th>取值</th><th>说明</th></tr></thead><tbody><tr><td><code>pid</code></td><td>配置</td><td>商户号</td></tr><tr><td><code>method</code></td><td><code>"jump"</code></td><td>请求方式</td></tr><tr><td><code>device</code></td><td><code>"pc"</code></td><td>设备类型</td></tr><tr><td><code>type</code></td><td>支付方式</td><td><code>alipay</code> 或 <code>wxpay</code></td></tr><tr><td><code>out_trade_no</code></td><td>订单号</td><td>商户订单号</td></tr><tr><td><code>notify_url</code></td><td>回调地址</td><td>异步通知</td></tr><tr><td><code>return_url</code></td><td>跳转地址</td><td>支付完成后回跳</td></tr><tr><td><code>name</code></td><td>商品中文名</td><td>展示用</td></tr><tr><td><code>money</code></td><td>金额字符串</td><td>来自商品配置</td></tr><tr><td><code>clientip</code></td><td>客户端地址</td><td>由端点传入</td></tr><tr><td><code>timestamp</code></td><td>秒级时间戳</td><td>每次请求重新取</td></tr></tbody></table>
-<p>请求用 <code>httpx.AsyncClient(timeout=30)</code> 发送，表单编码放在 <code>data</code> 参数里（<code>:144-145</code>）。响应先 <code>raise_for_status()</code>，再判断 <code>code</code>：非 0 时抛 <code>PaymentError</code>，消息取响应里的 <code>msg</code>（<code>:149-150</code>）。返回的是完整响应字典，由端点取 <code>trade_no</code>、<code>pay_info</code> 与 <code>pay_type</code>。</p>
+<p>请求用 <code>httpx.AsyncClient(timeout=30)</code> 发送，表单编码放在 <code>data</code> 参数里。响应先 <code>raise_for_status()</code>，再判断 <code>code</code>：非 0 时抛 <code>PaymentError</code>，消息取响应里的 <code>msg</code>。返回的是完整响应字典，由端点取 <code>trade_no</code>、<code>pay_info</code> 与 <code>pay_type</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant R as 创建端点
@@ -625,7 +617,7 @@
     S-->>R: PaymentError 带 msg
   end</pre></div>
 <h2 id="6-查询订单">6. 查询订单</h2>
-<p><code>query_order</code> 与创建类似，参数只有 <code>pid</code>、<code>timestamp</code> 与一个订单标识（<code>backend/services/payment.py:155-193</code>）。两个标识都为空时抛 <code>ValueError</code>，这是编程错误而不是网关错误，端点没有捕获这个异常分支：查询端点在 <code>PaymentError</code> 与其他异常上都做了处理（<code>backend/routes/payment.py:269-272</code>），<code>ValueError</code> 会落进通用异常分支被记录并吞掉。</p>
+<p><code>query_order</code> 与创建类似，参数只有 <code>pid</code>、<code>timestamp</code> 与一个订单标识（<code>backend/services/payment.py</code>）。两个标识都为空时抛 <code>ValueError</code>，这是编程错误而不是网关错误，端点没有捕获这个异常分支：查询端点在 <code>PaymentError</code> 与其他异常上都做了处理（<code>backend/routes/payment.py</code>），<code>ValueError</code> 会落进通用异常分支被记录并吞掉。</p>
 
 
 
@@ -658,7 +650,7 @@
 
 <table><thead><tr><th>差异</th><th>创建</th><th>查询</th></tr></thead><tbody><tr><td>路径</td><td><code>/api/pay/create</code></td><td><code>/api/pay/query</code></td></tr><tr><td>必填标识</td><td><code>out_trade_no</code></td><td><code>trade_no</code> 或 <code>out_trade_no</code> 二选一</td></tr><tr><td>缺参数</td><td>不适用</td><td><code>ValueError</code></td></tr><tr><td>错误转换</td><td><code>PaymentError</code></td><td><code>PaymentError</code></td></tr></tbody></table>
 <h2 id="7-超时与网络异常">7. 超时与网络异常</h2>
-<p>两个请求都用 30 秒超时，网络层异常直接向上抛。创建端点的通用异常分支会把订单取消并返回 502（<code>backend/routes/payment.py:107-110</code>）；查询端点把异常记日志后继续返回当前订单状态（<code>:271-272</code>），不向客户端暴露网关问题。</p>
+<p>两个请求都用 30 秒超时，网络层异常直接向上抛。创建端点的通用异常分支会把订单取消并返回 502（<code>backend/routes/payment.py</code>）；查询端点把异常记日志后继续返回当前订单状态，不向客户端暴露网关问题。</p>
 
 
 
@@ -726,7 +718,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为密钥缺失会在启动时报错</td><td>首次签名才失败</td><td><code>services/payment.py:25-30</code></td></tr><tr><td>环境变量里带 PEM 头尾</td><td>包装后格式错误</td><td><code>:37</code>、<code>:45</code></td></tr><tr><td>传入非字符串参数值</td><td>拼接结果与对方解析不一致</td><td><code>:62</code></td></tr><tr><td>以为验签能区分失败原因</td><td>统一返回 <code>False</code></td><td><code>:92-93</code></td></tr><tr><td>查询时两个标识都不传</td><td>抛 <code>ValueError</code> 并被记录后吞掉</td><td><code>:168-169</code></td></tr><tr><td>认为网关请求会重试</td><td>无重试逻辑</td><td><code>:144-147</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为密钥缺失会在启动时报错</td><td>首次签名才失败</td><td><code>services/payment.py</code></td></tr><tr><td>环境变量里带 PEM 头尾</td><td>包装后格式错误</td><td>—</td></tr><tr><td>传入非字符串参数值</td><td>拼接结果与对方解析不一致</td><td><code>services/payment.py</code></td></tr><tr><td>以为验签能区分失败原因</td><td>统一返回 <code>False</code></td><td><code>services/payment.py</code></td></tr><tr><td>查询时两个标识都不传</td><td>抛 <code>ValueError</code> 并被记录后吞掉</td><td><code>services/payment.py</code></td></tr><tr><td>认为网关请求会重试</td><td>无重试逻辑</td><td><code>services/payment.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -835,18 +827,18 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/services/payment.py</code></td><td>配置（:25-30）、回调路径常量（:32）、密钥加载（:35-48）、签名（:51-70）、验签（:73-93）、创建请求（:96-152）、查询请求（:155-193）、异常类（:196-198）</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>验签失败处理（:146-148）、网关异常分支（:104-110）、查询异常处理（:269-272）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-回调与幂等"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-回调与幂等</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/03-回调与幂等.md</span></div><div class="dfile__body"><h1 id="回调与幂等">回调与幂等</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/services/payment.py</code></td><td>配置、回调路径常量、密钥加载、签名、验签、创建请求、查询请求、异常类</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>验签失败处理、网关异常分支、查询异常处理</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-回调与幂等"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-回调与幂等</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/03-回调与幂等.md</span></div><div class="dfile__body"><h1 id="回调与幂等">回调与幂等</h1>
 <p>支付结果通过 <code>POST /api/pay/notify</code> 异步通知服务端。这个端点没有鉴权依赖，身份完全由验签确认。处理顺序是：解析表单、验签、判状态、查订单、标记已支付、发放权益。每一步的失败处理都不一样，有的返回 <code>fail</code> 让网关重试，有的返回 <code>success</code> 直接确认。</p>
 <p>回调的分支与幂等边界在这里展开。签名在 <code>02-支付网关与签名.md</code>，轮询补偿在 <code>04-订单查询与轮询补偿.md</code>，积分与会员函数在 <code>05-易错点与排查.md</code> 附录所引模块。</p>
 <h2 id="1-请求形态与解析">1. 请求形态与解析</h2>
-<p>回调端点的响应类型是纯文本（<code>backend/routes/payment.py:135</code>），因为它要按网关约定返回 <code>success</code> 或 <code>fail</code> 字符串。请求体按表单编码解析：</p>
+<p>回调端点的响应类型是纯文本（<code>backend/routes/payment.py</code>），因为它要按网关约定返回 <code>success</code> 或 <code>fail</code> 字符串。请求体按表单编码解析：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">body </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> request.body()</span></span>
 <span class="line"><span style="color:#24292E">body_str </span><span style="color:#D73A49">=</span><span style="color:#24292E"> body.decode(</span><span style="color:#032F62">"utf-8"</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">params </span><span style="color:#D73A49">=</span><span style="color:#24292E"> parse_qs(body_str, </span><span style="color:#E36209">keep_blank_values</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">flat_params </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {k: v[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">if</span><span style="color:#24292E"> v </span><span style="color:#D73A49">else</span><span style="color:#032F62"> ""</span><span style="color:#D73A49"> for</span><span style="color:#24292E"> k, v </span><span style="color:#D73A49">in</span><span style="color:#24292E"> params.items()}</span></span>
 <span class="line"><span style="color:#24292E">sign </span><span style="color:#D73A49">=</span><span style="color:#24292E"> flat_params.pop(</span><span style="color:#032F62">"sign"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">sign_type </span><span style="color:#D73A49">=</span><span style="color:#24292E"> flat_params.pop(</span><span style="color:#032F62">"sign_type"</span><span style="color:#24292E">, </span><span style="color:#032F62">""</span><span style="color:#24292E">)</span></span></code></pre>
-<p><code>keep_blank_values=True</code> 保证空值参数不丢失，<code>pop</code> 取出签名相关字段后，剩余参数参与验签。原始请求体字符串会随支付成功一起存入订单（<code>:174</code>），用于事后核对。</p>
+<p><code>keep_blank_values=True</code> 保证空值参数不丢失，<code>pop</code> 取出签名相关字段后，剩余参数参与验签。原始请求体字符串会随支付成功一起存入订单，用于事后核对。</p>
 
 
 
@@ -884,7 +876,7 @@
 
 <table><thead><tr><th>步骤</th><th>代码</th><th>说明</th></tr></thead><tbody><tr><td>读取</td><td><code>await request.body()</code></td><td>原始字节</td></tr><tr><td>解码</td><td><code>decode("utf-8")</code></td><td>文本</td></tr><tr><td>解析</td><td><code>parse_qs</code></td><td>表单参数</td></tr><tr><td>展平</td><td>取每个键的第一个值</td><td>得到扁平字典</td></tr><tr><td>取出签名</td><td><code>pop("sign")</code> 与 <code>pop("sign_type")</code></td><td>不参与验签</td></tr></tbody></table>
 <h2 id="2-验签与状态判定">2. 验签与状态判定</h2>
-<p>验签失败返回 <code>fail</code> 加 400（<code>backend/routes/payment.py:146-148</code>），网关会按约定重试。验签通过后先看交易状态：</p>
+<p>验签失败返回 <code>fail</code> 加 400（<code>backend/routes/payment.py</code>），网关会按约定重试。验签通过后先看交易状态：</p>
 
 
 
@@ -915,12 +907,7 @@
 
 
 
-
-
-
-
-
-<table><thead><tr><th>情况</th><th>响应</th><th>行号</th><th>理由</th></tr></thead><tbody><tr><td>验签失败</td><td><code>fail</code> 400</td><td><code>:146-148</code></td><td>让网关重试或告警</td></tr><tr><td>状态不是 <code>TRADE_SUCCESS</code></td><td><code>success</code></td><td><code>:150-153</code></td><td>已收到通知，无需再推</td></tr><tr><td>缺 <code>out_trade_no</code></td><td><code>fail</code> 400</td><td><code>:159-161</code></td><td>无法定位订单</td></tr><tr><td>订单不存在</td><td><code>fail</code> 400</td><td><code>:166-168</code></td><td>可能重放或串号</td></tr></tbody></table>
+<table><thead><tr><th>情况</th><th>响应</th><th>理由</th></tr></thead><tbody><tr><td>验签失败</td><td><code>fail</code> 400</td><td>让网关重试或告警</td></tr><tr><td>状态不是 <code>TRADE_SUCCESS</code></td><td><code>success</code></td><td>已收到通知，无需再推</td></tr><tr><td>缺 <code>out_trade_no</code></td><td><code>fail</code> 400</td><td>无法定位订单</td></tr><tr><td>订单不存在</td><td><code>fail</code> 400</td><td>可能重放或串号</td></tr></tbody></table>
 <p>非成功状态返回 <code>success</code> 的做法避免了网关对失败交易的重复推送。这也意味着关闭或退款通知不会改变订单状态，仓库不处理这两类交易。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["收到回调"] --> B["解析表单并取 sign"]
@@ -937,7 +924,7 @@
   I -->|否| K["mark_paid 并发放权益"]
   K --> L["success"]</pre></div>
 <h2 id="3-幂等只防重复已支付">3. 幂等：只防重复已支付</h2>
-<p>重复回调的处理只判断一个条件：订单状态已是 <code>PAID</code> 时直接返回 <code>success</code>（<code>backend/routes/payment.py:170-172</code>）。这是幂等的主要防线，配合 <code>mark_paid</code> 在发放权益之前执行（<code>:174</code>），使第二次回调在第一步就被拦住。</p>
+<p>重复回调的处理只判断一个条件：订单状态已是 <code>PAID</code> 时直接返回 <code>success</code>（<code>backend/routes/payment.py</code>）。这是幂等的主要防线，配合 <code>mark_paid</code> 在发放权益之前执行，使第二次回调在第一步就被拦住。</p>
 
 
 
@@ -1008,9 +995,9 @@
 
 
 
-<table><thead><tr><th>校验项</th><th>是否实现</th><th>位置</th></tr></thead><tbody><tr><td>签名</td><td>是</td><td><code>:146</code></td></tr><tr><td>交易状态</td><td>是</td><td><code>:150-151</code></td></tr><tr><td>订单存在</td><td>是</td><td><code>:166</code></td></tr><tr><td>已支付幂等</td><td>是</td><td><code>:170</code></td></tr><tr><td>金额一致</td><td>否</td><td>回调参数未使用 <code>money</code></td></tr><tr><td>订单可支付状态</td><td>否</td><td>未检查 <code>CANCELLED</code> 与 <code>EXPIRED</code></td></tr></tbody></table>
+<table><thead><tr><th>校验项</th><th>是否实现</th><th>位置</th></tr></thead><tbody><tr><td>签名</td><td>是</td><td>—</td></tr><tr><td>交易状态</td><td>是</td><td>—</td></tr><tr><td>订单存在</td><td>是</td><td>—</td></tr><tr><td>已支付幂等</td><td>是</td><td>—</td></tr><tr><td>金额一致</td><td>否</td><td>回调参数未使用 <code>money</code></td></tr><tr><td>订单可支付状态</td><td>否</td><td>未检查 <code>CANCELLED</code> 与 <code>EXPIRED</code></td></tr></tbody></table>
 <h2 id="5-权益发放">5. 权益发放</h2>
-<p>验证通过后，权益按商品名分支发放（<code>backend/routes/payment.py:184-204</code>）：</p>
+<p>验证通过后，权益按商品名分支发放（<code>backend/routes/payment.py</code>）：</p>
 
 
 
@@ -1032,8 +1019,8 @@
 
 
 <table><thead><tr><th>商品</th><th>发放</th><th>失败处理</th></tr></thead><tbody><tr><td><code>pro</code> / <code>plus</code></td><td><code>upgrade_membership</code> 后写回用户</td><td>错误只记日志，不写回</td></tr><tr><td><code>points_24</code></td><td><code>add_points</code> 加 24 点后写回</td><td>异常被外层吞掉</td></tr></tbody></table>
-<p><code>upgrade_membership</code> 会拒绝两种请求：Plus 有效期内不能买 Pro，不能降级到 Free（<code>backend/services/points.py:241-252</code>），拒绝理由放在返回值里。回调端点收到非空错误时只记录日志（<code>:188-190</code>），订单仍是已支付状态。</p>
-<p>外层 <code>try</code> / <code>except</code> 把发放阶段的任何异常都收敛为一条日志（<code>:205-206</code>），随后照常返回 <code>success</code>。这意味着「钱已付、订单已标记、权益未到账」是仓库认可的终态，用户只能通过人工介入恢复。</p>
+<p><code>upgrade_membership</code> 会拒绝两种请求：Plus 有效期内不能买 Pro，不能降级到 Free（<code>backend/services/points.py</code>），拒绝理由放在返回值里。回调端点收到非空错误时只记录日志，订单仍是已支付状态。</p>
+<p>外层 <code>try</code> / <code>except</code> 把发放阶段的任何异常都收敛为一条日志，随后照常返回 <code>success</code>。这意味着「钱已付、订单已标记、权益未到账」是仓库认可的终态，用户只能通过人工介入恢复。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant G as 支付网关
@@ -1058,7 +1045,7 @@
     end
   end</pre></div>
 <h2 id="6-用户缺失的回调">6. 用户缺失的回调</h2>
-<p>订单记录里的用户名在用户表中找不到时，端点记录错误后仍返回 <code>success</code>（<code>backend/routes/payment.py:180-182</code>）。此时订单已在前一步标记为已支付，权益无处发放。用户被删除或用户名被改写都会走到这条分支。</p>
+<p>订单记录里的用户名在用户表中找不到时，端点记录错误后仍返回 <code>success</code>（<code>backend/routes/payment.py</code>）。此时订单已在前一步标记为已支付，权益无处发放。用户被删除或用户名被改写都会走到这条分支。</p>
 
 
 
@@ -1090,7 +1077,7 @@
 
 <table><thead><tr><th>分支</th><th>订单状态</th><th>权益</th><th>响应</th></tr></thead><tbody><tr><td>用户存在</td><td><code>PAID</code></td><td>已发放</td><td><code>success</code></td></tr><tr><td>用户缺失</td><td><code>PAID</code></td><td>未发放</td><td><code>success</code></td></tr><tr><td>发放异常</td><td><code>PAID</code></td><td>未发放或部分</td><td><code>success</code></td></tr></tbody></table>
 <h2 id="7-与轮询补偿的关系">7. 与轮询补偿的关系</h2>
-<p>查询接口也有一套发放逻辑（<code>backend/routes/payment.py:246-266</code>）。两处都会在 <code>mark_paid</code> 之后升级会员或加积分，因此回调与轮询之间存在重复发放的理论窗口，详见 <code>04-订单查询与轮询补偿.md</code>。区别是轮询把 <code>mark_paid</code> 与发放包在同一个 <code>try</code> 里，异常会走 <code>PaymentError</code> 或通用分支。</p>
+<p>查询接口也有一套发放逻辑（<code>backend/routes/payment.py</code>）。两处都会在 <code>mark_paid</code> 之后升级会员或加积分，因此回调与轮询之间存在重复发放的理论窗口，详见 <code>04-订单查询与轮询补偿.md</code>。区别是轮询把 <code>mark_paid</code> 与发放包在同一个 <code>try</code> 里，异常会走 <code>PaymentError</code> 或通用分支。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 
 
@@ -1132,7 +1119,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为回调校验了金额</td><td>只验签与状态</td><td><code>routes/payment.py:146-151</code></td></tr><tr><td>认为取消后回调会被拒绝</td><td>非 <code>PAID</code> 即处理</td><td><code>:170</code></td></tr><tr><td>依赖并发下的唯一发放</td><td>先读后写存在窗口</td><td><code>:164-174</code></td></tr><tr><td>以为发放失败会回滚订单</td><td>订单已标记，失败只记日志</td><td><code>:174</code>、<code>:205-206</code></td></tr><tr><td>把 <code>success</code> 当成业务成功</td><td>用户缺失与发放失败也返回 <code>success</code></td><td><code>:180-182</code></td></tr><tr><td>期望处理退款通知</td><td>非 <code>TRADE_SUCCESS</code> 直接确认</td><td><code>:150-153</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为回调校验了金额</td><td>只验签与状态</td><td><code>routes/payment.py</code></td></tr><tr><td>认为取消后回调会被拒绝</td><td>非 <code>PAID</code> 即处理</td><td><code>routes/payment.py</code></td></tr><tr><td>依赖并发下的唯一发放</td><td>先读后写存在窗口</td><td><code>routes/payment.py</code></td></tr><tr><td>以为发放失败会回滚订单</td><td>订单已标记，失败只记日志</td><td>—</td></tr><tr><td>把 <code>success</code> 当成业务成功</td><td>用户缺失与发放失败也返回 <code>success</code></td><td><code>routes/payment.py</code></td></tr><tr><td>期望处理退款通知</td><td>非 <code>TRADE_SUCCESS</code> 直接确认</td><td><code>routes/payment.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -1249,11 +1236,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/payment.py</code></td><td>回调端点全文（:135-208）、幂等判断（:170-172）、发放分支（:184-204）、异常处理（:205-206）</td></tr><tr><td><code>backend/services/payment.py</code></td><td><code>verify_sign</code>（:73-93）</td></tr><tr><td><code>backend/services/points.py</code></td><td><code>upgrade_membership</code>（:228-269）、<code>add_points</code>（:272-287）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td><code>mark_paid</code>（:103-114）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-订单查询与轮询补偿"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-订单查询与轮询补偿</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/04-订单查询与轮询补偿.md</span></div><div class="dfile__body"><h1 id="订单查询与轮询补偿">订单查询与轮询补偿</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/payment.py</code></td><td>回调端点全文、幂等判断、发放分支、异常处理</td></tr><tr><td><code>backend/services/payment.py</code></td><td><code>verify_sign</code></td></tr><tr><td><code>backend/services/points.py</code></td><td><code>upgrade_membership</code>、<code>add_points</code></td></tr><tr><td><code>backend/storage/order_store.py</code></td><td><code>mark_paid</code></td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-订单查询与轮询补偿"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-订单查询与轮询补偿</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/04-订单查询与轮询补偿.md</span></div><div class="dfile__body"><h1 id="订单查询与轮询补偿">订单查询与轮询补偿</h1>
 <p>回调可能丢失，因此查询接口承担补偿职责：前端轮询 <code>GET /api/pay/query/{order_id}</code>，服务端发现订单仍处于待支付时主动向网关查一次，已支付就当场发放权益。列表与取消接口也在同一个模块里，三者都要求订单归属当前用户。</p>
 <p>查询与取消在这里展开。回调侧在 <code>03-回调与幂等.md</code>，网关查询函数在 <code>02-支付网关与签名.md</code>。</p>
 <h2 id="1-三个接口的归属校验">1. 三个接口的归属校验</h2>
-<p>订单是敏感数据，三个接口都在读订单后比较用户名（<code>backend/routes/payment.py:211-305</code>）：</p>
+<p>订单是敏感数据，三个接口都在读订单后比较用户名（<code>backend/routes/payment.py</code>）：</p>
 
 
 
@@ -1279,14 +1266,10 @@
 
 
 
-
-
-
-
-<table><thead><tr><th>接口</th><th>订单不存在</th><th>属于他人</th><th>行号</th></tr></thead><tbody><tr><td><code>GET /api/pay/orders</code></td><td>不适用，按用户名过滤</td><td>不适用</td><td><code>:217</code></td></tr><tr><td><code>GET /api/pay/query/{order_id}</code></td><td>404 <code>订单不存在</code></td><td>403 <code>无权查看此订单</code></td><td><code>:241-244</code></td></tr><tr><td><code>POST /api/pay/cancel/{order_id}</code></td><td>404 <code>订单不存在</code></td><td>403 <code>无权操作此订单</code></td><td><code>:296-299</code></td></tr></tbody></table>
-<p>列表接口直接调用 <code>get_user_orders(username)</code>（<code>:217</code>），不经过跨用户扫描；单订单接口走 <code>get_order</code>，后者会遍历所有用户文件（<code>backend/storage/order_store.py:150-157</code>）。</p>
+<table><thead><tr><th>接口</th><th>订单不存在</th><th>属于他人</th></tr></thead><tbody><tr><td><code>GET /api/pay/orders</code></td><td>不适用，按用户名过滤</td><td>不适用</td></tr><tr><td><code>GET /api/pay/query/{order_id}</code></td><td>404 <code>订单不存在</code></td><td>403 <code>无权查看此订单</code></td></tr><tr><td><code>POST /api/pay/cancel/{order_id}</code></td><td>404 <code>订单不存在</code></td><td>403 <code>无权操作此订单</code></td></tr></tbody></table>
+<p>列表接口直接调用 <code>get_user_orders(username)</code>，不经过跨用户扫描；单订单接口走 <code>get_order</code>，后者会遍历所有用户文件（<code>backend/storage/order_store.py</code>）。</p>
 <h2 id="2-列表的字段组装">2. 列表的字段组装</h2>
-<p>列表接口手工组装字典，并把顺序反转（<code>backend/routes/payment.py:218-230</code>）：</p>
+<p>列表接口手工组装字典，并把顺序反转（<code>backend/routes/payment.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> [</span></span>
 <span class="line"><span style="color:#24292E">    {</span></span>
 <span class="line"><span style="color:#032F62">        "order_id"</span><span style="color:#24292E">: o.order_id,</span></span>
@@ -1333,7 +1316,7 @@
 
 <table><thead><tr><th>字段</th><th>处理</th><th>说明</th></tr></thead><tbody><tr><td><code>status</code></td><td>原样</td><td>字符串枚举值</td></tr><tr><td>三个时间</td><td><code>isoformat()</code></td><td>可空字段判空</td></tr><tr><td><code>trade_no</code></td><td>不返回</td><td>列表不暴露网关订单号</td></tr><tr><td><code>raw_callback</code></td><td>不返回</td><td>原始回调不对外</td></tr></tbody></table>
 <h2 id="3-查询接口的轮询逻辑">3. 查询接口的轮询逻辑</h2>
-<p>查询接口先做归属校验，再判断状态是否需要问网关（<code>backend/routes/payment.py:246-272</code>）：</p>
+<p>查询接口先做归属校验，再判断状态是否需要问网关（<code>backend/routes/payment.py</code>）：</p>
 
 
 
@@ -1359,13 +1342,8 @@
 
 
 
-
-
-
-
-
-<table><thead><tr><th>条件</th><th>行为</th><th>行号</th></tr></thead><tbody><tr><td>状态是 <code>pending</code> 或 <code>paying</code> 且有 <code>trade_no</code></td><td>调 <code>query_order</code></td><td><code>:246-249</code></td></tr><tr><td>网关 <code>status</code> 为 1 且订单不是 <code>PAID</code></td><td><code>mark_paid</code> 并发放权益</td><td><code>:251-266</code></td></tr><tr><td><code>PaymentError</code></td><td>静默忽略</td><td><code>:269-270</code></td></tr><tr><td>其他异常</td><td>记录警告</td><td><code>:271-272</code></td></tr></tbody></table>
-<p>没有 <code>trade_no</code> 的订单（创建成功但网关调用失败前被取消）不会触发轮询，直接返回本地状态。轮询成功后重新读取订单（<code>:268</code>），保证响应里的状态与时间是最新值。</p>
+<table><thead><tr><th>条件</th><th>行为</th></tr></thead><tbody><tr><td>状态是 <code>pending</code> 或 <code>paying</code> 且有 <code>trade_no</code></td><td>调 <code>query_order</code></td></tr><tr><td>网关 <code>status</code> 为 1 且订单不是 <code>PAID</code></td><td><code>mark_paid</code> 并发放权益</td></tr><tr><td><code>PaymentError</code></td><td>静默忽略</td></tr><tr><td>其他异常</td><td>记录警告</td></tr></tbody></table>
+<p>没有 <code>trade_no</code> 的订单（创建成功但网关调用失败前被取消）不会触发轮询，直接返回本地状态。轮询成功后重新读取订单，保证响应里的状态与时间是最新值。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["GET query 订单号"] --> B{"订单存在"}
   B -->|否| C["404 订单不存在"]
@@ -1382,7 +1360,7 @@
   K --> L["重新读取订单"]
   L --> H</pre></div>
 <h2 id="4-轮询发放与回调发放的重复窗口">4. 轮询发放与回调发放的重复窗口</h2>
-<p>轮询里的发放逻辑与回调几乎一致：按商品名分支，<code>pro</code> / <code>plus</code> 升级会员，<code>points_24</code> 加积分（<code>backend/routes/payment.py:258-266</code>）。两处代码各写一份，判定与写入方式相同。</p>
+<p>轮询里的发放逻辑与回调几乎一致：按商品名分支，<code>pro</code> / <code>plus</code> 升级会员，<code>points_24</code> 加积分（<code>backend/routes/payment.py</code>）。两处代码各写一份，判定与写入方式相同。</p>
 <p>重复发放的窗口在于判定的时机：回调与轮询都先判断状态不是 <code>PAID</code>，再 <code>mark_paid</code>，再发放。两个请求若在检查之后、写入之前交错执行，就会各自发放一次。文件存储的读写没有排他控制，无法阻止这种交错。</p>
 
 
@@ -1410,9 +1388,9 @@
 
 
 <table><thead><tr><th>组合</th><th>结果</th><th>风险</th></tr></thead><tbody><tr><td>仅回调到达</td><td>发放一次</td><td>无</td></tr><tr><td>仅轮询命中</td><td>发放一次</td><td>无</td></tr><tr><td>回调与轮询并行</td><td>可能各发放一次</td><td>会员到期日或积分多算</td></tr></tbody></table>
-<p>会员多算一次的表现是到期日再延长 30 天（<code>backend/services/points.py:256-264</code>），积分多算的表现是加上第二份 24 点，但受会员上限截断（<code>:282-285</code>）。</p>
+<p>会员多算一次的表现是到期日再延长 30 天（<code>backend/services/points.py</code>），积分多算的表现是加上第二份 24 点，但受会员上限截断。</p>
 <h2 id="5-轮询的两条静默路径">5. 轮询的两条静默路径</h2>
-<p>轮询用 <code>except PaymentError: pass</code> 与通用 <code>except</code> 记录后继续（<code>backend/routes/payment.py:269-272</code>）。两类失败都不会改变响应结构：客户端看到的仍是本地订单状态，无法区分「网关说未支付」与「网关没答上来」。</p>
+<p>轮询用 <code>except PaymentError: pass</code> 与通用 <code>except</code> 记录后继续（<code>backend/routes/payment.py</code>）。两类失败都不会改变响应结构：客户端看到的仍是本地订单状态，无法区分「网关说未支付」与「网关没答上来」。</p>
 
 
 
@@ -1441,7 +1419,7 @@
 <table><thead><tr><th>失败</th><th>处理</th><th>客户端可见差异</th></tr></thead><tbody><tr><td><code>PaymentError</code></td><td>完全静默</td><td>无</td></tr><tr><td>网络异常</td><td>记警告日志</td><td>无</td></tr><tr><td>网关返回未支付</td><td>正常返回本地状态</td><td>无</td></tr></tbody></table>
 <p>排查支付未到账时，需要结合服务端日志与网关后台，接口本身不提供诊断信息。</p>
 <h2 id="6-取消接口的状态限制">6. 取消接口的状态限制</h2>
-<p>取消依赖存储层的状态判断（<code>backend/routes/payment.py:301-303</code>）：<code>cancel_order</code> 只在 <code>pending</code> 或 <code>paying</code> 时生效，其他状态返回 <code>None</code>（<code>backend/storage/order_store.py:116-125</code>），端点把 <code>None</code> 转成 400 <code>订单无法取消（已支付或已完成）</code>。</p>
+<p>取消依赖存储层的状态判断（<code>backend/routes/payment.py</code>）：<code>cancel_order</code> 只在 <code>pending</code> 或 <code>paying</code> 时生效，其他状态返回 <code>None</code>（<code>backend/storage/order_store.py</code>），端点把 <code>None</code> 转成 400 <code>订单无法取消（已支付或已完成）</code>。</p>
 
 
 
@@ -1478,9 +1456,9 @@
 
 
 <table><thead><tr><th>订单状态</th><th>取消结果</th><th>响应</th></tr></thead><tbody><tr><td><code>pending</code></td><td>置 <code>cancelled</code></td><td>返回取消后的订单号</td></tr><tr><td><code>paying</code></td><td>置 <code>cancelled</code></td><td>同上</td></tr><tr><td><code>paid</code></td><td>不变</td><td>400</td></tr><tr><td><code>cancelled</code></td><td>不变</td><td>400</td></tr><tr><td><code>expired</code></td><td>不变</td><td>400</td></tr></tbody></table>
-<p>取消后订单仍可能收到成功回调并被标记已支付，因为回调不检查 <code>cancelled</code> 状态（见 <code>03-回调与幂等.md</code>）。</p>
+<p>取消后订单仍可能收到成功回调并被标记已支付，因为回调不检查 <code>cancelled</code> 状态（<code>03-回调与幂等.md</code>）。</p>
 <h2 id="7-超时字段与轮询的关系">7. 超时字段与轮询的关系</h2>
-<p>订单创建时写入 <code>expired_at</code>，但仓库没有任何代码把超过时间的订单改成 <code>expired</code>（<code>backend/storage/order_store.py:127-136</code> 的 <code>mark_expired</code> 无调用点）。因此 <code>EXPIRED</code> 状态只存在于模型与存储层定义中，实际运行不会产生。</p>
+<p>订单创建时写入 <code>expired_at</code>，但仓库没有任何代码把超过时间的订单改成 <code>expired</code>（<code>backend/storage/order_store.py</code>）。因此 <code>EXPIRED</code> 状态只存在于模型与存储层定义中，实际运行不会产生。</p>
 
 
 
@@ -1577,7 +1555,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为查询结果一定来自网关</td><td>缺 <code>trade_no</code> 时只读本地</td><td><code>routes/payment.py:247</code></td></tr><tr><td>忽略回调与轮询的重复窗口</td><td>权益可能发放两次</td><td><code>:251-266</code> 与 <code>:184-204</code></td></tr><tr><td>用接口判断网关是否可达</td><td>两类失败都静默</td><td><code>:269-272</code></td></tr><tr><td>认为取消会阻止后续支付</td><td>回调不检查 <code>cancelled</code></td><td><code>:170</code></td></tr><tr><td>等待订单自动过期</td><td><code>mark_expired</code> 无调用点</td><td><code>order_store.py:127-136</code></td></tr><tr><td>以为列表有分页</td><td>一次返回全部订单</td><td><code>routes/payment.py:218-230</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为查询结果一定来自网关</td><td>缺 <code>trade_no</code> 时只读本地</td><td><code>routes/payment.py</code></td></tr><tr><td>忽略回调与轮询的重复窗口</td><td>权益可能发放两次</td><td>与</td></tr><tr><td>用接口判断网关是否可达</td><td>两类失败都静默</td><td>—</td></tr><tr><td>认为取消会阻止后续支付</td><td>回调不检查 <code>cancelled</code></td><td>—</td></tr><tr><td>等待订单自动过期</td><td><code>mark_expired</code> 无调用点</td><td><code>order_store.py</code></td></tr><tr><td>以为列表有分页</td><td>一次返回全部订单</td><td><code>routes/payment.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -1694,7 +1672,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/payment.py</code></td><td>列表（:211-230）、查询与轮询（:233-285）、取消（:288-305）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>取消与过期标记（:116-136）、查询与扫描（:138-157）</td></tr><tr><td><code>backend/services/points.py</code></td><td>续期计算（:256-264）、积分上限截断（:282-285）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="支付与积分的易错点与排查">支付与积分的易错点与排查</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/payment.py</code></td><td>列表、查询与轮询、取消</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>取消与过期标记、查询与扫描</td></tr><tr><td><code>backend/services/points.py</code></td><td>续期计算、积分上限截断</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/05-支付与积分/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="支付与积分的易错点与排查">支付与积分的易错点与排查</h1>
 <p>这条链路的故障表现有四种：订单状态不对、钱付了权益没到、积分不恢复、网关报错。前三种都能在订单文件与用户表里找到痕迹，第四种要看配置与日志。风险集中列出，并给出排查顺序。</p>
 <p>订单创建见 <code>01-商品配置与订单创建.md</code>，网关与签名见 <code>02-支付网关与签名.md</code>，回调见 <code>03-回调与幂等.md</code>，查询见 <code>04-订单查询与轮询补偿.md</code>。</p>
 <h2 id="1-风险清单">1. 风险清单</h2>
@@ -1793,7 +1771,7 @@
 
 
 
-<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>回调不校验金额</td><td><code>routes/payment.py:146-174</code></td><td>与订单金额不符的支付也会入账</td></tr><tr><td>R2</td><td>回调不校验订单可支付状态</td><td><code>:170</code></td><td>取消或超时订单仍可标记已支付</td></tr><tr><td>R3</td><td>发放失败只记日志</td><td><code>:205-206</code></td><td>订单已支付，权益缺失，无补偿</td></tr><tr><td>R4</td><td>用户缺失仍返回 <code>success</code></td><td><code>:180-182</code></td><td>支付成功但权益无处发放</td></tr><tr><td>R5</td><td>回调与轮询各有一份发放逻辑</td><td><code>:184-204</code> 与 <code>:258-266</code></td><td>并发下权益可能重复发放</td></tr><tr><td>R6</td><td><code>mark_expired</code> 无调用点</td><td><code>order_store.py:127-136</code></td><td><code>EXPIRED</code> 状态不会出现</td></tr><tr><td>R7</td><td>订单按用户 JSON 文件存储</td><td><code>order_store.py:35-57</code></td><td>并发写覆盖，按订单号查询要全目录扫描</td></tr><tr><td>R8</td><td>支付密钥默认空值无启动校验</td><td><code>services/payment.py:25-30</code></td><td>首次请求才失败</td></tr><tr><td>R9</td><td>验签异常统一为 <code>False</code></td><td><code>:92-93</code></td><td>无法区分配置错误与篡改</td></tr><tr><td>R10</td><td><code>X-Forwarded-For</code> 未校验来源</td><td><code>routes/payment.py:90</code></td><td>客户端可伪造地址</td></tr><tr><td>R11</td><td>查询失败静默</td><td><code>:269-272</code></td><td>客户端无法诊断未到账原因</td></tr><tr><td>R12</td><td>恢复时间戳在返回前被重置</td><td><code>services/points.py:87-91</code></td><td>频繁访问时积分永不恢复</td></tr><tr><td>R13</td><td>白名单每次调用都读文件</td><td><code>:37-48</code></td><td>高频检查产生重复 IO</td></tr><tr><td>R14</td><td>商品名与积分数量散落</td><td><code>routes/payment.py:196-198</code>、<code>:262-264</code></td><td>改商品配置时字面量漏改</td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>回调不校验金额</td><td><code>routes/payment.py</code></td><td>与订单金额不符的支付也会入账</td></tr><tr><td>R2</td><td>回调不校验订单可支付状态</td><td>—</td><td>取消或超时订单仍可标记已支付</td></tr><tr><td>R3</td><td>发放失败只记日志</td><td>—</td><td>订单已支付，权益缺失，无补偿</td></tr><tr><td>R4</td><td>用户缺失仍返回 <code>success</code></td><td>—</td><td>支付成功但权益无处发放</td></tr><tr><td>R5</td><td>回调与轮询各有一份发放逻辑</td><td>与</td><td>并发下权益可能重复发放</td></tr><tr><td>R6</td><td><code>mark_expired</code> 无调用点</td><td><code>order_store.py</code></td><td><code>EXPIRED</code> 状态不会出现</td></tr><tr><td>R7</td><td>订单按用户 JSON 文件存储</td><td><code>order_store.py</code></td><td>并发写覆盖，按订单号查询要全目录扫描</td></tr><tr><td>R8</td><td>支付密钥默认空值无启动校验</td><td><code>services/payment.py</code></td><td>首次请求才失败</td></tr><tr><td>R9</td><td>验签异常统一为 <code>False</code></td><td>—</td><td>无法区分配置错误与篡改</td></tr><tr><td>R10</td><td><code>X-Forwarded-For</code> 未校验来源</td><td><code>routes/payment.py</code></td><td>客户端可伪造地址</td></tr><tr><td>R11</td><td>查询失败静默</td><td>—</td><td>客户端无法诊断未到账原因</td></tr><tr><td>R12</td><td>恢复时间戳在返回前被重置</td><td><code>services/points.py</code></td><td>频繁访问时积分永不恢复</td></tr><tr><td>R13</td><td>白名单每次调用都读文件</td><td>—</td><td>高频检查产生重复 IO</td></tr><tr><td>R14</td><td>商品名与积分数量散落</td><td><code>routes/payment.py</code></td><td>改商品配置时字面量漏改</td></tr></tbody></table>
 <h2 id="2-支付链路的排查顺序">2. 支付链路的排查顺序</h2>
 <p>按订单状态决定入口，再顺着状态对应的代码路径找原因：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
@@ -1836,7 +1814,7 @@
 
 <table><thead><tr><th>状态</th><th>常见原因</th><th>检查点</th></tr></thead><tbody><tr><td><code>pending</code></td><td>网关创建失败</td><td>密钥配置与创建端点 502 日志</td></tr><tr><td><code>paying</code></td><td>回调未到达</td><td>回调日志、<code>NOTIFY_PATH</code> 可达性、轮询结果</td></tr><tr><td><code>paid</code> 但无权益</td><td>发放异常或用户缺失</td><td>回调查看 <code>Post-payment processing failed</code> 日志</td></tr><tr><td><code>cancelled</code></td><td>用户取消或网关失败回滚</td><td>取消接口调用记录</td></tr></tbody></table>
 <h2 id="3-积分恢复的口径">3. 积分恢复的口径</h2>
-<p>积分恢复是懒加载：每次读取用户状态时按经过的小时数补齐（<code>backend/services/points.py:58-98</code>）。这段逻辑有一处会改变实际行为的时间戳写入：</p>
+<p>积分恢复是懒加载：每次读取用户状态时按经过的小时数补齐（<code>backend/services/points.py</code>）。这段逻辑有一处会改变实际行为的时间戳写入：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> last_refill:</span></span>
 <span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">        last_time </span><span style="color:#D73A49">=</span><span style="color:#24292E"> datetime.fromisoformat(last_refill)</span></span>
@@ -1849,7 +1827,7 @@
 <span class="line"><span style="color:#24292E">hours_elapsed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (now </span><span style="color:#D73A49">-</span><span style="color:#24292E"> last_time).total_seconds() </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 3600</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> hours_elapsed </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> user_data</span></span></code></pre>
-<p><code>last_points_refill</code> 在计算之前就被写成当前时间（<code>:87</code>），不足一小时的早退分支（<code>:90-91</code>）保留了这个新值。结果是：两次访问间隔小于一小时时，起点被重置为本次访问时间，积分永远不会累积。用户只要在一个小时内多次查看状态或发起搜索，恢复逻辑就不会生效。</p>
+<p><code>last_points_refill</code> 在计算之前就被写成当前时间，不足一小时的早退分支保留了这个新值。结果是：两次访问间隔小于一小时时，起点被重置为本次访问时间，积分永远不会累积。用户只要在一个小时内多次查看状态或发起搜索，恢复逻辑就不会生效。</p>
 
 
 
@@ -1876,9 +1854,9 @@
 
 
 <table><thead><tr><th>访问间隔</th><th>起点变化</th><th>恢复量</th></tr></thead><tbody><tr><td>超过 1 小时</td><td>起点保留</td><td><code>int(小时数) × 每小时速率</code></td></tr><tr><td>不足 1 小时</td><td>起点被重置为本次时间</td><td>0</td></tr><tr><td>持续高频访问</td><td>起点不断重置</td><td>始终 0</td></tr></tbody></table>
-<p>积分恢复的三个相关常量：Free 每小时 2 点、上限 48；Pro 每小时 8 点、上限 96（<code>backend/config.py:152-155</code>）。Plus 用户不分恢复：直接置为上限（<code>services/points.py:75-78</code>）。恢复量按 <code>int(hours_elapsed)</code> 取整，零头不计，写入时把起点推进整小时数，余量留到下次（<code>:97</code>）。</p>
+<p>积分恢复的三个相关常量：Free 每小时 2 点、上限 48；Pro 每小时 8 点、上限 96（<code>backend/config.py</code>）。Plus 用户不分恢复：直接置为上限（<code>services/points.py</code>）。恢复量按 <code>int(hours_elapsed)</code> 取整，零头不计，写入时把起点推进整小时数，余量留到下次。</p>
 <h2 id="4-会员与权益的规则边界">4. 会员与权益的规则边界</h2>
-<p><code>upgrade_membership</code> 与 <code>add_points</code> 各自有边界条件（<code>backend/services/points.py:228-287</code>）：</p>
+<p><code>upgrade_membership</code> 与 <code>add_points</code> 各自有边界条件（<code>backend/services/points.py</code>）：</p>
 
 
 
@@ -1912,15 +1890,8 @@
 
 
 
-
-
-
-
-
-
-
-<table><thead><tr><th>规则</th><th>行为</th><th>行号</th></tr></thead><tbody><tr><td>Plus 有效期内买 Pro</td><td>拒绝，返回错误文案</td><td><code>:241-249</code></td></tr><tr><td>请求降级到 Free</td><td>拒绝</td><td><code>:251-252</code></td></tr><tr><td>同类型续期</td><td>从现有到期日延长 30 天</td><td><code>:256-264</code></td></tr><tr><td>换类型</td><td>从当前时间起 30 天</td><td><code>:255</code></td></tr><tr><td>加积分</td><td>不超过当前等级上限</td><td><code>:282-285</code></td></tr><tr><td>Plus 加积分</td><td>直接返回，不生效</td><td><code>:279-280</code></td></tr></tbody></table>
-<p>回调与轮询拿到升级错误时都只记录或忽略：回调写日志（<code>routes/payment.py:188-190</code>），轮询丢弃返回值（<code>:260</code>）。用户看到的仍是已支付，权益按拒绝后的原样保留。</p>
+<table><thead><tr><th>规则</th><th>行为</th></tr></thead><tbody><tr><td>Plus 有效期内买 Pro</td><td>拒绝，返回错误文案</td></tr><tr><td>请求降级到 Free</td><td>拒绝</td></tr><tr><td>同类型续期</td><td>从现有到期日延长 30 天</td></tr><tr><td>换类型</td><td>从当前时间起 30 天</td></tr><tr><td>加积分</td><td>不超过当前等级上限</td></tr><tr><td>Plus 加积分</td><td>直接返回，不生效</td></tr></tbody></table>
+<p>回调与轮询拿到升级错误时都只记录或忽略：回调写日志（<code>routes/payment.py</code>），轮询丢弃返回值。用户看到的仍是已支付，权益按拒绝后的原样保留。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["升级请求"] --> B{"目标等级是 Free"}
   B -->|是| C["拒绝 不能降级"]
@@ -1932,8 +1903,8 @@
   G --> I["写回 membership 与 membership_expiry"]
   H --> I</pre></div>
 <h2 id="5-订单数据与并发">5. 订单数据与并发</h2>
-<p>订单存在 <code>data/orders/{username}.json</code>，一次状态变更要读整个文件、改一条、写回整个文件（<code>backend/storage/order_store.py:159-167</code>）。两个并发回调可能互相覆盖，导致一条状态变更丢失。</p>
-<p>按订单号查询要遍历所有用户文件（<code>:150-157</code>），订单文件越多，单次查询越慢。回调与轮询都会触发这条扫描。</p>
+<p>订单存在 <code>data/orders/{username}.json</code>，一次状态变更要读整个文件、改一条、写回整个文件（<code>backend/storage/order_store.py</code>）。两个并发回调可能互相覆盖，导致一条状态变更丢失。</p>
+<p>按订单号查询要遍历所有用户文件，订单文件越多，单次查询越慢。回调与轮询都会触发这条扫描。</p>
 
 
 
@@ -1961,7 +1932,7 @@
 
 <table><thead><tr><th>操作</th><th>读</th><th>写</th></tr></thead><tbody><tr><td>创建订单</td><td>单文件</td><td>单文件</td></tr><tr><td>状态变更</td><td>单文件</td><td>单文件全量覆写</td></tr><tr><td>按订单号查找</td><td>全部文件</td><td>无</td></tr></tbody></table>
 <h2 id="6-网关配置与响应">6. 网关配置与响应</h2>
-<p>四个配置键都没有导入期校验（<code>backend/services/payment.py:25-30</code>），排查 502 时按顺序确认：环境变量是否存在、内容是否为未包装的单行 base64、<code>api_base</code> 是否可达。签名与验签的规范化必须一致，两边都过滤 <code>sign</code>、<code>sign_type</code> 与空值并按字典序排序（<code>:51-70</code>、<code>:73-93</code>），任何一侧改动都会导致验签失败。</p>
+<p>四个配置键都没有导入期校验（<code>backend/services/payment.py</code>），排查 502 时按顺序确认：环境变量是否存在、内容是否为未包装的单行 base64、<code>api_base</code> 是否可达。签名与验签的规范化必须一致，两边都过滤 <code>sign</code>、<code>sign_type</code> 与空值并按字典序排序，任何一侧改动都会导致验签失败。</p>
 <h2 id="7-容易走错的方向">7. 容易走错的方向</h2>
 
 
@@ -2128,4 +2099,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/services/points.py</code></td><td>白名单读取（:37-48）、积分上限（:51-55）、恢复逻辑（:58-98）、升级规则（:228-269）、加积分（:272-287）</td></tr><tr><td><code>backend/config.py</code></td><td>积分与会员常量（:151-158`）</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>回调缺口（:146-204）、发放分支（:184-204）、轮询发放（:258-266）、查询静默（:269-272`）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>文件存储与并发（:35-57）、状态变更（:103-136）、持久化与扫描（:150-177）</td></tr><tr><td><code>backend/services/payment.py</code></td><td>配置（:25-30）、签名与验签（:51-93）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/04-%E9%99%90%E6%B5%81%E4%B8%8E%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1/"><span class="k">← 上一篇</span><span class="t">限流与异步任务</span><span class="d">FastAPI 后端 · 5 个文件</span></a><a class="next" href="/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/01-Schema%E4%B8%8E%E5%A4%9Astore/"><span class="k">下一篇 →</span><span class="t">Schema与多store</span><span class="d">SQLite 数据层 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/services/points.py</code></td><td>白名单读取、积分上限、恢复逻辑、升级规则、加积分</td></tr><tr><td><code>backend/config.py</code></td><td>积分与会员常量（`）</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>回调缺口、发放分支、轮询发放、查询静默（`）</td></tr><tr><td><code>backend/storage/order_store.py</code></td><td>文件存储与并发、状态变更、持久化与扫描</td></tr><tr><td><code>backend/services/payment.py</code></td><td>配置、签名与验签</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/04-%E9%99%90%E6%B5%81%E4%B8%8E%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1/"><span class="k">← 上一篇</span><span class="t">限流与异步任务</span><span class="d">FastAPI 后端 · 5 个文件</span></a><a class="next" href="/tc63/docs/29-SQLite%20%E6%95%B0%E6%8D%AE%E5%B1%82/01-Schema%E4%B8%8E%E5%A4%9Astore/"><span class="k">下一篇 →</span><span class="t">Schema与多store</span><span class="d">SQLite 数据层 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

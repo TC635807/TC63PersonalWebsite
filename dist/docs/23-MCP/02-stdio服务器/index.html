@@ -1,9 +1,9 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>stdio服务器 · MCP · 王宇翔</title><meta name="description" content="stdio 传输的四个阶段、阻塞读取放进线程的理由、空行与通知对请求计数的影响、写回与刷新，以及 EOF 退出时的返回值"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/23-MCP/02-stdio%E6%9C%8D%E5%8A%A1%E5%99%A8/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="stdio服务器 · MCP · 王宇翔"><meta property="og:description" content="stdio 传输的四个阶段、阻塞读取放进线程的理由、空行与通知对请求计数的影响、写回与刷新，以及 EOF 退出时的返回值"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/23-MCP/02-stdio%E6%9C%8D%E5%8A%A1%E5%99%A8/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/23-MCP/">MCP</a><span class="sep" aria-hidden="true">/</span><span class="now">stdio服务器</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>stdio服务器</b><span>04 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">04 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>逐行循环：读取、分发与写回</span></a><ul class="toc__heads"><li><a href="#循环的四个阶段" data-depth="2" data-heading-j="0">循环的四个阶段</a></li><li><a href="#阻塞读取放进线程" data-depth="2" data-heading-j="1">阻塞读取放进线程</a></li><li><a href="#计数口径什么算处理过一条" data-depth="2" data-heading-j="2">计数口径：什么算处理过一条</a></li><li><a href="#写回与刷新" data-depth="2" data-heading-j="3">写回与刷新</a></li><li><a href="#eof-退出与返回值" data-depth="2" data-heading-j="4">EOF 退出与返回值</a></li><li><a href="#与协议层的职责分界" data-depth="2" data-heading-j="5">与协议层的职责分界</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>同步入口、退出码与日志通道</span></a><ul class="toc__heads"><li><a href="#同步桥一次会话一个事件循环" data-depth="2" data-heading-j="0">同步桥：一次会话一个事件循环</a></li><li><a href="#参数解析与配置来源" data-depth="2" data-heading-j="1">参数解析与配置来源</a></li><li><a href="#日志设置" data-depth="2" data-heading-j="2">日志设置</a></li><li><a href="#启动失败与退出码" data-depth="2" data-heading-j="3">启动失败与退出码</a></li><li><a href="#核验模式与正常模式的分叉" data-depth="2" data-heading-j="4">核验模式与正常模式的分叉</a></li><li><a href="#信号与中断" data-depth="2" data-heading-j="5">信号与中断</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>启动装配：身份解析与只读执行器</span></a><ul class="toc__heads"><li><a href="#身份解析的三层取值" data-depth="2" data-heading-j="0">身份解析的三层取值</a></li><li><a href="#两个可注入工厂" data-depth="2" data-heading-j="1">两个可注入工厂</a></li><li><a href="#只读启用集合的来源" data-depth="2" data-heading-j="2">只读启用集合的来源</a></li><li><a href="#网关构造与导入期断言" data-depth="2" data-heading-j="3">网关构造与导入期断言</a></li><li><a href="#手写实现与官方-sdk-的关系" data-depth="2" data-heading-j="4">手写实现与官方 SDK 的关系</a></li><li><a href="#装配失败的传播路径" data-depth="2" data-heading-j="5">装配失败的传播路径</a></li><li><a href="#易错点" data-depth="2" data-heading-j="6">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>客户端配置与进程生命周期</span></a><ul class="toc__heads"><li><a href="#配置文件的四个字段" data-depth="2" data-heading-j="0">配置文件的四个字段</a></li><li><a href="#命令工作目录与-pythonpath" data-depth="2" data-heading-j="1">命令、工作目录与 PYTHONPATH</a></li><li><a href="#编码与中文输出" data-depth="2" data-heading-j="2">编码与中文输出</a></li><li><a href="#身份参数的两种给法" data-depth="2" data-heading-j="3">身份参数的两种给法</a></li><li><a href="#进程生命周期" data-depth="2" data-heading-j="4">进程生命周期</a></li><li><a href="#故障排查表" data-depth="2" data-heading-j="5">故障排查表</a></li><li><a href="#适配到非-windows-平台" data-depth="2" data-heading-j="6">适配到非 Windows 平台</a></li><li><a href="#易错点" data-depth="2" data-heading-j="7">易错点</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="14">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">MCP</span><span class="dot" aria-hidden="true">·</span><span>4 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>MCP / stdio / 传输 / asyncio / 入口 / 退出码 / 日志 / 启动装配</span></div><h1 class="docs__title">stdio服务器</h1><p class="docs__lead">stdio 传输的四个阶段、阻塞读取放进线程的理由、空行与通知对请求计数的影响、写回与刷新，以及 EOF 退出时的返回值</p></header><section class="dfile" id="file-1" data-file="01-逐行循环与EOF退出"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-逐行循环与EOF退出</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/01-逐行循环与EOF退出.md</span></div><div class="dfile__body"><h1 id="逐行循环读取分发与写回">逐行循环：读取、分发与写回</h1>
-<p>stdio 服务器的全部传输逻辑在一个 while 循环里（<code>backend/mcp/stdio.py:22-46</code>）。它做四件事：读一行、解析、交给协议层、把响应写回去。没有连接管理、没有超时、没有并发。这种简单来自 MCP 的 stdio 约定：客户端把服务端当子进程启动，双方用标准输入输出对话，进程存活期就是一个会话。</p>
-<p>循环里唯一不那么直观的是读取方式。<code>stdin.readline</code> 是阻塞调用，直接写在协程里会卡住事件循环，虽然这个程序没有别的并发任务，代码仍然用 <code>asyncio.to_thread</code> 把它挪到线程里（<code>:26</code>）。这样写的好处是循环保持异步形态，未来若要加超时或并行处理不需要重写结构；代价是每行一次线程切换。</p>
+<p>stdio 服务器的全部传输逻辑在一个 while 循环里（<code>backend/mcp/stdio.py</code>）。它做四件事：读一行、解析、交给协议层、把响应写回去。没有连接管理、没有超时、没有并发。这种简单来自 MCP 的 stdio 约定：客户端把服务端当子进程启动，双方用标准输入输出对话，进程存活期就是一个会话。</p>
+<p>循环里唯一不那么直观的是读取方式。<code>stdin.readline</code> 是阻塞调用，直接写在协程里会卡住事件循环，虽然这个程序没有别的并发任务，代码仍然用 <code>asyncio.to_thread</code> 把它挪到线程里。这样写的好处是循环保持异步形态，未来若要加超时或并行处理不需要重写结构；代价是每行一次线程切换。</p>
 <p>计数与空行的关系由回归测试锁定，是读这段代码时最容易看错的地方。</p>
 <h2 id="循环的四个阶段">循环的四个阶段</h2>
-<p><code>serve_async</code> 的主体结构如下（<code>backend/mcp/stdio.py:22-46</code>）：</p>
+<p><code>serve_async</code> 的主体结构如下（<code>backend/mcp/stdio.py</code>）：</p>
 
 
 
@@ -40,7 +40,28 @@
 
 
 <table><thead><tr><th>阶段</th><th>代码</th><th>说明</th></tr></thead><tbody><tr><td>读取</td><td><code>line = await asyncio.to_thread(stdin.readline)</code></td><td>阻塞读放进线程</td></tr><tr><td>结束判断</td><td><code>if line == "": break</code></td><td>空串表示 EOF</td></tr><tr><td>预处理</td><td><code>line.strip()</code>，空行 <code>continue</code></td><td>去空白并跳过空行</td></tr><tr><td>解析与分发</td><td><code>json.loads</code>，失败构造错误，成功走 <code>handle_message</code></td><td>见下一节</td></tr><tr><td>写回</td><td>非 <code>None</code> 才写，写后 <code>flush</code></td><td>见写回一节</td></tr></tbody></table>
-<p>循环变量只有两个：<code>handled</code> 计数与当前行。没有任何跨行状态，因此逐行处理的顺序不影响结果。协议层的有状态部分集中在 <code>McpServer</code> 的 <code>initialized</code> 与 <code>client_info</code> 上（<code>backend/mcp/server.py:122-123</code>），传输层不触碰它们。</p>
+<p>整个循环就是下面这一段（<code>backend/mcp/stdio.py</code> 的 <code>serve_async</code>，去掉类型注解后的主干）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">handled </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span></span>
+<span class="line"><span style="color:#D73A49">while</span><span style="color:#005CC5"> True</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    line </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> asyncio.to_thread(stdin.readline)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> line </span><span style="color:#D73A49">==</span><span style="color:#032F62"> ""</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        break</span></span>
+<span class="line"><span style="color:#24292E">    line </span><span style="color:#D73A49">=</span><span style="color:#24292E"> line.strip()</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> line:</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        message: Any </span><span style="color:#D73A49">=</span><span style="color:#24292E"> json.loads(line)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#24292E"> json.JSONDecodeError </span><span style="color:#D73A49">as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#24292E">        response: </span><span style="color:#005CC5">dict</span><span style="color:#D73A49"> |</span><span style="color:#005CC5"> None</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> {</span><span style="color:#032F62">"jsonrpc"</span><span style="color:#24292E">: </span><span style="color:#032F62">"2.0"</span><span style="color:#24292E">, </span><span style="color:#032F62">"id"</span><span style="color:#24292E">: </span><span style="color:#005CC5">None</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#032F62">                                 "error"</span><span style="color:#24292E">: {</span><span style="color:#032F62">"code"</span><span style="color:#24292E">: </span><span style="color:#D73A49">-</span><span style="color:#005CC5">32700</span><span style="color:#24292E">, </span><span style="color:#032F62">"message"</span><span style="color:#24292E">: </span><span style="color:#D73A49">f</span><span style="color:#032F62">"JSON 解析失败: </span><span style="color:#005CC5">{</span><span style="color:#24292E">exc.msg</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">}}</span></span>
+<span class="line"><span style="color:#D73A49">    else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        response </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> server.handle_message(message)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> response </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        stdout.write(json.dumps(response, </span><span style="color:#E36209">ensure_ascii</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">) </span><span style="color:#D73A49">+</span><span style="color:#032F62"> "</span><span style="color:#005CC5">\n</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">        stdout.flush()</span></span>
+<span class="line"><span style="color:#24292E">        handled </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> handled</span></span></code></pre>
+<p>循环变量只有两个：<code>handled</code> 计数与当前行。没有任何跨行状态，因此逐行处理的顺序不影响结果。协议层的有状态部分集中在 <code>McpServer</code> 的 <code>initialized</code> 与 <code>client_info</code> 上（<code>backend/mcp/server.py</code>），传输层不触碰它们。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["readline 取一行"] --> B{"读到空串吗"}
   B -- 是 --> Z["跳出循环并返回 handled"]
@@ -56,11 +77,11 @@
   H -- 否 --> I
   I --> A</pre></div>
 <h2 id="阻塞读取放进线程">阻塞读取放进线程</h2>
-<p>读取那一行是 <code>await asyncio.to_thread(stdin.readline)</code>（<code>:26</code>）。<code>to_thread</code> 把函数调用提交给默认线程池并等待结果，事件循环在这段时间里可以跑别的任务。对这个单任务循环来说，收益只是形式上的异步；实际的理由是保持 <code>serve_async</code> 可被 <code>asyncio.run</code> 直接驱动，也便于测试里用 <code>StringIO</code> 替换标准流。</p>
-<p><code>serve_async</code> 的三个参数都允许测试注入：<code>server</code>、<code>stdin</code>、<code>stdout</code>（<code>:22</code>）。回归测试用 <code>io.StringIO</code> 构造输入输出，直接断言写出的行数与内容（<code>tests/backend/test_mcp_server.py:323-344</code>）。这也是为什么 <code>handled</code> 作为返回值暴露出来：测试可以核对处理条数，而不必解析全部输出。</p>
-<p><code>StringIO</code> 的 <code>readline</code> 在读到末尾时返回空串，与真实管道的 EOF 行为一致，因此 EOF 用例也能在内存流上跑（<code>:347-349</code>）。真实场景里空串出现在客户端关闭管道或进程被终止时。</p>
+<p>读取那一行是 <code>await asyncio.to_thread(stdin.readline)</code>。<code>to_thread</code> 把函数调用提交给默认线程池并等待结果，事件循环在这段时间里可以跑别的任务。对这个单任务循环来说，收益只是形式上的异步；实际的理由是保持 <code>serve_async</code> 可被 <code>asyncio.run</code> 直接驱动，也便于测试里用 <code>StringIO</code> 替换标准流。</p>
+<p><code>serve_async</code> 的三个参数都允许测试注入：<code>server</code>、<code>stdin</code>、<code>stdout</code>。回归测试用 <code>io.StringIO</code> 构造输入输出，直接断言写出的行数与内容（<code>tests/backend/test_mcp_server.py</code>）。这也是为什么 <code>handled</code> 作为返回值暴露出来：测试可以核对处理条数，而不必解析全部输出。</p>
+<p><code>StringIO</code> 的 <code>readline</code> 在读到末尾时返回空串，与真实管道的 EOF 行为一致，因此 EOF 用例也能在内存流上跑。真实场景里空串出现在客户端关闭管道或进程被终止时。</p>
 <h2 id="计数口径什么算处理过一条">计数口径：什么算处理过一条</h2>
-<p><code>handled</code> 在写回分支里自增（<code>backend/mcp/stdio.py:45</code>），因此它统计的是写出的响应条数，而不是读到的行数。三处差异：</p>
+<p><code>handled</code> 在写回分支里自增（<code>backend/mcp/stdio.py</code>），因此它统计的是写出的响应条数，而不是读到的行数。三处差异：</p>
 
 
 
@@ -92,15 +113,15 @@
 
 
 <table><thead><tr><th>输入</th><th>是否写响应</th><th>是否计数</th></tr></thead><tbody><tr><td>空行</td><td>否</td><td>否</td></tr><tr><td>通知（无 id）</td><td>否</td><td>否</td></tr><tr><td>请求</td><td>是</td><td>是</td></tr><tr><td>解析失败</td><td>是（<code>-32700</code>）</td><td>是</td></tr></tbody></table>
-<p>回归测试给的输入有 7 行：initialize、空行、initialized 通知、tools/list、tools/call、坏 JSON、ping，断言 <code>handled == 5</code>（<code>tests/backend/test_mcp_server.py:323-339</code>）。5 来自四个请求加一个解析错误；空行与通知各少一条。这个用例同时断言执行器只被调用一次（<code>:344</code>），说明通知形式的调用没有触达执行器。</p>
+<p>举个具体的账：输入 7 行（initialize、空行、initialized 通知、tools/list、tools/call、坏 JSON、ping），写出的响应是 5 条——四个请求加一个解析错误，空行与通知各少一条；执行器只被调用一次，因为通知形式的调用没有触达它。测试里就是按这个口径核对的（<code>tests/backend/test_mcp_server.py</code>）。</p>
 <p>把 <code>handled</code> 当“读取行数”会让这个断言看似出错，实际是口径不同。日志或监控若要统计客户端消息量，需要自己加计数，不能复用返回值。</p>
 <h2 id="写回与刷新">写回与刷新</h2>
-<p>写回只有在 <code>response is not None</code> 时发生（<code>backend/mcp/stdio.py:42-45</code>）：</p>
+<p>写回只有在 <code>response is not None</code> 时发生（<code>backend/mcp/stdio.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> response </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    stdout.write(json.dumps(response, </span><span style="color:#E36209">ensure_ascii</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">) </span><span style="color:#D73A49">+</span><span style="color:#032F62"> "</span><span style="color:#005CC5">\n</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">    stdout.flush()</span></span>
 <span class="line"><span style="color:#24292E">    handled </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1</span></span></code></pre>
-<p>三个细节都影响客户端行为：末尾的换行是 MCP 的分帧标记，缺了客户端会一直等下一行；<code>ensure_ascii=False</code> 保证中文按 UTF-8 输出而不是转义序列；<code>flush</code> 保证响应立刻离开缓冲区。stdio 传输没有长度前缀，换行与刷新缺一不可。</p>
+<p>三个细节都影响客户端行为：末尾的换行是 MCP 的分帧标记——所谓分帧，就是「怎么把连续的字节流切成一条条消息」，stdio 传输用换行分帧，所以消息体里不能出现裸换行；<code>ensure_ascii=False</code> 保证中文按 UTF-8 输出而不是转义序列；<code>flush</code> 保证响应立刻离开缓冲区。stdio 传输没有长度前缀，换行与刷新缺一不可。</p>
 <p>写回是同步调用，不放进线程。正常输出量是每请求一行，同步写不会成为瓶颈；只有在客户端停止读取、管道缓冲区写满时才会阻塞，此时整个循环停住，属于对端行为导致的背压。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
@@ -122,7 +143,7 @@
   C->>L: 关闭管道
   L->>L: readline 返回空串，退出</pre></div>
 <h2 id="eof-退出与返回值">EOF 退出与返回值</h2>
-<p>读到空串时跳出循环并把 <code>handled</code> 返回（<code>:25-28</code>）。返回值有两个消费方：测试断言处理条数；<code>serve_stdio</code> 把它作为同步入口的返回值（<code>backend/mcp/stdio.py:49-51</code>），而 <code>__main__.main</code> 忽略它并固定返回 0（<code>backend/mcp/__main__.py:53-54</code>）。</p>
+<p>读到空串时跳出循环并把 <code>handled</code> 返回。返回值有两个消费方：测试断言处理条数；<code>serve_stdio</code> 把它作为同步入口的返回值（<code>backend/mcp/stdio.py</code>），而 <code>__main__.main</code> 忽略它并固定返回 0（<code>backend/mcp/__main__.py</code>）。</p>
 <p>EOF 退出没有清理动作：不关闭数据库连接、不发送任何结束消息、不等待正在执行的任务。由于处理是逐行串行的，跳出循环时不可能有半途的任务。数据库连接随进程结束被系统回收，<code>SessionDatabaseManager.close</code> 没有被调用，这一点按代码事实记录，不是缺陷。</p>
 <p>客户端视角的等价信号是子进程退出。若客户端在退出前还发了若干行，这些行已经处理完才可能读到 EOF，因为管道按字节序读取。</p>
 <h2 id="与协议层的职责分界">与协议层的职责分界</h2>
@@ -167,7 +188,7 @@
 
 
 <table><thead><tr><th>职责</th><th>传输层</th><th>协议层</th></tr></thead><tbody><tr><td>读行与分帧</td><td>是</td><td>否</td></tr><tr><td>JSON 解析与 <code>-32700</code></td><td>是</td><td>否</td></tr><tr><td>消息字段校验与 <code>-32600</code></td><td>否</td><td>是</td></tr><tr><td>方法分发</td><td>否</td><td>是</td></tr><tr><td>序列化与写回</td><td>是</td><td>否</td></tr><tr><td>通知静默</td><td>依据响应是否为 <code>None</code></td><td>决定返回 <code>None</code></td></tr></tbody></table>
-<p>分界点只有一个：<code>handle_message</code> 的返回值。传输层不解析消息内容，协议层不接触流。这个界让协议逻辑可以脱离标准输入输出做单测（<code>tests/backend/test_mcp_server.py:224-319</code> 全部不经过传输层），也让传输层可以换成别的通道而复用协议层。</p>
+<p>分界点只有一个：<code>handle_message</code> 的返回值。传输层不解析消息内容，协议层不接触流。这个界让协议逻辑可以脱离标准输入输出做单测（<code>tests/backend/test_mcp_server.py</code> 全部不经过传输层），也让传输层可以换成别的通道而复用协议层。</p>
 <h2 id="易错点">易错点</h2>
 <ol>
 <li>把 <code>handled</code> 当读取行数。它只统计写出的响应。</li>
@@ -229,7 +250,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>循环入口</td><td><code>serve_async(server, stdin, stdout)</code></td><td><code>backend/mcp/stdio.py:22</code></td></tr><tr><td>读取方式</td><td><code>asyncio.to_thread(stdin.readline)</code></td><td><code>:26</code></td></tr><tr><td>EOF 判据</td><td>读到空串</td><td><code>:27-28</code></td></tr><tr><td>空行</td><td>跳过，不计数</td><td><code>:29-31</code></td></tr><tr><td>解析失败</td><td>构造 <code>-32700</code>，计数</td><td><code>:32-39</code></td></tr><tr><td>写回</td><td>换行加 <code>flush</code>，计数加一</td><td><code>:42-45</code></td></tr><tr><td>返回值</td><td>写出的响应条数</td><td><code>:24</code>、<code>:46</code></td></tr><tr><td>测试口径</td><td>7 行输入得 <code>handled == 5</code></td><td><code>tests/backend/test_mcp_server.py:323-344</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>循环入口</td><td><code>serve_async(server, stdin, stdout)</code></td><td><code>backend/mcp/stdio.py</code> 的 <code>serve_async</code></td></tr><tr><td>读取方式</td><td><code>asyncio.to_thread(stdin.readline)</code></td><td>循环体第一行</td></tr><tr><td>EOF 判据</td><td>读到空串</td><td><code>if line == "": break</code></td></tr><tr><td>空行</td><td>跳过，不计数</td><td><code>strip()</code> 后的 <code>if not line: continue</code></td></tr><tr><td>解析失败</td><td>构造 <code>-32700</code>，计数</td><td><code>except json.JSONDecodeError</code> 分支</td></tr><tr><td>写回</td><td>换行加 <code>flush</code>，计数加一</td><td><code>if response is not None</code> 分支</td></tr><tr><td>返回值</td><td>写出的响应条数</td><td><code>handled</code> 变量</td></tr><tr><td>测试口径</td><td>7 行输入得 <code>handled == 5</code></td><td><code>tests/backend/test_mcp_server.py</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -306,20 +327,20 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/stdio.py</code></td><td>逐行循环与写回（:22-51）</td></tr><tr><td><code>backend/mcp/server.py</code></td><td><code>handle_message</code> 与协议层状态（:122-123、:166-201）</td></tr><tr><td><code>backend/mcp/__main__.py</code></td><td>对返回值的处理（:53-54）</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>传输层回归断言（:321-349）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-同步入口与退出码"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-同步入口与退出码</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/02-同步入口与退出码.md</span></div><div class="dfile__body"><h1 id="同步入口退出码与日志通道">同步入口、退出码与日志通道</h1>
-<p>标准输入输出是异步接口，进程入口是同步的，中间需要一个桥。<code>serve_stdio</code> 就是这座桥：一行 <code>asyncio.run</code> 把协程循环跑完再返回（<code>backend/mcp/stdio.py:49-51</code>）。入口 <code>main</code> 负责更靠前的部分：解析参数、构建网关、把日志压到标准错误、决定退出码（<code>backend/mcp/__main__.py:29-54</code>）。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/stdio.py</code></td><td>逐行循环与写回</td></tr><tr><td><code>backend/mcp/server.py</code></td><td><code>handle_message</code> 与协议层状态</td></tr><tr><td><code>backend/mcp/__main__.py</code></td><td>对返回值的处理</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>传输层回归断言</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-同步入口与退出码"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-同步入口与退出码</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/02-同步入口与退出码.md</span></div><div class="dfile__body"><h1 id="同步入口退出码与日志通道">同步入口、退出码与日志通道</h1>
+<p>标准输入输出是异步接口，进程入口是同步的，中间需要一个桥。<code>serve_stdio</code> 就是这座桥：一行 <code>asyncio.run</code> 把协程循环跑完再返回（<code>backend/mcp/stdio.py</code>）。入口 <code>main</code> 负责更靠前的部分：解析参数、构建网关、把日志压到标准错误、决定退出码（<code>backend/mcp/__main__.py</code>）。</p>
 <p>退出码只有两个取值：正常结束返回 0，构建失败返回 2。客户端（Claude Desktop、Cursor 等）靠子进程退出码判断启动是否成功，因此构建失败必须在首条消息之前暴露，而不是等客户端发 <code>initialize</code> 才回错误。日志通道同样是协议的一部分：stdout 属于 JSON-RPC，任何日志混进去都会变成一条解析失败的消息。</p>
 <p>argparse 的默认行为按通用做法标注，代码没有覆写。</p>
 <h2 id="同步桥一次会话一个事件循环">同步桥：一次会话一个事件循环</h2>
-<p><code>serve_stdio</code> 的实现只有一行（<code>backend/mcp/stdio.py:49-51</code>）：</p>
+<p><code>serve_stdio</code> 的实现只有一行（<code>backend/mcp/stdio.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> serve_stdio</span><span style="color:#24292E">(server, stdin</span><span style="color:#D73A49">=</span><span style="color:#005CC5">None</span><span style="color:#24292E">, stdout</span><span style="color:#D73A49">=</span><span style="color:#005CC5">None</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">int</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#032F62">    """同步入口：阻塞式服务一个 stdio 会话。"""</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> asyncio.run(serve_async(server, stdin </span><span style="color:#D73A49">or</span><span style="color:#24292E"> sys.stdin, stdout </span><span style="color:#D73A49">or</span><span style="color:#24292E"> sys.stdout))</span></span></code></pre>
 <p>三个参数都可注入：<code>stdin</code>、<code>stdout</code> 缺省时才取 <code>sys.stdin</code> 与 <code>sys.stdout</code>，取值发生在调用时而不是导入时。这让测试与嵌入方都能替换流。返回值是 <code>serve_async</code> 的处理条数，入口 <code>main</code> 不使用它。</p>
 <p><code>asyncio.run</code> 会新建事件循环、跑完协程、关闭循环。因此一个进程只服务一个会话，会话结束即进程结束。这种“一进程一会话”的模型由 stdio 传输推导而来：客户端每次连接都启动一个新子进程，进程内不需要处理第二次 <code>initialize</code>。</p>
-<p><code>asyncio.run</code> 同时决定了异常路径：协程里未捕获的异常会从 <code>serve_stdio</code> 抛出，沿 <code>main</code> 冒泡到 <code>raise SystemExit(main())</code>（<code>backend/mcp/__main__.py:57-58</code>），最终以带 traceback 的退出结束。传输循环内部只兜住 JSON 解析错误，协议层与执行层的异常按契约已被包装成错误响应，因此这条路径主要留给编程错误。</p>
+<p><code>asyncio.run</code> 同时决定了异常路径：协程里未捕获的异常会从 <code>serve_stdio</code> 抛出，沿 <code>main</code> 冒泡到 <code>raise SystemExit(main())</code>（<code>backend/mcp/__main__.py</code>），最终以带 traceback 的退出结束。传输循环内部只兜住 JSON 解析错误，协议层与执行层的异常按契约已被包装成错误响应，因此这条路径主要留给编程错误。</p>
 <h2 id="参数解析与配置来源">参数解析与配置来源</h2>
-<p>入口用 argparse 定义三个参数（<code>backend/mcp/__main__.py:18-26</code>）：</p>
+<p>入口用 argparse 定义三个参数（<code>backend/mcp/__main__.py</code>）：</p>
 
 
 
@@ -346,22 +367,27 @@
 
 
 <table><thead><tr><th>参数</th><th>缺省</th><th>作用</th></tr></thead><tbody><tr><td><code>--username</code></td><td><code>None</code></td><td>KD 用户名，等价于环境变量 <code>KD_MCP_USERNAME</code></td></tr><tr><td><code>--session</code></td><td><code>None</code></td><td>会话 ID，等价于 <code>KD_MCP_SESSION</code>，再缺省为默认会话</td></tr><tr><td><code>--list-tools</code></td><td>假</td><td>打印工具清单后退出，不进入协议模式</td></tr></tbody></table>
-<p><code>--session</code> 的默认值刻意留成 <code>None</code>，实际的默认在 <code>runtime.resolve_identity</code> 里落到 <code>DEFAULT_SESSION_ID</code>（<code>backend/mcp/runtime.py:39-40</code>）。这样命令行参数、环境变量、全局默认三层的优先级只有一处实现，入口不重复判断。</p>
+<p>三个参数在源码里就是这样声明的（<code>backend/mcp/__main__.py</code> 的 <code>_parse_args</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">parser.add_argument(</span><span style="color:#032F62">"--username"</span><span style="color:#24292E">, </span><span style="color:#E36209">help</span><span style="color:#D73A49">=</span><span style="color:#032F62">"KnowledgeDiver 用户名（或环境变量 KD_MCP_USERNAME）"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">parser.add_argument(</span><span style="color:#032F62">"--session"</span><span style="color:#24292E">, </span><span style="color:#E36209">default</span><span style="color:#D73A49">=</span><span style="color:#005CC5">None</span><span style="color:#24292E">, </span><span style="color:#E36209">help</span><span style="color:#D73A49">=</span><span style="color:#032F62">"会话 ID（或 KD_MCP_SESSION，默认 default）"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">parser.add_argument(</span><span style="color:#032F62">"--list-tools"</span><span style="color:#24292E">, </span><span style="color:#E36209">action</span><span style="color:#D73A49">=</span><span style="color:#032F62">"store_true"</span><span style="color:#24292E">, </span><span style="color:#E36209">help</span><span style="color:#D73A49">=</span><span style="color:#032F62">"打印只读工具清单后退出"</span><span style="color:#24292E">)</span></span></code></pre>
+<p>argparse 是 Python 标准库的命令行参数解析器：声明参数名与帮助文本，它负责解析、生成 <code>--help</code>、并在参数写错时打印用法后以退出码 2 结束。<code>action="store_true"</code> 表示这是个开关，出现即真。</p>
+<p><code>--session</code> 的默认值刻意留成 <code>None</code>，实际的默认在 <code>runtime.resolve_identity</code> 里落到 <code>DEFAULT_SESSION_ID</code>（<code>backend/mcp/runtime.py</code>）。这样命令行参数、环境变量、全局默认三层的优先级只有一处实现，入口不重复判断。</p>
 <p>argparse 自带的 <code>--help</code> 与参数错误行为没有被覆写：未知参数会打印用法并退出，退出码为 2（按 argparse 通用做法）。这与构建失败的 2 撞在同一个数值上，若客户端只按退出码分类，需要再读 stderr 文本区分。</p>
 <h2 id="日志设置">日志设置</h2>
-<p>日志配置在参数解析之前执行（<code>backend/mcp/__main__.py:30-31</code>）：</p>
+<p>日志配置在参数解析之前执行（<code>backend/mcp/__main__.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">logging.basicConfig(</span><span style="color:#E36209">level</span><span style="color:#D73A49">=</span><span style="color:#24292E">logging.</span><span style="color:#005CC5">INFO</span><span style="color:#24292E">, </span><span style="color:#E36209">stream</span><span style="color:#D73A49">=</span><span style="color:#24292E">sys.stderr, </span><span style="color:#E36209">format</span><span style="color:#D73A49">=</span><span style="color:#032F62">"[mcp] </span><span style="color:#005CC5">%(levelname)s</span><span style="color:#005CC5"> %(message)s</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
-<p>三个显式选择：级别 INFO、输出流 stderr、格式固定为 <code>[mcp] 级别 消息</code>。级别 INFO 与就绪日志、网关调试日志的级别匹配；<code>backend/mcp/gateway.py:184</code> 的调用日志是 DEBUG，默认不会出现，需要调低级别才可见。</p>
+<p>三个显式选择：级别 INFO、输出流 stderr、格式固定为 <code>[mcp] 级别 消息</code>。级别 INFO 与就绪日志、网关调试日志的级别匹配；<code>backend/mcp/gateway.py</code> 里 <code>call_tool</code> 开头的调用日志是 DEBUG，默认不会出现，需要调低级别才可见。</p>
 <p>配置只对根日志器生效（<code>basicConfig</code> 的行为）。若上层应用已经配置过日志，这里的调用不会改变既有设置，这是 <code>basicConfig</code> 的常见行为。作为独立子进程启动时不存在这种情况，因为进程内没有别的配置者。</p>
 <h2 id="启动失败与退出码">启动失败与退出码</h2>
-<p>构建网关包在 try 里（<code>backend/mcp/__main__.py:34-38</code>）：</p>
+<p>构建网关包在 try 里（<code>backend/mcp/__main__.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">try</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    gateway </span><span style="color:#D73A49">=</span><span style="color:#24292E"> build_gateway(args.username, args.session)</span></span>
 <span class="line"><span style="color:#D73A49">except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> exc:</span></span>
 <span class="line"><span style="color:#005CC5">    print</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[mcp] 启动失败: </span><span style="color:#005CC5">{</span><span style="color:#24292E">exc</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#E36209">file</span><span style="color:#D73A49">=</span><span style="color:#24292E">sys.stderr)</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> 2</span></span></code></pre>
 <p>捕获的是 <code>Exception</code>，因此用户名缺失（<code>McpConfigError</code>）、数据库打不开、导入失败都会走同一条路：写一行 stderr、返回 2。消息里带上异常文本，最有用的是用户名缺失时的那句“请用 —username 或设置环境变量 KD_MCP_USERNAME”。</p>
-<p>成功路径不返回中途值，只在结尾返回 0（<code>:53-54</code>）。会话因 EOF 结束时 <code>serve_stdio</code> 正常返回，进程以 0 退出，客户端据此知道是对方关闭了连接。</p>
+<p>成功路径不返回中途值，只在结尾返回 0。会话因 EOF 结束时 <code>serve_stdio</code> 正常返回，进程以 0 退出，客户端据此知道是对方关闭了连接。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["python -m backend.mcp"] --> B["配置日志到 stderr"]
   B --> C["argparse 解析三个参数"]
@@ -374,7 +400,7 @@
   I --> J["serve_stdio 逐行服务"]
   J --> K["EOF 退出，返回 0"]</pre></div>
 <h2 id="核验模式与正常模式的分叉">核验模式与正常模式的分叉</h2>
-<p><code>--list-tools</code> 分支在构建网关之后、构造服务器之前（<code>backend/mcp/__main__.py:40-43</code>）：</p>
+<p><code>--list-tools</code> 分支在构建网关之后、构造服务器之前（<code>backend/mcp/__main__.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> args.list_tools:</span></span>
 <span class="line"><span style="color:#005CC5">    print</span><span style="color:#24292E">(json.dumps({</span><span style="color:#032F62">"tools"</span><span style="color:#24292E">: gateway.list_tools()}, </span><span style="color:#E36209">ensure_ascii</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#E36209">indent</span><span style="color:#D73A49">=</span><span style="color:#005CC5">2</span><span style="color:#24292E">))</span></span>
 <span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> 0</span></span></code></pre>
@@ -401,7 +427,7 @@
   end</pre></div>
 <h2 id="信号与中断">信号与中断</h2>
 <p>入口没有注册信号处理器。客户端关闭管道走 EOF 正常退出；用户按 Ctrl+C 时 <code>KeyboardInterrupt</code> 从 <code>asyncio.run</code> 抛出，<code>main</code> 不捕获，进程按 Python 默认行为打印 traceback 并以 130 退出（按 Python 行为的描述，仓库未覆写）。客户端场景下不会出现键盘中断。</p>
-<p>进程退出时没有资源清理：<code>build_gateway</code> 构造的 <code>PipelineAPI</code> 与数据库连接不显式关闭，<code>SessionDatabaseManager.close</code> 没有被调用。SQLite 连接随进程结束由系统回收，WAL 文件保持在可恢复状态。这一点按代码事实记录。</p>
+<p>进程退出时没有资源清理：<code>build_gateway</code> 构造的 <code>PipelineAPI</code> 与数据库连接不显式关闭，<code>SessionDatabaseManager.close</code> 没有被调用。SQLite 连接随进程结束由系统回收，WAL 文件保持在可恢复状态。WAL 是 SQLite 的一种日志模式：写操作先顺序追加进 <code>.wal</code> 文件，事后再合并回主库，因此进程被杀也不会留下写到一半的数据库，下次打开自动恢复。这一点按代码事实记录。</p>
 <h2 id="易错点">易错点</h2>
 <ol>
 <li>把日志写到 stdout。协议通道被污染，客户端会收到解析失败。</li>
@@ -463,7 +489,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>同步桥</td><td><code>asyncio.run(serve_async(...))</code></td><td><code>backend/mcp/stdio.py:49-51</code></td></tr><tr><td>注入流</td><td>缺省时才取 <code>sys.stdin</code> 与 <code>sys.stdout</code></td><td><code>:50</code></td></tr><tr><td>参数</td><td>username、session、list-tools</td><td><code>backend/mcp/__main__.py:18-26</code></td></tr><tr><td>日志</td><td>INFO 级别、stderr、固定格式</td><td><code>:30-31</code></td></tr><tr><td>构建失败</td><td>stderr 一行、退出码 2</td><td><code>:34-38</code></td></tr><tr><td>正常退出</td><td>EOF 后返回 0</td><td><code>:53-54</code></td></tr><tr><td>核验模式</td><td>先建网关，stdout 打印缩进 JSON</td><td><code>:40-43</code></td></tr><tr><td>清理</td><td>无显式关闭</td><td>退出路径代码</td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>同步桥</td><td><code>asyncio.run(serve_async(...))</code></td><td><code>stdio.serve_stdio</code></td></tr><tr><td>注入流</td><td>缺省时才取 <code>sys.stdin</code> 与 <code>sys.stdout</code></td><td><code>stdin or sys.stdin</code> 表达式</td></tr><tr><td>参数</td><td>username、session、list-tools</td><td><code>__main__._parse_args</code></td></tr><tr><td>日志</td><td>INFO 级别、stderr、固定格式</td><td><code>main</code> 里的 <code>logging.basicConfig</code></td></tr><tr><td>构建失败</td><td>stderr 一行、退出码 2</td><td><code>main</code> 里的 <code>try/except</code></td></tr><tr><td>正常退出</td><td>EOF 后返回 0</td><td><code>main</code> 末尾的 <code>return 0</code></td></tr><tr><td>核验模式</td><td>先建网关，stdout 打印缩进 JSON</td><td><code>main</code> 里的 <code>--list-tools</code> 分支</td></tr><tr><td>清理</td><td>无显式关闭</td><td>退出路径代码</td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -544,12 +570,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/__main__.py</code></td><td>参数解析、日志、退出码与模式分叉（:18-58）</td></tr><tr><td><code>backend/mcp/stdio.py</code></td><td>同步入口与返回类型（:49-51）</td></tr><tr><td><code>backend/mcp/runtime.py</code></td><td>会话与用户名的最终默认值（:32-40）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>调试级调用日志（:184）</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>传输与运行时断言（:321-392）</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-启动装配与只读执行器"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-启动装配与只读执行器</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/03-启动装配与只读执行器.md</span></div><div class="dfile__body"><h1 id="启动装配身份解析与只读执行器">启动装配：身份解析与只读执行器</h1>
-<p>服务器启动时要回答三个问题：服务哪个用户、哪个会话的数据；用哪个对象执行工具；暴露哪些工具。答案分别在 <code>resolve_identity</code>、<code>build_executor</code>、<code>ReadOnlyGateway.__init__</code> 里（<code>backend/mcp/runtime.py:32-74</code>、<code>backend/mcp/gateway.py:141-150</code>）。这三个函数串起来的顺序就是启动装配的全部内容，没有配置文件、没有插件加载。</p>
-<p>只读承诺在装配阶段被写成三层：清单白名单、调用时的层级复核、执行器的启用集合（<code>backend/mcp/gateway.py:15-19</code>）。前两层在网关内，第三层在构造执行器时把 <code>enabled_tools</code> 限成八个只读工具的集合（<code>backend/mcp/runtime.py:63</code>）。即使前两层被绕过，执行器仍然拒绝写层工具。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/__main__.py</code></td><td>参数解析、日志、退出码与模式分叉</td></tr><tr><td><code>backend/mcp/stdio.py</code></td><td>同步入口与返回类型</td></tr><tr><td><code>backend/mcp/runtime.py</code></td><td>会话与用户名的最终默认值</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>调试级调用日志</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>传输与运行时断言</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-启动装配与只读执行器"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-启动装配与只读执行器</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/03-启动装配与只读执行器.md</span></div><div class="dfile__body"><h1 id="启动装配身份解析与只读执行器">启动装配：身份解析与只读执行器</h1>
+<p>服务器启动时要回答三个问题：服务哪个用户、哪个会话的数据；用哪个对象执行工具；暴露哪些工具。答案分别在 <code>resolve_identity</code>、<code>build_executor</code>、<code>ReadOnlyGateway.__init__</code> 里（<code>backend/mcp/runtime.py</code>、<code>backend/mcp/gateway.py</code>）。这三个函数串起来的顺序就是启动装配的全部内容，没有配置文件、没有插件加载。</p>
+<p>只读承诺在装配阶段被写成三层：清单白名单、调用时的层级复核、执行器的启用集合（<code>backend/mcp/gateway.py</code>）。前两层在网关内，第三层在构造执行器时把 <code>enabled_tools</code> 限成八个只读工具的集合（<code>backend/mcp/runtime.py</code>）。即使前两层被绕过，执行器仍然拒绝写层工具。</p>
 <p>工具描述的字段结构属于相邻单元，这里只写到装配与边界为止。</p>
 <h2 id="身份解析的三层取值">身份解析的三层取值</h2>
-<p><code>resolve_identity</code> 的两个入参都可为空，取值优先级写在同一段代码里（<code>backend/mcp/runtime.py:32-40</code>）：</p>
+<p><code>resolve_identity</code> 的两个入参都可为空，取值优先级写在同一段代码里（<code>backend/mcp/runtime.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">resolved_user </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (username </span><span style="color:#D73A49">or</span><span style="color:#24292E"> os.getenv(</span><span style="color:#005CC5">ENV_USERNAME</span><span style="color:#24292E">) </span><span style="color:#D73A49">or</span><span style="color:#032F62"> ""</span><span style="color:#24292E">).strip()</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> resolved_user:</span></span>
 <span class="line"><span style="color:#D73A49">    raise</span><span style="color:#24292E"> McpConfigError(</span><span style="color:#005CC5">...</span><span style="color:#24292E">)</span></span>
@@ -578,10 +604,10 @@
 
 
 
-<table><thead><tr><th>字段</th><th>优先级</th><th>环境变量</th><th>最终默认</th></tr></thead><tbody><tr><td>用户名</td><td>参数、环境变量、无</td><td><code>KD_MCP_USERNAME</code>（<code>:21</code>）</td><td>无，缺失即报错</td></tr><tr><td>会话</td><td>参数、环境变量、默认</td><td><code>KD_MCP_SESSION</code>（<code>:22</code>）</td><td><code>DEFAULT_SESSION_ID</code>（<code>:18</code>）</td></tr></tbody></table>
-<p>用户名的三步都做了 <code>strip</code>，全空白视为未提供；会话在拼接后又剥一次空白，空串回落到默认会话（<code>:40</code>）。默认值来自 <code>backend.config</code> 的 <code>DEFAULT_SESSION_ID</code>，与 Web 侧共用同一个常量。</p>
-<p>用户名缺失抛 <code>McpConfigError</code>，消息里直接给出两种提供方式与环境变量名（<code>:35-38</code>）。这个异常继承 <code>RuntimeError</code>（<code>:28-29</code>），被入口的宽捕获转成退出码 2。</p>
-<p>回归测试固定了优先级：环境变量提供时无参调用可用；显式参数优先于环境变量；<code>KD_MCP_USERNAME</code> 被删除后无参调用抛错（<code>tests/backend/test_mcp_server.py:385-392</code>）。</p>
+<table><thead><tr><th>字段</th><th>优先级</th><th>环境变量</th><th>最终默认</th></tr></thead><tbody><tr><td>用户名</td><td>参数、环境变量、无</td><td><code>KD_MCP_USERNAME</code></td><td>无，缺失即报错</td></tr><tr><td>会话</td><td>参数、环境变量、默认</td><td><code>KD_MCP_SESSION</code></td><td><code>DEFAULT_SESSION_ID</code></td></tr></tbody></table>
+<p>用户名的三步都做了 <code>strip</code>，全空白视为未提供；会话在拼接后又剥一次空白，空串回落到默认会话。默认值来自 <code>backend.config</code> 的 <code>DEFAULT_SESSION_ID</code>，与 Web 侧共用同一个常量。</p>
+<p>用户名缺失抛 <code>McpConfigError</code>，消息里直接给出两种提供方式与环境变量名。这个异常继承 <code>RuntimeError</code>，被入口的宽捕获转成退出码 2。</p>
+<p>这条优先级可以用三条判据核对：只设环境变量时无参调用应当可用；参数与环境变量同时给出时以参数为准；两者都没有时应当报错，而不是退化成空用户名。测试里就是按这三条断言的（<code>tests/backend/test_mcp_server.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["resolve_identity(username, session_id)"] --> B["username 参数非空吗"]
   B -- 是 --> C["取参数"]
@@ -600,7 +626,7 @@
   L --> M
   M --> N["返回用户名与会话"]</pre></div>
 <h2 id="两个可注入工厂">两个可注入工厂</h2>
-<p><code>build_executor</code> 接受两个工厂参数，缺省时才用真实实现（<code>backend/mcp/runtime.py:43-63</code>）：</p>
+<p><code>build_executor</code> 接受两个工厂参数，缺省时才用真实实现（<code>backend/mcp/runtime.py</code>）：</p>
 
 
 
@@ -622,18 +648,32 @@
 
 
 <table><thead><tr><th>工厂</th><th>缺省实现</th><th>真实依赖</th></tr></thead><tbody><tr><td><code>api_factory(username, session_id)</code></td><td>函数内导入 <code>PipelineAPI</code> 并构造</td><td>数据库与嵌入模型</td></tr><tr><td><code>executor_factory(api, enabled)</code></td><td>函数内导入 <code>ToolExecutor</code> 并构造</td><td><code>backend.agent.tools</code></td></tr></tbody></table>
-<p>默认实现在函数体内部导入（<code>:52-54</code>、<code>:58-60</code>），模块导入阶段不加载流水线与 Agent 工具链。这让 <code>backend.mcp</code> 可以被轻量导入，例如只读工具清单或做单元测试时不必启动数据库。</p>
-<p>注入点存在的直接用途是测试：回归测试用假工厂绕开真实数据库与嵌入模型，构造执行器并断言它收到的 <code>enabled</code> 集合恰好是只读白名单（<code>tests/backend/test_mcp_server.py:354-371</code>）。<code>build_gateway</code> 同样把两个工厂透传下去（<code>backend/mcp/runtime.py:66-74</code>），使端到端测试可以在内存里跑完整个装配（<code>:374-382</code>）。</p>
+<p>默认实现在函数体内部导入，模块导入阶段不加载流水线与 Agent 工具链。简化后的骨架如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 简化：build_executor 的两个缺省工厂</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> api_factory </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    def</span><span style="color:#6F42C1"> api_factory</span><span style="color:#24292E">(u, s):</span></span>
+<span class="line"><span style="color:#D73A49">        from</span><span style="color:#24292E"> backend.pipeline.api </span><span style="color:#D73A49">import</span><span style="color:#24292E"> PipelineAPI    </span><span style="color:#6A737D"># 函数内导入</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> PipelineAPI(</span><span style="color:#E36209">username</span><span style="color:#D73A49">=</span><span style="color:#24292E">u, </span><span style="color:#E36209">session_id</span><span style="color:#D73A49">=</span><span style="color:#24292E">s)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> executor_factory </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    def</span><span style="color:#6F42C1"> executor_factory</span><span style="color:#24292E">(api, enabled):</span></span>
+<span class="line"><span style="color:#D73A49">        from</span><span style="color:#24292E"> backend.agent.tools </span><span style="color:#D73A49">import</span><span style="color:#24292E"> ToolExecutor    </span><span style="color:#6A737D"># 函数内导入</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> ToolExecutor(api, </span><span style="color:#E36209">enabled_tools</span><span style="color:#D73A49">=</span><span style="color:#24292E">enabled)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">api </span><span style="color:#D73A49">=</span><span style="color:#24292E"> api_factory(username, session_id)</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> executor_factory(api, </span><span style="color:#005CC5">set</span><span style="color:#24292E">(</span><span style="color:#005CC5">READ_TOOL_NAMES</span><span style="color:#24292E">))</span></span></code></pre>
+<p>关键在于 <code>from backend.pipeline.api import PipelineAPI</code> 写在函数体里：Python 只在真正调用这个函数时才执行 import，所以 <code>import backend.mcp</code> 不会顺带拉起数据库与嵌入模型。这让 <code>backend.mcp</code> 可以被轻量导入，例如只读工具清单或做单元测试时不必启动数据库。</p>
+<p>注入点存在的直接用途是测试：回归测试用假工厂绕开真实数据库与嵌入模型，构造执行器并断言它收到的 <code>enabled</code> 集合恰好是只读白名单（<code>tests/backend/test_mcp_server.py</code>）。<code>build_gateway</code> 同样把两个工厂透传下去（<code>backend/mcp/runtime.py</code>），使端到端测试可以在内存里跑完整个装配。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">api </span><span style="color:#D73A49">=</span><span style="color:#24292E"> api_factory(username, session_id)</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> executor_factory(api, </span><span style="color:#005CC5">set</span><span style="color:#24292E">(</span><span style="color:#005CC5">READ_TOOL_NAMES</span><span style="color:#24292E">))</span></span></code></pre>
 <p>最后一行是第三层兜底的落点：执行器拿到的启用集合是 <code>READ_TOOL_NAMES</code> 的拷贝，不含写层与处方层名字。拷贝而不是直接传引用，避免执行器意外改动模块级常量。</p>
 <h2 id="只读启用集合的来源">只读启用集合的来源</h2>
-<p><code>READ_TOOL_NAMES</code> 在网关模块导入时从注册表派生（<code>backend/mcp/gateway.py:33-35</code>）：</p>
+<p><code>READ_TOOL_NAMES</code> 在网关模块导入时从注册表派生（<code>backend/mcp/gateway.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">READ_TIERS</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> (registry.</span><span style="color:#005CC5">TIER_READ</span><span style="color:#24292E">,)</span></span>
 <span class="line"><span style="color:#005CC5">READ_TOOL_NAMES</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> frozenset</span><span style="color:#24292E">(registry.tools_by_tier(registry.</span><span style="color:#005CC5">TIER_READ</span><span style="color:#24292E">))</span></span>
 <span class="line"><span style="color:#005CC5">FORBIDDEN_TIERS</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> frozenset</span><span style="color:#24292E">({registry.</span><span style="color:#005CC5">TIER_PRESCRIBE</span><span style="color:#24292E">, registry.</span><span style="color:#005CC5">TIER_WRITE</span><span style="color:#24292E">})</span></span></code></pre>
-<p>清单是对注册表 read 层的查询结果，并没有手写八个名字。注册表增删只读工具时，暴露集合与执行器启用集合会一起变化，不需要改 <code>backend/mcp</code>。模块文档列出的八项是当时的结果快照（<code>backend/mcp/gateway.py:8-10</code>），回归测试用固定集合锁住了它（<code>tests/backend/test_mcp_server.py:79-82</code>）。</p>
-<p>处方层被排除的理由写在常量注释里：<code>plan_knowledge_gaps</code> 会消耗一次 AI 调用，不属于只读承诺（<code>gateway.py:32</code>）。写层的四个工具（联网搜索、扩展、刷新、建链）排除理由更直接，它们会改动数据。</p>
+<p>清单是对注册表 read 层的查询结果，并没有手写八个名字。注册表增删只读工具时，暴露集合与执行器启用集合会一起变化，不需要改 <code>backend/mcp</code>。这正是「从单一来源派生」的价值：权限清单不会和执行集合各改一处而漂移；文档里逐项列出的名字只是某个时间点的查询结果，不是需要同步维护的清单。</p>
+<p>处方层被排除的理由写在常量注释里：<code>plan_knowledge_gaps</code> 会消耗一次 AI 调用，不属于只读承诺（<code>gateway.py</code>）。写层的四个工具（联网搜索、扩展、刷新、建链）排除理由更直接，它们会改动数据。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   R["tool_registry 层级元数据"] --> A["READ_TOOL_NAMES 8 个"]
   R --> B["TIER_PRESCRIBE 1 个"]
@@ -643,16 +683,16 @@
   B --> F["不注册，调用被拒 -32601"]
   C --> F</pre></div>
 <h2 id="网关构造与导入期断言">网关构造与导入期断言</h2>
-<p><code>ReadOnlyGateway</code> 构造时先按名字建工具字典，再校验每个名字的层级（<code>backend/mcp/gateway.py:144-150</code>）：</p>
+<p><code>ReadOnlyGateway</code> 构造时先按名字建工具字典，再校验每个名字的层级（<code>backend/mcp/gateway.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._tools </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {t[</span><span style="color:#032F62">"name"</span><span style="color:#24292E">]: t </span><span style="color:#D73A49">for</span><span style="color:#24292E"> t </span><span style="color:#D73A49">in</span><span style="color:#24292E"> mcp_tools()}</span></span>
 <span class="line"><span style="color:#24292E">illegal </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> sorted</span><span style="color:#24292E">(n </span><span style="color:#D73A49">for</span><span style="color:#24292E"> n </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._tools </span><span style="color:#D73A49">if</span><span style="color:#24292E"> registry.tool_tier(n) </span><span style="color:#D73A49">!=</span><span style="color:#24292E"> registry.</span><span style="color:#005CC5">TIER_READ</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> illegal:</span></span>
 <span class="line"><span style="color:#D73A49">    raise</span><span style="color:#005CC5"> RuntimeError</span><span style="color:#24292E">(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"只读网关拒绝注册非 read 层工具: </span><span style="color:#005CC5">{</span><span style="color:#24292E">illegal</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
-<p>这是一条启动期断言：如果注册表被改成把写层工具算进只读导出集，服务器直接拒绝启动，而不是带着越权能力运行。回归测试用 <code>monkeypatch</code> 模拟这种改动，断言构造抛 <code>RuntimeError</code>（<code>tests/backend/test_mcp_server.py:138-148</code>）。</p>
-<p>断言之外还有调用期的实时复核：<code>call_tool</code> 在分发前再查一次 <code>tool_tier(name) == TIER_READ</code>（<code>gateway.py:178-181</code>）。注册表在运行期被改动时，第二层能立刻拦下，测试同样覆盖了这条路径（<code>tests/backend/test_mcp_server.py:124-135</code>）。</p>
+<p>这是一条启动期断言：如果注册表被改成把写层工具算进只读导出集，服务器直接拒绝启动，而不是带着越权能力运行。回归测试用 <code>monkeypatch</code> 模拟这种改动，断言构造抛 <code>RuntimeError</code>（<code>tests/backend/test_mcp_server.py</code>）；<code>monkeypatch</code> 是 pytest 提供的补丁工具，能在单条测试里临时替换模块属性并在测试结束后自动还原。</p>
+<p>断言之外还有调用期的实时复核：<code>call_tool</code> 在分发前再查一次 <code>tool_tier(name) == TIER_READ</code>（<code>gateway.py</code>）。注册表在运行期被改动时，第二层能立刻拦下，测试同样覆盖了这条路径（<code>tests/backend/test_mcp_server.py</code>）。</p>
 <h2 id="手写实现与官方-sdk-的关系">手写实现与官方 SDK 的关系</h2>
-<p>模块文档说明了为什么不直接用官方 mcp 包（<code>backend/mcp/__init__.py:16-22</code>）：开发环境里已装 mcp 2.2.0，但 <code>requirements.txt</code> 没有声明它，为避免干净环境装不上，协议层用标准库实现了一个子集，同时把版本探测做成可选导入（<code>backend/mcp/server.py:41-48</code>）。</p>
-<p>这个取舍对装配的影响是：<code>backend.mcp</code> 在没有任何第三方 MCP 依赖的环境里可以完整启动；装了官方包时只影响协议版本候选，不影响工具与执行器。官方包的导入失败被宽捕获，注释写明“无 SDK 时零影响”（<code>server.py:47-48</code>）。</p>
+<p>模块文档说明了为什么不直接用官方 mcp 包（<code>backend/mcp/__init__.py</code>）：开发环境里已装 mcp 2.2.0，但 <code>requirements.txt</code> 没有声明它，为避免干净环境装不上，协议层用标准库实现了一个子集，同时把版本探测做成可选导入（<code>backend/mcp/server.py</code>）。</p>
+<p>这个取舍对装配的影响是：<code>backend.mcp</code> 在没有任何第三方 MCP 依赖的环境里可以完整启动；装了官方包时只影响协议版本候选，不影响工具与执行器。官方包的导入失败被宽捕获，注释写明“无 SDK 时零影响”（<code>server.py</code>）。</p>
 <h2 id="装配失败的传播路径">装配失败的传播路径</h2>
 
 
@@ -763,7 +803,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>用户名优先级</td><td>参数、<code>KD_MCP_USERNAME</code>、否则报错</td><td><code>backend/mcp/runtime.py:32-38</code></td></tr><tr><td>会话优先级</td><td>参数、<code>KD_MCP_SESSION</code>、默认会话</td><td><code>:39-40</code></td></tr><tr><td>可注入工厂</td><td><code>api_factory</code> 与 <code>executor_factory</code></td><td><code>:43-63</code></td></tr><tr><td>启用集合</td><td><code>set(READ_TOOL_NAMES)</code></td><td><code>:63</code></td></tr><tr><td>只读清单来源</td><td>注册表 read 层</td><td><code>backend/mcp/gateway.py:33-34</code></td></tr><tr><td>启动期断言</td><td>非 read 层工具拒绝构造</td><td><code>:147-150</code></td></tr><tr><td>调用期复核</td><td>每次调用重查层级</td><td><code>:178-181</code></td></tr><tr><td>手写协议层</td><td>避免新增依赖</td><td><code>backend/mcp/__init__.py:16-22</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>用户名优先级</td><td>参数、<code>KD_MCP_USERNAME</code>、否则报错</td><td><code>runtime.resolve_identity</code></td></tr><tr><td>会话优先级</td><td>参数、<code>KD_MCP_SESSION</code>、默认会话</td><td><code>resolve_identity</code> 的会话取值</td></tr><tr><td>可注入工厂</td><td><code>api_factory</code> 与 <code>executor_factory</code></td><td><code>runtime.build_executor</code> 的两个参数</td></tr><tr><td>启用集合</td><td><code>set(READ_TOOL_NAMES)</code></td><td><code>build_executor</code> 末尾的构造调用</td></tr><tr><td>只读清单来源</td><td>注册表 read 层</td><td><code>gateway.READ_TOOL_NAMES</code></td></tr><tr><td>启动期断言</td><td>非 read 层工具拒绝构造</td><td><code>ReadOnlyGateway.__init__</code> 的层级检查</td></tr><tr><td>调用期复核</td><td>每次调用重查层级</td><td><code>ReadOnlyGateway.call_tool</code> 的第二层检查</td></tr><tr><td>手写协议层</td><td>避免新增依赖</td><td><code>backend/mcp/__init__.py</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -848,7 +888,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/runtime.py</code></td><td>身份解析与装配（:18-74）</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>只读清单、构造断言与调用复核（:15-19、:32-35、:141-191）</td></tr><tr><td><code>backend/mcp/__init__.py</code></td><td>手写实现的原因与模块划分（:1-22）</td></tr><tr><td><code>backend/mcp/server.py</code></td><td>可选 SDK 导入与版本探测（:41-48）</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>装配与边界断言（:79-148、:354-392）</td></tr><tr><td><code>backend/config.py</code></td><td><code>DEFAULT_SESSION_ID</code> 常量来源</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-客户端配置与进程生命周期"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-客户端配置与进程生命周期</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/04-客户端配置与进程生命周期.md</span></div><div class="dfile__body"><h1 id="客户端配置与进程生命周期">客户端配置与进程生命周期</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/runtime.py</code></td><td>身份解析与装配</td></tr><tr><td><code>backend/mcp/gateway.py</code></td><td>只读清单、构造断言与调用复核</td></tr><tr><td><code>backend/mcp/__init__.py</code></td><td>手写实现的原因与模块划分</td></tr><tr><td><code>backend/mcp/server.py</code></td><td>可选 SDK 导入与版本探测</td></tr><tr><td><code>tests/backend/test_mcp_server.py</code></td><td>装配与边界断言</td></tr><tr><td><code>backend/config.py</code></td><td><code>DEFAULT_SESSION_ID</code> 常量来源</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-客户端配置与进程生命周期"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-客户端配置与进程生命周期</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/23-MCP/02-stdio服务器/04-客户端配置与进程生命周期.md</span></div><div class="dfile__body"><h1 id="客户端配置与进程生命周期">客户端配置与进程生命周期</h1>
 <p>客户端接入这个服务器不需要网络地址，只需要一条启动命令。仓库里给了两份配置样例：Claude Desktop 的 <code>claude_desktop_config.json</code> 与 Cursor 的 <code>cursor_mcp.json</code>（<code>backend/mcp/examples/</code>）。两份都把 <code>command</code> 指向同一台机器上的 Python 解释器，把 <code>-m backend.mcp</code> 作为参数，再附上用户名。</p>
 <p>配置决定的不只是“怎么启动”，还包括子进程的工作目录、模块搜索路径与编码。这三项错了会在启动阶段就失败，而不是在协议阶段回一个错误码。因此排查连接问题时，先看 stderr 与退出码，再看协议消息。</p>
 <p>样例里的路径是 Windows 形式的绝对路径，按配置原文描述；在 WSL 或其他平台上需要替换解释器与路径，这一点在适配一节说明。</p>
@@ -900,7 +940,7 @@
 
 
 <table><thead><tr><th>字段</th><th>作用</th><th>本样例取值</th></tr></thead><tbody><tr><td><code>command</code></td><td>启动的可执行文件</td><td>Windows 虚拟环境里的 python.exe</td></tr><tr><td><code>args</code></td><td>命令行参数</td><td><code>-m backend.mcp</code> 加用户名与会话</td></tr><tr><td><code>cwd</code></td><td>子进程工作目录</td><td>仓库根目录</td></tr><tr><td><code>env</code></td><td>环境变量</td><td>模块路径、编码与两个身份变量</td></tr></tbody></table>
-<p><code>mcpServers</code> 下的键 <code>knowledgediver</code> 是客户端显示的服务名，与协议里的 <code>serverInfo.name</code>（<code>knowledgediver-readonly</code>，<code>backend/mcp/server.py:34</code>）无关。改显示名不影响协议。</p>
+<p><code>mcpServers</code> 下的键 <code>knowledgediver</code> 是客户端显示的服务名，与协议里的 <code>serverInfo.name</code>（<code>knowledgediver-readonly</code>，<code>backend/mcp/server.py</code>）无关。改显示名不影响协议。</p>
 <h2 id="命令工作目录与-pythonpath">命令、工作目录与 PYTHONPATH</h2>
 <p>三个字段共同保证 <code>-m backend.mcp</code> 能被找到：</p>
 <ul>
@@ -909,9 +949,19 @@
 <li><code>env.PYTHONPATH</code> 再给一份模块搜索路径，避免客户端启动时没有继承 shell 的 <code>PYTHONPATH</code>。</li>
 </ul>
 <p>三者里最容易漏的是 <code>cwd</code>。数据库与卡片目录按进程工作目录解析，工作目录不对时服务能启动，但读到的是另一份（或不存在的）数据。表现是工具清单正常、查询结果为空。</p>
-<p>Cursor 样例省掉了 <code>--session</code> 参数，改用 <code>KD_MCP_SESSION</code> 之外的默认值，即 <code>DEFAULT_SESSION_ID</code>（<code>backend/mcp/runtime.py:18</code>、<code>:39-40</code>）。两份样例的差异只在会话的给法，命令与路径部分相同。</p>
+<p>Cursor 样例省掉了 <code>--session</code> 参数，改用环境变量之外的默认值，即 <code>DEFAULT_SESSION_ID</code>（<code>backend/mcp/runtime.py</code>）。两份样例的差异只在会话的给法，命令与路径部分相同。Cursor 那份节选如下：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="json"><code><span class="line"><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#005CC5">  "mcpServers"</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#005CC5">    "knowledgediver"</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#005CC5">      "command"</span><span style="color:#24292E">: </span><span style="color:#032F62">"D:/KnowledgeDiver/.venv/Scripts/python.exe"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">      "args"</span><span style="color:#24292E">: [</span><span style="color:#032F62">"-m"</span><span style="color:#24292E">, </span><span style="color:#032F62">"backend.mcp"</span><span style="color:#24292E">, </span><span style="color:#032F62">"--username"</span><span style="color:#24292E">, </span><span style="color:#032F62">"&#x3C;你的KD用户名>"</span><span style="color:#24292E">],</span></span>
+<span class="line"><span style="color:#005CC5">      "cwd"</span><span style="color:#24292E">: </span><span style="color:#032F62">"D:/KnowledgeDiver"</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#005CC5">      "env"</span><span style="color:#24292E">: { </span><span style="color:#005CC5">"PYTHONPATH"</span><span style="color:#24292E">: </span><span style="color:#032F62">"D:/KnowledgeDiver"</span><span style="color:#24292E">, </span><span style="color:#005CC5">"KD_MCP_USERNAME"</span><span style="color:#24292E">: </span><span style="color:#032F62">"&#x3C;你的KD用户名>"</span><span style="color:#24292E"> }</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <h2 id="编码与中文输出">编码与中文输出</h2>
-<p>配置里显式设了 <code>PYTHONIOENCODING=utf-8</code>。原因是协议输出包含中文：<code>instructions</code> 是中文说明（<code>backend/mcp/server.py:144-147</code>），工具摘要与错误消息也含中文。stdio 写回时用 <code>ensure_ascii=False</code>（<code>backend/mcp/stdio.py:43</code>），若输出流的编码不是 UTF-8，写入可能抛编码错误或产生乱码。</p>
+<p>配置里显式设了 <code>PYTHONIOENCODING=utf-8</code>。原因是协议输出包含中文：<code>instructions</code> 是中文说明（<code>backend/mcp/server.py</code>），工具摘要与错误消息也含中文。stdio 写回时用 <code>ensure_ascii=False</code>（<code>backend/mcp/stdio.py</code>），若输出流的编码不是 UTF-8，写入可能抛编码错误或产生乱码。</p>
 <p>这一项在 Windows 上尤其需要：默认控制台编码与管道编码可能不是 UTF-8，客户端解析 <code>json.loads</code> 时遇到乱码会得到解码错误而不是协议错误。配置样例把它和 <code>PYTHONPATH</code> 放在一起，属于运行环境而非协议参数。</p>
 <h2 id="身份参数的两种给法">身份参数的两种给法</h2>
 <p>用户名与会话各有两种给法，优先级由 <code>resolve_identity</code> 统一处理：</p>
@@ -939,10 +989,10 @@
 
 
 <table><thead><tr><th>项</th><th>命令行</th><th>环境变量</th><th>优先级</th></tr></thead><tbody><tr><td>用户名</td><td><code>--username</code></td><td><code>KD_MCP_USERNAME</code></td><td>命令行优先</td></tr><tr><td>会话</td><td><code>--session</code></td><td><code>KD_MCP_SESSION</code></td><td>命令行优先，再缺省默认会话</td></tr></tbody></table>
-<p>两份样例都同时提供了两种，看起来重复，实际是防御性写法：某些客户端在合并 <code>env</code> 时行为不同，参数与环境变量各留一份更稳。用户名缺失时服务不会启动，入口以退出码 2 结束并打印提示（<code>backend/mcp/__main__.py:34-38</code>）。</p>
+<p>两份样例都同时提供了两种，看起来重复，实际是防御性写法：某些客户端在合并 <code>env</code> 时行为不同，参数与环境变量各留一份更稳。用户名缺失时服务不会启动，入口以退出码 2 结束并打印提示（<code>backend/mcp/__main__.py</code>）。</p>
 <p>用户名对应 <code>data/</code> 与 <code>cards/</code> 下的存储目录，写错不会报“无此用户”，而是读写另一个目录，表现为空结果。核对方式是拿用户名去看 <code>cards/&#x3C;username>/&#x3C;session>/session.db</code> 是否存在。</p>
 <h2 id="进程生命周期">进程生命周期</h2>
-<p>客户端每次建立 MCP 会话都会启动一个新的子进程，进程内只处理一条 stdio 会话（<code>backend/mcp/stdio.py:49-51</code>）。</p>
+<p>客户端每次建立 MCP 会话都会启动一个新的子进程，进程内只处理一条 stdio 会话（<code>backend/mcp/stdio.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   autonumber
   participant C as 客户端
@@ -962,7 +1012,7 @@
   S-->>P: 返回处理条数
   P-->>C: 退出码 0</pre></div>
 <p>三个退出信号要分清：构建失败退出码 2 且 stderr 有一行原因；正常 EOF 退出码 0；未捕获异常带 traceback 退出。客户端配置错误最常见的是第一种，表现为服务列表里能看到条目但工具为空。</p>
-<p>生命周期内没有显式资源清理：数据库连接与嵌入模型随进程结束回收。因此每次会话启动都会重新加载一次模型，首次 <code>tools/call</code> 会包含加载时间；模型文档给的是首次约 500 ms 的量级（<code>backend/ai/embedder.py:4-5</code>），未在本仓库实测。</p>
+<p>生命周期内没有显式资源清理：数据库连接与嵌入模型随进程结束回收。因此每次会话启动都会重新加载一次模型，首次 <code>tools/call</code> 会包含加载时间；仓库注释给出的量级是约 500 ms（声明值，未实测）。要紧的是这个结构：进程不常驻，加载成本每开一次会话就要再付一遍。</p>
 <p>多个客户端同时连接会得到多个子进程，各自打开同一会话的数据库连接。SQLite 的 WAL 模式支持多连接读写，但嵌入模型会在每个进程里各加载一份，内存按进程数增长。</p>
 <h2 id="故障排查表">故障排查表</h2>
 
@@ -1085,7 +1135,7 @@
 
 
 
-<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>配置文件</td><td><code>mcpServers</code> 下的 command、args、cwd、env</td><td><code>backend/mcp/examples/claude_desktop_config.json</code></td></tr><tr><td>启动命令</td><td>虚拟环境解释器加 <code>-m backend.mcp</code></td><td>同上</td></tr><tr><td>工作目录</td><td>仓库根，决定数据目录解析</td><td>同上</td></tr><tr><td>编码</td><td><code>PYTHONIOENCODING=utf-8</code></td><td>同上</td></tr><tr><td>身份</td><td>参数或环境变量，命令行优先</td><td><code>backend/mcp/runtime.py:32-40</code></td></tr><tr><td>会话模型</td><td>一进程一会话，EOF 退出码 0</td><td><code>backend/mcp/stdio.py:49-51</code></td></tr><tr><td>启动失败</td><td>stderr 一行加退出码 2</td><td><code>backend/mcp/__main__.py:34-38</code></td></tr><tr><td>就绪日志</td><td>stderr 打印用户与工具名</td><td><code>:49-52</code></td></tr></tbody></table>
+<table><thead><tr><th>概念</th><th>取值或做法</th><th>来源</th></tr></thead><tbody><tr><td>配置文件</td><td><code>mcpServers</code> 下的 command、args、cwd、env</td><td><code>backend/mcp/examples/claude_desktop_config.json</code></td></tr><tr><td>启动命令</td><td>虚拟环境解释器加 <code>-m backend.mcp</code></td><td>同上</td></tr><tr><td>工作目录</td><td>仓库根，决定数据目录解析</td><td>同上</td></tr><tr><td>编码</td><td><code>PYTHONIOENCODING=utf-8</code></td><td>同上</td></tr><tr><td>身份</td><td>参数或环境变量，命令行优先</td><td><code>runtime.resolve_identity</code></td></tr><tr><td>会话模型</td><td>一进程一会话，EOF 退出码 0</td><td><code>stdio.serve_stdio</code> 与 <code>asyncio.run</code></td></tr><tr><td>启动失败</td><td>stderr 一行加退出码 2</td><td><code>__main__.main</code> 的 <code>try/except</code></td></tr><tr><td>就绪日志</td><td>stderr 打印用户与工具名</td><td><code>main</code> 里的 <code>logging.info</code></td></tr></tbody></table>
 <h3 id="设计权衡">设计权衡</h3>
 
 
@@ -1174,4 +1224,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/examples/claude_desktop_config.json</code></td><td>Claude Desktop 配置样例</td></tr><tr><td><code>backend/mcp/examples/cursor_mcp.json</code></td><td>Cursor 配置样例</td></tr><tr><td><code>backend/mcp/__main__.py</code></td><td>启动失败、就绪日志与退出码（:29-54）</td></tr><tr><td><code>backend/mcp/runtime.py</code></td><td>身份解析与环境变量名（:18-40）</td></tr><tr><td><code>backend/mcp/stdio.py</code></td><td>写回编码与同步入口（:42-45、:49-51）</td></tr><tr><td><code>backend/mcp/server.py</code></td><td>服务器名与中文 instructions（:34、:144-147）</td></tr><tr><td><code>backend/ai/embedder.py</code></td><td>首次加载量级的声明值（:4-5）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/23-MCP/01-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E6%B6%88%E6%81%AF/"><span class="k">← 上一篇</span><span class="t">协议与消息</span><span class="d">MCP · 4 个文件</span></a><a class="next" href="/tc63/docs/23-MCP/03-%E5%B7%A5%E5%85%B7schema%E4%B8%8E%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%84/"><span class="k">下一篇 →</span><span class="t">工具schema与返回结构</span><span class="d">MCP · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/mcp/examples/claude_desktop_config.json</code></td><td>Claude Desktop 配置样例</td></tr><tr><td><code>backend/mcp/examples/cursor_mcp.json</code></td><td>Cursor 配置样例</td></tr><tr><td><code>backend/mcp/__main__.py</code></td><td>启动失败、就绪日志与退出码</td></tr><tr><td><code>backend/mcp/runtime.py</code></td><td>身份解析与环境变量名</td></tr><tr><td><code>backend/mcp/stdio.py</code></td><td>写回编码与同步入口</td></tr><tr><td><code>backend/mcp/server.py</code></td><td>服务器名与中文 instructions</td></tr><tr><td><code>backend/ai/embedder.py</code></td><td>首次加载量级的声明值</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/23-MCP/01-%E5%8D%8F%E8%AE%AE%E4%B8%8E%E6%B6%88%E6%81%AF/"><span class="k">← 上一篇</span><span class="t">协议与消息</span><span class="d">MCP · 4 个文件</span></a><a class="next" href="/tc63/docs/23-MCP/03-%E5%B7%A5%E5%85%B7schema%E4%B8%8E%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%84/"><span class="k">下一篇 →</span><span class="t">工具schema与返回结构</span><span class="d">MCP · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

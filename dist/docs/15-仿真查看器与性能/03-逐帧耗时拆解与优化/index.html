@@ -2,7 +2,7 @@
 <p>观测脚本的一帧不是「物理一步」那么简单：它包含命令组装、策略前向、物理推进、状态搬回 CPU、可选的扫描点计算、交给渲染线程的同步，以及为了维持实时而补足的睡眠。任何一项偏大，画面都会变卡，但它们的原因与修法完全不同。</p>
 <p>一帧可以拆成若干可计时的分项，本机一条完整的优化记录把优化前后的账目都留了下来；分项统计怎么打、以及为什么不能用一个数字解释全部现象，都能从这份账目里读出来。数字取自 <code>mjx-go1-getup/docs/viewer-guide.md</code> 与 <code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code> 的本机实测。</p>
 <h2 id="一帧由哪些部分拼成">一帧由哪些部分拼成</h2>
-<p>观测脚本的每帧构成与初始耗时量级如下（<code>viewer-guide.md:28-43</code>）：</p>
+<p>观测脚本的每帧构成与初始耗时量级如下（<code>viewer-guide.md</code>）：</p>
 
 
 
@@ -62,15 +62,15 @@
     E --> F["自绘扫描点（可选）"]
     F --> G["v.sync 交给渲染线程"]
     G --> H["节流睡眠"]</pre></div>
-<p>对照实测：优化前 373 ms 一帧（约 3 fps），优化后 19.5 ms 一帧（约 50 fps）；差值几乎全部来自 ② ③ ⑥ 三处，与「物理本身太慢」无关（<code>viewer-guide.md:42-43</code>）。</p>
+<p>对照实测：优化前 373 ms 一帧（约 3 fps），优化后 19.5 ms 一帧（约 50 fps）；差值几乎全部来自 ② ③ ⑥ 三处，与「物理本身太慢」无关（<code>viewer-guide.md</code>）。</p>
 <h2 id="初始账目373-ms-的去向">初始账目：373 ms 的去向</h2>
-<p><code>view_go1.py</code> 跑 v20 权重时的日志是这份账目的原始记录（<code>实验记录_Go1复现.md:4110-4120</code>）：</p>
+<p><code>view_go1.py</code> 跑 v20 权重时的日志是这份账目的原始记录（<code>实验记录_Go1复现.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>frame  50: fps=3  step=377.3 copy=0.2 render=2.4 scan=3.5 total=383.4 ms</span></span>
 <span class="line"><span>frame 400: fps=3  step=369.5 copy=0.2 render=2.5 scan=3.6 total=375.8 ms</span></span>
 <span class="line"><span>frame 425: fps=9  step=103.5 ...          &#x3C;- 自行恢复</span></span>
 <span class="line"><span>frame 450: fps=16 step=55.7  ...</span></span>
 <span class="line"><span>frame 650: fps=1  step=1693.0 ...         &#x3C;- 又爆</span></span></code></pre>
-<p>记录当时就把现象拆成两个：前约 400 帧的 373 ms 暂态，以及暂态恢复之后稳态仍有 52 ms（<code>实验记录_Go1复现.md:4122-4123</code>）。</p>
+<p>记录当时就把现象拆成两个：前约 400 帧的 373 ms 暂态，以及暂态恢复之后稳态仍有 52 ms（<code>实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -102,7 +102,7 @@
 
 
 <table><thead><tr><th>现象</th><th>来源</th><th>对应处理</th></tr></thead><tbody><tr><td>前约 400 帧 step 约 373 ms</td><td>窗口暂态与首帧编译</td><td>开窗口前预热</td></tr><tr><td>稳态 52 ms 里多出的约 11 ms</td><td>策略前向未 jit</td><td>把策略 jit 成一个 kernel</td></tr><tr><td>软件渲染时的额外暴涨</td><td>llvmpipe 占 CPU，与内核分发抢核</td><td>换硬件渲染后端</td></tr><tr><td>偶尔整帧上千毫秒</td><td>编译或资源竞争叠加</td><td>先隔离变量再归因</td></tr></tbody></table>
-<p>记录里对这三个来源的叠加有一句总结：同一个「慢」可能由多个独立原因叠加，修掉一个不能解释全部（<code>实验记录_Go1复现.md:4267-4269</code>）。</p>
+<p>记录里对这三个来源的叠加有一句总结：同一个「慢」可能由多个独立原因叠加，修掉一个不能解释全部（<code>实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     S["total 383 ms"] --> A["窗口暂态：前约 400 帧"]
     S --> B["策略 eager：每帧约 11 ms"]
@@ -114,7 +114,7 @@
     F2 --> R
     F3 --> R</pre></div>
 <h2 id="优化后的账目195-ms">优化后的账目：19.5 ms</h2>
-<p>同一台机器上，新脚本 <code>watch_v20_fast.py</code> 的日志把稳态账目写得很清楚（<code>实验记录_Go1复现.md:4201-4210</code>）：</p>
+<p>同一台机器上，新脚本 <code>watch_v20_fast.py</code> 的日志把稳态账目写得很清楚（<code>实验记录_Go1复现.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>[GL] 实际渲染器: D3D12 (AMD Radeon 780M Graphics)</span></span>
 <span class="line"><span>[预热] 150 帧 ... [ 13.0s] 预热完成</span></span>
 <span class="line"><span>frame   25: fps=28 step=27.8 ...</span></span>
@@ -163,9 +163,9 @@
 
 
 <table><thead><tr><th>分项</th><th>初始</th><th>优化后</th><th>说明</th></tr></thead><tbody><tr><td>step</td><td>373 ms（暂态）</td><td>12.7 到 13.5 ms</td><td>暂态消除后回到物理本身的开销</td></tr><tr><td>copy</td><td>0.2 ms</td><td>0.2 ms</td><td>只搬 <code>qpos</code>/<code>qvel</code>，没有变化</td></tr><tr><td>sync</td><td>2.4 ms</td><td>2.3 到 2.4 ms</td><td>只做线程交接，不含 GL 绘制</td></tr><tr><td>scan</td><td>3.5 ms</td><td>3.4 到 3.5 ms</td><td>已 jit 的扫描计算</td></tr><tr><td>total</td><td>383 ms</td><td>19.2 到 19.8 ms</td><td>稳定 50 fps 以上</td></tr></tbody></table>
-<p>预热之后的第一行日志（frame 25）已经到 28 fps，到 frame 100 就是 50 fps，没有 373 ms 段（<code>实验记录_Go1复现.md:4170-4171</code>）。</p>
+<p>预热之后的第一行日志（frame 25）已经到 28 fps，到 frame 100 就是 50 fps，没有 373 ms 段（<code>实验记录_Go1复现.md</code>）。</p>
 <h2 id="分项统计怎么打出来">分项统计怎么打出来</h2>
-<p>分项统计由观测脚本自己打印，代码里把 <code>step</code> 与 <code>copy</code> 分开计时并在循环末尾汇总（<code>mjx-go1-getup/sim/watch_v20_fast.py:443-465</code>）：</p>
+<p>分项统计由观测脚本自己打印，代码里把 <code>step</code> 与 <code>copy</code> 分开计时并在循环末尾汇总（<code>mjx-go1-getup/sim/watch_v20_fast.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">t0 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.perf_counter()</span></span>
 <span class="line"><span style="color:#24292E">state.info[</span><span style="color:#032F62">"command"</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.asarray(np.array(command, </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#24292E">np.float32))</span></span>
 <span class="line"><span style="color:#24292E">a </span><span style="color:#D73A49">=</span><span style="color:#24292E"> act_jit(state.obs[</span><span style="color:#032F62">"state"</span><span style="color:#24292E">]) </span><span style="color:#D73A49">if</span><span style="color:#24292E"> act </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#D73A49"> else</span><span style="color:#24292E"> act</span></span>
@@ -174,11 +174,11 @@
 <span class="line"><span style="color:#24292E">qpos </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.asarray(state.data.qpos)</span></span>
 <span class="line"><span style="color:#24292E">qvel </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.asarray(state.data.qvel)</span></span>
 <span class="line"><span style="color:#24292E">t_step </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (time.perf_counter() </span><span style="color:#D73A49">-</span><span style="color:#24292E"> t0) </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 1000.0</span></span></code></pre>
-<p>日志与画面 overlay 都同时给出 fps 与各分项（<code>watch_v20_fast.py:671-675</code>、<code>:682-685</code>）：</p>
+<p>日志与画面 overlay 都同时给出 fps 与各分项（<code>watch_v20_fast.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>frame {fi}: fps={...} step={...} copy={...} sync={...} scan={...} total={...} ms</span></span></code></pre>
-<p>记录里明确要求 overlay 同时显示 fps 与分项，因为分项是定位瓶颈的唯一依据，只有 fps 无法判断该优化哪一项（<code>viewer-guide.md:367-368</code>）。</p>
+<p>记录里明确要求 overlay 同时显示 fps 与分项，因为分项是定位瓶颈的唯一依据，只有 fps 无法判断该优化哪一项（<code>viewer-guide.md</code>）。</p>
 <h2 id="同一个慢可能有多个来源">同一个慢可能有多个来源</h2>
-<p>判断顺序建议先排除进程外的干扰，再看指标本身是否代表目标场景，最后才怀疑代码（<code>viewer-guide.md:411-412</code>）。有一类读数会误导人：脚本曾打印「无窗口稳态 step」，它比窗口内偏高约两倍（24 ms 对 13 ms），据此怀疑「窗口外反而更慢」是错的，那个数字受开窗口前驱动与排队状态影响（<code>watch_v20_fast.py:476-478</code>）。</p>
+<p>判断顺序建议先排除进程外的干扰，再看指标本身是否代表目标场景，最后才怀疑代码（<code>viewer-guide.md</code>）。有一类读数会误导人：脚本曾打印「无窗口稳态 step」，它比窗口内偏高约两倍（24 ms 对 13 ms），据此怀疑「窗口外反而更慢」是错的，那个数字受开窗口前驱动与排队状态影响（<code>watch_v20_fast.py</code>）。</p>
 
 
 
@@ -206,7 +206,7 @@
 
 <table><thead><tr><th>读数</th><th>能否作为目标场景判据</th><th>原因</th></tr></thead><tbody><tr><td>无窗口循环的 step</td><td>否</td><td>受开窗前的驱动状态影响，偏高约两倍</td></tr><tr><td>主循环的 fps 与分项</td><td>是</td><td>就是实际运行状态</td></tr><tr><td>离屏渲染耗时</td><td>仅限渲染对比</td><td>不含窗口与交互</td></tr></tbody></table>
 <h2 id="哪些分项不属于本帧">哪些分项不属于本帧</h2>
-<p>有两处开销不在主循环的计时里，读账目时要知道它们的存在（<code>viewer-guide.md:38</code>、<code>:153-154</code>）：</p>
+<p>有两处开销不在主循环的计时里，读账目时要知道它们的存在（<code>viewer-guide.md</code>）：</p>
 
 
 
@@ -356,12 +356,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>每帧构成表、优化前后对照与判读顺序（<code>:28-48</code>、<code>:153-154</code>、<code>:367-368</code>、<code>:411-412</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>373 ms 原始日志、优化后日志与教训（<code>:4110-4123</code>、<code>:4201-4210</code>、<code>:4261-4274</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>分项计时实现与日志格式（<code>:443-478</code>、<code>:671-685</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>每帧构成表、优化前后对照与判读顺序（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>373 ms 原始日志、优化后日志与教训（）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>分项计时实现与日志格式（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-2" data-file="02-策略与扫描的jit化"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-策略与扫描的jit化</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/15-仿真查看器与性能/03-逐帧耗时拆解与优化/02-策略与扫描的jit化.md</span></div><div class="dfile__body"><h1 id="策略与扫描计算的-jit-化">策略与扫描计算的 jit 化</h1>
 <p>训练时策略跑在整体 jit 的大图里，调度开销被摊薄到看不出；观测脚本每帧只调用一次，Python 侧的派发开销就变成了主要成本。小网络尤其明显：计算本身远小于调用它的代价。</p>
 <p>策略前向与自绘扫描点两处的实测差距都在十倍以上，归因方法与注意事项也有共性，数字取自 <code>mjx-go1-getup/docs/viewer-guide.md</code> 与 <code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>。</p>
 <h2 id="交互循环里的调度开销">交互循环里的调度开销</h2>
-<p>观测脚本与训练脚本的根本差别在于批大小与调用方式：训练侧批量大、缓冲区地址稳定、不看画面；观测侧单环境、每帧新建数组、有人盯着画面。同一份代码在两种用法下的最优解不同，这是这一类优化的总纲（<code>viewer-guide.md:22-24</code>）。</p>
+<p>观测脚本与训练脚本的根本差别在于批大小与调用方式：训练侧批量大、缓冲区地址稳定、不看画面；观测侧单环境、每帧新建数组、有人盯着画面。同一份代码在两种用法下的最优解不同，这是这一类优化的总纲（<code>viewer-guide.md</code>）。</p>
 
 
 
@@ -390,7 +390,7 @@
     B -->|"jit 成一个 kernel"| E["一次派发"]
     E --> F["开销约 0.08 ms"]</pre></div>
 <h2 id="策略前向的实测差距">策略前向的实测差距</h2>
-<p>同一份策略（128×128 网络，观测 91 维）两种写法的耗时如下（<code>viewer-guide.md:53-70</code>）：</p>
+<p>同一份策略（128×128 网络，观测 91 维）两种写法的耗时如下（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># eager：小网络的 Python dispatch 开销远大于计算本身</span></span>
 <span class="line"><span style="color:#24292E">act, _ </span><span style="color:#D73A49">=</span><span style="color:#24292E"> policy(state.obs[</span><span style="color:#032F62">"state"</span><span style="color:#24292E">], rng)</span></span>
 <span class="line"></span>
@@ -418,9 +418,9 @@
 
 
 <table><thead><tr><th>写法</th><th>耗时</th><th>差距</th></tr></thead><tbody><tr><td>eager</td><td>10.97 ms</td><td>基准</td></tr><tr><td>jit</td><td>0.08 ms</td><td>约 137 倍</td></tr></tbody></table>
-<p>这条差距容易漏掉的原因也在记录里：训练时策略被 <code>scan</code> 或 <code>vmap</code> 整体包住，从没暴露过派发开销，只有观测脚本这种每帧单独调用的写法才会遇到（<code>viewer-guide.md:72-74</code>）。本机 <code>watch_v20_fast.py</code> 的修法是把策略前向单独 jit 成 <code>act_jit</code>，主循环只调用它（<code>mjx-go1-getup/sim/watch_v20_fast.py:453</code>）。</p>
+<p>这条差距容易漏掉的原因也在记录里：训练时策略被 <code>scan</code> 或 <code>vmap</code> 整体包住，从没暴露过派发开销，只有观测脚本这种每帧单独调用的写法才会遇到（<code>viewer-guide.md</code>）。本机 <code>watch_v20_fast.py</code> 的修法是把策略前向单独 jit 成 <code>act_jit</code>，主循环只调用它（<code>mjx-go1-getup/sim/watch_v20_fast.py</code>）。</p>
 <h2 id="冷热对照排除暂态">冷热对照排除暂态</h2>
-<p>只测一次容易把进程早期效应当成真实差距。记录里做了同进程的冷热两轮对照（<code>实验记录_Go1复现.md:4155-4163</code>）：</p>
+<p>只测一次容易把进程早期效应当成真实差距。记录里做了同进程的冷热两轮对照（<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -447,18 +447,18 @@
 
 
 <table><thead><tr><th>变体</th><th>冷，第一轮</th><th>热，第二轮</th></tr></thead><tbody><tr><td>策略 jit</td><td>16.95 ms</td><td>17.06 ms</td></tr><tr><td>策略 eager</td><td>28.90 ms</td><td>27.24 ms</td></tr><tr><td>策略 jit（再测）</td><td>17.06 ms</td><td>16.94 ms</td></tr></tbody></table>
-<p>两轮都保持约 11 ms 的差距，说明这是写法差异而不是暂态（<code>实验记录_Go1复现.md:4163</code>）。对照实验的设计要点是同一进程、同一个输入、交替测量，而不是在不同时间点各测一次。</p>
+<p>两轮都保持约 11 ms 的差距，说明这是写法差异而不是暂态（<code>实验记录_Go1复现.md</code>）。对照实验的设计要点是同一进程、同一个输入、交替测量，而不是在不同时间点各测一次。</p>
 <h2 id="jit-时随机数要固定">jit 时随机数要固定</h2>
-<p>策略推理是确定性的，随机数可以直接固定成常量（<code>viewer-guide.md:76-77</code>）：</p>
+<p>策略推理是确定性的，随机数可以直接固定成常量（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">act_jit </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.jit(</span><span style="color:#D73A49">lambda</span><span style="color:#24292E"> obs: policy(obs, rng_const)[</span><span style="color:#005CC5">0</span><span style="color:#24292E">])</span></span></code></pre>
-<p>每次传入不同的随机键会让 jit 重新编译，jit 的收益就消失了。本项目策略本身是确定性推理，因此给常量即可（<code>viewer-guide.md:76-77</code>）。</p>
+<p>每次传入不同的随机键会让 jit 重新编译，jit 的收益就消失了。本项目策略本身是确定性推理，因此给常量即可（<code>viewer-guide.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["传入常量 rng"] --> B["形状与地址稳定"]
     B --> C["命中已编译的 kernel"]
     D["每次传新 rng"] --> E["触发重新编译"]
     E --> F["每帧都在编译，jit 失效"]</pre></div>
 <h2 id="自绘扫描点的整串-jit">自绘扫描点的整串 jit</h2>
-<p>观测脚本常有「按帧算一点东西给可视化用」的需求，本机是 35 个地形采样点的位置、地面高与特征。这一整串必须 jit 成一个 kernel（<code>viewer-guide.md:120-135</code>）：</p>
+<p>观测脚本常有「按帧算一点东西给可视化用」的需求，本机是 35 个地形采样点的位置、地面高与特征。这一整串必须 jit 成一个 kernel（<code>viewer-guide.md</code>）：</p>
 
 
 
@@ -477,10 +477,10 @@
 
 
 <table><thead><tr><th>写法</th><th>每帧耗时（两次独立测量）</th></tr></thead><tbody><tr><td>eager 逐条</td><td>51.6 ms / 315.8 ms</td></tr><tr><td>jit 成一个 kernel</td><td>0.32 ms / 6.28 ms</td></tr></tbody></table>
-<p>差距在 50 到 160 倍之间，数值一致（最大差小于 5e-07）（<code>viewer-guide.md:130</code>）。原因是 eager 写法每帧要在 Python 侧按顺序发起上百个微小内核，每个都有启动与同步开销（<code>viewer-guide.md:131-132</code>）。</p>
-<p>判别方法很简单：观测脚本里凡是「每帧调用一次、返回若干数组给渲染用」的函数，一律加 jit；输入里含非常量结构（例如环境对象）时，把它移出参数列表或用闭包捕获（<code>viewer-guide.md:134-135</code>）。本机脚本把扫描计算与绘制分开，绘制走 <code>draw_scan</code>，计算侧单独计时并累加到 <code>scan</code> 分项（<code>watch_v20_fast.py:610-614</code>）。</p>
+<p>差距在 50 到 160 倍之间，数值一致（最大差小于 5e-07）（<code>viewer-guide.md</code>）。原因是 eager 写法每帧要在 Python 侧按顺序发起上百个微小内核，每个都有启动与同步开销（<code>viewer-guide.md</code>）。</p>
+<p>判别方法很简单：观测脚本里凡是「每帧调用一次、返回若干数组给渲染用」的函数，一律加 jit；输入里含非常量结构（例如环境对象）时，把它移出参数列表或用闭包捕获（<code>viewer-guide.md</code>）。本机脚本把扫描计算与绘制分开，绘制走 <code>draw_scan</code>，计算侧单独计时并累加到 <code>scan</code> 分项（<code>watch_v20_fast.py</code>）。</p>
 <h2 id="等价性判据用动作">等价性判据用动作</h2>
-<p>jit 前后必须验证行为一致，但判据不能用状态量。一步物理求解会把 1e-7 的动作差混沌放大：本机实测用 <code>qpos</code> 比较时，一步就把差异放大到 2.8 m，看起来像「不一致」（<code>实验记录_Go1复现.md:4233-4234</code>、<code>viewer-guide.md:79-80</code>）。</p>
+<p>jit 前后必须验证行为一致，但判据不能用状态量。一步物理求解会把 1e-7 的动作差混沌放大：本机实测用 <code>qpos</code> 比较时，一步就把差异放大到 2.8 m，看起来像「不一致」（<code>实验记录_Go1复现.md</code>、<code>viewer-guide.md</code>）。</p>
 
 
 
@@ -501,7 +501,7 @@
 
 
 
-<table><thead><tr><th>判据</th><th>结果</th><th>是否可用</th></tr></thead><tbody><tr><td>动作偏差</td><td>1.19e-06</td><td>可用（<code>实验记录_Go1复现.md:4226</code>）</td></tr><tr><td><code>qpos</code> 偏差</td><td>被混沌放大到米级</td><td>不可用</td></tr></tbody></table>
+<table><thead><tr><th>判据</th><th>结果</th><th>是否可用</th></tr></thead><tbody><tr><td>动作偏差</td><td>1.19e-06</td><td>可用（<code>实验记录_Go1复现.md</code>）</td></tr><tr><td><code>qpos</code> 偏差</td><td>被混沌放大到米级</td><td>不可用</td></tr></tbody></table>
 <h2 id="易错点">易错点</h2>
 
 
@@ -630,12 +630,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>策略与扫描的实测差距、rng 处理与等价判据（<code>:22-24</code>、<code>:53-82</code>、<code>:120-135</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>冷热对照与 jit 等价性数据（<code>:4145-4164</code>、<code>:4226</code>、<code>:4233-4234</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>策略 jit 与扫描计时的实现（<code>:453</code>、<code>:610-614</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>策略与扫描的实测差距、rng 处理与等价判据（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>冷热对照与 jit 等价性数据（）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>策略 jit 与扫描计时的实现（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-3" data-file="03-数据搬运与图模式"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-数据搬运与图模式</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/15-仿真查看器与性能/03-逐帧耗时拆解与优化/03-数据搬运与图模式.md</span></div><div class="dfile__body"><h1 id="数据搬运与图模式">数据搬运与图模式</h1>
 <p>观测脚本有两处与「每帧都做同一件事」相关的成本：把 GPU 上的状态搬回 CPU，以及把重复的计算包成图执行。前者只要挑对字段就能降一个量级，后者则有一个反直觉之处：训练侧最优的图模式在观测侧会反复重建图缓存，跑上几千帧后直接崩。</p>
 <p>两处成本的处理方式不同：搬运要挑字段，图模式要跟着地址稳定性来选；地址为什么会变、以及一个进程只建一个环境的约束，决定了选择空间。数字来自 <code>mjx-go1-getup/docs/viewer-guide.md</code> 与实验记录。</p>
 <h2 id="只搬渲染需要的字段">只搬渲染需要的字段</h2>
-<p>渲染只需要 <code>qpos</code> 与 <code>qvel</code>，不需要接触数组等巨大字段（<code>viewer-guide.md:139-151</code>）：</p>
+<p>渲染只需要 <code>qpos</code> 与 <code>qvel</code>，不需要接触数组等巨大字段（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 慢: mjx.get_data + mj_copyData 会搬整个 Data (含 naconmax=65536 的接触数组)</span></span>
 <span class="line"><span style="color:#6A737D"># 快: 只搬 qpos/qvel (1.13 ms -> 0.02 ms)</span></span>
 <span class="line"><span style="color:#24292E">qpos </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.asarray(state.data.qpos)</span></span>
@@ -664,9 +664,9 @@
 
 
 <table><thead><tr><th>搬运方式</th><th>每帧耗时</th><th>原因</th></tr></thead><tbody><tr><td>整个 Data 搬回</td><td>1.13 ms</td><td>含为 768 环境预留的接触数组</td></tr><tr><td>只搬 <code>qpos</code>/<code>qvel</code></td><td>0.02 ms</td><td>两个小数组</td></tr></tbody></table>
-<p>差别看起来只有 1 ms，但它是「每帧固定成本」的一部分，而且整块搬运还受接触数组容量影响。记录里把这条列为独立优化项，理由是渲染用不到的字段不该参与搬运（<code>viewer-guide.md:141</code>）。</p>
+<p>差别看起来只有 1 ms，但它是「每帧固定成本」的一部分，而且整块搬运还受接触数组容量影响。记录里把这条列为独立优化项，理由是渲染用不到的字段不该参与搬运（<code>viewer-guide.md</code>）。</p>
 <h2 id="设备同步点决定计时位置">设备同步点决定计时位置</h2>
-<p><code>np.asarray</code> 会强制设备同步，也就是说策略与物理的真实耗时直到这一行才结算（<code>viewer-guide.md:152-154</code>）。因此计时区间必须包含它，否则测到的是异步派发的速度，而不是帧耗时。</p>
+<p><code>np.asarray</code> 会强制设备同步，也就是说策略与物理的真实耗时直到这一行才结算（<code>viewer-guide.md</code>）。因此计时区间必须包含它，否则测到的是异步派发的速度，而不是帧耗时。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     autonumber
     participant P as Python 主循环
@@ -675,9 +675,9 @@
     P->>G: np.asarray(qpos)
     G-->>P: 同步返回数据（前面的工作在此结算）
     Note over P: 计时点在这之后才是真实帧耗时</pre></div>
-<p>本机脚本的计时写法与此一致：先记录起点，依次完成命令组装、策略、物理与两次搬运，再取结束时间（<code>mjx-go1-getup/sim/watch_v20_fast.py:451-458</code>），并在注释里写明同步结算这一点（<code>:455</code>）。</p>
+<p>本机脚本的计时写法与此一致：先记录起点，依次完成命令组装、策略、物理与两次搬运，再取结束时间（<code>mjx-go1-getup/sim/watch_v20_fast.py</code>），并在注释里写明同步结算这一点（）。</p>
 <h2 id="graph_mode-的几种取值">graph_mode 的几种取值</h2>
-<p>MJX 在 warp 后端下会把内核包成 CUDA 图。默认 <code>graph_mode=WARP</code> 的语义是按缓冲区地址缓存图（<code>viewer-guide.md:84-87</code>，对应 warp 的 <code>JaxCallableGraphMode</code>）。观测循环里的地址不稳定，因此几种取值的表现差别很大（<code>viewer-guide.md:96-102</code>）：</p>
+<p>MJX 在 warp 后端下会把内核包成 CUDA 图。默认 <code>graph_mode=WARP</code> 的语义是按缓冲区地址缓存图（<code>viewer-guide.md</code>，对应 warp 的 <code>JaxCallableGraphMode</code>）。观测循环里的地址不稳定，因此几种取值的表现差别很大（<code>viewer-guide.md</code>）：</p>
 
 
 
@@ -714,7 +714,7 @@
 
 
 <table><thead><tr><th>graph_mode</th><th>步时</th><th>结果</th></tr></thead><tbody><tr><td>NONE</td><td>139.0 ms</td><td>不崩但慢</td></tr><tr><td>JAX</td><td>预热即崩</td><td>报 <code>CUDA_ERROR_NOT_SUPPORTED</code></td></tr><tr><td>WARP（默认）</td><td>185.5 ms</td><td>探针下不崩，真实窗口跑几千帧后崩</td></tr><tr><td>WARP_STAGED</td><td>16.3 ms</td><td>不崩，专为地址会变设计</td></tr><tr><td>WARP_STAGED_EX</td><td>57.3 ms</td><td>不崩</td></tr></tbody></table>
-<p>结论是分工：观测脚本用 <code>WARP_STAGED</code>，训练保持默认，因此环境配置里要有 <code>graph_mode</code> 字段，让两种用法各取所需，而不是为了观测去改训练配置（<code>viewer-guide.md:104-105</code>）。训练侧的对照数据也支持这个分工：<code>donate_argnums=0</code> 能把单步从 25.9 ms 降到 14.8 ms，而 <code>WARP_STAGED</code> 与 <code>_EX</code> 分别只有 17.2 与 41.6 ms（<code>experiment-log.md:708-710</code>）。</p>
+<p>结论是分工：观测脚本用 <code>WARP_STAGED</code>，训练保持默认，因此环境配置里要有 <code>graph_mode</code> 字段，让两种用法各取所需，而不是为了观测去改训练配置（<code>viewer-guide.md</code>）。训练侧的对照数据也支持这个分工：<code>donate_argnums=0</code> 能把单步从 25.9 ms 降到 14.8 ms，而 <code>WARP_STAGED</code> 与 <code>_EX</code> 分别只有 17.2 与 41.6 ms（<code>experiment-log.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["每帧调用 step"] --> B{"graph_mode"}
     B -->|"WARP"| C["按 buffer 地址查图缓存"]
@@ -725,17 +725,17 @@
     B -->|"WARP_STAGED"| H["staging buffer 加图内拷贝"]
     H --> I["地址变化不影响，稳定快"]</pre></div>
 <h2 id="地址变化与图缓存失效">地址变化与图缓存失效</h2>
-<p>观测循环里有两个动作会改变地址：每帧给 <code>state.info["command"]</code> 赋一个新数组，以及按重置键换一个 state（<code>viewer-guide.md:88-92</code>）。地址一变，按地址缓存的图就失效，需要重新捕获；反复捕获最终撞上运行时错误：</p>
+<p>观测循环里有两个动作会改变地址：每帧给 <code>state.info["command"]</code> 赋一个新数组，以及按重置键换一个 state（<code>viewer-guide.md</code>）。地址一变，按地址缓存的图就失效，需要重新捕获；反复捕获最终撞上运行时错误：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>wp.capture_begin(...) -> RuntimeError: Warp error: unknown stream</span></span></code></pre>
-<p><code>WARP_STAGED</code> 的设计目标正是这种地址会变的场景：它用 staging buffer 加图内拷贝，把地址变化挡在图外（<code>viewer-guide.md:101</code>）。</p>
+<p><code>WARP_STAGED</code> 的设计目标正是这种地址会变的场景：它用 staging buffer 加图内拷贝，把地址变化挡在图外（<code>viewer-guide.md</code>）。</p>
 <h2 id="捐赠数组与每帧重建">捐赠数组与每帧重建</h2>
-<p>使用 <code>donate_argnums=0</code> 时，循环里复用的固定数组会被 jax 判为已删除，报 <code>Array has been deleted</code>（<code>viewer-guide.md:107-108</code>）。本机脚本的选择是每帧重建那个三维命令数组，并在注释里写明原因（<code>watch_v20_fast.py:449-452</code>）：</p>
+<p>使用 <code>donate_argnums=0</code> 时，循环里复用的固定数组会被 jax 判为已删除，报 <code>Array has been deleted</code>（<code>viewer-guide.md</code>）。本机脚本的选择是每帧重建那个三维命令数组，并在注释里写明原因（<code>watch_v20_fast.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 每帧重建 command 数组: step_jit 的 donate_argnums=0 会把 state.info 里的</span></span>
 <span class="line"><span style="color:#6A737D"># 数组合并捐赠, 复用同一数组会被 jax 判为 deleted。(3,) 重建开销可忽略。</span></span>
 <span class="line"><span style="color:#24292E">state.info[</span><span style="color:#032F62">"command"</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.asarray(np.array(command, </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#24292E">np.float32))</span></span></code></pre>
 <p>重建一个三维数组的开销可以忽略，比为了省这点开销而放弃捐赠更划算。这也是「训练最优不一定适合观测」的一个具体例子。</p>
 <h2 id="一个进程只建一个环境">一个进程只建一个环境</h2>
-<p>环境与进程的对应关系有一条硬约束：一个进程只放一个环境，两个环境同进程会撞上 warp 的 CUDA 图地址缓存（<code>viewer-guide.md:474-482</code>）。记录里为此专门写了追踪脚本 <code>sim/probe_getup_mjx_trace.py</code>（<code>viewer-guide.md:481</code>）。</p>
+<p>环境与进程的对应关系有一条硬约束：一个进程只放一个环境，两个环境同进程会撞上 warp 的 CUDA 图地址缓存（<code>viewer-guide.md</code>）。记录里为此专门写了追踪脚本 <code>sim/probe_getup_mjx_trace.py</code>（<code>viewer-guide.md</code>）。</p>
 
 
 
@@ -754,7 +754,7 @@
 
 
 <table><thead><tr><th>配置</th><th>后果</th></tr></thead><tbody><tr><td>一个进程一个环境</td><td>正常</td></tr><tr><td>一个进程两个环境</td><td>地址缓存冲突，需要串行化或改图模式</td></tr></tbody></table>
-<p>交付前建议用 grep 确认每个查看器脚本都设了图模式（<code>viewer-guide.md:114-116</code>）：</p>
+<p>交付前建议用 grep 确认每个查看器脚本都设了图模式（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">grep</span><span style="color:#005CC5"> -n</span><span style="color:#032F62"> "graph_mode"</span><span style="color:#032F62"> sim/</span><span style="color:#005CC5">*</span><span style="color:#032F62">.py</span></span></code></pre>
 <h2 id="易错点">易错点</h2>
 
@@ -884,13 +884,13 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>搬运字段、同步点、图模式对比与进程约束（<code>:84-116</code>、<code>:139-154</code>、<code>:474-482</code>）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>训练侧捐赠与图模式的单步对照（<code>:708-710</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>命令数组重建与计时实现（<code>:449-458</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>搬运字段、同步点、图模式对比与进程约束（）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>训练侧捐赠与图模式的单步对照（）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>命令数组重建与计时实现（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-4" data-file="04-预热、显存与等价性闸门"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-预热、显存与等价性闸门</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/15-仿真查看器与性能/03-逐帧耗时拆解与优化/04-预热、显存与等价性闸门.md</span></div><div class="dfile__body"><h1 id="预热显存与等价性闸门">预热、显存与等价性闸门</h1>
 <p>优化到稳态之后，剩下三类问题会让帧率再次失真：窗口刚出现的早期暂态、显存被预占导致的 GPU 降频，以及为了提速改动物理而失去观测意义。前两类是「测得不准」，第三类是「测得对但已经不是同一个东西」。</p>
 <p>三类问题的处理办法依次是：开窗前预热、限制显存预占、把提速改动过一遍等价性闸门；交付前还要按配置清单核对代码。数字来自 <code>mjx-go1-getup/docs/viewer-guide.md</code> 与 <code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>。</p>
 <h2 id="窗口暂态与预热">窗口暂态与预热</h2>
-<p>窗口刚出现的头约 400 帧里 <code>step</code> 会停在高位（373 ms），之后自行恢复到 52 ms，期间还可能再爆一次；同一份配置在进程早期测 63 ms、稍后测 14.9 ms（<code>viewer-guide.md:209-212</code>）。它来自编译与首帧开销落在正式循环里，与代码逻辑无关。</p>
-<p>解法是在打开窗口之前，用与主循环相同的调用序列先跑若干帧（默认 150），把编译与首帧开销在「还没有窗口」时结清（<code>viewer-guide.md:214-224</code>）：</p>
+<p>窗口刚出现的头约 400 帧里 <code>step</code> 会停在高位（373 ms），之后自行恢复到 52 ms，期间还可能再爆一次；同一份配置在进程早期测 63 ms、稍后测 14.9 ms（<code>viewer-guide.md</code>）。它来自编译与首帧开销落在正式循环里，与代码逻辑无关。</p>
+<p>解法是在打开窗口之前，用与主循环相同的调用序列先跑若干帧（默认 150），把编译与首帧开销在「还没有窗口」时结清（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> _ </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(args.warmup):</span></span>
 <span class="line"><span style="color:#24292E">    state, qpos, qvel, _, _ </span><span style="color:#D73A49">=</span><span style="color:#24292E"> frame(state, d_view)   </span><span style="color:#6A737D"># 与主循环同一个 frame()</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> show_scan:</span></span>
@@ -920,10 +920,10 @@
     C -->|"是"| E["无窗口跑 150 帧，开销在此结清"]
     E --> F["窗口出现即稳态，frame 25 已 28fps"]</pre></div>
 <h2 id="预热必须走同一个函数">预热必须走同一个函数</h2>
-<p>预热用的是与主循环完全相同的 <code>frame()</code>，而不是另写一份简化版；否则漏掉某个 kernel 就白预热了，本项目第一版就漏了扫描点的预热（<code>viewer-guide.md:226-227</code>）。本机脚本的预热循环与主循环共用同一个 <code>frame()</code>，扫描计算也单独 <code>block_until_ready</code> 一次（<code>mjx-go1-getup/sim/watch_v20_fast.py:467-479</code>）。</p>
-<p>同一个位置还有一条容易被忽视的细节：不要在预热阶段打印「无窗口稳态 step」，它比窗口内偏高约两倍，并且受开窗口前的驱动与排队状态影响，据此判断窗口外更慢是错的；主循环的 fps 分项才是判据（<code>watch_v20_fast.py:476-478</code>、<code>viewer-guide.md:406-409</code>）。</p>
+<p>预热用的是与主循环完全相同的 <code>frame()</code>，而不是另写一份简化版；否则漏掉某个 kernel 就白预热了，本项目第一版就漏了扫描点的预热（<code>viewer-guide.md</code>）。本机脚本的预热循环与主循环共用同一个 <code>frame()</code>，扫描计算也单独 <code>block_until_ready</code> 一次（<code>mjx-go1-getup/sim/watch_v20_fast.py</code>）。</p>
+<p>同一个位置还有一条容易被忽视的细节：不要在预热阶段打印「无窗口稳态 step」，它比窗口内偏高约两倍，并且受开窗口前的驱动与排队状态影响，据此判断窗口外更慢是错的；主循环的 fps 分项才是判据（<code>watch_v20_fast.py</code>、<code>viewer-guide.md</code>）。</p>
 <h2 id="显存预占导致的帧率塌方">显存预占导致的帧率塌方</h2>
-<p>第二类失真来自显存。XLA 默认预占约 75% 的显存，两个进程同时跑时把 8 GiB 打满，GPU 时钟掉到 180 MHz，其中一个进程塌到 3.3 fps，另一个仍有 30.8 fps（<code>viewer-guide.md:231-248</code>、<code>:398-401</code>）。</p>
+<p>第二类失真来自显存。XLA 默认预占约 75% 的显存，两个进程同时跑时把 8 GiB 打满，GPU 时钟掉到 180 MHz，其中一个进程塌到 3.3 fps，另一个仍有 30.8 fps（<code>viewer-guide.md</code>）。</p>
 
 
 
@@ -958,11 +958,11 @@
 
 
 <table><thead><tr><th>场景</th><th>显存</th><th>SM 时钟</th><th>帧耗时</th><th>fps</th></tr></thead><tbody><tr><td>单进程</td><td>未打满</td><td>1500+ MHz</td><td>15.7 ms</td><td>63.7</td></tr><tr><td>双进程，默认预占</td><td>7674 / 8192 MiB</td><td>180 MHz</td><td>306.9 / 32.4 ms</td><td>3.3 / 30.8</td></tr><tr><td>双进程，<code>MEM_FRACTION=0.25</code></td><td>未打满</td><td>正常</td><td>27.1 / 27.1 ms</td><td>36.9 / 36.9</td></tr></tbody></table>
-<p>关键观察是中间那行：两个进程里通常只有一个被拖住，另一个照常有 30 fps，症状因此表现为「某一个查看器莫名只有 3 fps」，很容易误判成代码问题（<code>viewer-guide.md:247-248</code>）。修复方式是在 <code>import jax</code> 之前限制预占比例（<code>viewer-guide.md:250-257</code>）：</p>
+<p>关键观察是中间那行：两个进程里通常只有一个被拖住，另一个照常有 30 fps，症状因此表现为「某一个查看器莫名只有 3 fps」，很容易误判成代码问题（<code>viewer-guide.md</code>）。修复方式是在 <code>import jax</code> 之前限制预占比例（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">os.environ.setdefault(</span><span style="color:#032F62">"XLA_PYTHON_CLIENT_MEM_FRACTION"</span><span style="color:#24292E">, </span><span style="color:#032F62">"0.25"</span><span style="color:#24292E">)  </span><span style="color:#6A737D"># 8G 卡 -> ~2G</span></span></code></pre>
-<p>不同脚本的取值不同：观测脚本 0.25，评估与诊断脚本 0.3 到 0.55，训练侧 0.80（<code>viewer-guide.md:256-257</code>）。</p>
+<p>不同脚本的取值不同：观测脚本 0.25，评估与诊断脚本 0.3 到 0.55，训练侧 0.80（<code>viewer-guide.md</code>）。</p>
 <h2 id="从-gpu-状态分辨这类问题">从 GPU 状态分辨这类问题</h2>
-<p>这类问题在 CPU 侧看不出来：WSL 内的 <code>load average</code> 只有 0.11（<code>viewer-guide.md:234</code>、<code>:402</code>）。要看的是 GPU 进程与显存占用（<code>viewer-guide.md:259-267</code>）：</p>
+<p>这类问题在 CPU 侧看不出来：WSL 内的 <code>load average</code> 只有 0.11（<code>viewer-guide.md</code>）。要看的是 GPU 进程与显存占用（<code>viewer-guide.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">nvidia-smi</span><span style="color:#005CC5"> --query-compute-apps=pid,used_memory</span><span style="color:#005CC5"> --format=csv</span></span>
 <span class="line"><span style="color:#6F42C1">nvidia-smi</span><span style="color:#005CC5"> --query-gpu=memory.used,pstate,clocks.sm</span><span style="color:#005CC5"> --format=csv</span></span></code></pre>
 
@@ -991,7 +991,7 @@
 
 
 <table><thead><tr><th>观察量</th><th>正常</th><th>异常指纹</th></tr></thead><tbody><tr><td><code>memory.used</code></td><td>明显低于上限</td><td>接近上限</td></tr><tr><td><code>clocks.sm</code></td><td>1500 MHz 以上</td><td>低于 200 MHz</td></tr><tr><td><code>load average</code></td><td>不重要</td><td>低也可能异常，不能据此排除</td></tr></tbody></table>
-<p>做对照实验之前先 <code>pkill -f 你的脚本</code> 确认残留进程退干净（<code>viewer-guide.md:267</code>）。本项目对这个问题的定位用了两步：先跑一个无窗口基准复刻完整帧流程，单进程只有 15.7 ms，排除软件栈本身；再做双进程并发把 306.9 ms 复现出来，并用限制预占反证回 27 ms（<code>viewer-guide.md:277-281</code>）。复现脚本是 <code>probe_viewer_slow.py</code>，在当前检出中位于 <code>RLcontroller_go1_moreinformation/sim/</code>。</p>
+<p>做对照实验之前先 <code>pkill -f 你的脚本</code> 确认残留进程退干净（<code>viewer-guide.md</code>）。本项目对这个问题的定位用了两步：先跑一个无窗口基准复刻完整帧流程，单进程只有 15.7 ms，排除软件栈本身；再做双进程并发把 306.9 ms 复现出来，并用限制预占反证回 27 ms（<code>viewer-guide.md</code>）。复现脚本是 <code>probe_viewer_slow.py</code>，在当前检出中位于 <code>RLcontroller_go1_moreinformation/sim/</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["帧率异常"] --> B{"是否有其他 GPU 进程"}
     B -->|"有"| C["残留进程抢显存"]
@@ -1001,8 +1001,8 @@
     F -->|"否"| G["换用主循环 fps 分项"]
     F -->|"是"| H["最后才怀疑代码"]</pre></div>
 <h2 id="被否决的加速改动">被否决的加速改动</h2>
-<p>有一类改动确实能省时间，但改变了物理，因此被否决并记录在案。把接触数组容量 <code>naconmax</code> 从 65536 降到 512 到 2048，单环境步耗时从 14.94 ms 降到 12.28 ms，省下 18%（<code>viewer-guide.md:416-419</code>）。</p>
-<p>等价性验证用固定动作序列跑 500 步比对轨迹（<code>viewer-guide.md:421-424</code>、<code>实验记录_Go1复现.md:4179-4184</code>）：</p>
+<p>有一类改动确实能省时间，但改变了物理，因此被否决并记录在案。把接触数组容量 <code>naconmax</code> 从 65536 降到 512 到 2048，单环境步耗时从 14.94 ms 降到 12.28 ms，省下 18%（<code>viewer-guide.md</code>）。</p>
+<p>等价性验证用固定动作序列跑 500 步比对轨迹（<code>viewer-guide.md</code>、<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -1029,7 +1029,7 @@
 
 
 <table><thead><tr><th>naconmax</th><th>与默认的最大偏差</th><th>第 1 步偏差</th></tr></thead><tbody><tr><td>2048</td><td>8.88e-01</td><td>1.67e-03</td></tr><tr><td>1024</td><td>4.23e-01</td><td>未记录</td></tr><tr><td>512</td><td>5.19e-01</td><td>7.81e-03</td></tr></tbody></table>
-<p>判据要点是看第 1 步是否分叉：1.7e-3 已经远超 float32 舍入，说明从第一步起物理就不再等价，后面的米级差异只是混沌放大（<code>viewer-guide.md:426-430</code>）。机理是接触数组容量改变了求解器里的求和与排序顺序（<code>viewer-guide.md:427</code>）。</p>
+<p>判据要点是看第 1 步是否分叉：1.7e-3 已经远超 float32 舍入，说明从第一步起物理就不再等价，后面的米级差异只是混沌放大（<code>viewer-guide.md</code>）。机理是接触数组容量改变了求解器里的求和与排序顺序（<code>viewer-guide.md</code>）。</p>
 
 
 
@@ -1067,7 +1067,7 @@
 
 <table><thead><tr><th>改动</th><th>收益</th><th>是否采用</th><th>理由</th></tr></thead><tbody><tr><td><code>naconmax</code> 降到 512 到 2048</td><td>单步省 18%</td><td>否</td><td>第 1 步即分叉，物理不等价</td></tr><tr><td>策略 jit</td><td>每帧省约 11 ms</td><td>是</td><td>动作偏差 1.19e-06</td></tr><tr><td>开窗预热</td><td>消除 373 ms 段</td><td>是</td><td>只改时序，不改数值</td></tr><tr><td>换渲染后端</td><td>渲染快约 32 倍</td><td>是</td><td>不影响物理与数值</td></tr></tbody></table>
 <h2 id="正确性闸门">正确性闸门</h2>
-<p>任何提速改动都要过闸门，而不是看到帧率上涨就收工。本项目的闸门脚本是 <code>sim/verify_watch_v20_fast.py</code>，四道检查全部通过（<code>viewer-guide.md:372-391</code>、<code>实验记录_Go1复现.md:4215-4234</code>）：</p>
+<p>任何提速改动都要过闸门，而不是看到帧率上涨就收工。本项目的闸门脚本是 <code>sim/verify_watch_v20_fast.py</code>，四道检查全部通过（<code>viewer-guide.md</code>、<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -1114,9 +1114,9 @@
     D -->|"是"| E{"动作偏差小于 1e-05"}
     E -->|"否"| X
     E -->|"是"| F["通过，可以采用"]</pre></div>
-<p>闸门脚本本身也会出错，记录里就记了三处误判：用世界系速度比机体系指令、步数太多走出地形边界、用 <code>qpos</code> 判 jit 等价性（<code>实验记录_Go1复现.md:4228-4234</code>）。指标报异常时，先怀疑指标（<code>viewer-guide.md:391</code>）。</p>
+<p>闸门脚本本身也会出错，记录里就记了三处误判：用世界系速度比机体系指令、步数太多走出地形边界、用 <code>qpos</code> 判 jit 等价性（<code>实验记录_Go1复现.md</code>）。指标报异常时，先怀疑指标（<code>viewer-guide.md</code>）。</p>
 <h2 id="交付清单的用法">交付清单的用法</h2>
-<p>交付前对着清单过一遍，并用 grep 核对代码，而不是对着文档确认（<code>viewer-guide.md:434-450</code>）。清单里直接相关的几项：</p>
+<p>交付前对着清单过一遍，并用 grep 核对代码，而不是对着文档确认（<code>viewer-guide.md</code>）。清单里直接相关的几项：</p>
 
 
 
@@ -1287,5 +1287,5 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>预热、显存预占、GPU 指纹与非等价改动（<code>:209-284</code>、<code>:391-430</code>、<code>:434-450</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>预热实测、被否决的改动与闸门结果（<code>:4166-4171</code>、<code>:4173-4187</code>、<code>:4215-4234</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>预热循环与无窗口读数说明（<code>:467-479</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_viewer_slow.py</code></td><td>帧率塌方的复现脚本（当前检出路径）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/verify_watch_v20_fast.py</code></td><td>正确性闸门脚本（当前检出路径）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>预热、显存预占、GPU 指纹与非等价改动（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>预热实测、被否决的改动与闸门结果（）</td></tr><tr><td><code>mjx-go1-getup/sim/watch_v20_fast.py</code></td><td>预热循环与无窗口读数说明（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_viewer_slow.py</code></td><td>帧率塌方的复现脚本（当前检出路径）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/verify_watch_v20_fast.py</code></td><td>正确性闸门脚本（当前检出路径）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/15-%E4%BB%BF%E7%9C%9F%E6%9F%A5%E7%9C%8B%E5%99%A8%E4%B8%8E%E6%80%A7%E8%83%BD/02-%E6%B8%B2%E6%9F%93%E5%90%8E%E7%AB%AF/"><span class="k">← 上一篇</span><span class="t">渲染后端</span><span class="d">仿真查看器与性能 · 4 个文件</span></a><a class="next" href="/tc63/docs/16-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E8%AF%95/01-%E5%88%A4%E6%8D%AE%E5%8F%A3%E5%BE%84/"><span class="k">下一篇 →</span><span class="t">判据口径</span><span class="d">强化学习评测与调试 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

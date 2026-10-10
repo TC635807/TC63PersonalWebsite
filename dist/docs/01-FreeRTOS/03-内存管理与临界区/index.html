@@ -48,7 +48,7 @@
 <li>维度 B，对象内存来源：某个内核对象（任务、队列等）的内存是运行时从 <code>ucHeap</code> 里切，还是调用者事先提供。这是逐个对象选的。</li>
 </ul>
 <p>维度 B 由两个开关控制，本工程两个都打开了：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:59-60 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configSUPPORT_STATIC_ALLOCATION</span><span style="color:#005CC5">          1</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configSUPPORT_DYNAMIC_ALLOCATION</span><span style="color:#005CC5">         1</span></span></code></pre>
 <p>这意味着同一份固件里可以混用 <code>xTaskCreate()</code> 和 <code>xTaskCreateStatic()</code>。第 2.5 节会看到，本工程的空闲任务是静态的，其余全是动态的。</p>
@@ -60,7 +60,7 @@
 </ul>
 <p>优点：O(1)、绝对无碎片、代码最小。
 缺点：不能释放。一旦调用了 <code>vTaskDelete()</code>、<code>vSemaphoreDelete()</code>、<code>vQueueDelete()</code>，内存就永久泄漏。</p>
-<p>本工程不用它，因为 <code>FreeRTOSConfig.h</code> 第 87 行明确开了删除功能：</p>
+<p>本工程不用它，因为 <code>FreeRTOSConfig.h</code> 明确打开了删除功能：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> INCLUDE_vTaskDelete</span><span style="color:#005CC5">                  1</span></span></code></pre>
 <p>在 heap_1 上，这行开关没有实际作用：编译能过，删任务时内存回不来。这是配置项互相冲突的典型案例。</p>
 <h3 id="23-heap_2首次适配但不合并已被淘汰">2.3 heap_2：首次适配，但不合并（已被淘汰）</h3>
@@ -106,7 +106,7 @@
 <h3 id="28-静态分配换来的确定性">2.8 静态分配换来的确定性</h3>
 <p>静态分配指内核对象的存储由调用者在编译期提供：一个 <code>StaticTask_t</code> 装 TCB，一个 <code>StackType_t[]</code> 当栈。</p>
 <p>本工程唯一的静态使用者是空闲任务（Idle Task）。这段代码在 <code>Core/Src/freertos.c</code> 里，由 CubeMX 模板加手写填空组成：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c:73-87，一字未改 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c，一字未改 */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> vApplicationGetIdleTaskMemory</span><span style="color:#24292E">( </span><span style="color:#005CC5">StaticTask_t</span><span style="color:#D73A49"> **</span><span style="color:#E36209">ppxIdleTaskTCBBuffer</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#005CC5">                                    StackType_t</span><span style="color:#D73A49"> **</span><span style="color:#E36209">ppxIdleTaskStackBuffer</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#D73A49">                                    uint32_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209">pulIdleTaskStackSize</span><span style="color:#24292E"> );</span></span>
@@ -207,7 +207,7 @@
 <p>开了删除开关却选了 heap_1，编译期没有提示，运行期静默泄漏。这类配置项互相冲突的问题，只能靠读懂每个开关的隐含前提来避免。</p>
 <h3 id="易错点-3xportgetfreeheapsize-在第一次分配之前没有意义">易错点 3：<code>xPortGetFreeHeapSize()</code> 在第一次分配之前没有意义</h3>
 <p>heap_4 的 <code>prvHeapInit()</code> 是懒初始化，只在第一次 <code>pvPortMalloc()</code> 里执行：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:120-131（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c（节选） */</span></span>
 <span class="line"><span style="color:#6F42C1">vTaskSuspendAll</span><span style="color:#24292E">();</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E">( pxEnd </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E"> )</span></span>
@@ -336,10 +336,10 @@
 堆地址和 <code>ucHeap</code> 大小取自 <code>build/Debug/sentriomeni2026.map</code>。</p>
 </blockquote>
 <h2 id="1-40-kb-从哪来">1. 40 KB 从哪来</h2>
-<p><code>Core/Inc/FreeRTOSConfig.h</code> 第 67 行：</p>
+<p><code>Core/Inc/FreeRTOSConfig.h</code> 里这一项：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configTOTAL_HEAP_SIZE</span><span style="color:#24292E">                    ((</span><span style="color:#D73A49">size_t</span><span style="color:#24292E">)</span><span style="color:#005CC5">40960</span><span style="color:#24292E">)</span></span></code></pre>
 <p>40960 = 40 × 1024，也就是 40 KB。它就是 heap_4 里这个数组的长度：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:59-65 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">#if</span><span style="color:#24292E">( </span><span style="color:#6F42C1">configAPPLICATION_ALLOCATED_HEAP</span><span style="color:#D73A49"> ==</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#D73A49">	extern</span><span style="color:#D73A49"> uint8_t</span><span style="color:#E36209"> ucHeap</span><span style="color:#24292E">[ configTOTAL_HEAP_SIZE ];</span></span>
 <span class="line"><span style="color:#D73A49">#else</span></span>
@@ -353,21 +353,21 @@
 <h2 id="2-heap_4-的块结构">2. heap_4 的块结构</h2>
 <h3 id="21-每个块前面都有-8-字节的块头">2.1 每个块前面都有 8 字节的块头</h3>
 <p>heap_4 把整块内存切成一段段”块”（block），每个块的开头都放一个 <code>BlockLink_t</code>：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:69-73 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">typedef</span><span style="color:#D73A49"> struct</span><span style="color:#24292E"> A_BLOCK_LINK</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">	struct</span><span style="color:#24292E"> A_BLOCK_LINK </span><span style="color:#D73A49">*</span><span style="color:#24292E">pxNextFreeBlock;</span><span style="color:#6A737D">	/* 下一个空闲块 */</span></span>
 <span class="line"><span style="color:#D73A49">	size_t</span><span style="color:#24292E"> xBlockSize;</span><span style="color:#6A737D">						/* 本块大小 */</span></span>
 <span class="line"><span style="color:#24292E">} </span><span style="color:#005CC5">BlockLink_t</span><span style="color:#24292E">;</span></span></code></pre>
 <p>在 32 位 Cortex-M 上，两个 4 字节成员 = 8 字节。再向上对齐到 <code>portBYTE_ALIGNMENT</code>：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:95 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> const</span><span style="color:#D73A49"> size_t</span><span style="color:#24292E"> xHeapStructSize </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ( </span><span style="color:#D73A49">sizeof</span><span style="color:#24292E">( </span><span style="color:#005CC5">BlockLink_t</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">+</span><span style="color:#24292E"> ( portBYTE_ALIGNMENT </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) ) </span><span style="color:#D73A49">&#x26;</span><span style="color:#D73A49"> ~</span><span style="color:#24292E">( portBYTE_ALIGNMENT_MASK );</span></span></code></pre>
-<p>本工程的 <code>portBYTE_ALIGNMENT</code> 是 8（<code>portable/GCC/ARM_CM4F/portmacro.h:75</code>），而 8 本身已经对齐，所以：</p>
+<p>本工程的 <code>portBYTE_ALIGNMENT</code> 是 8（<code>portable/GCC/ARM_CM4F/portmacro.h</code>），而 8 本身已经对齐，所以：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mtext>link</mtext></msub><mo>=</mo><mtext>sizeof</mtext><mo stretchy="false">(</mo><mtext>BlockLink_t</mtext><mo stretchy="false">)</mo><mo>=</mo><mn>8</mn><mtext> bytes</mtext></mrow><annotation encoding="application/x-tex">S_{\text{link}} = \text{sizeof}(\text{BlockLink\_t}) = 8 \ \text{bytes}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">link</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">sizeof</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">BlockLink_t</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">8</span><span class="mspace"> </span><span class="mord text"><span class="mord">bytes</span></span></span></span></span></p>
 <p>这 8 字节是每次分配都要付出的固定开销。申请 84 字节的 TCB，实际从堆里挖走的是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84</mn><mo>+</mo><mn>8</mn><mo>=</mo><mn>92</mn></mrow><annotation encoding="application/x-tex">84 + 8 = 92</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">84</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92</span></span></span></span> 字节。本工程一共 13 次分配，光是块头就吃掉 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>13</mn><mo>×</mo><mn>8</mn><mo>=</mo><mn>104</mn></mrow><annotation encoding="application/x-tex">13 \times 8 = 104</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">13</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">104</span></span></span></span> 字节。</p>
 <h3 id="22-空闲链表按地址升序两端有哨兵">2.2 空闲链表：按地址升序，两端有哨兵</h3>
 <p>heap_4 维护一条空闲块链表，关键特征是它按内存地址从小到大排序，不按大小排序：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:98 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#005CC5"> BlockLink_t</span><span style="color:#24292E"> xStart, </span><span style="color:#D73A49">*</span><span style="color:#24292E">pxEnd </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E">;</span></span></code></pre>
 <ul>
 <li><code>xStart</code> 是链表头哨兵，本身不是一块内存；</li>
@@ -381,7 +381,7 @@
 <p>第 2 条正是 heap_4 能合并相邻空闲块的前提。</p>
 <h3 id="23-用最高位当已分配标志">2.3 用最高位当”已分配”标志</h3>
 <p>heap_4 不给每个块额外加标志位，而是借用 <code>xBlockSize</code> 的最高位：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:107-111 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> size_t</span><span style="color:#24292E"> xBlockAllocatedBit </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
 <span class="line"><span style="color:#6A737D">/* prvHeapInit 末尾： */</span></span>
 <span class="line"><span style="color:#24292E">xBlockAllocatedBit </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ( ( </span><span style="color:#D73A49">size_t</span><span style="color:#24292E"> ) </span><span style="color:#005CC5">1</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#24292E"> ( ( </span><span style="color:#D73A49">sizeof</span><span style="color:#24292E">( </span><span style="color:#D73A49">size_t</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> heapBITS_PER_BYTE ) </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> );</span></span></code></pre>
@@ -391,10 +391,10 @@
 <li>真实大小要 <code>xBlockSize &#x26; ~xBlockAllocatedBit</code> 取回来。</li>
 </ul>
 <p>代价是块大小不能超过 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>31</mn></msup></mrow><annotation encoding="application/x-tex">2^{31}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">31</span></span></span></span></span></span></span></span></span></span></span></span> 字节。对 40 KB 的堆来说这不构成问题，但这解释了为什么 <code>pvPortMalloc</code> 开头有这么一句：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:137 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E">( ( xWantedSize </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E"> xBlockAllocatedBit ) </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E"> )</span><span style="color:#6A737D">   /* 申请的太大就直接放弃 */</span></span></code></pre>
 <h3 id="24-最小块16-字节">2.4 最小块：16 字节</h3>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:53 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> heapMINIMUM_BLOCK_SIZE</span><span style="color:#24292E">	( ( </span><span style="color:#D73A49">size_t</span><span style="color:#24292E"> ) ( xHeapStructSize </span><span style="color:#D73A49">&#x3C;&#x3C;</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) )</span><span style="color:#6A737D">   /* = 8 &#x3C;&#x3C; 1 = 16 */</span></span></code></pre>
 <p>分割（split）只在剩余量大于 16 字节时才做。如果一块 100 字节的空闲块被申请走 90 字节，剩下的 10 字节不会被单独切出来：太小了，切出来光块头就占 8 字节，还得额外维护链表项。整块 100 字节都归这次申请。</p>
 <p>这条规则叫”不许出现小于 <code>heapMINIMUM_BLOCK_SIZE</code> 的碎片”，是 heap_4 抑制碎片的第二道防线。</p>
@@ -418,7 +418,7 @@
   M --> N
   N --> O["xTaskResumeAll 恢复调度器"]
   O --> P["返回应用可用指针，即块头之后 8 字节"]</pre></div>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:165-186（节选，删掉了 coverage 标记） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c（节选，删掉了 coverage 标记） */</span></span>
 <span class="line"><span style="color:#24292E">pxPreviousBlock </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> &#x26;</span><span style="color:#24292E">xStart;</span></span>
 <span class="line"><span style="color:#24292E">pxBlock </span><span style="color:#D73A49">=</span><span style="color:#24292E"> xStart.pxNextFreeBlock;</span></span>
 <span class="line"><span style="color:#D73A49">while</span><span style="color:#24292E">( ( pxBlock</span><span style="color:#D73A49">-></span><span style="color:#24292E">xBlockSize </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> xWantedSize ) </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> ( pxBlock</span><span style="color:#D73A49">-></span><span style="color:#24292E">pxNextFreeBlock </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E"> ) )</span></span>
@@ -434,7 +434,7 @@
 <p>注意 <code>pvReturn</code> 那一行：返回给应用的指针 = 块地址 + 8。这就是 <code>xHeapStructSize</code> 在运行期的体现。</p>
 <h3 id="32-释放按地址插回--相邻合并">3.2 释放：按地址插回 + 相邻合并</h3>
 <p>合并是 heap_4 的核心机制。看真实实现：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:398-425（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> void</span><span style="color:#6F42C1"> prvInsertBlockIntoFreeList</span><span style="color:#24292E">( </span><span style="color:#005CC5">BlockLink_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209">pxBlockToInsert</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#005CC5">	BlockLink_t</span><span style="color:#D73A49"> *</span><span style="color:#24292E">pxIterator;</span></span>
@@ -495,7 +495,7 @@
 </blockquote>
 <h2 id="4-40960-里有-40944-可用prvheapinit-的三次截断">4. 40960 里有 40944 可用：prvHeapInit 的三次截断</h2>
 <p>配置里写 40960，并不等于实际能拿到 40960。<code>prvHeapInit()</code> 会砍掉三部分：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:333-372（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> void</span><span style="color:#6F42C1"> prvHeapInit</span><span style="color:#24292E">( </span><span style="color:#D73A49">void</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">	size_t</span><span style="color:#24292E"> uxAddress;</span></span>
@@ -605,10 +605,10 @@
 
 
 
-<table><thead><tr><th>参数</th><th>实测值</th><th>来源</th></tr></thead><tbody><tr><td><code>sizeof(StackType_t)</code></td><td>4</td><td><code>portmacro.h</code>，Cortex-M 字长</td></tr><tr><td><code>sizeof(TCB_t)</code></td><td>84</td><td>工具链探针实测（<code>StaticTask_t</code> 也是 84，map 里 <code>xIdleTaskTCBBuffer</code> 为 <code>0x54</code>）</td></tr><tr><td><code>sizeof(Queue_t)</code></td><td>72</td><td>工具链探针实测</td></tr><tr><td><code>xHeapStructSize</code></td><td>8</td><td><code>heap_4.c:95</code></td></tr><tr><td>每个 TCB 的堆开销</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84</mn><mo>+</mo><mn>8</mn><mo>=</mo><mn>92</mn></mrow><annotation encoding="application/x-tex">84 + 8 = 92</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">84</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92</span></span></span></span></td><td>TCB 单独一次 <code>pvPortMalloc( sizeof(TCB_t) )</code></td></tr><tr><td>每个任务栈的堆开销</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mi>d</mi><mo>+</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">4 d + 8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8</span></span></span></span></td><td><code>pvPortMalloc( d * sizeof(StackType_t) )</code>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 为栈深（words）</td></tr></tbody></table>
-<p><code>TCB_t</code> 与栈是两次独立分配（<code>tasks.c:770-780</code>，因为 <code>portSTACK_GROWTH = -1</code> 走的是先栈后 TCB 的分支），所以每个任务要承担两次 8 字节块头开销。</p>
+<table><thead><tr><th>参数</th><th>实测值</th><th>来源</th></tr></thead><tbody><tr><td><code>sizeof(StackType_t)</code></td><td>4</td><td><code>portmacro.h</code>，Cortex-M 字长</td></tr><tr><td><code>sizeof(TCB_t)</code></td><td>84</td><td>工具链探针实测（<code>StaticTask_t</code> 也是 84，map 里 <code>xIdleTaskTCBBuffer</code> 为 <code>0x54</code>）</td></tr><tr><td><code>sizeof(Queue_t)</code></td><td>72</td><td>工具链探针实测</td></tr><tr><td><code>xHeapStructSize</code></td><td>8</td><td><code>heap_4.c</code></td></tr><tr><td>每个 TCB 的堆开销</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84</mn><mo>+</mo><mn>8</mn><mo>=</mo><mn>92</mn></mrow><annotation encoding="application/x-tex">84 + 8 = 92</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">84</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92</span></span></span></span></td><td>TCB 单独一次 <code>pvPortMalloc( sizeof(TCB_t) )</code></td></tr><tr><td>每个任务栈的堆开销</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mi>d</mi><mo>+</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">4 d + 8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8</span></span></span></span></td><td><code>pvPortMalloc( d * sizeof(StackType_t) )</code>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 为栈深（words）</td></tr></tbody></table>
+<p><code>TCB_t</code> 与栈是两次独立分配（<code>tasks.c</code>，因为 <code>portSTACK_GROWTH = -1</code> 走的是先栈后 TCB 的分支），所以每个任务要承担两次 8 字节块头开销。</p>
 <h3 id="52-预算表">5.2 预算表</h3>
-<p>队列先创建（<code>freertos.c:114</code>），随后 <code>defaultTask</code>（<code>freertos.c:123-124</code>），再是 5 个应用任务（<code>freertos.c:129-133</code>）。</p>
+<p>队列先创建（<code>freertos.c</code>），随后 <code>defaultTask</code>（<code>freertos.c</code>），再是 5 个应用任务（<code>freertos.c</code>）。</p>
 
 
 
@@ -704,7 +704,7 @@
 
 
 
-<table><thead><tr><th>#</th><th>对象</th><th>创建位置</th><th>栈深 words</th><th>栈字节</th><th>栈+块头</th><th>TCB+块头</th><th>小计</th></tr></thead><tbody><tr><td>1</td><td><code>usbRxQueue</code></td><td><code>freertos.c:114</code></td><td>—</td><td>128</td><td>—</td><td>—</td><td>208</td></tr><tr><td>2</td><td><code>defaultTask</code></td><td><code>freertos.c:123</code></td><td>256</td><td>1024</td><td>1032</td><td>92</td><td>1124</td></tr><tr><td>3</td><td><code>StartFireTask</code></td><td><code>FireTask.cpp:80</code></td><td>512</td><td>2048</td><td>2056</td><td>92</td><td>2148</td></tr><tr><td>4</td><td><code>imuTask</code></td><td><code>ImuTask.cpp:123</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>5</td><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp:110</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td>6</td><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp:122</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>7</td><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp:177</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td></td><td>合计</td><td></td><td>6912</td><td>27648</td><td>27696</td><td>552</td><td>28456</td></tr></tbody></table>
+<table><thead><tr><th>#</th><th>对象</th><th>创建位置</th><th>栈深 words</th><th>栈字节</th><th>栈+块头</th><th>TCB+块头</th><th>小计</th></tr></thead><tbody><tr><td>1</td><td><code>usbRxQueue</code></td><td><code>freertos.c</code></td><td>—</td><td>128</td><td>—</td><td>—</td><td>208</td></tr><tr><td>2</td><td><code>defaultTask</code></td><td><code>freertos.c</code></td><td>256</td><td>1024</td><td>1032</td><td>92</td><td>1124</td></tr><tr><td>3</td><td><code>StartFireTask</code></td><td><code>FireTask.cpp</code></td><td>512</td><td>2048</td><td>2056</td><td>92</td><td>2148</td></tr><tr><td>4</td><td><code>imuTask</code></td><td><code>ImuTask.cpp</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>5</td><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td>6</td><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp</code></td><td>1024</td><td>4096</td><td>4104</td><td>92</td><td>4196</td></tr><tr><td>7</td><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp</code></td><td>2048</td><td>8192</td><td>8200</td><td>92</td><td>8292</td></tr><tr><td></td><td>合计</td><td></td><td>6912</td><td>27648</td><td>27696</td><td>552</td><td>28456</td></tr></tbody></table>
 <p>其中队列的 208 字节是这样来的：队列体大小 = <code>sizeof(Queue_t)</code> + 消息存储 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>72</mn><mo>+</mo><mo stretchy="false">(</mo><mn>128</mn><mo>×</mo><mn>1</mn><mo stretchy="false">)</mo><mo>=</mo><mn>200</mn></mrow><annotation encoding="application/x-tex">72 + (128 \times 1) = 200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">72</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">128</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span>，再加上 8 字节块头 = 208。</p>
 <p>用公式写一遍：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mo>=</mo><munder><munder><mn>208</mn><mo stretchy="true">⏟</mo></munder><mtext>queue</mtext></munder><mo>+</mo><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mn>6</mn></msubsup><mrow><mo fence="true">(</mo><munder><munder><mrow><mn>4</mn><msub><mi>d</mi><mi>i</mi></msub><mo>+</mo><mn>8</mn></mrow><mo stretchy="true">⏟</mo></munder><mtext>stack</mtext></munder><mo>+</mo><munder><munder><mn>92</mn><mo stretchy="true">⏟</mo></munder><mtext>TCB</mtext></munder><mo fence="true">)</mo></mrow><mo>=</mo><mn>208</mn><mo>+</mo><mn>27648</mn><mo>+</mo><mn>48</mn><mo>+</mo><mn>552</mn><mo>=</mo><mn>28456</mn><mtext> bytes</mtext></mrow><annotation encoding="application/x-tex">C = \underbrace{208}_{\text{queue}} + \sum_{i=1}^{6}\left(\underbrace{4 d_i + 8}_{\text{stack}} + \underbrace{92}_{\text{TCB}}\right) = 208 + 27648 + 48 + 552 = 28456 \ \text{bytes}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.9299em;vertical-align:-1.2855em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6444em;"><span style="top:-1.8506em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">queue</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6444em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
@@ -783,7 +783,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <p>如果哪天把 <code>configUSE_TIMERS</code> 打开，堆会立刻多出 <code>configTIMER_TASK_STACK_DEPTH</code> 字节的栈 + 92 字节 TCB + 定时器队列，而且必须补写 <code>vApplicationGetTimerTaskMemory()</code>。</p>
 <h2 id="6-xportgetfreeheapsize--xportgetminimumeverfreeheapsize-怎么用">6. xPortGetFreeHeapSize / xPortGetMinimumEverFreeHeapSize 怎么用</h2>
 <p>heap_4 提供两个查询函数，实现只有一行：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c:315-323 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* heap_4.c */</span></span>
 <span class="line"><span style="color:#D73A49">size_t</span><span style="color:#6F42C1"> xPortGetFreeHeapSize</span><span style="color:#24292E">( </span><span style="color:#D73A49">void</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">	return</span><span style="color:#24292E"> xFreeBytesRemaining;</span><span style="color:#6A737D">          /* 当前还剩多少 */</span></span>
@@ -845,7 +845,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 </blockquote>
 <h3 id="62-三个必须知道的前提">6.2 三个必须知道的前提</h3>
 <ol>
-<li>必须在第一次 <code>pvPortMalloc</code> 之后调用。因为 <code>prvHeapInit()</code> 是懒初始化的（<code>heap_4.c:124-127</code>），在那之前 <code>xFreeBytesRemaining</code> 还是 0。</li>
+<li>必须在第一次 <code>pvPortMalloc</code> 之后调用。因为 <code>prvHeapInit()</code> 是懒初始化的（<code>heap_4.c</code>），在那之前 <code>xFreeBytesRemaining</code> 还是 0。</li>
 <li>返回值单位是字节，不是字。<code>uxTaskGetStackHighWaterMark()</code> 的单位是字，两者别混（见 <code>04-栈溢出检测与断言</code>）。</li>
 <li>不要用 <code>xPortGetFreeHeapSize</code> 做业务判断。它是瞬时值，会被无关的分配/释放带偏；要判断容量是否安全，看 <code>xPortGetMinimumEverFreeHeapSize</code>。</li>
 </ol>
@@ -1051,10 +1051,10 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <h2 id="1-临界区每毫秒都在跑">1. 临界区每毫秒都在跑</h2>
 <p>多数人第一次听到”临界区”是在教程里看到 <code>taskENTER_CRITICAL()</code>。但在本工程里，应用层从来没有写过这个宏，它却每毫秒都在跑。</p>
 <p>证据：<code>Core/Src/freertos.c</code> 建了一个队列，<code>USB_DEVICE/App/usbd_cdc_if.c</code> 在 USB 中断里往里塞字节：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c:114 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/freertos.c */</span></span>
 <span class="line"><span style="color:#24292E">usbRxQueue </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> xQueueCreate</span><span style="color:#24292E">(</span><span style="color:#005CC5">128</span><span style="color:#24292E">, </span><span style="color:#D73A49">sizeof</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint8_t</span><span style="color:#24292E">));</span></span>
 <span class="line"></span>
-<span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c:264-282（节选） */</span></span>
+<span class="line"><span style="color:#6A737D">/* USB_DEVICE/App/usbd_cdc_if.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> int8_t</span><span style="color:#6F42C1"> CDC_Receive_FS</span><span style="color:#24292E">(</span><span style="color:#D73A49">uint8_t*</span><span style="color:#E36209"> Buf</span><span style="color:#24292E">, </span><span style="color:#D73A49">uint32_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209">Len</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#005CC5">  BaseType_t</span><span style="color:#24292E"> xHigherPriorityTaskWoken </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pdFALSE;</span></span>
@@ -1110,10 +1110,10 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <p>本文后面凡是写”数值”，一律指 NVIC 数值。</p>
 <h3 id="22-优先级分组必须和-configprio_bits-对齐">2.2 优先级分组必须和 <code>configPRIO_BITS</code> 对齐</h3>
 <p>STM32 的 4 个优先级位可以切成”抢占位 + 子优先级位”。本工程的分组由 HAL 设置：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c:173，HAL_Init 内部 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c，HAL_Init 内部 */</span></span>
 <span class="line"><span style="color:#6F42C1">HAL_NVIC_SetPriorityGrouping</span><span style="color:#24292E">(NVIC_PRIORITYGROUP_4);</span><span style="color:#6A737D">   /* 4 位全是抢占优先级，0 位子优先级 */</span></span></code></pre>
 <p>而 FreeRTOS 这边通过 CMSIS 拿到同样的位数：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:95-100 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h */</span></span>
 <span class="line"><span style="color:#D73A49">#ifdef</span><span style="color:#6F42C1"> __NVIC_PRIO_BITS</span></span>
 <span class="line"><span style="color:#D73A49"> #define</span><span style="color:#6F42C1"> configPRIO_BITS</span><span style="color:#24292E">         __NVIC_PRIO_BITS</span><span style="color:#6A737D">     /* STM32F407 上是 4 */</span></span>
 <span class="line"><span style="color:#D73A49">#else</span></span>
@@ -1123,7 +1123,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <h2 id="3-taskenter_critical-到底做了什么">3. taskENTER_CRITICAL 到底做了什么</h2>
 <h3 id="31-宏的链路">3.1 宏的链路</h3>
 <p><code>taskENTER_CRITICAL()</code> 在 <code>task.h</code> 里只是一层转发：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/task.h:187-222（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/task.h（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> taskENTER_CRITICAL</span><span style="color:#24292E">()              </span><span style="color:#6F42C1">portENTER_CRITICAL</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> taskENTER_CRITICAL_FROM_ISR</span><span style="color:#24292E">()     </span><span style="color:#6F42C1">portSET_INTERRUPT_MASK_FROM_ISR</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> taskEXIT_CRITICAL</span><span style="color:#24292E">()               </span><span style="color:#6F42C1">portEXIT_CRITICAL</span><span style="color:#24292E">()</span></span>
@@ -1131,7 +1131,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> taskDISABLE_INTERRUPTS</span><span style="color:#24292E">()          </span><span style="color:#6F42C1">portDISABLE_INTERRUPTS</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> taskENABLE_INTERRUPTS</span><span style="color:#24292E">()           </span><span style="color:#6F42C1">portENABLE_INTERRUPTS</span><span style="color:#24292E">()</span></span></code></pre>
 <p>再往下到 ARM_CM4F 的 port：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h:99-104 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> portSET_INTERRUPT_MASK_FROM_ISR</span><span style="color:#24292E">()		</span><span style="color:#6F42C1">ulPortRaiseBASEPRI</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> portCLEAR_INTERRUPT_MASK_FROM_ISR</span><span style="color:#24292E">(</span><span style="color:#E36209">x</span><span style="color:#24292E">)	</span><span style="color:#6F42C1">vPortSetBASEPRI</span><span style="color:#24292E">(x)</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> portDISABLE_INTERRUPTS</span><span style="color:#24292E">()				</span><span style="color:#6F42C1">vPortRaiseBASEPRI</span><span style="color:#24292E">()</span></span>
@@ -1141,7 +1141,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <p>注意 <code>portDISABLE_INTERRUPTS()</code> 的名字有误导性：它并不等同于 <code>__disable_irq()</code>（那个是 PRIMASK，关掉除 NMI/HardFault 外的一切），只是抬高 BASEPRI。</p>
 <h3 id="32-实现细节">3.2 实现细节</h3>
 <p>源码只有两个函数，逻辑是「抬高 BASEPRI → 计数加一 → 计数归零时放行」：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/port.c:403-428 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/port.c */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> vPortEnterCritical</span><span style="color:#24292E">( </span><span style="color:#D73A49">void</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#6F42C1">	portDISABLE_INTERRUPTS</span><span style="color:#24292E">();</span><span style="color:#6A737D">          /* 把 BASEPRI 抬到 configMAX_SYSCALL_INTERRUPT_PRIORITY */</span></span>
@@ -1171,7 +1171,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 </ol>
 <h3 id="33-basepri-原理">3.3 BASEPRI 原理</h3>
 <p>抬 BASEPRI 用的是这段内联汇编：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h:191-203 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h */</span></span>
 <span class="line"><span style="color:#24292E">portFORCE_INLINE </span><span style="color:#D73A49">static</span><span style="color:#D73A49"> void</span><span style="color:#6F42C1"> vPortRaiseBASEPRI</span><span style="color:#24292E">( </span><span style="color:#D73A49">void</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">uint32_t</span><span style="color:#24292E"> ulNewBASEPRI;</span></span>
@@ -1187,7 +1187,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>BASEPRI 的硬件语义只有一句：当前中断的优先级数值 ≥ BASEPRI 时，不被允许进入（挂起等待）；数值 &#x3C; BASEPRI 的中断照常抢占。</p>
 <p>FreeRTOS 把 <code>configMAX_SYSCALL_INTERRUPT_PRIORITY</code> 写进 BASEPRI。它由库级配置左移得到：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:104-117 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configLIBRARY_LOWEST_INTERRUPT_PRIORITY</span><span style="color:#005CC5">       15</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY</span><span style="color:#005CC5">  5</span></span>
 <span class="line"></span>
@@ -1277,7 +1277,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <table><thead><tr><th>NVIC 数值</th><th>逻辑优先级</th><th>临界区里会被屏蔽吗</th><th>允许调用 FromISR API 吗</th><th>本工程有没有这样的中断</th></tr></thead><tbody><tr><td>0</td><td>最高</td><td>否，照常抢占</td><td>绝对禁止</td><td>没有</td></tr><tr><td>1~4</td><td>很高</td><td>否，照常抢占</td><td>绝对禁止</td><td>没有</td></tr><tr><td>5</td><td>第 5 级（阈值）</td><td>是</td><td>可以</td><td>全部外设中断都在这里</td></tr><tr><td>6~14</td><td>更低</td><td>是</td><td>可以</td><td>没有</td></tr><tr><td>15</td><td>最低（<code>configKERNEL_INTERRUPT_PRIORITY</code>）</td><td>是</td><td>可以</td><td>PendSV 是 15；HAL 时基 TIM2 是 15</td></tr></tbody></table>
 <h2 id="4-中断版的临界区portset_interrupt_mask_from_isr">4. 中断版的临界区：portSET_INTERRUPT_MASK_FROM_ISR</h2>
 <p>在 ISR 里不能用 <code>taskENTER_CRITICAL()</code>（第 3.2 节的 <code>configASSERT</code> 会拦），要用 <code>FromISR</code> 系列。它的实现是同一个汇编，但多返回一个值：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h:207-233 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h */</span></span>
 <span class="line"><span style="color:#24292E">portFORCE_INLINE </span><span style="color:#D73A49">static</span><span style="color:#D73A49"> uint32_t</span><span style="color:#6F42C1"> ulPortRaiseBASEPRI</span><span style="color:#24292E">( </span><span style="color:#D73A49">void</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">uint32_t</span><span style="color:#24292E"> ulOriginalBASEPRI, ulNewBASEPRI;</span></span>
@@ -1399,9 +1399,9 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 
 
 
-<table><thead><tr><th>中断</th><th>NVIC 数值</th><th>设置位置</th><th>会调 FreeRTOS API 吗</th></tr></thead><tbody><tr><td><code>OTG_FS_IRQn</code>（USB）</td><td>5</td><td><code>USB_DEVICE/Target/usbd_conf.c:94</code></td><td>会：<code>xQueueSendFromISR</code> + <code>portYIELD_FROM_ISR</code></td></tr><tr><td><code>CAN1_RX0_IRQn</code> / <code>CAN1_RX1_IRQn</code></td><td>5</td><td><code>Core/Src/can.c:125,127</code></td><td>否</td></tr><tr><td><code>CAN2_RX0_IRQn</code> / <code>CAN2_RX1_IRQn</code></td><td>5</td><td><code>Core/Src/can.c:158,160</code></td><td>否</td></tr><tr><td><code>DMA1_Stream1_IRQn</code>（USART3 RX，DBUS 遥控）</td><td>5</td><td><code>Core/Src/dma.c:48</code></td><td>否</td></tr><tr><td><code>DMA2_Stream1_IRQn</code>（USART6 RX）</td><td>5</td><td><code>Core/Src/dma.c:51</code></td><td>否</td></tr><tr><td><code>DMA2_Stream2/3/6_IRQn</code>（SPI1 RX/TX、USART6 TX）</td><td>5</td><td><code>Core/Src/dma.c:54,57,60</code></td><td>否</td></tr><tr><td><code>USART3_IRQn</code> / <code>USART6_IRQn</code></td><td>5</td><td><code>Core/Src/usart.c:198,262</code></td><td>否</td></tr><tr><td><code>TIM1_UP_TIM10_IRQn</code></td><td>5</td><td><code>Core/Src/tim.c:83</code></td><td>否</td></tr><tr><td><code>PendSV_IRQn</code></td><td>15</td><td><code>Core/Src/stm32f4xx_hal_msp.c:75</code></td><td>内核自己用</td></tr><tr><td><code>TIM2_IRQn</code>（HAL 时基）</td><td><code>TICK_INT_PRIORITY = 15</code></td><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c:100</code> + <code>stm32f4xx_hal_conf.h:151</code></td><td>否</td></tr><tr><td><code>SysTick_IRQn</code></td><td>由 <code>xPortSysTickHandler</code> 接管</td><td><code>FreeRTOSConfig.h:133</code></td><td>内核滴答</td></tr></tbody></table>
+<table><thead><tr><th>中断</th><th>NVIC 数值</th><th>设置位置</th><th>会调 FreeRTOS API 吗</th></tr></thead><tbody><tr><td><code>OTG_FS_IRQn</code>（USB）</td><td>5</td><td><code>USB_DEVICE/Target/usbd_conf.c</code></td><td>会：<code>xQueueSendFromISR</code> + <code>portYIELD_FROM_ISR</code></td></tr><tr><td><code>CAN1_RX0_IRQn</code> / <code>CAN1_RX1_IRQn</code></td><td>5</td><td><code>Core/Src/can.c,127</code></td><td>否</td></tr><tr><td><code>CAN2_RX0_IRQn</code> / <code>CAN2_RX1_IRQn</code></td><td>5</td><td><code>Core/Src/can.c,160</code></td><td>否</td></tr><tr><td><code>DMA1_Stream1_IRQn</code>（USART3 RX，DBUS 遥控）</td><td>5</td><td><code>Core/Src/dma.c</code></td><td>否</td></tr><tr><td><code>DMA2_Stream1_IRQn</code>（USART6 RX）</td><td>5</td><td><code>Core/Src/dma.c</code></td><td>否</td></tr><tr><td><code>DMA2_Stream2/3/6_IRQn</code>（SPI1 RX/TX、USART6 TX）</td><td>5</td><td><code>Core/Src/dma.c,57,60</code></td><td>否</td></tr><tr><td><code>USART3_IRQn</code> / <code>USART6_IRQn</code></td><td>5</td><td><code>Core/Src/usart.c,262</code></td><td>否</td></tr><tr><td><code>TIM1_UP_TIM10_IRQn</code></td><td>5</td><td><code>Core/Src/tim.c</code></td><td>否</td></tr><tr><td><code>PendSV_IRQn</code></td><td>15</td><td><code>Core/Src/stm32f4xx_hal_msp.c</code></td><td>内核自己用</td></tr><tr><td><code>TIM2_IRQn</code>（HAL 时基）</td><td><code>TICK_INT_PRIORITY = 15</code></td><td><code>Core/Src/stm32f4xx_hal_timebase_tim.c</code> + <code>stm32f4xx_hal_conf.h</code></td><td>否</td></tr><tr><td><code>SysTick_IRQn</code></td><td>由 <code>xPortSysTickHandler</code> 接管</td><td><code>FreeRTOSConfig.h</code></td><td>内核滴答</td></tr></tbody></table>
 <p><code>Core/Src/stm32f4xx_it.c</code> 里能看到这些处理函数的写法，它们只转发给 HAL：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/stm32f4xx_it.c:331-337 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/stm32f4xx_it.c */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> OTG_FS_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#6F42C1">  HAL_PCD_IRQHandler</span><span style="color:#24292E">(</span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E">hpcd_USB_OTG_FS);</span><span style="color:#6A737D">   /* 内部最终会调到 CDC_Receive_FS */</span></span>
@@ -1460,7 +1460,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <p><code>xQueueSend()</code> 内部用 <code>taskENTER_CRITICAL()</code>。而第 3.2 节看到了，<code>vPortEnterCritical()</code> 里有：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6F42C1">configASSERT</span><span style="color:#24292E">( ( portNVIC_INT_CTRL_REG </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E"> portVECTACTIVE_MASK ) </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E"> );</span></span></code></pre>
 <p>在 ISR 里 <code>VECTACTIVE</code> 非 0，断言失败。而本工程的 <code>configASSERT</code> 是死循环：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/FreeRTOSConfig.h:122 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/FreeRTOSConfig.h */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configASSERT</span><span style="color:#24292E">( </span><span style="color:#E36209">x</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">if</span><span style="color:#24292E"> ((x) </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">) {</span><span style="color:#6F42C1">taskDISABLE_INTERRUPTS</span><span style="color:#24292E">(); </span><span style="color:#D73A49">for</span><span style="color:#24292E">( ;; );}</span></span></code></pre>
 <p>所以误用 <code>xQueueSend()</code> 的现场表现是：USB 一收到数据，整块板子直接卡死，且中断大部分被屏蔽。这个现象和”USB 硬件坏了”很像，很容易查错方向。</p>
 <h3 id="理由-3非-fromisr-版本会试图阻塞">理由 3：非 FromISR 版本会试图阻塞</h3>
@@ -1494,10 +1494,10 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <h3 id="唯一一处真实调用">唯一一处真实调用</h3>
 <p>本工程里 <code>FromISR</code> 的调用点只有这一处：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "FromISR"</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.c</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.cpp</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.h</span><span style="color:#032F62"> .</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> Middlewares</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> Drivers</span></span>
-<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:264:</span><span style="color:#032F62">  BaseType_t</span><span style="color:#032F62"> xHigherPriorityTaskWoken</span><span style="color:#032F62"> =</span><span style="color:#032F62"> pdFALSE</span><span style="color:#24292E">;</span></span>
-<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:273:</span><span style="color:#032F62">    if</span><span style="color:#24292E"> (xQueueSendFromISR(usbRxQueue,</span></span>
-<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:275:</span><span style="color:#24292E">                          &#x26;</span><span style="color:#6F42C1">xHigherPriorityTaskWoken</span><span style="color:#24292E">) </span><span style="color:#D73A49">!</span><span style="color:#032F62">=</span><span style="color:#032F62"> pdPASS</span><span style="color:#24292E">) {} // 队列满丢弃</span></span>
-<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:282:</span><span style="color:#032F62">  portYIELD_FROM_ISR</span><span style="color:#24292E">(</span><span style="color:#6F42C1">xHigherPriorityTaskWoken</span><span style="color:#24292E">);</span></span></code></pre>
+<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:</span><span style="color:#032F62">  BaseType_t</span><span style="color:#032F62"> xHigherPriorityTaskWoken</span><span style="color:#032F62"> =</span><span style="color:#032F62"> pdFALSE</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:</span><span style="color:#032F62">    if</span><span style="color:#24292E"> (xQueueSendFromISR(usbRxQueue,</span></span>
+<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:</span><span style="color:#24292E">                          &#x26;</span><span style="color:#6F42C1">xHigherPriorityTaskWoken</span><span style="color:#24292E">) </span><span style="color:#D73A49">!</span><span style="color:#032F62">=</span><span style="color:#032F62"> pdPASS</span><span style="color:#24292E">) {} // 队列满丢弃</span></span>
+<span class="line"><span style="color:#6F42C1">./USB_DEVICE/App/usbd_cdc_if.c:</span><span style="color:#032F62">  portYIELD_FROM_ISR</span><span style="color:#24292E">(</span><span style="color:#6F42C1">xHigherPriorityTaskWoken</span><span style="color:#24292E">);</span></span></code></pre>
 <p>同时也能确认：应用层没有任何一处在自己写临界区。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "taskENTER_CRITICAL"</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.c</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.cpp</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.h</span><span style="color:#032F62"> .</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> Middlewares</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> Drivers</span></span>
 <span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">无输出</span><span style="color:#24292E">)</span></span></code></pre>
@@ -1522,14 +1522,14 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <p>注意这张图里的上下文边界：<code>usbRxQueue</code> 左边是中断上下文，右边是任务上下文。整条链路只有这一个跨上下文接口，而它由 FreeRTOS 的队列负责保护，这就是”中断安全”在本工程的具体落点。</p>
 <h2 id="8-优先级反转与优先级继承">8. 优先级反转与优先级继承</h2>
 <p>临界区保护的是「同时访问」；优先级反转（Priority Inversion）说的是另一种现象：高优先级任务因为等一个被低优先级任务占着的锁，实际表现得比中优先级任务还慢。完整时序与继承机制在 <code>02-同步与IPC/04-优先级反转与继承.md</code> 里推过一遍，这里只留与本层有关的三点。</p>
-<p>本工程开了互斥量支持（<code>Core/Inc/FreeRTOSConfig.h:70</code> 的 <code>configUSE_MUTEXES = 1</code>），但 <code>MX_FREERTOS_Init()</code> 里 <code>RTOS_MUTEX</code> 段是空的，所以目前是「能力已备好但尚未启用」。之后按 <code>02-同步与IPC</code> 的建议加锁时要用互斥量，不能用二值信号量。</p>
+<p>本工程开了互斥量支持（<code>Core/Inc/FreeRTOSConfig.h</code> 的 <code>configUSE_MUTEXES = 1</code>），但 <code>MX_FREERTOS_Init()</code> 里 <code>RTOS_MUTEX</code> 段是空的，所以目前是「能力已备好但尚未启用」。之后按 <code>02-同步与IPC</code> 的建议加锁时要用互斥量，不能用二值信号量。</p>
 <p>区别就在这里：优先级继承只在互斥量（<code>xSemaphoreCreateMutex()</code>）上有，二值信号量（<code>xSemaphoreCreateBinary()</code>）没有这个机制。用错会得到一个「看起来加了锁、实际仍会被中优先级任务插队」的实现。</p>
 <h2 id="9-高级话题与常见问题">9. 高级话题与常见问题</h2>
 <h3 id="易错点-1在临界区里做耗时操作">易错点 1：在临界区里做耗时操作</h3>
 <p>临界区抬高了 BASEPRI，意味着数值 ≥ 5 的所有中断都被推迟。本工程里那意味着 CAN 接收、串口 DMA、USB 全部被推迟。在临界区里放一句 <code>HAL_Delay(1)</code>，就等于让整个系统丢 1 ms 的中断。</p>
 <p>规则：临界区里只放几行内存操作，不调用任何可能耗时或有阻塞语义的函数。</p>
 <h3 id="易错点-2hal_delay-在任何中断里都是错的">易错点 2：<code>HAL_Delay()</code> 在任何中断里都是错的</h3>
-<p><code>HAL_Delay()</code> 依赖 <code>HAL_GetTick()</code>，而后者依赖 HAL 的时基中断（本工程是 TIM2，优先级 15）。在优先级 5 的中断里调用 <code>HAL_Delay()</code>，因为 BASEPRI 的关系它等不到时基更新，直接死循环。本工程在任务代码里用 <code>osDelay(5)</code> 轮询 <code>USBD_BUSY</code>（<code>UsbConnectTask.cpp:148</code>，<code>usbd_cdc_if.c</code> 内没有延时调用），那是任务上下文，没问题；但把同样的代码挪进 ISR，立刻挂死。</p>
+<p><code>HAL_Delay()</code> 依赖 <code>HAL_GetTick()</code>，而后者依赖 HAL 的时基中断（本工程是 TIM2，优先级 15）。在优先级 5 的中断里调用 <code>HAL_Delay()</code>，因为 BASEPRI 的关系它等不到时基更新，直接死循环。本工程在任务代码里用 <code>osDelay(5)</code> 轮询 <code>USBD_BUSY</code>（<code>UsbConnectTask.cpp</code>，<code>usbd_cdc_if.c</code> 内没有延时调用），那是任务上下文，没问题；但把同样的代码挪进 ISR，立刻挂死。</p>
 <h3 id="易错点-3osdelay-和-hal_delay-分不清">易错点 3：<code>osDelay()</code> 和 <code>HAL_Delay()</code> 分不清</h3>
 
 
@@ -1568,7 +1568,7 @@ l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configASSERT</span><span style="color:#24292E">( </span><span style="color:#E36209">x</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">if</span><span style="color:#24292E"> ((x) </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">) {</span><span style="color:#6F42C1">taskDISABLE_INTERRUPTS</span><span style="color:#24292E">(); </span><span style="color:#D73A49">for</span><span style="color:#24292E">( ;; );}</span></span></code></pre>
 <p>这里有一个容易忽略的细节：<code>taskDISABLE_INTERRUPTS()</code> 在这套 port 上只是抬 BASEPRI 到 0x50，并不等同于 <code>__disable_irq()</code>。所以断言挂死时，NVIC 数值 0<del>4 的中断仍然会继续进来。本工程没有 0</del>4 的中断，所以现象就是彻底安静；但在别的工程里，如果有高优先级中断，就会看到”主循环死了但某个中断还在跑”这种反常现象。</p>
 <p>本工程还有另一条挂死路径，现象几乎一样，注意区分：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/main.c:226-232 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/main.c */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> Error_Handler</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#6F42C1">  __disable_irq</span><span style="color:#24292E">();</span><span style="color:#6A737D">        /* 这个才是真关中断，PRIMASK */</span></span>
@@ -1709,14 +1709,14 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -n</span><span style="color:#032F62"> "STACK_OVERFLOW"</span><span style="color:#032F62"> Core/Inc/FreeRTOSConfig.h</span></span>
 <span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">无输出</span><span style="color:#24292E">)</span></span></code></pre>
 <p>没有定义，于是走内核默认值：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/FreeRTOS.h:397-399 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/FreeRTOS.h */</span></span>
 <span class="line"><span style="color:#D73A49">#ifndef</span><span style="color:#6F42C1"> configCHECK_FOR_STACK_OVERFLOW</span></span>
 <span class="line"><span style="color:#D73A49">	#define</span><span style="color:#6F42C1"> configCHECK_FOR_STACK_OVERFLOW</span><span style="color:#005CC5"> 0</span></span>
 <span class="line"><span style="color:#D73A49">#endif</span></span></code></pre>
 <p>再确认一下配套的钩子函数有没有人实现：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "vApplicationStackOverflowHook"</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.c</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.h</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.cpp</span><span style="color:#032F62"> .</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#D73A49">    |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> "Middlewares/Third_Party/FreeRTOS/Source/include"</span><span style="color:#D73A49"> |</span><span style="color:#6F42C1"> grep</span><span style="color:#005CC5"> -v</span><span style="color:#032F62"> Drivers</span></span>
-<span class="line"><span style="color:#6F42C1">./Middlewares/Third_Party/FreeRTOS/Source/tasks.c:407:</span><span style="color:#032F62">	extern</span><span style="color:#032F62"> void</span><span style="color:#032F62"> vApplicationStackOverflowHook</span><span style="color:#24292E">( </span><span style="color:#6F42C1">TaskHandle_t</span><span style="color:#032F62"> xTask,</span><span style="color:#032F62"> char</span><span style="color:#005CC5"> *</span><span style="color:#032F62">pcTaskName</span><span style="color:#24292E"> );</span></span>
+<span class="line"><span style="color:#6F42C1">./Middlewares/Third_Party/FreeRTOS/Source/tasks.c:</span><span style="color:#032F62">	extern</span><span style="color:#032F62"> void</span><span style="color:#032F62"> vApplicationStackOverflowHook</span><span style="color:#24292E">( </span><span style="color:#6F42C1">TaskHandle_t</span><span style="color:#032F62"> xTask,</span><span style="color:#032F62"> char</span><span style="color:#005CC5"> *</span><span style="color:#032F62">pcTaskName</span><span style="color:#24292E"> );</span></span>
 <span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">仅内核内部的</span><span style="color:#032F62"> extern</span><span style="color:#032F62"> 声明，应用层没有实现</span><span style="color:#24292E">)</span></span></code></pre>
 <p>同理，这几个钩子在本工程里一个都没有实现：</p>
 
@@ -1753,7 +1753,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <p>所以现状是：6 个任务、6912 words 的栈全部”声明式”地跑着，没有任何机制在验证”声明得够不够”。这是本工程最大的监控盲区，也是下面要解决的问题。</p>
 <h2 id="2-栈往哪边长">2. 栈往哪边长</h2>
 <p>Cortex-M 的栈向下生长（从高地址往低地址）。ARM_CM4F 的 port 明确声明了这一点：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h:73 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* portable/GCC/ARM_CM4F/portmacro.h */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> portSTACK_GROWTH</span><span style="color:#24292E">			( </span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E"> )</span></span></code></pre>
 <p>这个 <code>-1</code> 会决定后面所有代码走哪个分支，非常关键。任务栈的内存布局因此是：</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
@@ -1772,7 +1772,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <h2 id="3-两种内核检测模式">3. 两种内核检测模式</h2>
 <p>FreeRTOS 的检测逻辑全部集中在 <code>include/StackMacros.h</code> 的 <code>taskCHECK_FOR_STACK_OVERFLOW()</code> 宏里，它由 <code>configCHECK_FOR_STACK_OVERFLOW</code> 的值选择不同实现。</p>
 <h3 id="31-模式-1只检查当时的栈指针">3.1 模式 1：只检查当时的栈指针</h3>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/StackMacros.h:52-62（portSTACK_GROWTH &#x3C; 0 分支） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/StackMacros.h（portSTACK_GROWTH &#x3C; 0 分支） */</span></span>
 <span class="line"><span style="color:#D73A49">#if</span><span style="color:#24292E">( ( </span><span style="color:#6F42C1">configCHECK_FOR_STACK_OVERFLOW</span><span style="color:#D73A49"> ==</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> ( </span><span style="color:#6F42C1">portSTACK_GROWTH</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#24292E"> ) )</span></span>
 <span class="line"></span>
 <span class="line"><span style="color:#D73A49">	#define</span><span style="color:#6F42C1"> taskCHECK_FOR_STACK_OVERFLOW</span><span style="color:#24292E">()																</span><span style="color:#005CC5">\</span></span>
@@ -1790,7 +1790,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 缺点：只在任务切换的那一刻看得见。如果某个任务深调用了一次之后正常返回了，栈指针又回到安全区，那么这次越界不会被发现，尽管它可能已经踩坏了别人的内存。</p>
 <h3 id="32-模式-2填充魔数--检查栈底的-4-个字">3.2 模式 2：填充魔数 + 检查栈底的 4 个字</h3>
 <p>模式 2 不看寄存器，而是回看栈的起点有没有被动过：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/StackMacros.h:82-99（portSTACK_GROWTH &#x3C; 0 分支） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/StackMacros.h（portSTACK_GROWTH &#x3C; 0 分支） */</span></span>
 <span class="line"><span style="color:#D73A49">#if</span><span style="color:#24292E">( ( </span><span style="color:#6F42C1">configCHECK_FOR_STACK_OVERFLOW</span><span style="color:#D73A49"> ></span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> ( </span><span style="color:#6F42C1">portSTACK_GROWTH</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#24292E"> ) )</span></span>
 <span class="line"></span>
 <span class="line"><span style="color:#D73A49">	#define</span><span style="color:#6F42C1"> taskCHECK_FOR_STACK_OVERFLOW</span><span style="color:#24292E">()																</span><span style="color:#005CC5">\</span></span>
@@ -1869,7 +1869,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 </blockquote>
 <h3 id="34-模式-2-的三重连锁条件">3.4 模式 2 的三重连锁条件</h3>
 <p>模式 2 依赖”栈被填充成 <code>0xa5</code>”。但这个填充并不只取决于 <code>configCHECK_FOR_STACK_OVERFLOW</code>：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:83-90 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c */</span></span>
 <span class="line"><span style="color:#6A737D">/* If any of the following are set then task stacks are filled with a known</span></span>
 <span class="line"><span style="color:#6A737D">value so the high water mark can be determined.  If none of the following are</span></span>
 <span class="line"><span style="color:#6A737D">set then don't fill the stack so there is no unnecessary dependency on memset. */</span></span>
@@ -1879,7 +1879,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#D73A49">	#define</span><span style="color:#6F42C1"> tskSET_NEW_STACKS_TO_KNOWN_VALUE</span><span style="color:#005CC5">	0</span></span>
 <span class="line"><span style="color:#D73A49">#endif</span></span></code></pre>
 <p>填充发生在任务创建时：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:850-856（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c（节选） */</span></span>
 <span class="line"><span style="color:#6A737D">	/* Avoid dependency on memset() if it is not required. */</span></span>
 <span class="line"><span style="color:#D73A49">	#if</span><span style="color:#24292E">( </span><span style="color:#6F42C1">tskSET_NEW_STACKS_TO_KNOWN_VALUE</span><span style="color:#D73A49"> ==</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">	{</span></span>
@@ -1889,7 +1889,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#24292E">	}</span></span>
 <span class="line"><span style="color:#D73A49">	#endif</span></span></code></pre>
 <p>而 <code>tskSTACK_FILL_BYTE</code> 就是 <code>0xa5</code>：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:76 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c */</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> tskSTACK_FILL_BYTE</span><span style="color:#24292E">	( </span><span style="color:#D73A49">0x</span><span style="color:#005CC5">a5</span><span style="color:#D73A49">U</span><span style="color:#24292E"> )</span></span></code></pre>
 <p>本工程的情况是四个条件全部不满足。</p>
 
@@ -1929,7 +1929,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 </blockquote>
 <h2 id="4-检查在什么时候发生">4. 检查在什么时候发生</h2>
 <p>两种模式的 <code>taskCHECK_FOR_STACK_OVERFLOW()</code> 都只有一个调用点：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:3026-3032（节选，位于 vTaskSwitchContext 内部） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c（节选，位于 vTaskSwitchContext 内部） */</span></span>
 <span class="line"><span style="color:#B31D28;font-style:italic">		#endif</span><span style="color:#6A737D"> /* configGENERATE_RUN_TIME_STATS */</span></span>
 <span class="line"></span>
 <span class="line"><span style="color:#6A737D">		/* Check for stack overflow, if configured. */</span></span>
@@ -1953,11 +1953,11 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
   NOHOOK -->|"有"| ACT["执行应用的处理 通常保存任务名后复位或死循环"]
   SKIP --> NEXT
   NEXT --> RESUME["PendSV 恢复新任务上下文 返回"]</pre></div>
-<p>有一个有利条件：检查频率很高。因为本工程 <code>configTICK_RATE_HZ = 1000</code>（1 tick = 1 ms），而且 <code>configUSE_TIME_SLICING</code> 默认是 1（<code>FreeRTOS.h:793-794</code>），6 个同优先级任务每毫秒都会轮转一次。也就是说模式 1 的检查最快每毫秒就会对每个任务做一次，捕捉概率并不低。</p>
+<p>有一个有利条件：检查频率很高。因为本工程 <code>configTICK_RATE_HZ = 1000</code>（1 tick = 1 ms），而且 <code>configUSE_TIME_SLICING</code> 默认是 1（<code>FreeRTOS.h</code>），6 个同优先级任务每毫秒都会轮转一次。也就是说模式 1 的检查最快每毫秒就会对每个任务做一次，捕捉概率并不低。</p>
 <h2 id="5-vapplicationstackoverflowhook-怎么写">5. vApplicationStackOverflowHook 怎么写</h2>
 <h3 id="51-函数签名">5.1 函数签名</h3>
 <p>从内核的 extern 声明就能看到签名：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:407 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c */</span></span>
 <span class="line"><span style="color:#D73A49">extern</span><span style="color:#D73A49"> void</span><span style="color:#6F42C1"> vApplicationStackOverflowHook</span><span style="color:#24292E">( </span><span style="color:#005CC5">TaskHandle_t</span><span style="color:#E36209"> xTask</span><span style="color:#24292E">, </span><span style="color:#D73A49">char</span><span style="color:#D73A49"> *</span><span style="color:#E36209">pcTaskName</span><span style="color:#24292E"> );</span></span></code></pre>
 <p>第一个参数是溢出任务的 TCB 句柄，第二个是任务名字符串。<code>configMAX_TASK_NAME_LEN = 16</code>，而本工程有任务名超过了这个长度（见第 8 节易错点 2），会被截断。</p>
 <h3 id="52-它运行在什么上下文">5.2 它运行在什么上下文</h3>
@@ -2033,7 +2033,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <p>所以在 <code>vApplicationStackOverflowHook</code> 里看到 <code>pcTaskName</code> 是 <code>"StartControlCent"</code> 这种半截名字时，不要以为是内存被改坏了，那只是名字长度限制。想看到完整名字就把 <code>configMAX_TASK_NAME_LEN</code> 调大（每个任务多占几个字节的 TCB 空间）。</p>
 <h2 id="6-configassert命中即死循环">6. configASSERT：命中即死循环</h2>
 <h3 id="61-本工程的真实定义">6.1 本工程的真实定义</h3>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:119-123 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h */</span></span>
 <span class="line"><span style="color:#6A737D">/* Normal assert() semantics without relying on the provision of an assert.h</span></span>
 <span class="line"><span style="color:#6A737D">header file. */</span></span>
 <span class="line"><span style="color:#6A737D">/* USER CODE BEGIN 1 */</span></span>
@@ -2068,7 +2068,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <table><thead><tr><th>中断的 NVIC 数值</th><th>断点挂住后还会进来吗</th></tr></thead><tbody><tr><td>0 ~ 4</td><td>会（BASEPRI = 0x50 挡不住它们）</td></tr><tr><td>5 ~ 15</td><td>不会</td></tr></tbody></table>
 <p>本工程所有外设中断都是 5，所以现象就是完全安静。但若照着 <code>03</code> 的建议加了一个”紧急制动”高优先级中断（数值 ≤ 4），就会看到”主逻辑死了但那个中断还在跑”的反常现象，这时候不能以为板子还能继续运行。</p>
 <p>对照 <code>Core/Src/main.c</code> 里另一条挂死路径，两者现象几乎一样：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/main.c:226-232 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Src/main.c */</span></span>
 <span class="line"><span style="color:#D73A49">void</span><span style="color:#6F42C1"> Error_Handler</span><span style="color:#24292E">(</span><span style="color:#D73A49">void</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#6F42C1">  __disable_irq</span><span style="color:#24292E">();</span><span style="color:#6A737D">       /* 这个是真关中断 PRIMASK */</span></span>
@@ -2141,7 +2141,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <p>代价是 <code>__FILE__</code> 是字符串常量，每个断言点都会往 Flash 里加一个文件名字符串。本工程 Flash 只用 92 KB（共 1 MB），完全放得下，可以采用这个方案。</p>
 <h3 id="64-断言处理函数里别再触发断言">6.4 断言处理函数里别再触发断言</h3>
 <p>如果把 <code>configASSERT</code> 改成调用 <code>vAssertFailed()</code>，而这个函数内部又用了 <code>printf</code> 或任何带临界区的 API，就可能递归触发断言。<code>vPortEnterCritical()</code> 里的注释专门提到了这一点：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* port.c:408-412 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* port.c */</span></span>
 <span class="line"><span style="color:#6A737D">	/* This is not the interrupt safe version of the enter critical function so</span></span>
 <span class="line"><span style="color:#6A737D">	assert() if it is being called from an interrupt context.  Only API</span></span>
 <span class="line"><span style="color:#6A737D">	functions that end in "FromISR" can be used in an interrupt.  Only assert if</span></span>
@@ -2153,7 +2153,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -n</span><span style="color:#032F62"> "INCLUDE_uxTaskGetStackHighWaterMark"</span><span style="color:#032F62"> Core/Inc/FreeRTOSConfig.h</span></span>
 <span class="line"><span style="color:#24292E">(</span><span style="color:#6F42C1">无输出</span><span style="color:#24292E">)</span></span></code></pre>
 <p>于是走默认值 0，函数根本不存在：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/FreeRTOS.h:155-157 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* include/FreeRTOS.h */</span></span>
 <span class="line"><span style="color:#D73A49">#ifndef</span><span style="color:#6F42C1"> INCLUDE_uxTaskGetStackHighWaterMark</span></span>
 <span class="line"><span style="color:#D73A49">	#define</span><span style="color:#6F42C1"> INCLUDE_uxTaskGetStackHighWaterMark</span><span style="color:#005CC5"> 0</span></span>
 <span class="line"><span style="color:#D73A49">#endif</span></span></code></pre>
@@ -2168,7 +2168,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 </blockquote>
 <h3 id="72-它的实现与单位">7.2 它的实现与单位</h3>
 <p>实现就是把栈底残留的填充字节数出来：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:3799-3814 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#24292E"> configSTACK_DEPTH_TYPE </span><span style="color:#6F42C1">prvTaskCheckFreeStackSpace</span><span style="color:#24292E">( </span><span style="color:#D73A49">const</span><span style="color:#D73A49"> uint8_t</span><span style="color:#D73A49"> *</span><span style="color:#E36209"> pucStackByte</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">uint32_t</span><span style="color:#24292E"> ulCount </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#D73A49">U</span><span style="color:#24292E">;</span></span>
@@ -2188,7 +2188,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <ul>
 <li>单位是 words，不是字节。返回值 64 意味着还剩 64 words = 256 字节；</li>
 <li>返回的是历史最小值（自任务创建以来剩余最少时的值），这正是它的价值所在；</li>
-<li>返回类型 <code>configSTACK_DEPTH_TYPE</code> 默认是 <code>uint16_t</code>（<code>FreeRTOS.h:855-858</code>），最大 65535 words，对本工程绰绰有余。</li>
+<li>返回类型 <code>configSTACK_DEPTH_TYPE</code> 默认是 <code>uint16_t</code>（<code>FreeRTOS.h</code>），最大 65535 words，对本工程绰绰有余。</li>
 </ul>
 <p>返回值容易被误读：它给的是历史最少剩余量，不是当前值。所以：</p>
 <ul>
@@ -2291,7 +2291,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#D73A49">extern</span><span style="color:#032F62"> "C"</span><span style="color:#D73A49"> void</span><span style="color:#6F42C1"> StackProbe_Report</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">    static</span><span style="color:#D73A49"> const</span><span style="color:#D73A49"> uint32_t</span><span style="color:#24292E"> declaredWords[</span><span style="color:#6F42C1">TaskRegistry</span><span style="color:#24292E">::kMaxTasks] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
-<span class="line"><span style="color:#6A737D">        /* 与创建顺序一致：见 Core/Src/freertos.c:114-133 */</span></span>
+<span class="line"><span style="color:#6A737D">        /* 与创建顺序一致：见 Core/Src/freertos.c */</span></span>
 <span class="line"><span style="color:#005CC5">        256</span><span style="color:#24292E">,</span><span style="color:#6A737D">   /* defaultTask            */</span></span>
 <span class="line"><span style="color:#005CC5">        512</span><span style="color:#24292E">,</span><span style="color:#6A737D">   /* StartFireTask          */</span></span>
 <span class="line"><span style="color:#005CC5">        1024</span><span style="color:#24292E">,</span><span style="color:#6A737D">  /* imuTask                */</span></span>
@@ -2522,7 +2522,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
   L --> P["链接期是否报 undefined reference"]
   H --> Q["任务创建是否成功"]</pre></div>
 <h2 id="2-逐项解读">2. 逐项解读</h2>
-<p>按原文件顺序列出，行号对应 <code>Core/Inc/FreeRTOSConfig.h</code>。</p>
+<p>按配置文件的原有顺序列出，条目名对应 <code>Core/Inc/FreeRTOSConfig.h</code>。</p>
 <h3 id="21-基础开关与调度">2.1 基础开关与调度</h3>
 
 
@@ -2811,12 +2811,12 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 <table><thead><tr><th>行</th><th>配置项</th><th>本工程值</th><th>含义</th></tr></thead><tbody><tr><td>122</td><td><code>configASSERT( x )</code></td><td><code>if ((x) == 0) {taskDISABLE_INTERRUPTS(); for( ;; );}</code></td><td>断言失败 = 抬 BASEPRI 加死循环（见 <code>04</code>）</td></tr><tr><td>127</td><td><code>vPortSVCHandler</code></td><td><code>SVC_Handler</code></td><td>内核启动第一个任务用</td></tr><tr><td>128</td><td><code>xPortPendSVHandler</code></td><td><code>PendSV_Handler</code></td><td>上下文切换的实现</td></tr><tr><td>133</td><td><code>xPortSysTickHandler</code></td><td><code>SysTick_Handler</code></td><td>内核滴答源</td></tr></tbody></table>
 <p>最后三项需要特别注意：本工程把 <code>SysTick_Handler</code> 交给了 FreeRTOS，而 HAL 的时基改用 TIM2：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h:130-133 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* Core/Inc/FreeRTOSConfig.h */</span></span>
 <span class="line"><span style="color:#6A737D">/* IMPORTANT: This define is commented when used with STM32Cube firmware, when the timebase source is SysTick,</span></span>
 <span class="line"><span style="color:#6A737D">              to prevent overwriting SysTick_Handler defined within STM32Cube HAL */</span></span>
 <span class="line"></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> xPortSysTickHandler</span><span style="color:#24292E"> SysTick_Handler</span></span></code></pre>
-<p>对应的是 <code>Core/Src/stm32f4xx_hal_timebase_tim.c</code>。HAL 的时基由 TIM2 提供，优先级 <code>TICK_INT_PRIORITY = 15</code>（<code>stm32f4xx_hal_conf.h:151</code>）。这是正确的设计：SysTick 必须给 RTOS 用，HAL 另找定时器，否则 <code>HAL_GetTick()</code> 和内核滴答会互相覆盖。</p>
+<p>对应的是 <code>Core/Src/stm32f4xx_hal_timebase_tim.c</code>。HAL 的时基由 TIM2 提供，优先级 <code>TICK_INT_PRIORITY = 15</code>（<code>stm32f4xx_hal_conf.h</code>）。这是正确的设计：SysTick 必须给 RTOS 用，HAL 另找定时器，否则 <code>HAL_GetTick()</code> 和内核滴答会互相覆盖。</p>
 <h3 id="26-本工程没有定义但很重要的项">2.6 本工程没有定义、但很重要的项</h3>
 <p>这些项不在文件里，走内核默认值。它们对系统行为的影响不比上面小：</p>
 
@@ -2899,7 +2899,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 
-<table><thead><tr><th>配置项</th><th>默认值</th><th>本工程实际效果</th></tr></thead><tbody><tr><td><code>configCHECK_FOR_STACK_OVERFLOW</code></td><td>0</td><td>栈溢出检测完全关闭（见 <code>04</code>）</td></tr><tr><td><code>INCLUDE_uxTaskGetStackHighWaterMark</code></td><td>0</td><td>栈水位 API 不可用</td></tr><tr><td><code>configUSE_TIME_SLICING</code></td><td>1</td><td>同优先级任务按 tick 轮转。本工程运行期创建的 6 个任务（<code>defaultTask</code> + 5 个应用任务，不含内核 IDLE；<code>StartTestTask_Init()</code> 在 <code>freertos.c:134</code> 被注释掉）全是优先级 3，这条决定调度行为</td></tr><tr><td><code>configUSE_TIMERS</code></td><td>0</td><td>没有定时器任务，不需要 <code>vApplicationGetTimerTaskMemory</code></td></tr><tr><td><code>configUSE_MALLOC_FAILED_HOOK</code></td><td>0</td><td>分配失败不会回调，静默返回 <code>NULL</code></td></tr><tr><td><code>configUSE_TRACE_FACILITY</code></td><td>0</td><td>无 <code>uxTaskGetSystemState</code>，也没有运行时间统计</td></tr><tr><td><code>configUSE_TICKLESS_IDLE</code></td><td>0</td><td>不做低功耗，滴答不停</td></tr><tr><td><code>configUSE_RECURSIVE_MUTEXES</code></td><td>0</td><td>无递归互斥量</td></tr><tr><td><code>configUSE_COUNTING_SEMAPHORES</code></td><td>0</td><td>无计数信号量</td></tr><tr><td><code>configUSE_QUEUE_SETS</code></td><td>0</td><td>无队列集</td></tr><tr><td><code>configUSE_APPLICATION_TASK_TAG</code></td><td>0</td><td>任务无自定义标签</td></tr><tr><td><code>configGENERATE_RUN_TIME_STATS</code></td><td>0</td><td>无 CPU 占用率统计</td></tr><tr><td><code>configAPPLICATION_ALLOCATED_HEAP</code></td><td>0</td><td><code>ucHeap</code> 由 heap_4.c 内部定义</td></tr><tr><td><code>configIDLE_TASK_NAME</code></td><td><code>"IDLE"</code></td><td>空闲任务名</td></tr></tbody></table>
+<table><thead><tr><th>配置项</th><th>默认值</th><th>本工程实际效果</th></tr></thead><tbody><tr><td><code>configCHECK_FOR_STACK_OVERFLOW</code></td><td>0</td><td>栈溢出检测完全关闭（见 <code>04</code>）</td></tr><tr><td><code>INCLUDE_uxTaskGetStackHighWaterMark</code></td><td>0</td><td>栈水位 API 不可用</td></tr><tr><td><code>configUSE_TIME_SLICING</code></td><td>1</td><td>同优先级任务按 tick 轮转。本工程运行期创建的 6 个任务（<code>defaultTask</code> + 5 个应用任务，不含内核 IDLE；<code>StartTestTask_Init()</code> 在 <code>freertos.c</code> 被注释掉）全是优先级 3，这条决定调度行为</td></tr><tr><td><code>configUSE_TIMERS</code></td><td>0</td><td>没有定时器任务，不需要 <code>vApplicationGetTimerTaskMemory</code></td></tr><tr><td><code>configUSE_MALLOC_FAILED_HOOK</code></td><td>0</td><td>分配失败不会回调，静默返回 <code>NULL</code></td></tr><tr><td><code>configUSE_TRACE_FACILITY</code></td><td>0</td><td>无 <code>uxTaskGetSystemState</code>，也没有运行时间统计</td></tr><tr><td><code>configUSE_TICKLESS_IDLE</code></td><td>0</td><td>不做低功耗，滴答不停</td></tr><tr><td><code>configUSE_RECURSIVE_MUTEXES</code></td><td>0</td><td>无递归互斥量</td></tr><tr><td><code>configUSE_COUNTING_SEMAPHORES</code></td><td>0</td><td>无计数信号量</td></tr><tr><td><code>configUSE_QUEUE_SETS</code></td><td>0</td><td>无队列集</td></tr><tr><td><code>configUSE_APPLICATION_TASK_TAG</code></td><td>0</td><td>任务无自定义标签</td></tr><tr><td><code>configGENERATE_RUN_TIME_STATS</code></td><td>0</td><td>无 CPU 占用率统计</td></tr><tr><td><code>configAPPLICATION_ALLOCATED_HEAP</code></td><td>0</td><td><code>ucHeap</code> 由 heap_4.c 内部定义</td></tr><tr><td><code>configIDLE_TASK_NAME</code></td><td><code>"IDLE"</code></td><td>空闲任务名</td></tr></tbody></table>
 <h2 id="3-三块最容易出事的配置">3. 三块最容易出事的配置</h2>
 <p>上面的表是全的，最容易出问题的是这三块。逐个说清”为什么这个值是这个值”。</p>
 <h3 id="31-调度与时钟1000-hz-意味着什么">3.1 调度与时钟：1000 Hz 意味着什么</h3>
@@ -2937,7 +2937,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 
-<table><thead><tr><th>现象</th><th>来自哪一行代码</th></tr></thead><tbody><tr><td><code>osDelay(1)</code> 就是 1 ms</td><td><code>FireTask.cpp:70</code>、<code>ControlCenterTask.cpp:111</code> 的控制周期；<code>gimbalTask</code> 用的是 <code>osDelay(2)</code>（<code>GimbalTask.cpp:100</code>）</td></tr><tr><td><code>osDelay(5)</code> = 5 ms</td><td><code>UsbConnectTask.cpp:148</code> 轮询 <code>USBD_BUSY</code> 的间隔</td></tr><tr><td><code>osDelay(10)</code> = 10 ms</td><td><code>UsbConnectTask.cpp:154</code> USB 任务主循环周期</td></tr><tr><td><code>1.0f / 1000.0f</code> 当 dt</td><td><code>ImuTask.cpp</code> 里 <code>1kHz</code> 的融合频率</td></tr><tr><td><code>configTICK_RATE_HZ = 1000</code> 与 <code>HAL_Delay(1)</code> 数值相同</td><td>两个时基恰好都是 1 ms，见 <code>03</code> 易错点 3</td></tr></tbody></table>
+<table><thead><tr><th>现象</th><th>来自哪一行代码</th></tr></thead><tbody><tr><td><code>osDelay(1)</code> 就是 1 ms</td><td><code>FireTask.cpp</code>、<code>ControlCenterTask.cpp</code> 的控制周期；<code>gimbalTask</code> 用的是 <code>osDelay(2)</code>（<code>GimbalTask.cpp</code>）</td></tr><tr><td><code>osDelay(5)</code> = 5 ms</td><td><code>UsbConnectTask.cpp</code> 轮询 <code>USBD_BUSY</code> 的间隔</td></tr><tr><td><code>osDelay(10)</code> = 10 ms</td><td><code>UsbConnectTask.cpp</code> USB 任务主循环周期</td></tr><tr><td><code>1.0f / 1000.0f</code> 当 dt</td><td><code>ImuTask.cpp</code> 里 <code>1kHz</code> 的融合频率</td></tr><tr><td><code>configTICK_RATE_HZ = 1000</code> 与 <code>HAL_Delay(1)</code> 数值相同</td><td>两个时基恰好都是 1 ms，见 <code>03</code> 易错点 3</td></tr></tbody></table>
 <p>最后一行只是巧合，不是设计保证。<code>osDelay</code> 的单位是 tick，<code>HAL_Delay</code> 的单位是 ms。两者数值相同仅仅因为 <code>configTICK_RATE_HZ = 1000</code>。改滴答频率时，所有 <code>osDelay(n)</code> 的语义都会跟着变，而 <code>HAL_Delay(n)</code> 不变。</p>
 <p><code>configUSE_PREEMPTION = 1</code> 决定”高优先级任务就绪时是否立刻抢”。本工程 6 个任务同优先级，所以抢占主要发生在”任务 vs 空闲任务”之间：只要有任务就绪，空闲任务（优先级 0）就永远不会被运行。</p>
 <h3 id="32-内存两个-1-带来的双轨制">3.2 内存：两个 <code>1</code> 带来的双轨制</h3>
@@ -2945,8 +2945,8 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configSUPPORT_DYNAMIC_ALLOCATION</span><span style="color:#005CC5">         1</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configTOTAL_HEAP_SIZE</span><span style="color:#24292E">                    ((</span><span style="color:#D73A49">size_t</span><span style="color:#24292E">)</span><span style="color:#005CC5">40960</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configMINIMAL_STACK_SIZE</span><span style="color:#24292E">                 ((</span><span style="color:#D73A49">uint16_t</span><span style="color:#24292E">)</span><span style="color:#005CC5">256</span><span style="color:#24292E">)</span></span></code></pre>
-<p>两个 <code>1</code> 意味着内核里 <code>tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE</code> 为真（<code>FreeRTOS.h:1048</code>），于是 CMSIS 的 <code>osThreadCreate</code> 会走双分支：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* CMSIS_RTOS/cmsis_os.c:216-226（节选） */</span></span>
+<p>两个 <code>1</code> 意味着内核里 <code>tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE</code> 为真（<code>FreeRTOS.h</code>），于是 CMSIS 的 <code>osThreadCreate</code> 会走双分支：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* CMSIS_RTOS/cmsis_os.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">#if</span><span style="color:#24292E">( </span><span style="color:#6F42C1">configSUPPORT_STATIC_ALLOCATION</span><span style="color:#D73A49"> ==</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> ) </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E">  ( </span><span style="color:#6F42C1">configSUPPORT_DYNAMIC_ALLOCATION</span><span style="color:#D73A49"> ==</span><span style="color:#005CC5"> 1</span><span style="color:#24292E"> )</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E">((thread_def</span><span style="color:#D73A49">-></span><span style="color:#24292E">buffer </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E">) </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> (thread_def</span><span style="color:#D73A49">-></span><span style="color:#24292E">controlblock </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> NULL</span><span style="color:#24292E">)) {</span></span>
 <span class="line"><span style="color:#24292E">    handle </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> xTaskCreateStatic</span><span style="color:#24292E">( ... );</span></span>
@@ -3016,7 +3016,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
   G --> I
   H --> I
   I --> J["好消息 这类错误编译期就能发现"]</pre></div>
-<p>本工程当前的状态：<code>configSUPPORT_STATIC_ALLOCATION = 1</code> 且已提供 <code>vApplicationGetIdleTaskMemory()</code>（<code>freertos.c:80-86</code>），其余开关都是关的，所以不需要任何别的回调。上面这张图的 6 条依赖里，本工程目前只需要满足第 5 条（静态分配的空闲任务内存）。</p>
+<p>本工程当前的状态：<code>configSUPPORT_STATIC_ALLOCATION = 1</code> 且已提供 <code>vApplicationGetIdleTaskMemory()</code>（<code>freertos.c</code>），其余开关都是关的，所以不需要任何别的回调。上面这张图的 6 条依赖里，本工程目前只需要满足第 5 条（静态分配的空闲任务内存）。</p>
 <h3 id="36-include-裁剪在省-flash-和留余地之间">3.6 INCLUDE 裁剪：在省 Flash 和留余地之间</h3>
 <p>本工程 Flash 占用 92948 字节（<code>.text</code>，共 1 MB），没有裁剪的必要。但 CubeMX 模板保守地关掉了几个：</p>
 
@@ -3041,8 +3041,8 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 <table><thead><tr><th>关掉的</th><th>影响</th></tr></thead><tbody><tr><td><code>INCLUDE_vTaskDelayUntil = 0</code></td><td>不能用”绝对时刻延时”。对 1 ms 级的固定周期控制，<code>vTaskDelayUntil</code> 比 <code>osDelay</code> 更抗漂移。本工程三个控制任务都用 <code>osDelay</code>，周期会累积漂移</td></tr><tr><td><code>INCLUDE_vTaskCleanUpResources = 0</code></td><td>本来就已废弃，无所谓</td></tr><tr><td><code>INCLUDE_uxTaskGetStackHighWaterMark</code> 未定义</td><td>栈水位不可用（见 <code>04</code>）</td></tr></tbody></table>
-<p><code>INCLUDE_vTaskDelayUntil = 0</code> 需要单独说明。本工程 <code>GimbalTask</code> 在循环末尾调用 <code>osDelay(2)</code>（<code>GimbalTask.cpp:100</code>，源码注释写的是 1 ms 控制周期）：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/GimbalTask.cpp:100 */</span></span>
+<p><code>INCLUDE_vTaskDelayUntil = 0</code> 需要单独说明。本工程 <code>GimbalTask</code> 在循环末尾调用 <code>osDelay(2)</code>（<code>GimbalTask.cpp</code>，源码注释写的是 1 ms 控制周期）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="cpp"><code><span class="line"><span style="color:#6A737D">/* Task/Src/GimbalTask.cpp */</span></span>
 <span class="line"><span style="color:#6F42C1">osDelay</span><span style="color:#24292E">(</span><span style="color:#005CC5">2</span><span style="color:#24292E">);</span><span style="color:#6A737D"> // 1ms控制周期</span></span></code></pre>
 <p><code>osDelay</code> 是相对延时：它在”本次调用时刻”基础上加 2 tick。每轮的 PID 计算、CAN 收发耗时都会叠加到周期里，于是实际周期是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext> ms</mtext><mo>+</mo><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">2\ \text{ms} + \epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace"> </span><span class="mord text"><span class="mord">ms</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ϵ</span></span></span></span>。而 <code>vTaskDelayUntil</code> 是绝对延时：它保存上次唤醒的绝对时刻，下一轮按 <code>上次 + 2 tick</code> 唤醒，误差不累积。</p>
 <p>对云台这种角度环加 1 kHz 速度环的场合，累积漂移会直接变成相位滞后。要改成 <code>vTaskDelayUntil</code> 需要三步：把 <code>INCLUDE_vTaskDelayUntil</code> 置 1、在循环外记录 <code>TickType_t xLastWakeTime = xTaskGetTickCount()</code>、循环内换成 <code>vTaskDelayUntil(&#x26;xLastWakeTime, pdMS_TO_TICKS(2))</code>。这是本工程一个明确的可优化点。</p>
@@ -3051,20 +3051,20 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#D73A49">#define</span><span style="color:#6F42C1"> configENABLE_MPU</span><span style="color:#005CC5">                         0</span></span></code></pre>
 <p>这两行看起来很重要，但在本工程实际不产生任何效果。理由：它们只在 <code>FreeRTOS.h</code> 里有默认定义，而本工程用的移植层是 <code>portable/GCC/ARM_CM4F</code>，这个 port 的 <code>port.c</code> / <code>portmacro.h</code> 里没有任何代码引用它们：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">$</span><span style="color:#032F62"> grep</span><span style="color:#005CC5"> -rn</span><span style="color:#032F62"> "configENABLE_FPU\|configENABLE_MPU"</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.c</span><span style="color:#005CC5"> --include=</span><span style="color:#D73A49">*</span><span style="color:#005CC5">.h</span><span style="color:#032F62"> Middlewares/</span><span style="color:#032F62"> Core/</span></span>
-<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:984:#ifndef</span><span style="color:#032F62"> configENABLE_MPU</span></span>
-<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:985:</span><span style="color:#6A737D">	#define configENABLE_MPU 0</span></span>
-<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:988:/*</span><span style="color:#032F62"> Set</span><span style="color:#032F62"> configENABLE_FPU</span><span style="color:#032F62"> to</span><span style="color:#005CC5"> 1</span><span style="color:#032F62"> to</span><span style="color:#032F62"> enable</span><span style="color:#032F62"> FPU</span><span style="color:#032F62"> support</span><span style="color:#032F62"> and</span><span style="color:#005CC5"> 0</span><span style="color:#032F62"> to</span><span style="color:#032F62"> disable</span><span style="color:#032F62"> it.</span><span style="color:#032F62"> ...</span></span>
-<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:990:#ifndef</span><span style="color:#032F62"> configENABLE_FPU</span></span>
-<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:991:</span><span style="color:#6A737D">	#define configENABLE_FPU 1</span></span>
-<span class="line"><span style="color:#6F42C1">Core/Inc/FreeRTOSConfig.h:55:#define</span><span style="color:#032F62"> configENABLE_FPU</span><span style="color:#005CC5">                         0</span></span>
-<span class="line"><span style="color:#6F42C1">Core/Inc/FreeRTOSConfig.h:56:#define</span><span style="color:#032F62"> configENABLE_MPU</span><span style="color:#005CC5">                         0</span></span></code></pre>
+<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:#ifndef</span><span style="color:#032F62"> configENABLE_MPU</span></span>
+<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:</span><span style="color:#6A737D">	#define configENABLE_MPU 0</span></span>
+<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:/*</span><span style="color:#032F62"> Set</span><span style="color:#032F62"> configENABLE_FPU</span><span style="color:#032F62"> to</span><span style="color:#005CC5"> 1</span><span style="color:#032F62"> to</span><span style="color:#032F62"> enable</span><span style="color:#032F62"> FPU</span><span style="color:#032F62"> support</span><span style="color:#032F62"> and</span><span style="color:#005CC5"> 0</span><span style="color:#032F62"> to</span><span style="color:#032F62"> disable</span><span style="color:#032F62"> it.</span><span style="color:#032F62"> ...</span></span>
+<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:#ifndef</span><span style="color:#032F62"> configENABLE_FPU</span></span>
+<span class="line"><span style="color:#6F42C1">Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:</span><span style="color:#6A737D">	#define configENABLE_FPU 1</span></span>
+<span class="line"><span style="color:#6F42C1">Core/Inc/FreeRTOSConfig.h:#define</span><span style="color:#032F62"> configENABLE_FPU</span><span style="color:#005CC5">                         0</span></span>
+<span class="line"><span style="color:#6F42C1">Core/Inc/FreeRTOSConfig.h:#define</span><span style="color:#032F62"> configENABLE_MPU</span><span style="color:#005CC5">                         0</span></span></code></pre>
 <p>命中的全是”默认定义处”和本工程的定义处，没有一处使用。</p>
-<p>而且这里有个反直觉的地方：<code>FreeRTOS.h:991</code> 的默认值是 1，本工程把它改成了 0。如果 <code>configENABLE_FPU</code> 真能关掉 FPU 支持，那本工程那些满屏的 <code>float</code> 运算（<code>FusionAHRS</code>、PID、三角函数）就会出问题。事实是：ARM_CM4F port 是否保存 FPU 上下文（S16~S31）由 <code>EXC_RETURN</code> 的值决定，与 <code>configENABLE_FPU</code> 无关。硬件会在使用 FPU 后自动置位 <code>CONTROL.FPCA</code>，异常返回时 LR 的 bit 4 就会指示”要恢复 FPU 上下文”，port 的汇编会照着做。</p>
+<p>而且这里有个反直觉的地方：<code>FreeRTOS.h</code> 的默认值是 1，本工程把它改成了 0。如果 <code>configENABLE_FPU</code> 真能关掉 FPU 支持，那本工程那些满屏的 <code>float</code> 运算（<code>FusionAHRS</code>、PID、三角函数）就会出问题。事实是：ARM_CM4F port 是否保存 FPU 上下文（S16~S31）由 <code>EXC_RETURN</code> 的值决定，与 <code>configENABLE_FPU</code> 无关。硬件会在使用 FPU 后自动置位 <code>CONTROL.FPCA</code>，异常返回时 LR 的 bit 4 就会指示”要恢复 FPU 上下文”，port 的汇编会照着做。</p>
 <p>结论与操作建议：这两行在本工程里是无害的噪音，可以留着。但要知道它们是 CubeMX 模板从别的 port（如 ARMv8-M / ST 自己的定制 port）带过来的。如果换了移植层，就必须重新确认它们有没有被使用。配置项看起来生效与配置项真的生效是两件不同的事。</p>
 <h2 id="4-cmsis-rtos-v1-的优先级映射">4. CMSIS-RTOS v1 的优先级映射</h2>
 <p>本工程的 <code>osThreadDef</code> / <code>osThreadCreate</code> 是 CMSIS-RTOS v1 的 API，它和 FreeRTOS 原生优先级之间存在一层整数换算。这一层经常被忽略，而它恰好解释了本工程一个很特别的现象。</p>
 <h3 id="41-换算公式的真实实现">4.1 换算公式的真实实现</h3>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* CMSIS_RTOS/cmsis_os.c:102-113 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* CMSIS_RTOS/cmsis_os.c */</span></span>
 <span class="line"><span style="color:#D73A49">static</span><span style="color:#D73A49"> unsigned</span><span style="color:#24292E"> portBASE_TYPE </span><span style="color:#6F42C1">makeFreeRtosPriority</span><span style="color:#24292E"> (osPriority </span><span style="color:#E36209">priority</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">{</span></span>
 <span class="line"><span style="color:#D73A49">  unsigned</span><span style="color:#24292E"> portBASE_TYPE fpriority </span><span style="color:#D73A49">=</span><span style="color:#24292E"> tskIDLE_PRIORITY;</span></span>
@@ -3076,7 +3076,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> fpriority;</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>CMSIS 的枚举从 -3 开始：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* CMSIS_RTOS/cmsis_os.h:173-180 */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* CMSIS_RTOS/cmsis_os.h */</span></span>
 <span class="line"><span style="color:#24292E">  osPriorityIdle          </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">3</span><span style="color:#24292E">,</span><span style="color:#6A737D">          ///&#x3C; priority: idle (lowest)</span></span>
 <span class="line"><span style="color:#24292E">  osPriorityLow           </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">2</span><span style="color:#24292E">,</span><span style="color:#6A737D">          ///&#x3C; priority: low</span></span>
 <span class="line"><span style="color:#6A737D">  /* osPriorityBelowNormal = -1 */</span></span>
@@ -3159,7 +3159,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 <table><thead><tr><th>CMSIS <code>osPriority</code></th><th>枚举值</th><th>FreeRTOS 优先级</th><th><code>configMAX_PRIORITIES = 7</code> 下是否合法</th><th>本工程是否使用</th></tr></thead><tbody><tr><td><code>osPriorityIdle</code></td><td>−3</td><td>0</td><td>合法（但那是空闲任务的级别）</td><td>否</td></tr><tr><td><code>osPriorityLow</code></td><td>−2</td><td>1</td><td>合法</td><td>否</td></tr><tr><td><code>osPriorityBelowNormal</code></td><td>−1</td><td>2</td><td>合法</td><td>否</td></tr><tr><td><code>osPriorityNormal</code></td><td>0</td><td>3</td><td>合法</td><td>是，全部 6 个任务</td></tr><tr><td><code>osPriorityAboveNormal</code></td><td>+1</td><td>4</td><td>合法</td><td>否</td></tr><tr><td><code>osPriorityHigh</code></td><td>+2</td><td>5</td><td>合法</td><td>否</td></tr><tr><td><code>osPriorityRealtime</code></td><td>+3</td><td>6</td><td>合法，恰好等于 6 = 7 − 1</td><td>否</td></tr><tr><td><code>osPriorityError</code></td><td>0x84</td><td>0（<code>tskIDLE_PRIORITY</code>）</td><td>—</td><td>否</td></tr></tbody></table>
 <p><code>configMAX_PRIORITIES = 7</code> 的边界性就体现在这里：<code>osPriorityRealtime</code> 映射到 6，需要 <code>configMAX_PRIORITIES >= 7</code>。如果这个值被改小（比如 6），<code>xTaskCreate</code> 里会执行钳位：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c:924-933（节选） */</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="c"><code><span class="line"><span style="color:#6A737D">/* tasks.c（节选） */</span></span>
 <span class="line"><span style="color:#D73A49">	if</span><span style="color:#24292E">( uxPriority </span><span style="color:#D73A49">>=</span><span style="color:#24292E"> ( </span><span style="color:#005CC5">UBaseType_t</span><span style="color:#24292E"> ) configMAX_PRIORITIES )</span></span>
 <span class="line"><span style="color:#24292E">	{</span></span>
 <span class="line"><span style="color:#24292E">		uxPriority </span><span style="color:#D73A49">=</span><span style="color:#24292E"> ( </span><span style="color:#005CC5">UBaseType_t</span><span style="color:#24292E"> ) configMAX_PRIORITIES </span><span style="color:#D73A49">-</span><span style="color:#24292E"> ( </span><span style="color:#005CC5">UBaseType_t</span><span style="color:#24292E"> ) </span><span style="color:#005CC5">1</span><span style="color:#D73A49">U</span><span style="color:#24292E">;</span></span>
@@ -3221,7 +3221,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 
 
 
-<table><thead><tr><th>任务</th><th>创建位置</th><th>传入优先级</th><th>实际 FreeRTOS 优先级</th></tr></thead><tbody><tr><td><code>defaultTask</code></td><td><code>freertos.c:123</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartFireTask</code></td><td><code>FireTask.cpp:80</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>imuTask</code></td><td><code>ImuTask.cpp:123</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp:110</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp:122</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp:177</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td>空闲任务</td><td>内核自动创建</td><td><code>tskIDLE_PRIORITY</code></td><td>0</td></tr></tbody></table>
+<table><thead><tr><th>任务</th><th>创建位置</th><th>传入优先级</th><th>实际 FreeRTOS 优先级</th></tr></thead><tbody><tr><td><code>defaultTask</code></td><td><code>freertos.c</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartFireTask</code></td><td><code>FireTask.cpp</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>imuTask</code></td><td><code>ImuTask.cpp</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>gimbalTask</code></td><td><code>GimbalTask.cpp</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartControlCenterTask</code></td><td><code>ControlCenterTask.cpp</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td><code>StartUsbConnectTask</code></td><td><code>UsbConnectTask.cpp</code></td><td><code>osPriorityNormal</code></td><td>3</td></tr><tr><td>空闲任务</td><td>内核自动创建</td><td><code>tskIDLE_PRIORITY</code></td><td>0</td></tr></tbody></table>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   subgraph L6["优先级 6 最高 未使用"]
     P6["空"]
@@ -3249,7 +3249,7 @@ FreeRTOS 把它默认成 0，栈溢出检测处于关闭状态。
 <p>结论有三条：</p>
 <ol>
 <li><code>osPriorityNormal</code> 是 7 个档位里的第 4 档（优先级 3），不是最低档。</li>
-<li>6 个任务全部同优先级，所以它们之间是时间片轮转（<code>configUSE_TIME_SLICING</code> 默认为 1，<code>FreeRTOS.h:793-794</code>），每 1 ms 轮一圈。这也是为什么 <code>GimbalTask</code> 里的 <code>osDelay(1)</code> 能让出 CPU：它主动阻塞 1 tick，正好和其他任务的轮转节奏对上。</li>
+<li>6 个任务全部同优先级，所以它们之间是时间片轮转（<code>configUSE_TIME_SLICING</code> 默认为 1，<code>FreeRTOS.h</code>），每 1 ms 轮一圈。这也是为什么 <code>GimbalTask</code> 里的 <code>osDelay(1)</code> 能让出 CPU：它主动阻塞 1 tick，正好和其他任务的轮转节奏对上。</li>
 <li>优先级配置在本工程实际上是装饰性的。唯一真实的优先级差别是”任务（3）与空闲任务（0）“。如果想让某个任务更及时（比如 <code>imuTask</code> 必须在 1 ms 内完成），必须显式把它的优先级提到 <code>osPriorityAboveNormal</code> 或 <code>osPriorityHigh</code>。当前配置下这 6 个任务的优先级改不改都一样。</li>
 </ol>
 <blockquote>

@@ -2,7 +2,7 @@
 <p>一个在仿真里成功率七成的策略，直接放到机器人上往往第一步就摔。原因在于仿真的世界与真实世界在若干处不同，而不是算法错了：关节不是理想的力矩源，指令到达有延迟，传感器读数带噪声，地面摩擦与机器人质量也和建模时不一样。域随机化的做法是在训练时把这些量随机化，让策略见过足够多的「世界变体」，从而对真实世界的那一份差异保持鲁棒。</p>
 <p>本项目的定位需要说明清楚：它的目标是把仿真里的起身与走路做对，不追求实机部署。因此域随机化的部分只做到「小幅扰动与传感器噪声」这一层，公开记录里也把更完整的随机化列成待办。差距里哪些是本项目已经处理过的、哪些仍是待办，需要逐项对照开关状态才能分清。</p>
 <h2 id="差距的五个来源">差距的五个来源</h2>
-<p>公开工作的随机化项可以按来源归类，每一类对应一种真实的失配（<code>docs/getup-recipes.md:110-135</code> 与 <code>:150-160</code>）：</p>
+<p>公开工作的随机化项可以按来源归类，每一类对应一种真实的失配（<code>docs/getup-recipes.md</code> 与 ）：</p>
 
 
 
@@ -41,9 +41,9 @@
 <table><thead><tr><th>来源</th><th>具体差异</th><th>公开的随机化范围</th></tr></thead><tbody><tr><td>执行器</td><td>增益、力矩上限、电机强度与建模值不同</td><td>增益乘 0.85 到 1.15，电机强度取 0.9 到 1.1，力矩有比例噪声</td></tr><tr><td>延迟</td><td>指令与反馈在链路里有几十毫秒延迟</td><td>控制延迟取 0 到 100 ms，或折算成若干控制步</td></tr><tr><td>观测</td><td>编码器噪声、姿态估计误差、速度估计误差</td><td>各通道按量级加均匀噪声</td></tr><tr><td>物理参数</td><td>摩擦、恢复系数、质量、质心位置</td><td>摩擦取 0.1 到 1，恢复系数取 0 到 1，质心偏移几十毫米</td></tr><tr><td>环境</td><td>地面坡度、障碍高度、地形材质</td><td>坡度从 0 到 45 度，障碍高度逐步加大</td></tr></tbody></table>
 <p>这五类里，执行器与延迟对四足的影响最直接：位置控制回路的稳定裕度对增益与延迟都敏感，同样的目标关节角在不同增益下会得到不同的实际轨迹。观测噪声影响的是策略的输入分布，物理参数与环境影响的是动力学与接触。</p>
 <h2 id="本项目的位置">本项目的位置</h2>
-<p>第二版起身环境的文件头明确写了三处「有意差异」：不开动作噪声与观测噪声（先拿干净基线）、没有状态估计模块与高度图特权、高度扫描用的是高度场双线性采样而不是射线投射（<code>envs/go1_getup_v2.py:40-43</code>）。第一条正是域随机化尚未接入的直接证据。</p>
-<p>项目在起身实验的总结里把缺口列成一份清单：还欠域随机化，包括动作与观测噪声、摩擦、质量与增益，另外还有环境规模与训练步数两项（<code>docs/experiment-log.md:6125</code> 附近）。同一份记录给出的对照是：本项目累计约 204M 步但只用 768 个环境，而公开工作用 4096 个环境与 98M 到 787M 步。这说明域随机化不只是加噪声，它还与训练规模配套。</p>
-<p>走路侧的情况不同。走路环境在 v19 之后已经接入了随机出生、周期外力推挤与观测噪声三个开关，默认关闭、由命令行打开（<code>envs/go1_walk.py:376-397</code>）。因此域随机化在本项目里走路有、起身没有，两边的成熟度不同。</p>
+<p>第二版起身环境的文件头明确写了三处「有意差异」：不开动作噪声与观测噪声（先拿干净基线）、没有状态估计模块与高度图特权、高度扫描用的是高度场双线性采样而不是射线投射（<code>envs/go1_getup_v2.py</code>）。第一条正是域随机化尚未接入的直接证据。</p>
+<p>域随机化不是单独加几条噪声就完事，它与训练规模是配套的：随机化范围越宽，策略需要见过的样本越多。公开工作用几千个并行环境配合上亿步训练，正是为了覆盖这些变体；并行环境数不足时贸然放宽随机化，常见表现是收敛变慢甚至不收敛。本项目的记录里，训练规模与随机化两项缺口是被并列写在一起的。</p>
+<p>走路侧的情况不同。走路环境在 v19 之后已经接入了随机出生、周期外力推挤与观测噪声三个开关，默认关闭、由命令行打开（<code>envs/go1_walk.py</code>）。因此域随机化在本项目里走路有、起身没有，两边的成熟度不同。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["仿真策略"] --> B{"移植到实机"}
   B --> C["执行器差异 增益 力矩 电机强度"]
@@ -58,7 +58,7 @@
   G --> H
   H --> I["策略对变体保持鲁棒"]</pre></div>
 <h2 id="随机化与课程的关系">随机化与课程的关系</h2>
-<p>域随机化的范围本身可以当作课程轴。公开工作的做法普遍是先把任务在窄分布上学会，再逐步放大随机化范围（<code>docs/getup-recipes.md:186-192</code>）。</p>
+<p>域随机化的范围本身可以当作课程轴。公开工作的做法普遍是先把任务在窄分布上学会，再逐步放大随机化范围（<code>docs/getup-recipes.md</code>）。</p>
 
 
 
@@ -85,10 +85,10 @@
 
 
 <table><thead><tr><th>阶段</th><th>随机化范围</th><th>目的</th></tr></thead><tbody><tr><td>发现阶段</td><td>窄分布、弱正则</td><td>先学会动作</td></tr><tr><td>泛化阶段</td><td>放宽姿态与地形</td><td>覆盖更多起点</td></tr><tr><td>鲁棒阶段</td><td>加执行器、延迟与观测噪声</td><td>抵抗真实失配</td></tr></tbody></table>
-<p>三个阶段的顺序不能颠倒。在动作还没学会时加满随机化，策略拿不到稳定的学习信号；反过来，如果只在窄分布上训练到收敛，再加随机化需要重新学习，前面的算力白花。项目记录里对起身任务给出的正是两阶段配方，第一阶段在规范姿态上发现动作，第二阶段才放开初始分布（<code>docs/getup-recipes.md:135-141</code>）。</p>
-<p>域随机化还有一个容易被忽略的代价：它改变了最优策略。在带噪声的观测下训练出来的策略会学到「如何在噪声里活下来」，而这个最优解在去噪之后反而更差（<code>docs/experiment-log.md:5905-5913</code>）。项目在分析关键帧残差退化时发现的就是这类噪声鲁棒性错配，结论是噪声量级必须按真实传感器的规格来定，而不是越大越好。</p>
+<p>三个阶段的顺序不能颠倒。在动作还没学会时加满随机化，策略拿不到稳定的学习信号；反过来，如果只在窄分布上训练到收敛，再加随机化需要重新学习，前面的算力白花。项目记录里对起身任务给出的正是两阶段配方，第一阶段在规范姿态上发现动作，第二阶段才放开初始分布（<code>docs/getup-recipes.md</code>）。</p>
+<p>域随机化还有一个容易被忽略的代价：它改变了最优策略。在带噪声的观测下训练出来的策略会学到「如何在噪声里活下来」，而这个最优解在去噪之后反而更差（<code>docs/experiment-log.md</code>）。项目在分析关键帧残差退化时发现的就是这类噪声鲁棒性错配，结论是噪声量级必须按真实传感器的规格来定，而不是越大越好。</p>
 <h2 id="随机化项清单">随机化项清单</h2>
-<p>把公开的随机化项逐条对照本项目的实现状态，可以清楚地看到缺口在哪（«envs/go1_walk.py:376-397» 与 «:355-372»、«docs/experiment-log.md:6125»）：</p>
+<p>把公开的随机化项逐条对照本项目的实现状态，可以清楚地看到缺口在哪（<code>envs/go1_walk.py</code> 与 <code>docs/experiment-log.md</code>）：</p>
 
 
 
@@ -141,12 +141,12 @@
 
 <table><thead><tr><th>随机化项</th><th>本项目状态</th><th>取值或位置</th></tr></thead><tbody><tr><td>随机出生位置与朝向</td><td>已实现（走路）</td><td>xy 正负 5 m，yaw 全向，出生速度正负 0.3</td></tr><tr><td>周期外力推挤</td><td>已实现（走路）</td><td>每 250 步一次，水平速度正负 0.5 m/s</td></tr><tr><td>观测噪声</td><td>已实现（走路）</td><td>线速度 0.05，角速度 0.05，重力 0.02，关节角 0.01，关节速度 0.15</td></tr><tr><td>高度扫描噪声</td><td>已实现</td><td>均匀分布半宽 0.02 m，乘缩放后约正负 0.10</td></tr><tr><td>动作噪声</td><td>未实现（起身）</td><td>第二版明确不开</td></tr><tr><td>执行器增益与力矩随机化</td><td>未实现</td><td>公开配方有，本项目无</td></tr><tr><td>摩擦、质量与质心随机化</td><td>未实现</td><td>公开配方有，本项目无</td></tr><tr><td>控制延迟随机化</td><td>未实现</td><td>公开配方有，本项目无</td></tr></tbody></table>
 <p>这张表说明缺口的性质：已经有的三项都属于「输入侧扰动」，缺的四项都属于「动力学与执行器侧随机化」。后者的实现难度更高，因为它要求把增益、质量与延迟写成可采样的参数，而当前的模型把这些量写死在场景文件里。</p>
-<p>还有一项配套缺口是规模。公开工作的 4096 个并行环境与 98M 到 787M 步量级是本项目 768 环境、204M 步的若干倍，而这个倍数与随机化范围是互相牵制的：随机化越宽，策略需要见过的样本越多，环境数不足时很难收敛（«docs/experiment-log.md:6120-6128»）。</p>
-<p>另一条需要记录的边界是评估口径。项目的评估脚本默认关闭推挤与观测噪声，因此现有的所有成功率都是干净条件下的平均表现（«docs/experiment-log.md:4630-4636» 与 «:4878-4880»）。这意味着即使实现项已经接通，鲁棒性也还没有被度量过。</p>
+<p>还有一项配套缺口是规模。公开工作的 4096 个并行环境与 98M 到 787M 步量级是本项目 768 环境、204M 步的若干倍，而这个倍数与随机化范围是互相牵制的：随机化越宽，策略需要见过的样本越多，环境数不足时很难收敛（«docs/experiment-log.md»）。</p>
+<p>另一条需要记录的边界是评估口径。项目的评估脚本默认关闭推挤与观测噪声，因此现有的所有成功率都是干净条件下的平均表现（<code>docs/experiment-log.md</code>）。这意味着即使实现项已经接通，鲁棒性也还没有被度量过。</p>
 <h2 id="真机验证的位置">真机验证的位置</h2>
 <p>以上讨论的前提是有实机可验证。本项目没有实机环节，因此所有与实机相关的结论都只能停在「按公开配方」这一层（按素材调研笔记，本仓库未做真机验证）。</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>仿真成功率</mtext><mo>⇒</mo><mtext>待验证</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>实机成功率</mtext><mo>=</mo><mtext>本仓库未做</mtext></mrow><annotation encoding="application/x-tex">\text{仿真成功率} \Rightarrow \text{待验证}, \qquad \text{实机成功率} = \text{本仓库未做}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">仿真成功率</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord cjk_fallback">待验证</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">实机成功率</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">本仓库未做</span></span></span></span></span></span>
-<p>项目在文档里对这一点保持诚实：公开工作报了实机结果，本项目只报仿真口径的成功率，并且在总结里把规模与随机化列为未完成的差距（<code>docs/experiment-log.md:6120-6128</code>）。</p>
+<p>项目在文档里对这一点保持诚实：公开工作报了实机结果，本项目只报仿真口径的成功率，并且在总结里把规模与随机化列为未完成的差距（<code>docs/experiment-log.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["干净基线 仿真成功率"] --> B["随机出生与地形"]
   B --> C["外力推挤"]
@@ -244,11 +244,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开工作的随机化范围（:110-135）、两阶段课程（:135-141、:186-192）、噪声语义（:150-160）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_getup_v2.py</code></td><td>第二版的有意差异与不开噪声（:40-43）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>走路侧的三个鲁棒性开关（:376-397）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>未完成的域随机化清单（:6120-6128）、噪声鲁棒性错配（:5905-5913）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-扰动与观测噪声的工程实现"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-扰动与观测噪声的工程实现</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/04-Sim-to-Real与域随机化/02-扰动与观测噪声的工程实现.md</span></div><div class="dfile__body"><h1 id="扰动与观测噪声的工程实现">扰动与观测噪声的工程实现</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开工作的随机化范围、两阶段课程、噪声语义</td></tr><tr><td><code>mjx-go1-getup/envs/go1_getup_v2.py</code></td><td>第二版的有意差异与不开噪声</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>走路侧的三个鲁棒性开关</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>未完成的域随机化清单、噪声鲁棒性错配</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-扰动与观测噪声的工程实现"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-扰动与观测噪声的工程实现</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/04-Sim-to-Real与域随机化/02-扰动与观测噪声的工程实现.md</span></div><div class="dfile__body"><h1 id="扰动与观测噪声的工程实现">扰动与观测噪声的工程实现</h1>
 <p>域随机化的概念容易讲，落到代码里却要回答一串具体问题：噪声加在哪一步、加在哪个坐标系、量纲是什么、是否只加给 actor、默认开还是关。这些细节决定了随机化是有效的鲁棒性训练，还是给策略喂了一堆无法解释的输入。</p>
 <p>本项目走路环境里的实现可以作为一份参考：三个开关都做成配置块、默认关闭、由命令行打开，每一项都注明了参考来源。以下按开关逐个说明取值与注入位置，并解释几个容易写错的地方。</p>
 <h2 id="三个开关的位置">三个开关的位置</h2>
-<p>三个鲁棒性开关都在环境配置里（<code>envs/go1_walk.py:376-397</code>）：</p>
+<p>三个鲁棒性开关都在环境配置里（<code>envs/go1_walk.py</code>）：</p>
 
 
 
@@ -279,10 +279,10 @@
 
 
 <table><thead><tr><th>开关</th><th>配置名</th><th>默认</th><th>作用</th></tr></thead><tbody><tr><td>随机出生</td><td>random_init</td><td>关（地形训练时自动开）</td><td>出生位置、朝向、速度随机</td></tr><tr><td>外力推挤</td><td>push_config</td><td>关，命令行打开</td><td>周期性给基座水平速度冲量</td></tr><tr><td>观测噪声</td><td>obs_noise</td><td>关，命令行打开</td><td>给 actor 的传感器通道加均匀噪声</td></tr></tbody></table>
-<p>三个开关默认关闭的理由是保持干净基线：训练脚本在需要鲁棒性时再打开，评估脚本默认关掉，这样成功率的口径不会因为噪声而漂移。项目记录里明确写了「推挤与观测噪声默认关，可开；训练时它们是开的」（<code>docs/experiment-log.md:3691</code> 附近）。</p>
+<p>三个开关默认关闭的理由是保持干净基线：训练脚本在需要鲁棒性时再打开，评估脚本默认关掉，这样成功率的口径不会因为噪声而漂移。项目记录里明确写了「推挤与观测噪声默认关，可开；训练时它们是开的」（<code>docs/experiment-log.md</code> 附近）。</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>默认关闭</mtext><mo>⇒</mo><mtext>干净基线</mtext><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>训练时打开</mtext><mo>⇒</mo><mtext>鲁棒性训练</mtext></mrow><annotation encoding="application/x-tex">\text{默认关闭} \Rightarrow \text{干净基线}, \qquad \text{训练时打开} \Rightarrow \text{鲁棒性训练}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">默认关闭</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord cjk_fallback">干净基线</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">训练时打开</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">鲁棒性训练</span></span></span></span></span></span>
 <h2 id="随机出生的取值">随机出生的取值</h2>
-<p>随机出生是地形训练的硬前提。项目记录里的原因很直接：如果出生位置不随机，8192 个环境会全部挤在原点周围半径 0.5 m 的压平区里，永远见不到台阶与楼梯，也就学不会爬梯（<code>envs/go1_walk.py:377-379</code> 转引项目实验记录）。</p>
+<p>随机出生是地形训练的硬前提。项目记录里的原因很直接：如果出生位置不随机，8192 个环境会全部挤在原点周围半径 0.5 m 的压平区里，永远见不到台阶与楼梯，也就学不会爬梯（<code>envs/go1_walk.py</code> 转引项目实验记录）。</p>
 
 
 
@@ -314,9 +314,9 @@
 
 
 <table><thead><tr><th>参数</th><th>取值</th><th>说明</th></tr></thead><tbody><tr><td>平面范围</td><td>正负 5 m</td><td>避开正负 6 m 的地形边界</td></tr><tr><td>朝向</td><td>全向随机</td><td>与机体系指令自洽</td></tr><tr><td>出生高度</td><td>地面高度加 0.35 m</td><td>取默认站立关键帧的高度</td></tr><tr><td>出生速度</td><td>正负 0.3 m/s 与 rad/s</td><td>模拟落地后的残余速度</td></tr></tbody></table>
-<p>另外在重置时还有一层小幅噪声：关节位置加正负一个尺度参数的均匀噪声，控制目标加同量级的正态噪声（<code>envs/go1_walk.py:791-800</code>）。这层噪声的作用是让同一批并行环境不会以完全相同的状态开始，避免梯度估计在初值上重复。</p>
+<p>另外在重置时还有一层小幅噪声：关节位置加正负一个尺度参数的均匀噪声，控制目标加同量级的正态噪声（<code>envs/go1_walk.py</code>）。这层噪声的作用是让同一批并行环境不会以完全相同的状态开始，避免梯度估计在初值上重复。</p>
 <h2 id="外力推挤的注入位置">外力推挤的注入位置</h2>
-<p>推挤的实现要点在于注入位置。项目在物理积分之前给基座叠加水平速度，这样本步奖励看到的速度是「真被推了」之后的真实值，物理上自洽（<code>envs/go1_walk.py:913-928</code>）。</p>
+<p>推挤的实现要点在于注入位置。项目在物理积分之前给基座叠加水平速度，这样本步奖励看到的速度是「真被推了」之后的真实值，物理上自洽（<code>envs/go1_walk.py</code>）。</p>
 
 
 
@@ -343,16 +343,28 @@
 
 
 <table><thead><tr><th>参数</th><th>取值</th><th>说明</th></tr></thead><tbody><tr><td>间隔</td><td>250 步等于 5 秒</td><td>周期性施加</td></tr><tr><td>幅度</td><td>水平速度正负 0.5 m/s</td><td>作为冲量等效速度</td></tr><tr><td>方向</td><td>仅水平两维</td><td>不动垂直分量</td></tr></tbody></table>
-<p>只动水平两维是一个刻意选择。如果在垂直方向伪造速度，垂直速度成本项会被误触发，奖励会对一个物理上不存在的状态做出反应（<code>envs/go1_walk.py:913-918</code>）。</p>
-<p>实测验证了两个细节：速度跳变恰好落在第 249、250 步与 500、501 步，间隔正确；0.5 m/s 的踢入被位置控制器阻尼到 0.3 到 0.4 m/s 的实际偏移（<code>docs/experiment-log.md:2222-2226</code>）。第二条说明「施加的速度冲量」与「实际发生的位移」不是一个量，写判据时要用后者。</p>
+<p>只动水平两维是一个刻意选择。如果在垂直方向伪造速度，垂直速度成本项会被误触发，奖励会对一个物理上不存在的状态做出反应（<code>envs/go1_walk.py</code>）。</p>
+<p>实测验证了两个细节：速度跳变恰好落在第 249、250 步与 500、501 步，间隔正确；0.5 m/s 的踢入被位置控制器阻尼到 0.3 到 0.4 m/s 的实际偏移（<code>docs/experiment-log.md</code>）。第二条说明「施加的速度冲量」与「实际发生的位移」不是一个量，写判据时要用后者。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["每 250 步触发"] --> B["采样水平速度冲量 正负 0.5 m/s"]
   B --> C["物理积分前叠加到基座速度"]
   C --> D["本步奖励看到真实被推后的速度"]
   D --> E["位置控制器阻尼到 0.3 到 0.4 m/s 偏移"]
   F["垂直分量不动"] --> C</pre></div>
+<p>推挤的实现只有几行，关键在注入位置：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># mjx-go1-getup/envs/go1_walk.py（节选）</span></span>
+<span class="line"><span style="color:#24292E">rng, noise_key, push_key </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.random.split(state.info[</span><span style="color:#032F62">"rng"</span><span style="color:#24292E">], </span><span style="color:#005CC5">3</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">pc </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._config.push_config</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> pc.enable:</span></span>
+<span class="line"><span style="color:#24292E">    kick </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jax.random.uniform(push_key, (</span><span style="color:#005CC5">2</span><span style="color:#24292E">,), </span><span style="color:#E36209">minval</span><span style="color:#D73A49">=-</span><span style="color:#24292E">pc.max_vel, </span><span style="color:#E36209">maxval</span><span style="color:#D73A49">=</span><span style="color:#24292E">pc.max_vel)</span></span>
+<span class="line"><span style="color:#24292E">    do_push </span><span style="color:#D73A49">=</span><span style="color:#24292E"> state.info[</span><span style="color:#032F62">"push_countdown"</span><span style="color:#24292E">] </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 0</span></span>
+<span class="line"><span style="color:#24292E">    data_in </span><span style="color:#D73A49">=</span><span style="color:#24292E"> data_in.replace(</span><span style="color:#E36209">qvel</span><span style="color:#D73A49">=</span><span style="color:#24292E">data_in.qvel.at[:</span><span style="color:#005CC5">2</span><span style="color:#24292E">].add(</span></span>
+<span class="line"><span style="color:#24292E">        jp.where(do_push, kick, jp.zeros(</span><span style="color:#005CC5">2</span><span style="color:#24292E">))))        </span><span style="color:#6A737D"># 只加水平两维</span></span>
+<span class="line"><span style="color:#24292E">    state.info[</span><span style="color:#032F62">"push_countdown"</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> jp.where(do_push, jp.array(pc.interval),</span></span>
+<span class="line"><span style="color:#24292E">                                            state.info[</span><span style="color:#032F62">"push_countdown"</span><span style="color:#24292E">] </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">)</span></span></code></pre>
+<p>两个细节值得注意。第一，冲量在物理积分之前叠加到基座速度上，因此本步奖励看到的是「真被推了」之后的速度，物理是自洽的。第二，只改水平两维、不动竖直速度，否则竖直速度成本项会被误触发——扰动注入的位置和维度都要与奖励口径对齐，这是自测时最容易忽略的一处。</p>
 <h2 id="观测噪声的量级口径">观测噪声的量级口径</h2>
-<p>观测噪声的量级不能直接给绝对物理量，而要按「已缩放的观测」量级给出。项目的实现与 legged_gym 的噪声尺度函数同构：每个通道的噪声幅度等于噪声系数乘该通道的缩放系数，采样为均匀分布的正负幅度（<code>envs/go1_walk.py:1050-1065</code>）。</p>
+<p>观测噪声的量级不能直接给绝对物理量，而要按「已缩放的观测」量级给出。项目的实现与 legged_gym 的噪声尺度函数同构：每个通道的噪声幅度等于噪声系数乘该通道的缩放系数，采样为均匀分布的正负幅度（<code>envs/go1_walk.py</code>）。</p>
 
 
 
@@ -395,11 +407,11 @@
 
 
 <table><thead><tr><th>通道</th><th>噪声系数</th><th>缩放系数</th><th>说明</th></tr></thead><tbody><tr><td>机体线速度</td><td>0.05</td><td>2.0</td><td>米每秒</td></tr><tr><td>机体角速度</td><td>0.05</td><td>0.25</td><td>弧度每秒</td></tr><tr><td>投影重力</td><td>0.02</td><td>无</td><td>单位向量分量</td></tr><tr><td>关节角</td><td>0.01</td><td>1.0</td><td>弧度</td></tr><tr><td>关节速度</td><td>0.15</td><td>0.05</td><td>弧度每秒</td></tr></tbody></table>
-<p>按缩放量级给出的好处是噪声与观测的实际有效范围成比例：缩放小的通道绝对噪声也小，不会出现某个通道被噪声淹没的情况。参考来源是同构的公开实现，项目在配置注释里写明了这一条的出处（<code>envs/go1_walk.py:1050-1058</code>）。</p>
-<p>有两个通道刻意不加噪声：指令与上一步动作。理由是指令是策略自己下的、上一步动作是策略自己输出的，两者都没有传感器误差（<code>envs/go1_walk.py:1052-1058</code>）。这一条容易被忽略，把噪声加到自产信号上会让策略学不到正确的动作记忆。</p>
-<p>噪声只加给 actor，critic 拿到的是干净观测（<code>envs/go1_walk.py:1120-1131</code>）。这样价值函数在无噪信号上估计，策略在带噪信号上决策，符合非对称结构的分工。</p>
+<p>按缩放量级给出的好处是噪声与观测的实际有效范围成比例：缩放小的通道绝对噪声也小，不会出现某个通道被噪声淹没的情况。参考来源是同构的公开实现，项目在配置注释里写明了这一条的出处（<code>envs/go1_walk.py</code>）。</p>
+<p>有两个通道刻意不加噪声：指令与上一步动作。理由是指令是策略自己下的、上一步动作是策略自己输出的，两者都没有传感器误差（<code>envs/go1_walk.py</code>）。这一条容易被忽略，把噪声加到自产信号上会让策略学不到正确的动作记忆。</p>
+<p>噪声只加给 actor，critic 拿到的是干净观测（<code>envs/go1_walk.py</code>）。这样价值函数在无噪信号上估计，策略在带噪信号上决策，符合非对称结构的分工。</p>
 <h2 id="高度扫描噪声">高度扫描噪声</h2>
-<p>高度扫描是地形感知的输入，项目对它单独加了一层噪声：均匀分布半宽 0.02 m，乘以特征缩放 5.0 之后相当于正负 0.10 的特征量（<code>envs/go1_walk.py:355-372</code> 与 <code>docs/experiment-log.md:2230-2234</code>）。</p>
+<p>高度扫描是地形感知的输入，项目对它单独加了一层噪声：均匀分布半宽 0.02 m，乘以特征缩放 5.0 之后相当于正负 0.10 的特征量（<code>envs/go1_walk.py</code> 与 <code>docs/experiment-log.md</code>）。</p>
 
 
 
@@ -431,11 +443,11 @@
 
 
 <table><thead><tr><th>项</th><th>取值</th><th>作用</th></tr></thead><tbody><tr><td>噪声半宽</td><td>0.02 m</td><td>扰动地面高度读数</td></tr><tr><td>特征缩放</td><td>5.0</td><td>米制差转特征</td></tr><tr><td>特征量级</td><td>正负 0.10</td><td>与关节角、重力特征可比</td></tr><tr><td>适用范围</td><td>仅 actor</td><td>critic 用干净值</td></tr></tbody></table>
-<p>这项噪声的目的在配置注释里写得很清楚：训练时扰动地面高度，避免策略过拟合精确地形，同时也是迁移到真实地面的关键（<code>envs/go1_walk.py:367-372</code>）。公开实现里的对应做法是射线投射漂移，量级更大。</p>
+<p>这项噪声的目的在配置注释里写得很清楚：训练时扰动地面高度，避免策略过拟合精确地形，同时也是迁移到真实地面的关键（<code>envs/go1_walk.py</code>）。公开实现里的对应做法是射线投射漂移，量级更大。</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>0.02</mn><mtext>  </mtext><mtext>m</mtext><mo>×</mo><mn>5.0</mn><mo>=</mo><mo>±</mo><mn>0.10</mn><mtext>  </mtext><mtext>特征量</mtext></mrow><annotation encoding="application/x-tex">0.02 \; \text{m} \times 5.0 = \pm 0.10 \; \text{特征量}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.02</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord text"><span class="mord">m</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5.0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord">±</span><span class="mord">0.10</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord text"><span class="mord cjk_fallback">特征量</span></span></span></span></span></span>
 <p>「0.02 m 听起来很小」是一个量级误判：经过缩放之后它在特征空间里并不小，与关节角特征同量级。判断噪声大小要看它落在哪个空间。</p>
 <h2 id="开关状态与评估口径">开关状态与评估口径</h2>
-<p>三个开关的默认状态与评估口径之间有一个缺口。评估脚本默认关闭推挤与观测噪声，因此现有全部成功率都是干净地形上的平均表现（<code>docs/experiment-log.md:4630-4636</code>）。</p>
+<p>三个开关的默认状态与评估口径之间有一个缺口。评估脚本默认关闭推挤与观测噪声，因此现有全部成功率都是干净地形上的平均表现（<code>docs/experiment-log.md</code>）。</p>
 
 
 
@@ -466,7 +478,7 @@
 
 
 <table><thead><tr><th>场景</th><th>推挤</th><th>观测噪声</th><th>结论可用性</th></tr></thead><tbody><tr><td>训练</td><td>开</td><td>开</td><td>策略见过扰动</td></tr><tr><td>默认评估</td><td>关</td><td>关</td><td>只能说明干净条件下的能力</td></tr><tr><td>抗扰动评估</td><td>开</td><td>开</td><td>需要补做，项目记录列为缺口</td></tr></tbody></table>
-<p>项目在续训结论文档里明确写了「鲁棒性没有被度量」，并指出要回答「抗扰动更强吗」必须补一个开扰动的评估（<code>docs/experiment-log.md:4878-4880</code>）。这条缺口与起身侧的域随机化缺口是两件事：走路是实现过但没测，起身是还没实现。</p>
+<p>项目在续训结论文档里明确写了「鲁棒性没有被度量」，并指出要回答「抗扰动更强吗」必须补一个开扰动的评估（<code>docs/experiment-log.md</code>）。这条缺口与起身侧的域随机化缺口是两件事：走路是实现过但没测，起身是还没实现。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["配置开关默认关"] --> B{"运行场景"}
   B -- "训练" --> C["命令行打开 三开关生效"]
@@ -556,11 +568,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>三个开关配置（:376-397）、重置噪声（:791-800）、推挤注入（:913-928）、噪声尺度（:1050-1065）、actor 噪声应用（:1120-1131）、高度扫描噪声（:355-372）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>鲁棒性三小节与推挤实测（:2217-2234）、开关默认状态（:3691）、鲁棒性未被度量（:4630-4636、:4878-4880）、域随机化缺口（:6125）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；公开实现的对应做法经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-域随机化的取值与取舍"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-域随机化的取值与取舍</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/04-Sim-to-Real与域随机化/03-域随机化的取值与取舍.md</span></div><div class="dfile__body"><h1 id="域随机化的取值与取舍">域随机化的取值与取舍</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>三个开关配置、重置噪声、推挤注入、噪声尺度、actor 噪声应用、高度扫描噪声</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>鲁棒性三小节与推挤实测、开关默认状态、鲁棒性未被度量、域随机化缺口</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；公开实现的对应做法经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-域随机化的取值与取舍"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-域随机化的取值与取舍</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/04-Sim-to-Real与域随机化/03-域随机化的取值与取舍.md</span></div><div class="dfile__body"><h1 id="域随机化的取值与取舍">域随机化的取值与取舍</h1>
 <p>随机化的范围该取多少，是域随机化里最需要判断的一项。范围太窄，策略见过的世界变体不足，到了真实机器人上仍然会摔；范围太宽，任务在同一批样本里呈现多种动力学，策略要花更多样本才能学会任何一个，甚至学到过于保守的行为。公开工作给出的值可以作为起点，但每个值背后都有它的硬件与训练规模前提。</p>
 <p>这一页把公开工作的随机化取值整理成一张可查的表，再讨论几个敏感项为什么敏感，最后给出有效噪声幅度的算法与范围选择的判据。所有外部数值都来自素材仓库的调研笔记，未直接核对原始论文的表格。</p>
 <h2 id="公开取值清单">公开取值清单</h2>
-<p>公开的起身与恢复工作给出的随机化范围如下（<code>docs/getup-recipes.md:110-135</code> 与 <code>:150-160</code> 转引各实现的配置源码）：</p>
+<p>公开的起身与恢复工作给出的随机化范围如下（<code>docs/getup-recipes.md</code> 与  转引各实现的配置源码）：</p>
 
 
 
@@ -638,6 +650,21 @@
 
 <table><thead><tr><th>类别</th><th>项</th><th>公开取值</th></tr></thead><tbody><tr><td>执行器</td><td>PD 增益</td><td>乘 0.85 到 1.15</td></tr><tr><td>执行器</td><td>电机强度</td><td>取 0.9 到 1.1</td></tr><tr><td>执行器</td><td>力矩</td><td>加正负 5% 比例噪声</td></tr><tr><td>执行器</td><td>关节初始偏置与缩放</td><td>偏置正负 0.1 rad，缩放 0.9 到 1.1</td></tr><tr><td>延迟</td><td>控制延迟</td><td>取 0 到 100 ms，或折算到若干控制步</td></tr><tr><td>物理</td><td>摩擦系数</td><td>取 0.1 到 1</td></tr><tr><td>物理</td><td>恢复系数</td><td>取 0 到 1</td></tr><tr><td>物理</td><td>质心偏移</td><td>正负 30 到 50 mm</td></tr><tr><td>物理</td><td>躯干质量</td><td>4 到 28 kg，或按倍数 0.8 到 1.2</td></tr><tr><td>载荷</td><td>附加负载</td><td>正负 2.5 kg</td></tr><tr><td>环境</td><td>地面坡度</td><td>0 到 45 度</td></tr><tr><td>环境</td><td>离散障碍</td><td>高 0.10 到 0.30 m</td></tr><tr><td>环境</td><td>石块与缝隙</td><td>0.15 到 0.40 m 与 0.10 到 0.30 m</td></tr></tbody></table>
 <p>把这些值直接抄到自己的任务上要谨慎。同一项在不同平台上的合理范围差别很大：人形机器人的躯干质量范围与四足不可比，坡度 45 度对某些机型已经超出可站立范围。取值的前提是知道自己的硬件在这个量上实际有多少变化。</p>
+<p>三条随机化的取值在配置里是这样写的：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># mjx-go1-getup/envs/go1_walk.py（节选）</span></span>
+<span class="line"><span style="color:#24292E">random_init</span><span style="color:#D73A49">=</span><span style="color:#24292E">config_dict.create(</span></span>
+<span class="line"><span style="color:#E36209">    enable</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">,          </span><span style="color:#6A737D"># 开地形训练时由训练脚本自动打开</span></span>
+<span class="line"><span style="color:#E36209">    xy_range</span><span style="color:#D73A49">=</span><span style="color:#005CC5">5.0</span><span style="color:#24292E">,          </span><span style="color:#6A737D"># 出生点 xy ~ U(-5, 5)，避开 ±6 m 边界</span></span>
+<span class="line"><span style="color:#E36209">    random_yaw</span><span style="color:#D73A49">=</span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#E36209">spawn_z_offset</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.35</span><span style="color:#24292E">, </span><span style="color:#E36209">random_vel</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.3</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#24292E">push_config</span><span style="color:#D73A49">=</span><span style="color:#24292E">config_dict.create(</span></span>
+<span class="line"><span style="color:#E36209">    enable</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#E36209">interval</span><span style="color:#D73A49">=</span><span style="color:#005CC5">250</span><span style="color:#24292E">,   </span><span style="color:#6A737D"># 每 250 步（50 Hz 下 5 s）推一次</span></span>
+<span class="line"><span style="color:#E36209">    max_vel</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.5</span><span style="color:#24292E">,                  </span><span style="color:#6A737D"># 冲量等效速度（m/s）</span></span>
+<span class="line"><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#24292E">obs_noise</span><span style="color:#D73A49">=</span><span style="color:#24292E">config_dict.create(</span></span>
+<span class="line"><span style="color:#E36209">    enable</span><span style="color:#D73A49">=</span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#E36209">lin_vel</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.05</span><span style="color:#24292E">, </span><span style="color:#E36209">ang_vel</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.05</span><span style="color:#24292E">, </span><span style="color:#E36209">gravity</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.02</span><span style="color:#24292E">, </span><span style="color:#E36209">dof_pos</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0.01</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">),</span></span></code></pre>
+<p>每一项都带一个 <code>enable</code> 开关且默认关闭，这是域随机化的常见做法：随机化会同时抬高任务难度与方差，训练不稳定时先关掉它、把基线跑通，再逐轴打开并单独观察指标变化。</p>
 <h2 id="执行器与延迟为什么最敏感">执行器与延迟为什么最敏感</h2>
 <p>在各类随机化项里，执行器与延迟对四足的影响最直接。位置控制回路有稳定裕度，增益变大或延迟变大都会降低相位裕度，同样的目标关节角在不同组合下会得到不同的实际轨迹。</p>
 
@@ -674,15 +701,15 @@
 <p>这三个量还会互相补偿：延迟变大时，控制器往往会调低增益来维持稳定。因此随机化时把三者独立均匀采样，会覆盖到一些在真实系统里不会同时出现的组合，例如高增益配大延迟。如果知道硬件上它们的相关性，按相关性采样更接近现实（按控制工程通用做法，本仓库未实现相关性采样）。</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>稳定裕度</mtext><mo>=</mo><mi>f</mi><mo stretchy="false">(</mo><mtext>增益</mtext><mo separator="true">,</mo><mtext>  </mtext><mtext>延迟</mtext><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mtext>独立采样会覆盖不可能的组合</mtext></mrow><annotation encoding="application/x-tex">\text{稳定裕度} = f(\text{增益}, \; \text{延迟}), \qquad \text{独立采样会覆盖不可能的组合}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">稳定裕度</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mopen">(</span><span class="mord text"><span class="mord cjk_fallback">增益</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">延迟</span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">独立采样会覆盖不可能的组合</span></span></span></span></span></span>
 <h2 id="观测噪声与有效动作噪声">观测噪声与有效动作噪声</h2>
-<p>观测噪声的范围应当来自传感器指标，而不是凭感觉给。项目的做法是按各通道已缩放后的量级给噪声系数，再乘缩放系数得到绝对幅度（<code>envs/go1_walk.py:1050-1065</code>）。这个口径可以反推：如果编码器的角度误差是某个值，那么关节角通道的噪声系数就应当取该值除以关节角的缩放系数。</p>
-<p>动作侧的噪声要区分两个概念。策略探索用的噪声标准差与域随机化不是一回事，但两者的效果都经过动作缩放系数放大，因此有效幅度是两个参数的乘积（<code>docs/getup-recipes.md:283-292</code>）：</p>
+<p>观测噪声的范围应当来自传感器指标，而不是凭感觉给。项目的做法是按各通道已缩放后的量级给噪声系数，再乘缩放系数得到绝对幅度（<code>envs/go1_walk.py</code>）。这个口径可以反推：如果编码器的角度误差是某个值，那么关节角通道的噪声系数就应当取该值除以关节角的缩放系数。</p>
+<p>动作侧的噪声要区分两个概念。策略探索用的噪声标准差与域随机化不是一回事，但两者的效果都经过动作缩放系数放大，因此有效幅度是两个参数的乘积（<code>docs/getup-recipes.md</code>）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>有效噪声</mtext><mo>=</mo><mtext>噪声标准差</mtext><mo>×</mo><mtext>动作缩放系数</mtext></mrow><annotation encoding="application/x-tex">\text{有效噪声} = \text{噪声标准差} \times \text{动作缩放系数}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">有效噪声</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord cjk_fallback">噪声标准差</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">动作缩放系数</span></span></span></span></span></span>
 <p>官方起身任务的配置是 1.0 乘 0.5，等于每步 0.5 rad；精细操作任务是 1.0 乘 0.04，等于 0.04。两者看起来相差十倍以上，但差异主要来自缩放系数而不是噪声标准差。给域随机化定量时必须落到这个乘积上。</p>
 <h2 id="范围选择的三个判据">范围选择的三个判据</h2>
 <p>范围该取多大，可以用三条判据交叉检查。</p>
 <p>第一条是硬件实测。凡是能在自己硬件上测到的量，范围应当覆盖实测的极值再加一点余量；测不到的量可以引用公开范围，但要注明是引用（「按公开配方」）。</p>
-<p>第二条是学习曲线。范围放大后如果评估指标长期不涨，说明当前规模支撑不了这个范围，应当缩回来或者增加环境数与步数。项目记录里已经把域随机化与环境规模并列成同一个缺口（<code>docs/experiment-log.md:6120-6128</code>）。</p>
-<p>第三条是最优策略是否被噪声改变。在过大的观测噪声下，策略会学到在噪声里生存的行为，而这个最优解在去噪后更差（<code>docs/experiment-log.md:5905-5913</code>）。因此噪声范围要有上界，超出传感器真实误差的部分只是在惩罚策略。</p>
+<p>第二条是学习曲线。范围放大后如果评估指标长期不涨，说明当前规模支撑不了这个范围，应当缩回来或者增加环境数与步数。项目记录里已经把域随机化与环境规模并列成同一个缺口（<code>docs/experiment-log.md</code>）。</p>
+<p>第三条是最优策略是否被噪声改变。在过大的观测噪声下，策略会学到在噪声里生存的行为，而这个最优解在去噪后更差（<code>docs/experiment-log.md</code>）。因此噪声范围要有上界，超出传感器真实误差的部分只是在惩罚策略。</p>
 
 
 
@@ -721,7 +748,7 @@
   G -- "否" --> I</pre></div>
 <h2 id="分轴施加与组合爆炸">分轴施加与组合爆炸</h2>
 <p>随机化项多了以后，全组合采样会带来组合爆炸：项之间的交互使某些组合在现实中不存在，策略却要为它们准备行为。实践上常用的做法是分轴实验：先单独打开一类随机化，看评估指标的变化，再逐一叠加（按通用做法，本仓库未做分轴实验记录）。</p>
-<p>分轴实验的另一个好处是归因。一次性打开全部随机化，若结果变差，无法判断是执行器范围太大、延迟太大还是观测噪声太大。项目在推挤与观测噪声上保留了独立开关，正是为了这种分轴能力（<code>envs/go1_walk.py:384-397</code>）。</p>
+<p>分轴实验的另一个好处是归因。一次性打开全部随机化，若结果变差，无法判断是执行器范围太大、延迟太大还是观测噪声太大。项目在推挤与观测噪声上保留了独立开关，正是为了这种分轴能力（<code>envs/go1_walk.py</code>）。</p>
 
 
 
@@ -845,11 +872,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开随机化取值（:110-135）、有效噪声（:283-292）、两阶段课程（:135-141、:186-192）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>观测噪声口径（:1050-1065）、推挤与噪声开关（:384-397）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>域随机化与规模缺口（:6120-6128）、噪声鲁棒性错配（:5905-5913）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-鲁棒性评估与验收口径"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-鲁棒性评估与验收口径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/04-Sim-to-Real与域随机化/04-鲁棒性评估与验收口径.md</span></div><div class="dfile__body"><h1 id="鲁棒性评估与验收口径">鲁棒性评估与验收口径</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开随机化取值、有效噪声、两阶段课程</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>观测噪声口径、推挤与噪声开关</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>域随机化与规模缺口、噪声鲁棒性错配</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-鲁棒性评估与验收口径"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-鲁棒性评估与验收口径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/14-四足机器人/04-Sim-to-Real与域随机化/04-鲁棒性评估与验收口径.md</span></div><div class="dfile__body"><h1 id="鲁棒性评估与验收口径">鲁棒性评估与验收口径</h1>
 <p>实现域随机化之后，很容易产生一种错觉：开关打开了，鲁棒性就提高了。实际上开关与结论之间还隔着一层评估：如果评估脚本默认关闭推挤与观测噪声，那么它测出来的一切都只是干净条件下的平均表现，与鲁棒性无关。项目在续训总结里明确写了这一点，并把它列为长期缺口。</p>
 <p>这一页把评估口径该记录的量、样本量的注意事项、以及实现层面的自查清单整理出来。最后诚实列出本项目在这条路上的位置：走路侧实现了但未度量，起身侧尚未实现，实机验证不在范围内。</p>
 <h2 id="现有结论覆盖到哪里">现有结论覆盖到哪里</h2>
-<p>项目的全部成功率与跟踪误差都在干净条件下测得。评估脚本默认关闭推挤与观测噪声，因此这些数字回答的是「没有任何扰动时策略表现如何」（<code>docs/experiment-log.md:4630-4636</code>）。</p>
+<p>项目的全部成功率与跟踪误差都在干净条件下测得。评估脚本默认关闭推挤与观测噪声，因此这些数字回答的是「没有任何扰动时策略表现如何」（<code>docs/experiment-log.md</code>）。</p>
 
 
 
@@ -881,7 +908,7 @@
 
 
 <table><thead><tr><th>结论</th><th>条件</th><th>能回答的问题</th></tr></thead><tbody><tr><td>速度跟踪误差</td><td>干净地形、无扰动</td><td>理想条件下的控制精度</td></tr><tr><td>存活率与摔倒率</td><td>干净地形、无扰动</td><td>理想条件下的稳定性</td></tr><tr><td>爬台阶比例</td><td>干净地形、无扰动</td><td>理想条件下的地形能力</td></tr><tr><td>抗扰动能力</td><td>未测</td><td>需要补做</td></tr></tbody></table>
-<p>项目在同一份记录里点明了缺口：要回答「抗扰动更强吗」，必须补一个开着扰动与噪声的评估（<code>docs/experiment-log.md:4878-4880</code>）。这条缺口与域随机化是否实现是两件事，即使实现全部接上，不测仍然等于零信息。</p>
+<p>项目在同一份记录里点明了缺口：要回答「抗扰动更强吗」，必须补一个开着扰动与噪声的评估（<code>docs/experiment-log.md</code>）。这条缺口与域随机化是否实现是两件事，即使实现全部接上，不测仍然等于零信息。</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>开关打开</mtext><mo>⇏</mo><mtext>鲁棒性已被度量</mtext></mrow><annotation encoding="application/x-tex">\text{开关打开} \not\Rightarrow \text{鲁棒性已被度量}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord cjk_fallback">开关打开</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel"><span class="mord vbox"><span class="thinbox"><span class="rlap"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="inner"><span class="mord"><span class="mrel"></span></span></span><span class="fix"></span></span></span></span></span><span class="mspace nobreak"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">鲁棒性已被度量</span></span></span></span></span></span>
 <h2 id="评估要记录的量">评估要记录的量</h2>
 <p>鲁棒性评估的输出不能只有一个成功率。至少要把下面几个量分开记录，才能看出策略是被扰动影响还是被扰动击败（按通用做法的评估设计，本仓库的扰动评估尚未落地）：</p>
@@ -926,9 +953,9 @@
 
 
 <table><thead><tr><th>量</th><th>定义</th><th>用途</th></tr></thead><tbody><tr><td>成功率</td><td>满足判据的样本比例</td><td>总体能力</td></tr><tr><td>存活率</td><td>未摔倒的样本比例</td><td>稳定性</td></tr><tr><td>跟踪误差</td><td>速度指令与实际的差</td><td>扰动下的控制精度</td></tr><tr><td>实际位移</td><td>推挤引起的真实速度偏移</td><td>校准施加的扰动量</td></tr><tr><td>恢复时间</td><td>从扰动到恢复跟踪的时间</td><td>抗扰动的响应速度</td></tr><tr><td>摔倒率</td><td>摔倒样本比例</td><td>与成功率的互补视角</td></tr></tbody></table>
-<p>「实际位移」这一项容易被漏掉。项目实测施加 0.5 m/s 的速度冲量之后，位置控制器把它阻尼到 0.3 到 0.4 m/s 的实际偏移（<code>docs/experiment-log.md:2222-2226</code>）。如果评估只记录施加值而记录实际值，不同控制器配置下的扰动强度会被误判成相同。</p>
+<p>「实际位移」这一项容易被漏掉。项目实测施加 0.5 m/s 的速度冲量之后，位置控制器把它阻尼到 0.3 到 0.4 m/s 的实际偏移（<code>docs/experiment-log.md</code>）。如果评估只记录施加值而记录实际值，不同控制器配置下的扰动强度会被误判成相同。</p>
 <h2 id="样本量与对比方法">样本量与对比方法</h2>
-<p>样本量不足会制造假结论。项目记录里有一条明确的提醒：单点存活率的差异在 256 个样本下大约是一个标准差，不能只看一个数下结论（<code>docs/experiment-log.md:4628-4634</code>）。</p>
+<p>样本量不足会制造假结论。项目记录里有一条明确的提醒：单点存活率的差异在 256 个样本下大约是一个标准差，不能只看一个数下结论（<code>docs/experiment-log.md</code>）。</p>
 
 
 
@@ -962,7 +989,7 @@
 <table><thead><tr><th>对比方式</th><th>可行性</th><th>说明</th></tr></thead><tbody><tr><td>单次运行比较</td><td>低</td><td>差异可能落在噪声内</td></tr><tr><td>多随机种子平均</td><td>中</td><td>能压低方差</td></tr><tr><td>同种子开关对照</td><td>高</td><td>直接回答扰动带来的变化</td></tr><tr><td>分轴对照</td><td>高</td><td>同时给出归因</td></tr></tbody></table>
 <p>推荐的安排是固定种子做开关对照：同一组种子上分别跑干净与扰动两种条件，比较同一批样本的表现。这样扰动的效果与种子噪声分离，样本量可以小一些。若要做策略之间的比较，则需要多种子平均。</p>
 <h2 id="实现层面的自查清单">实现层面的自查清单</h2>
-<p>在跑评估之前，先把实现层面的几个常见错误排掉。这些错误会让随机化看起来生效、实际无效（<code>envs/go1_walk.py:376-397</code> 与 <code>:1050-1065</code>）：</p>
+<p>在跑评估之前，先把实现层面的几个常见错误排掉。这些错误会让随机化看起来生效、实际无效（<code>envs/go1_walk.py</code> 与 ）：</p>
 
 
 
@@ -1005,7 +1032,7 @@
 
 
 <table><thead><tr><th>检查项</th><th>正确的做法</th></tr></thead><tbody><tr><td>自产信号是否加噪</td><td>指令与上一步动作不加噪</td></tr><tr><td>噪声给谁</td><td>给 actor，critic 保持干净</td></tr><tr><td>噪声量级</td><td>按已缩放观测量级给出，不用绝对物理量</td></tr><tr><td>扰动注入位置</td><td>物理积分之前，本步奖励看到真实状态</td></tr><tr><td>扰动的垂直分量</td><td>不动，避免误触垂直速度成本</td></tr><tr><td>开关默认状态</td><td>训练打开、评估默认关闭，避免口径漂移</td></tr><tr><td>观测维度变化</td><td>加载器从参数形状推断，不写死维度</td></tr><tr><td>扰动量级核对</td><td>比较施加值与实际位移</td></tr></tbody></table>
-<p>最后一项与观测维度一项都来自实际教训：项目在 v19 改动观测维度后，加载器里写死的维度会直接报形状错误，改成从参数形状推断之后才不再逐文件修改（<code>docs/experiment-log.md:2236-2252</code>）。这类工程细节不写进清单，下一次改观测仍会踩到。</p>
+<p>最后一项与观测维度一项都来自实际教训：项目在 v19 改动观测维度后，加载器里写死的维度会直接报形状错误，改成从参数形状推断之后才不再逐文件修改（<code>docs/experiment-log.md</code>）。这类工程细节不写进清单，下一次改观测仍会踩到。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["实现随机化开关"] --> B["实现层自查 自产信号 噪声对象 量级"]
   B --> C{"通过"}
@@ -1017,6 +1044,13 @@
   H --> I{"扰动下是否可用"}
   I -- "否" --> J["调整随机化范围或增加规模"]
   I -- "是" --> K["结论可用"]</pre></div>
+<p>评估脚本用默认值固定了样本量与步数预算：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># mjx-go1-getup/sim/eval_getup.py（节选）</span></span>
+<span class="line"><span style="color:#24292E">ap.add_argument(</span><span style="color:#032F62">"--envs"</span><span style="color:#24292E">, </span><span style="color:#E36209">type</span><span style="color:#D73A49">=</span><span style="color:#005CC5">int</span><span style="color:#24292E">, </span><span style="color:#E36209">default</span><span style="color:#D73A49">=</span><span style="color:#005CC5">256</span><span style="color:#24292E">)      </span><span style="color:#6A737D"># 并行环境数 = 样本量</span></span>
+<span class="line"><span style="color:#24292E">ap.add_argument(</span><span style="color:#032F62">"--steps"</span><span style="color:#24292E">, </span><span style="color:#E36209">type</span><span style="color:#D73A49">=</span><span style="color:#005CC5">int</span><span style="color:#24292E">, </span><span style="color:#E36209">default</span><span style="color:#D73A49">=</span><span style="color:#005CC5">300</span><span style="color:#24292E">)     </span><span style="color:#6A737D"># 每个环境最多跑多少步</span></span>
+<span class="line"><span style="color:#24292E">ap.add_argument(</span><span style="color:#032F62">"--seed"</span><span style="color:#24292E">, </span><span style="color:#E36209">type</span><span style="color:#D73A49">=</span><span style="color:#005CC5">int</span><span style="color:#24292E">, </span><span style="color:#E36209">default</span><span style="color:#D73A49">=</span><span style="color:#005CC5">0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">ap.add_argument(</span><span style="color:#032F62">"--check_every"</span><span style="color:#24292E">, </span><span style="color:#E36209">type</span><span style="color:#D73A49">=</span><span style="color:#005CC5">int</span><span style="color:#24292E">, </span><span style="color:#E36209">default</span><span style="color:#D73A49">=</span><span style="color:#005CC5">5</span><span style="color:#24292E">, </span><span style="color:#005CC5">...</span><span style="color:#24292E">)  </span><span style="color:#6A737D"># 每隔几步检查一次判据</span></span></code></pre>
+<p>256 个环境意味着一次评估给出 256 条独立轨迹，成功率的分辨率约为 0.4%；要比较两个策略几个百分点的差距，这个样本量是下限。<code>--check_every</code> 只影响判据被检查的频率，不改变物理——把它调大不会让策略更容易成功，但可能漏掉短暂的达标窗口。</p>
 <h2 id="域随机化的验收清单">域随机化的验收清单</h2>
 <p>把实现与评估合起来，域随机化的验收可以按下面的清单逐项打勾（本清单按素材记录与本仓库现状整理，其中多项尚未实施）：</p>
 
@@ -1075,7 +1109,7 @@
 
 
 <table><thead><tr><th>项</th><th>状态</th><th>判据</th></tr></thead><tbody><tr><td>随机关卡实现</td><td>走路已实现</td><td>出生位置与朝向覆盖地形</td></tr><tr><td>外力推挤实现</td><td>走路已实现</td><td>跳变落在预期步数</td></tr><tr><td>观测噪声实现</td><td>走路已实现</td><td>噪声只给 actor</td></tr><tr><td>高度扫描噪声</td><td>已实现</td><td>按缩放量级给出</td></tr><tr><td>扰动评估</td><td>未做</td><td>开关打开后重测一遍</td></tr><tr><td>执行器与延迟随机化</td><td>未实现</td><td>增益、延迟按范围采样</td></tr><tr><td>摩擦与质量随机化</td><td>未实现</td><td>物理参数按范围采样</td></tr><tr><td>起身侧随机化</td><td>未实现</td><td>第二版明确不开</td></tr><tr><td>实机验证</td><td>未做</td><td>本仓库无硬件环节</td></tr></tbody></table>
-<p>一个可以立即执行的下一步是把走路侧的扰动评估补上：开关已经实现，只缺一次开着推挤与噪声的评估。这条能回答项目记录里悬置的问题，成本也最低（<code>docs/experiment-log.md:4878-4880</code>）。</p>
+<p>一个可以立即执行的下一步是把走路侧的扰动评估补上：开关已经实现，只缺一次开着推挤与噪声的评估。这条能回答项目记录里悬置的问题，成本也最低（<code>docs/experiment-log.md</code>）。</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>最低成本动作</mtext><mo>=</mo><mtext>开着推挤与观测噪声重跑一遍评估</mtext></mrow><annotation encoding="application/x-tex">\text{最低成本动作} = \text{开着推挤与观测噪声重跑一遍评估}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">最低成本动作</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">开着推挤与观测噪声重跑一遍评估</span></span></span></span></span></span>
 <h2 id="诚实的边界">诚实的边界</h2>
 <p>以上内容里有三类信息需要区分来源。项目自身的实测数字来自实验记录，可以直接引用；公开工作的随机化范围来自素材调研笔记转引，未核对原始论文表格；通用做法部分按工程惯例给出，本仓库未实现或未记录。</p>
@@ -1196,4 +1230,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>鲁棒性未被度量与单一数据点提醒（:4628-4636、:4878-4880）、推挤实测（:2222-2226）、加载器维度推断（:2236-2252）、域随机化缺口（:6120-6128）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>三个开关与参数（:376-397）、观测噪声量级（:1050-1065）</td></tr><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开随机化范围与阶段安排（:110-135、:186-192）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/03-%E6%91%94%E5%80%92%E6%A3%80%E6%B5%8B%E4%B8%8E%E7%AD%96%E7%95%A5%E8%B0%83%E5%BA%A6/"><span class="k">← 上一篇</span><span class="t">摔倒检测与策略调度</span><span class="d">四足机器人 · 5 个文件</span></a><a class="next" href="/tc63/docs/15-%E4%BB%BF%E7%9C%9F%E6%9F%A5%E7%9C%8B%E5%99%A8%E4%B8%8E%E6%80%A7%E8%83%BD/01-%E4%BA%A4%E4%BA%92%E5%BC%8F%E6%9F%A5%E7%9C%8B%E5%99%A8/"><span class="k">下一篇 →</span><span class="t">交互式查看器</span><span class="d">仿真查看器与性能 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>鲁棒性未被度量与单一数据点提醒、推挤实测、加载器维度推断、域随机化缺口</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>三个开关与参数、观测噪声量级</td></tr><tr><td><code>mjx-go1-getup/docs/getup-recipes.md</code></td><td>公开随机化范围与阶段安排</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根；外部实现的数字经素材调研笔记转引</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/14-%E5%9B%9B%E8%B6%B3%E6%9C%BA%E5%99%A8%E4%BA%BA/03-%E6%91%94%E5%80%92%E6%A3%80%E6%B5%8B%E4%B8%8E%E7%AD%96%E7%95%A5%E8%B0%83%E5%BA%A6/"><span class="k">← 上一篇</span><span class="t">摔倒检测与策略调度</span><span class="d">四足机器人 · 5 个文件</span></a><a class="next" href="/tc63/docs/15-%E4%BB%BF%E7%9C%9F%E6%9F%A5%E7%9C%8B%E5%99%A8%E4%B8%8E%E6%80%A7%E8%83%BD/01-%E4%BA%A4%E4%BA%92%E5%BC%8F%E6%9F%A5%E7%9C%8B%E5%99%A8/"><span class="k">下一篇 →</span><span class="t">交互式查看器</span><span class="d">仿真查看器与性能 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

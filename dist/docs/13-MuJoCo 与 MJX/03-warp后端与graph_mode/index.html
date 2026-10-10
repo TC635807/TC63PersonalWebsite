@@ -2,20 +2,20 @@
 <p>MJX 有两条执行路径。一条是纯 JAX 实现，仿真逻辑写成 JAX 算子，靠 jit 与 vmap 跑在 GPU 上；另一条是 warp 后端，仿真内核用 NVIDIA warp 编写，通过 FFI 从 JAX 调用。同一个 MJCF 模型在两条路径上的能力并不相同，这一点在平地训练时不太明显，一旦把机器人放到程序化地形上就会立刻暴露。</p>
 <p>这个项目的地形是高度场，而纯 JAX 后端不支持高度场碰撞，会直接抛出未实现错误。后端的选择在这一步就被锁死：必须用 warp。选定之后，模型加载、数据构造、求解器参数与可用字段都跟着换了一套约定。</p>
 <h2 id="后端选择为什么必须用-warp">后端选择：为什么必须用 warp</h2>
-<p>环境的配置里写死了后端（<code>envs/go1_walk.py:319</code> 附近）：</p>
+<p>环境的配置里写死了后端（<code>envs/go1_walk.py</code> 附近）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>impl</mtext><mo>=</mo><mtext>"warp"</mtext></mrow><annotation encoding="application/x-tex">\text{impl} = \text{"warp"}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">impl</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">"warp"</span></span></span></span></span></span>
-<p>这条配置的注释解释了原因：高度场碰撞在纯 JAX 后端没有实现，只有 warp 的碰撞驱动支持 HFIELD 类型，并且把高度场数据暴露成 JAX 数组，供训练循环做解析采样。项目在实验记录里记录了确认过程：把模型转成 warp 后端后，模型对象上能看到高度场数据、行列数、尺寸与地址等字段，而 JAX 后端在建模型阶段就会报未实现（<code>mjx-go1-getup/docs/experiment-log.md:1626-1631</code>）。</p>
-<p>后端选择还影响观测脚本能拿到什么。warp 后端的 Data 对象没有接触数组字段，碰撞代价函数是空实现。选后端时的取舍是：要么接受 warp 的字段缺失，在需要接触信息时换用别的量（例如几何体最低点高度）；要么放弃高度场地形。项目选择了前者（<code>envs/go1_walk.py:1520-1600</code> 附近的注释）。</p>
+<p>这条配置的注释解释了原因：高度场碰撞在纯 JAX 后端没有实现，只有 warp 的碰撞驱动支持 HFIELD 类型，并且把高度场数据暴露成 JAX 数组，供训练循环做解析采样。项目在实验记录里记录了确认过程：把模型转成 warp 后端后，模型对象上能看到高度场数据、行列数、尺寸与地址等字段，而 JAX 后端在建模型阶段就会报未实现（<code>mjx-go1-getup/docs/experiment-log.md</code>）。</p>
+<p>后端选择还影响观测脚本能拿到什么。warp 后端的 Data 对象没有接触数组字段，碰撞代价函数是空实现。选后端时的取舍是：要么接受 warp 的字段缺失，在需要接触信息时换用别的量（例如几何体最低点高度）；要么放弃高度场地形。项目选择了前者（<code>envs/go1_walk.py</code> 附近的注释）。</p>
 <h2 id="模型与数据的构造路径">模型与数据的构造路径</h2>
-<p>环境初始化分两步。第一步把 CPU 侧的模型转换成后端模型（<code>envs/go1_walk.py:440-447</code>）：</p>
+<p>环境初始化分两步。第一步把 CPU 侧的模型转换成后端模型（<code>envs/go1_walk.py</code>）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>mjx.put_model</mtext><mo stretchy="false">(</mo><mtext>mj_model</mtext><mo separator="true">,</mo><mtext>  </mtext><mtext>impl</mtext><mo separator="true">,</mo><mtext>  </mtext><mtext>graph_mode</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{mjx.put\_model}(\text{mj\_model}, \; \text{impl}, \; \text{graph\_mode})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">mjx.put_model</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">mj_model</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">impl</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">graph_mode</span></span><span class="mclose">)</span></span></span></span></span>
-<p>第二步在每个 episode 重置时构造数据对象（<code>envs/go1_walk.py:835-845</code>）：</p>
+<p>第二步在每个 episode 重置时构造数据对象（<code>envs/go1_walk.py</code>）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>mjx_env.make_data</mtext><mo stretchy="false">(</mo><mtext>model</mtext><mo separator="true">,</mo><mtext>  </mtext><mi>q</mi><mi>p</mi><mi>o</mi><mi>s</mi><mo separator="true">,</mo><mi>q</mi><mi>v</mi><mi>e</mi><mi>l</mi><mo separator="true">,</mo><mi>c</mi><mi>t</mi><mi>r</mi><mi>l</mi><mo separator="true">,</mo><mtext>impl</mtext><mo separator="true">,</mo><mtext>naconmax</mtext><mo separator="true">,</mo><mtext>njmax</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{mjx\_env.make\_data}(\text{model}, \; qpos, qvel, ctrl, \text{impl}, \text{naconmax}, \text{njmax})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">mjx_env.make_data</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">model</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mord mathnormal">p</span><span class="mord mathnormal">os</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">c</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">impl</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">naconmax</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">njmax</span></span><span class="mclose">)</span></span></span></span></span>
-<p>两个容量参数都在第二步传入，并且都以字符串形式传后端的名称（<code>envs/go1_walk.py:840</code>）。数据构造的签名里同时出现 impl 与两个容量上限，说明容量是数据侧的属性而不是模型侧的属性，换环境数量时需要重新构造数据。</p>
-<p>构造数据时传给 make_data 的后端字符串来自后端模型自身（«envs/go1_walk.py:840»）：</p>
+<p>两个容量参数都在第二步传入，并且都以字符串形式传后端的名称（<code>envs/go1_walk.py</code>）。数据构造的签名里同时出现 impl 与两个容量上限，说明容量是数据侧的属性而不是模型侧的属性，换环境数量时需要重新构造数据。</p>
+<p>构造数据时传给 make_data 的后端字符串来自后端模型自身（«envs/go1_walk.py»）：</p>
 <p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>impl</mtext><mo>=</mo><mtext>model.impl.value</mtext></mrow><annotation encoding="application/x-tex">\text{impl} = \text{model.impl.value}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">impl</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord text"><span class="mord">model.impl.value</span></span></span></span></span></p>
 <p>从模型反向读回而不是直接复制配置，好处是配置与模型不可能出现不一致。若直接写配置里的字符串，一旦 put_model 因为条件判断落回默认后端，数据侧仍会按配置构造，两边的后端就不一致了。这类不一致在建数据时会报错或产生难以定位的行为差异，用模型自身的取值可以避免。</p>
-<p>graph_mode 只在 warp 后端下有意义，环境在传入前做了一个条件判断：只有 impl 是 warp 且配置里给了非空值时，才去取枚举成员并传给 put_model（<code>envs/go1_walk.py:440-447</code>）。这样默认配置下走 MJX 自己的默认行为，不会因为传了空值而出错。</p>
+<p>graph_mode 只在 warp 后端下有意义，环境在传入前做了一个条件判断：只有 impl 是 warp 且配置里给了非空值时，才去取枚举成员并传给 put_model（<code>envs/go1_walk.py</code>）。这样默认配置下走 MJX 自己的默认行为，不会因为传了空值而出错。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["MJCF 模型"] --> B["mjx.put_model 传 impl 与 graph_mode"]
   B --> C["后端模型 可读 hfield_data"]
@@ -23,17 +23,17 @@
   C --> E
   E --> F["mjx.forward 与 step"]</pre></div>
 <h2 id="求解器与接触模型配置">求解器与接触模型配置</h2>
-<p>warp 后端下的求解器参数有独立的默认值。配置里的迭代次数设为 2，注释写明这是 warp 后端软接触收敛的实测值（<code>envs/go1_walk.py:76</code> 附近）。软接触是 MJX 迭代求解器下的默认选择，因为硬接触在迭代次数不足时不容易收敛。</p>
-<p>硬接触在项目里也被启用过，配置为足端硬接触关闭软接触，并单独给出硬接触的迭代次数与线搜索次数（<code>envs/go1_walk.py:77-84</code>）。注释记录了诊断结论：迭代 20 与 100 的沉降高度、残差与随机动作结果逐位一致，因此取 20 可以省下两到三倍时间。</p>
-<p>软接触另有线搜索次数的配置，硬接触也有自己的线搜索次数（«envs/go1_walk.py:76-84»）。迭代次数在 warp 里是内核循环的展开次数，直接决定每步耗时，因此这两组参数不能照搬 CPU 求解器的经验值，需要按后端实测确定。项目对硬接触的做法是先用较大的迭代次数确认结果收敛到与参考实现一致，再把次数压到结果不再变化的下界。</p>
-<p>足端几何体的接触参数在初始化时被逐点覆写：四个足端几何体的 solimp 被设为同一组值，condim 设为 3（<code>envs/go1_walk.py:433-437</code>）。这解释了地形场景里为什么必须保持地面 priority 为 0：地面与足端不同级时，生效的是足端一侧的 condim 与摩擦设置，这套参数就是策略训练时的接触语义。</p>
+<p>warp 后端下的求解器参数有独立的默认值。配置里的迭代次数设为 2，注释写明这是 warp 后端软接触收敛的实测值（<code>envs/go1_walk.py</code> 附近）。软接触是 MJX 迭代求解器下的默认选择，因为硬接触在迭代次数不足时不容易收敛。</p>
+<p>硬接触在项目里也被启用过，配置为足端硬接触关闭软接触，并单独给出硬接触的迭代次数与线搜索次数（<code>envs/go1_walk.py</code>）。注释记录了诊断结论：迭代 20 与 100 的沉降高度、残差与随机动作结果逐位一致，因此取 20 可以省下两到三倍时间。</p>
+<p>软接触另有线搜索次数的配置，硬接触也有自己的线搜索次数（«envs/go1_walk.py»）。迭代次数在 warp 里是内核循环的展开次数，直接决定每步耗时，因此这两组参数不能照搬 CPU 求解器的经验值，需要按后端实测确定。项目对硬接触的做法是先用较大的迭代次数确认结果收敛到与参考实现一致，再把次数压到结果不再变化的下界。</p>
+<p>足端几何体的接触参数在初始化时被逐点覆写：四个足端几何体的 solimp 被设为同一组值，condim 设为 3（<code>envs/go1_walk.py</code>）。这解释了地形场景里为什么必须保持地面 priority 为 0：地面与足端不同级时，生效的是足端一侧的 condim 与摩擦设置，这套参数就是策略训练时的接触语义。</p>
 <h2 id="warp后端缺失的字段与替代做法">warp后端缺失的字段与替代做法</h2>
 <p>warp 后端的 Data 对象没有接触数组，也没有外力数组。项目在两处依赖接触信息的奖励与观测上遇到了这个问题，并给出了替代做法。</p>
-<p>第一处是碰撞代价：函数体是空实现，权重也设为 0（<code>envs/go1_walk.py:1562</code> 附近）。原因写得直接：warp 后端的数据里没有接触数组，无法按接触力复刻这项惩罚。</p>
-<p>第二处是地形净空。项目需要「身体最低点相对脚下地面的高度」，做法是不读接触数组，而是求世界系最低点再减去该点脚下的地形高度（<code>envs/go1_walk.py:500-510</code> 附近）。地形高度用解析双线性采样得到，因此整条链路可以留在 jit 里。</p>
+<p>第一处是碰撞代价：函数体是空实现，权重也设为 0（<code>envs/go1_walk.py</code> 附近）。原因写得直接：warp 后端的数据里没有接触数组，无法按接触力复刻这项惩罚。</p>
+<p>第二处是地形净空。项目需要「身体最低点相对脚下地面的高度」，做法是不读接触数组，而是求世界系最低点再减去该点脚下的地形高度（<code>envs/go1_walk.py</code> 附近）。地形高度用解析双线性采样得到，因此整条链路可以留在 jit 里。</p>
 <p>这两处替代做法的共同点是把接触信息换成几何量。接触数组给出的是求解结果，几何量给出的是位姿关系，二者在站立与摔倒的判别上足够用，但无法表达接触力的大小。需要接触力的奖励项在这个后端下只能放弃或改写。</p>
-<p>数据构造完成后立刻调用一次前向计算把派生的量填好，并把时间归零（«envs/go1_walk.py:848-852»）。参考实现没有单独的沉降段，重置即开始，初始瞬态交给策略自己处理；这是针对 12 kg 量级机器人的选择，更大质量的平台需要单独的沉降步骤。</p>
-<p>warp 求解器在极端自碰撞下可能发散，环境里有 NaN 护栏，把非有限值回填成有限值并终止该 episode（«envs/go1_walk.py:934» 附近）。护栏是兜底而不是解决方案：如果它每步都在触发，说明物理已经崩了，需要回到容量参数与接触设置上排查。项目把「全程零次溢出与零次 NaN」作为数值稳定的判据。</p>
+<p>数据构造完成后立刻调用一次前向计算把派生的量填好，并把时间归零（«envs/go1_walk.py»）。参考实现没有单独的沉降段，重置即开始，初始瞬态交给策略自己处理；这是针对 12 kg 量级机器人的选择，更大质量的平台需要单独的沉降步骤。</p>
+<p>warp 求解器在极端自碰撞下可能发散，环境里有 NaN 护栏，把非有限值回填成有限值并终止该 episode（«envs/go1_walk.py» 附近）。护栏是兜底而不是解决方案：如果它每步都在触发，说明物理已经崩了，需要回到容量参数与接触设置上排查。项目把「全程零次溢出与零次 NaN」作为数值稳定的判据。</p>
 <h2 id="与jax后端的能力对照">与JAX后端的能力对照</h2>
 
 
@@ -169,23 +169,23 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>环境配置：后端与容量（:319、:76-96）、模型构造（:440-447）、数据构造（:835-845）、足端接触参数（:433-437）、缺失字段的替代做法（:500-510、:1520-1600）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>后端能力对照与高度场数据暴露（:1601-1646）</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>地面几何体与 priority 约束</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-CUDA graph与graph_mode"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-CUDA graph与graph_mode</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/03-warp后端与graph_mode/02-CUDA graph与graph_mode.md</span></div><div class="dfile__body"><h1 id="cuda-graph与graph_mode">CUDA graph与graph_mode</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>环境配置：后端与容量、模型构造、数据构造、足端接触参数、缺失字段的替代做法</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>后端能力对照与高度场数据暴露</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>地面几何体与 priority 约束</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-CUDA graph与graph_mode"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-CUDA graph与graph_mode</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/03-warp后端与graph_mode/02-CUDA graph与graph_mode.md</span></div><div class="dfile__body"><h1 id="cuda-graph与graph_mode">CUDA graph与graph_mode</h1>
 <p>把仿真跑在 GPU 上时，每一步都要向 GPU 提交一串内核，提交本身的开销会累积成可观的固定成本。CUDA graph 把这一串内核录制下来，之后按同样的顺序重放，省掉重复的提交与调度。MJX 在 warp 后端下自动做了这件事，但录制与重放有一个前提：参与计算的显存地址在重放时保持不变。</p>
 <p>训练脚本满足这个前提，交互式查看器不满足。查看器的循环里每帧新建指令数组，按一次重置键就换一整套状态，地址一直在变。地址一变，录下来的图就用不上，引擎只能重新录制，反复录制最终会撞上流对象失效而崩溃。这一段是项目里排查成本最高的性能问题之一。</p>
 <h2 id="cuda-graph缓存的是什么">CUDA graph缓存的是什么</h2>
-<p>MJX 在 warp 后端下把仿真内核包成 CUDA graph，配置字段 graph_mode 决定捕获策略，默认值是 WARP（<code>envs/go1_walk.py:320-339</code> 附近的注释）。默认模式的语义在 warp 的 JAX FFI 文档里写得很清楚：</p>
+<p>MJX 在 warp 后端下把仿真内核包成 CUDA graph，配置字段 graph_mode 决定捕获策略，默认值是 WARP（<code>envs/go1_walk.py</code> 附近的注释）。默认模式的语义在 warp 的 JAX FFI 文档里写得很清楚：</p>
 <blockquote>
 <p>capture the graph and replay it for matching buffer addresses</p>
 </blockquote>
 <p>也就是录制一次、遇到地址匹配的缓冲区就直接重放。重放的前提是地址不变，这正是训练与观测两条路径表现不同的根源。</p>
-<p>项目的文件头记录过这项优化的收益：训练步时从 25.9 ms 降到 14.8 ms（<code>envs/go1_walk.py:336-339</code> 附近）。这个数量级说明图缓存对训练吞吐有决定性影响。</p>
+<p>项目的文件头记录过这项优化的收益：训练步时从 25.9 ms 降到 14.8 ms（<code>envs/go1_walk.py</code> 附近）。这个数量级说明图缓存对训练吞吐有决定性影响。</p>
 <h2 id="训练侧为什么安全">训练侧为什么安全</h2>
-<p>训练循环里状态数组是复用的，并且用 jit 的 donate 语义把输入缓冲区交出去复用（<code>envs/go1_walk.py:336-338</code> 附近）：</p>
+<p>训练循环里状态数组是复用的，并且用 jit 的 donate 语义把输入缓冲区交出去复用（<code>envs/go1_walk.py</code> 附近）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>jax.jit</mtext><mo stretchy="false">(</mo><mtext>donate_argnums</mtext><mo>=</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{jax.jit}(\text{donate\_argnums} = 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.06em;vertical-align:-0.31em;"></span><span class="mord text"><span class="mord">jax.jit</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">donate_argnums</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span></span>
-<p>固定地址加上稳定的调用序列，图缓存每次都能命中。项目在实验记录里把这条列为训练侧不受影响的依据，并特别强调不能为了查看器去改训练配置（<code>experiment-log.md:3976-3990</code>）。</p>
-<p>代价是 donate 语义下循环里复用的固定数组会被 JAX 判定为已删除，需要使用方每帧重建或者干脆不捐赠（<code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md:100-107</code>）。查看器选择每帧重建三维指令数组，开销可以忽略，这个选择反而保证了地址会变、必须换模式。</p>
+<p>固定地址加上稳定的调用序列，图缓存每次都能命中。项目在实验记录里把这条列为训练侧不受影响的依据，并特别强调不能为了查看器去改训练配置（<code>experiment-log.md</code>）。</p>
+<p>代价是 donate 语义下循环里复用的固定数组会被 JAX 判定为已删除，需要使用方每帧重建或者干脆不捐赠（<code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md</code>）。查看器选择每帧重建三维指令数组，开销可以忽略，这个选择反而保证了地址会变、必须换模式。</p>
 <h2 id="观测循环里的地址变动">观测循环里的地址变动</h2>
-<p>查看器的主循环有两处会改变缓冲区地址（<code>experiment-log.md:3979-3985</code>）：</p>
+<p>查看器的主循环有两处会改变缓冲区地址（<code>experiment-log.md</code>）：</p>
 
 
 
@@ -207,9 +207,9 @@
 
 
 <table><thead><tr><th>来源</th><th>频率</th><th>后果</th></tr></thead><tbody><tr><td>每帧新建 command 数组并写入 info</td><td>每帧</td><td>图缓存失效，重新捕获</td></tr><tr><td>按重置键或摔倒触发重置</td><td>每几百帧</td><td>整套状态换地址，重新捕获</td></tr></tbody></table>
-<p>地址反复变动会让引擎反复录制。录到一定次数后流对象失效，报出的错误是 warp 捕获开始阶段的运行时错误，项目实测崩在第 2125 帧（<code>experiment-log.md:3985-3989</code>）。这类崩溃的特点是跑几千帧才出现，短时间试跑看不出来。</p>
+<p>地址反复变动会让引擎反复录制。录到一定次数后流对象失效，报出的错误是 warp 捕获开始阶段的运行时错误，项目实测崩在第 2125 帧（<code>experiment-log.md</code>）。这类崩溃的特点是跑几千帧才出现，短时间试跑看不出来。</p>
 <h2 id="五种graph_mode的实测对比">五种graph_mode的实测对比</h2>
-<p>项目用一个模拟查看器循环的探针脚本做了对照，循环模式与真实查看器一致：每帧新建 command、每 300 帧重置一次，各跑 3000 帧（<code>experiment-log.md:3991-4002</code>）：</p>
+<p>项目用一个模拟查看器循环的探针脚本做了对照，循环模式与真实查看器一致：每帧新建 command、每 300 帧重置一次，各跑 3000 帧（<code>experiment-log.md</code>）：</p>
 
 
 
@@ -246,8 +246,8 @@
 
 
 <table><thead><tr><th>graph_mode</th><th>步时</th><th>结果</th></tr></thead><tbody><tr><td>NONE</td><td>139.0 ms/帧</td><td>不崩但慢</td></tr><tr><td>JAX</td><td>预热即崩</td><td>无法建子图节点</td></tr><tr><td>WARP（原默认）</td><td>185.5 ms/帧</td><td>探针下不崩，真实查看器几千帧后崩</td></tr><tr><td>WARP_STAGED</td><td>16.3 ms/帧</td><td>不崩</td></tr><tr><td>WARP_STAGED_EX</td><td>57.3 ms/帧</td><td>不崩</td></tr></tbody></table>
-<p>WARP_STAGED 的机制是引入一块暂存缓冲区，把数据在图内用一次拷贝搬进去，因此图本身不依赖外部缓冲区的固定地址，专为地址会变的场景设计。它比默认模式快约十一倍，同时解决了崩溃（<code>experiment-log.md:4000-4004</code>）。</p>
-<p>这份对照表也说明了探针跑不崩不等于真实场景不崩：WARP 在探针里 3000 帧没有崩，在真实窗口里崩了。项目在总结里把这条教训写成「代理指标与真实场景不一致时以真实场景为准」（<code>experiment-log.md:4090-4100</code> 附近）。</p>
+<p>WARP_STAGED 的机制是引入一块暂存缓冲区，把数据在图内用一次拷贝搬进去，因此图本身不依赖外部缓冲区的固定地址，专为地址会变的场景设计。它比默认模式快约十一倍，同时解决了崩溃（<code>experiment-log.md</code>）。</p>
+<p>这份对照表也说明了探针跑不崩不等于真实场景不崩：WARP 在探针里 3000 帧没有崩，在真实窗口里崩了。项目在总结里把这条教训写成「代理指标与真实场景不一致时以真实场景为准」（<code>experiment-log.md</code> 附近）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["每帧新建 command 与重置状态"] --> B["缓冲区地址变动"]
   B --> C{"graph_mode 的捕获策略"}
@@ -256,17 +256,17 @@
   C -- "WARP_STAGED 暂存缓冲" --> F["图内拷贝 地址无关"]
   F --> G["稳定 16.3 ms 每帧"]</pre></div>
 <h2 id="配置字段与调用路径">配置字段与调用路径</h2>
-<p>修复方式是在环境配置里加一个 graph_mode 字段，默认留空表示沿用 MJX 默认，训练行为不变；查看器显式传 WARP_STAGED（<code>envs/go1_walk.py:339</code> 与 <code>experiment-log.md:4004-4005</code>）。环境初始化时按需把字符串转成枚举成员（<code>envs/go1_walk.py:440-447</code>）：</p>
+<p>修复方式是在环境配置里加一个 graph_mode 字段，默认留空表示沿用 MJX 默认，训练行为不变；查看器显式传 WARP_STAGED（<code>envs/go1_walk.py</code> 与 <code>experiment-log.md</code>）。环境初始化时按需把字符串转成枚举成员（<code>envs/go1_walk.py</code>）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>getattr</mtext><mo stretchy="false">(</mo><mtext>GraphMode</mtext><mo separator="true">,</mo><mtext>  </mtext><mtext>配置值</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{getattr}(\text{GraphMode}, \; \text{配置值})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">getattr</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">GraphMode</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">配置值</span></span><span class="mclose">)</span></span></span></span></span>
-<p>命令行入口也各自暴露了这个参数：训练脚本、评估脚本与查看器脚本都有 graph_mode 选项，默认值与用途不同（<code>train/train_getup.py:137</code>、<code>sim/eval_getup.py:66</code>、<code>sim/view_go1.py:256</code>）。查看器另有几处把它固定在 WARP_STAGED 并打印出来（<code>sim/watch_v20_fast.py:318-324</code>、<code>sim/eval_stairs.py:53</code>）。</p>
-<p>项目从两次回归里总结出一条交付检查：写完观测脚本后逐个 grep 关键配置，因为真实发生过「文档写了、代码没写」的情况，表现就是每帧重新捕获加几千帧后崩溃（<code>docs/viewer-guide.md:110-120</code> 附近）。</p>
+<p>命令行入口也各自暴露了这个参数：训练脚本、评估脚本与查看器脚本都有 graph_mode 选项，默认值与用途不同（<code>train/train_getup.py</code>、<code>sim/eval_getup.py</code>、<code>sim/view_go1.py</code>）。查看器另有几处把它固定在 WARP_STAGED 并打印出来（<code>sim/watch_v20_fast.py</code>、<code>sim/eval_stairs.py</code>）。</p>
+<p>项目从两次回归里总结出一条交付检查：写完观测脚本后逐个 grep 关键配置，因为真实发生过「文档写了、代码没写」的情况，表现就是每帧重新捕获加几千帧后崩溃（<code>docs/viewer-guide.md</code> 附近）。</p>
 <h2 id="一进程两环境的相互干扰">一进程两环境的相互干扰</h2>
-<p>与地址缓存同源的另一类问题是同一进程里建多个环境。对照实验时如果一个进程先后建两个环境，后一个环境的 step 会命中前一个录制的图，现象是地形里机器人完全不动或者平地里莫名翻身，而且同一段代码换个进程跑就正常（<code>观测器脚本撰写指南.md:463-471</code>）。</p>
+<p>与地址缓存同源的另一类问题是同一进程里建多个环境。对照实验时如果一个进程先后建两个环境，后一个环境的 step 会命中前一个录制的图，现象是地形里机器人完全不动或者平地里莫名翻身，而且同一段代码换个进程跑就正常（<code>观测器脚本撰写指南.md</code>）。</p>
 <p>这类问题的判断成本很高，因为症状看起来像物理或策略问题。规避规则很直接：一个进程只建一个环境，做 A/B 对照用两个进程。项目为此单独写了一个在独立进程里追踪物理量的脚本。</p>
 <h2 id="预热与首帧暂态">预热与首帧暂态</h2>
-<p>换用 WARP_STAGED 之后还有一段与图无关的暂态。查看器刚开窗口时，编译、首次捕获与驱动初始化都挤在前几十帧里，实测早期一帧可以到 373 ms，稍后自行降到 14.9 ms（<code>experiment-log.md:4160-4176</code> 附近）。</p>
-<p>做法是在打开窗口之前把主循环的同一段调用序列先跑一遍，让编译与首帧开销在还没有窗口时结清（<code>experiment-log.md:4170-4176</code>）。项目实测预热 150 帧后，窗口出现的第一条日志就是约 28 fps，到第 100 帧升到 50 fps，不再出现几百毫秒的段。预热必须走同一个帧函数，否则编译的是另一条调用路径。</p>
-<p>同一批实验还测出策略前向 jit 与 eager 的差别：jit 稳定省下约 11 ms 每帧，且与冷热状态无关（<code>experiment-log.md:4145-4160</code> 附近的对照表）。交互式循环里每个按帧调用的 JAX 计算都应该 jit，这条与 graph_mode 是两件独立的事，不能互相替代。</p>
+<p>换用 WARP_STAGED 之后还有一段与图无关的暂态。查看器刚开窗口时，编译、首次捕获与驱动初始化都挤在前几十帧里，实测早期一帧可以到 373 ms，稍后自行降到 14.9 ms（<code>experiment-log.md</code> 附近）。</p>
+<p>做法是在打开窗口之前把主循环的同一段调用序列先跑一遍，让编译与首帧开销在还没有窗口时结清（<code>experiment-log.md</code>）。项目实测预热 150 帧后，窗口出现的第一条日志就是约 28 fps，到第 100 帧升到 50 fps，不再出现几百毫秒的段。预热必须走同一个帧函数，否则编译的是另一条调用路径。</p>
+<p>同一批实验还测出策略前向 jit 与 eager 的差别：jit 稳定省下约 11 ms 每帧，且与冷热状态无关（<code>experiment-log.md</code> 附近的对照表）。交互式循环里每个按帧调用的 JAX 计算都应该 jit，这条与 graph_mode 是两件独立的事，不能互相替代。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["打开窗口"] --> B["首帧编译与捕获"]
   B --> C["数百毫秒暂态"]
@@ -366,11 +366,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>graph_mode 字段与实测对照注释（:320-339）、枚举转换与模型构造（:440-447）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>崩溃根因与五种模式实测（:3976-4005）、帧率定位（:4010-4030）、策略 jit 对照（:4145-4160）、预热（:4160-4176）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>graph_mode 一节与交付检查清单（:84-120、:423-450）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md</code></td><td>每帧耗时构成（:16-38）、graph_mode 一节（:72-107）、一进程两环境（:463-471）</td></tr><tr><td><code>mjx-go1-getup/train/train_getup.py</code>、<code>sim/eval_getup.py</code>、<code>sim/view_go1.py</code></td><td>各命令行入口的 graph_mode 参数</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-容量参数与数值边界"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-容量参数与数值边界</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/03-warp后端与graph_mode/03-容量参数与数值边界.md</span></div><div class="dfile__body"><h1 id="容量参数与数值边界">容量参数与数值边界</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>graph_mode 字段与实测对照注释、枚举转换与模型构造</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>崩溃根因与五种模式实测、帧率定位、策略 jit 对照、预热</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>graph_mode 一节与交付检查清单</td></tr><tr><td><code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md</code></td><td>每帧耗时构成、graph_mode 一节、一进程两环境</td></tr><tr><td><code>mjx-go1-getup/train/train_getup.py</code>、<code>sim/eval_getup.py</code>、<code>sim/view_go1.py</code></td><td>各命令行入口的 graph_mode 参数</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-容量参数与数值边界"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-容量参数与数值边界</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/03-warp后端与graph_mode/03-容量参数与数值边界.md</span></div><div class="dfile__body"><h1 id="容量参数与数值边界">容量参数与数值边界</h1>
 <p>GPU 批量仿真要在编译期确定数组大小，因此接触与约束的存储必须预留容量。容量给少了，超出部分被截断或越界写入；给多了，显存与带宽被白白占用。MJX 把这件事拆成两个参数：一个管接触槽，一个管约束数。两个参数都不随仿真进程自动增长，改环境数量或改地形都必须重新核对。</p>
 <p>这套容量语义在 warp 后端下还有一处容易误读的地方：接触槽是所有并行世界共享的一池，而不是每个世界各占一份。按「每环境多少接触」去估算容量会把总量算错一个数量级，轻则在环境数变大时越界，重则让奖励变成非数、训练参数被打爆。以下按两个参数各自的语义、实测峰值与选择方法展开。</p>
 <h2 id="两个容量参数的分工">两个容量参数的分工</h2>
-<p>两个参数在构造数据时一起传入（<code>envs/go1_walk.py:835-845</code>）：</p>
+<p>两个参数在构造数据时一起传入（<code>envs/go1_walk.py</code>）：</p>
 
 
 
@@ -393,24 +393,24 @@
 
 <table><thead><tr><th>参数</th><th>管什么</th><th>越界的后果</th></tr></thead><tbody><tr><td>naconmax</td><td>接触槽总数</td><td>接触被截断，物理行为改变</td></tr><tr><td>njmax</td><td>约束数上限</td><td>nefc overflow，越界写入破坏状态</td></tr></tbody></table>
 <p>naconmax 的单位是接触个数，njmax 的单位是标量约束行数。同一对几何体产生的接触会展开成多行约束，因此 njmax 通常比 naconmax 小得多。两者不是同一量的两种写法，改地形时都要单独检查。</p>
-<p>默认值写在环境配置里：naconmax 取 8 乘 8192，njmax 取 256（<code>envs/go1_walk.py:85-96</code>）。配置注释把这两条的选择依据都写下来了，下文分别展开。</p>
+<p>默认值写在环境配置里：naconmax 取 8 乘 8192，njmax 取 256（<code>envs/go1_walk.py</code>）。配置注释把这两条的选择依据都写下来了，下文分别展开。</p>
 <h2 id="naconmax是全体world共享的">naconmax是全体world共享的</h2>
-<p>配置注释直接引用了依赖库的类型定义：naconmax 是全体 world 共享的最大接触数，并且库的输入输出层有一条断言（<code>envs/go1_walk.py:85-88</code>）：</p>
+<p>配置注释直接引用了依赖库的类型定义：naconmax 是全体 world 共享的最大接触数，并且库的输入输出层有一条断言（<code>envs/go1_walk.py</code>）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>naconmax</mtext><mo>≥</mo><mtext>ncon</mtext><mo>×</mo><mtext>nworld</mtext></mrow><annotation encoding="application/x-tex">\text{naconmax} \ge \text{ncon} \times \text{nworld}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mord text"><span class="mord">naconmax</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord text"><span class="mord">ncon</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">nworld</span></span></span></span></span></span>
 <p>默认值 8 乘 8192 等于 65536，意思是当并行世界数是 8192 时，每个世界平均只有 8 个接触槽。注释里还给了对照：playground 的 Go1 例子用的是 4 乘 8192。把这两个数并列，是想说明 8 已经是偏保守的取值，继续调大主要是在买余量而不是买速度。</p>
-<p>实测的峰值说明了余量有多大。在 768 环境的配置下，走路的接触数峰值是 2369 个，起身躺地时是 3700 个，都是全局量（<code>envs/go1_walk.py:88-91</code>）。换算成每世界约 4.8 个接触，相对 65536 的容量在 768 环境下有大约 85 个每世界的余量。</p>
-<p>容量调大在速度上没有收益。项目实测把 65536 调到 32768 或 49152，步时没有差异，只是省内存与带宽（<code>envs/go1_walk.py:91-92</code> 与 <code>experiment-log.md:4176-4182</code>）。这条结论把容量选择变成了纯粹的显存问题。</p>
+<p>实测的峰值说明了余量有多大。在 768 环境的配置下，走路的接触数峰值是 2369 个，起身躺地时是 3700 个，都是全局量（<code>envs/go1_walk.py</code>）。换算成每世界约 4.8 个接触，相对 65536 的容量在 768 环境下有大约 85 个每世界的余量。</p>
+<p>容量调大在速度上没有收益。项目实测把 65536 调到 32768 或 49152，步时没有差异，只是省内存与带宽（<code>envs/go1_walk.py</code> 与 <code>experiment-log.md</code>）。这条结论把容量选择变成了纯粹的显存问题。</p>
 <p>库层的那条断言是硬性的：容量小于模型在给定世界数下的接触数上限时，构造数据阶段就会失败，而不是在运行中静默丢接触。因此容量不足有两种表现，一种是断言失败看得见，另一种是断言通过但实际接触数超过预留，后者只会在某些位姿下出现，表现为偶发的物理异常。</p>
 <p>单环境观测脚本的处境比较特殊：并行世界数是一，默认容量远远用不完，但也不必改小。观测脚本的原则是复现训练物理，容量属于物理的一部分，改它会改变求解顺序。观测脚本因此沿用训练侧的默认容量，宁可多占显存也不冒改变动力学的风险。</p>
 <h2 id="接触峰值的实测口径">接触峰值的实测口径</h2>
-<p>接触峰值随任务变化很大，不能用一个任务的数据去配另一个任务。项目里差别最大的一组是走路与起身：走路峰值 2369，起身躺地峰值 3700，而起身姿势池脚本的注释给出了更细的数字——躺地时每个环境约 33 个接触（<code>sim/make_getup_posepool.py:37-38</code>）。</p>
-<p>这个 33 与前面的 4.8 并不矛盾：4.8 是全局峰值除以环境数的平均值，33 是躺地瞬间单个环境的局部峰值。容量要按最坏情况配，因此姿势池脚本按 64 个每环境预留，并且取 8 乘 8192 与 64 乘环境数中的较大者（<code>sim/make_getup_posepool.py:50</code>）：</p>
+<p>接触峰值随任务变化很大，不能用一个任务的数据去配另一个任务。项目里差别最大的一组是走路与起身：走路峰值 2369，起身躺地峰值 3700，而起身姿势池脚本的注释给出了更细的数字——躺地时每个环境约 33 个接触（<code>sim/make_getup_posepool.py</code>）。</p>
+<p>这个 33 与前面的 4.8 并不矛盾：4.8 是全局峰值除以环境数的平均值，33 是躺地瞬间单个环境的局部峰值。容量要按最坏情况配，因此姿势池脚本按 64 个每环境预留，并且取 8 乘 8192 与 64 乘环境数中的较大者（<code>sim/make_getup_posepool.py</code>）：</p>
 <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>naconmax</mtext><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>8</mn><mo>×</mo><mn>8192</mn><mo separator="true">,</mo><mtext>  </mtext><mn>64</mn><mo>×</mo><mtext>envs</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{naconmax} = \max(8 \times 8192, \; 64 \times \text{envs})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord text"><span class="mord">naconmax</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">8192</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">64</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">envs</span></span><span class="mclose">)</span></span></span></span></span>
-<p>这个写法同时满足了大批量与小批量两种情形：环境数少时用默认容量，环境数多时按每环境 64 个接触放大。项目诊断脚本也把两个容量都做成命令行参数，便于扫描（<code>sim/probe_nefc.py:30-46</code>）。</p>
+<p>这个写法同时满足了大批量与小批量两种情形：环境数少时用默认容量，环境数多时按每环境 64 个接触放大。项目诊断脚本也把两个容量都做成命令行参数，便于扫描（<code>sim/probe_nefc.py</code>）。</p>
 <h2 id="njmax与nefc溢出">njmax与nefc溢出</h2>
-<p>njmax 的默认值从 64 提到 256，原因是硬接触加上摔倒在地时的自碰撞会让约束数超过 64（<code>envs/go1_walk.py:93-96</code>）。溢出的表现是越界写入，而不是警告后丢弃：广义加速度与传感器数据被写坏，奖励随之变成非数，PPO 的参数被打爆。项目把这一条列为早期几次训练崩溃的共同根因之一。</p>
-<p>实验记录里对这条错误的解释做过单独澄清：把 nefc overflow 当成「只是警告、warp 会丢弃溢出约束」是错的，实际会写坏状态（<code>experiment-log.md:407</code> 附近）。这条记录与「全程零次 nefc overflow、零次 NaN」的稳定性判据互相呼应（<code>experiment-log.md:35</code> 与 <code>:311</code>）。</p>
-<p>容量配好之后仍要留护栏。环境里有 NaN 护栏，把非有限值回填并终止该 episode（<code>envs/go1_walk.py:934</code> 附近）。护栏触发频率是诊断信号：偶尔触发说明遇到了极端位姿，持续触发说明容量或接触设置已经不够。</p>
+<p>njmax 的默认值从 64 提到 256，原因是硬接触加上摔倒在地时的自碰撞会让约束数超过 64（<code>envs/go1_walk.py</code>）。溢出的表现是越界写入，而不是警告后丢弃：广义加速度与传感器数据被写坏，奖励随之变成非数，PPO 的参数被打爆。项目把这一条列为早期几次训练崩溃的共同根因之一。</p>
+<p>实验记录里对这条错误的解释做过单独澄清：把 nefc overflow 当成「只是警告、warp 会丢弃溢出约束」是错的，实际会写坏状态（<code>experiment-log.md</code> 附近）。这条记录与「全程零次 nefc overflow、零次 NaN」的稳定性判据互相呼应（<code>experiment-log.md</code>）。</p>
+<p>容量配好之后仍要留护栏。环境里有 NaN 护栏，把非有限值回填并终止该 episode（<code>envs/go1_walk.py</code> 附近）。护栏触发频率是诊断信号：偶尔触发说明遇到了极端位姿，持续触发说明容量或接触设置已经不够。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["约束数超过 njmax"] --> B["nefc overflow"]
   B --> C["越界写入 qacc 与 sensordata"]
@@ -421,7 +421,7 @@
   H -- "偶发" --> I["极端位姿 可接受"]
   H -- "持续" --> J["回到容量与接触设置排查"]</pre></div>
 <h2 id="容量变更为什么改变物理">容量变更为什么改变物理</h2>
-<p>容量看起来只影响存储，实际上会改变计算结果。项目测过一次看起来白捡的优化：把 naconmax 从 65536 降到 2048、1024、512，单环境步时从 14.94 ms 降到 12.28 ms，省了 18%（<code>experiment-log.md:4160-4182</code>）。</p>
+<p>容量看起来只影响存储，实际上会改变计算结果。项目测过一次看起来白捡的优化：把 naconmax 从 65536 降到 2048、1024、512，单环境步时从 14.94 ms 降到 12.28 ms，省了 18%（<code>experiment-log.md</code>）。</p>
 <p>用固定动作序列跑 500 步对比轨迹后，这个优化被否决：</p>
 
 
@@ -449,11 +449,11 @@
 
 
 <table><thead><tr><th>naconmax</th><th>与默认的最大偏差</th><th>第 1 步偏差</th></tr></thead><tbody><tr><td>2048</td><td>8.88e-01</td><td>1.67e-03</td></tr><tr><td>1024</td><td>4.23e-01</td><td>未给出</td></tr><tr><td>512</td><td>5.19e-01</td><td>7.81e-03</td></tr></tbody></table>
-<p>关键在第 1 步就已经分叉，偏差量级远超单精度浮点的舍入误差，随后被混沌放大到半米。机理是接触数组的容量改变了求解器内部的求和与排序顺序，物理不再等价（<code>experiment-log.md:4176-4182</code>）。</p>
+<p>关键在第 1 步就已经分叉，偏差量级远超单精度浮点的舍入误差，随后被混沌放大到半米。机理是接触数组的容量改变了求解器内部的求和与排序顺序，物理不再等价（<code>experiment-log.md</code>）。</p>
 <p>判据因此定为看第 1 步：后期差异可能来自混沌放大，不能当作证据。这条经验对所有容量与缓冲区相关的优化都适用——要省资源，先证明物理等价。</p>
 <h2 id="按环境数选容量">按环境数选容量</h2>
 <p>综合以上实测，容量选择可以按四步做。先确定任务的最坏接触峰值，起身躺地取每环境 64 个接触；再乘以并行世界数得到总量，并与默认容量取较大者；然后按约束行数的峰值校核 njmax，留出至少一倍余量；最后用固定动作序列对比第 1 步，确认物理等价。</p>
-<p>按这条流程，地形训练时还要额外考虑高度场带来的接触增长。地形让足端在坡面上更容易同时接触多个格子，接触数峰值会上升，项目在新地形下的接触数峰值是 11，相对 njmax 的 256 仍有充足余量（<code>models/go1/scene_mjx_terrain.xml:44-46</code>）。</p>
+<p>按这条流程，地形训练时还要额外考虑高度场带来的接触增长。地形让足端在坡面上更容易同时接触多个格子，接触数峰值会上升，项目在新地形下的接触数峰值是 11，相对 njmax 的 256 仍有充足余量（<code>models/go1/scene_mjx_terrain.xml</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["确定最坏接触峰值 每环境 64"] --> B["乘并行世界数"]
   B --> C["与默认容量取较大者"]
@@ -554,11 +554,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>naconmax 与 njmax 的默认值及注释（:85-96）、数据构造（:835-845）、NaN 护栏（:934）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>nefc 溢出的澄清（:407）、稳定性判据（:35、:311）、被否决的容量优化（:4160-4182）</td></tr><tr><td><code>mjx-go1-getup/sim/make_getup_posepool.py</code></td><td>躺地时每环境接触数与容量公式（:37-50）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_nefc.py</code></td><td>两个容量的扫描诊断入口（:30-46）</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>地形下的接触数峰值与约束余量（:44-46）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-性能排查与观测脚本口径"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-性能排查与观测脚本口径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/03-warp后端与graph_mode/04-性能排查与观测脚本口径.md</span></div><div class="dfile__body"><h1 id="性能排查与观测脚本口径">性能排查与观测脚本口径</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>naconmax 与 njmax 的默认值及注释、数据构造、NaN 护栏</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>nefc 溢出的澄清、稳定性判据、被否决的容量优化</td></tr><tr><td><code>mjx-go1-getup/sim/make_getup_posepool.py</code></td><td>躺地时每环境接触数与容量公式</td></tr><tr><td><code>mjx-go1-getup/sim/probe_nefc.py</code></td><td>两个容量的扫描诊断入口</td></tr><tr><td><code>mjx-go1-getup/models/go1/scene_mjx_terrain.xml</code></td><td>地形下的接触数峰值与约束余量</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-性能排查与观测脚本口径"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-性能排查与观测脚本口径</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/13-MuJoCo 与 MJX/03-warp后端与graph_mode/04-性能排查与观测脚本口径.md</span></div><div class="dfile__body"><h1 id="性能排查与观测脚本口径">性能排查与观测脚本口径</h1>
 <p>训练跑在无人值守的批处理里，观测脚本却是交互式的：它要一边推物理、一边把状态搬回 CPU 画图、一边响应按键。这套流程里每一步都可能成为瓶颈，而症状又高度相似：帧率低、步时高。项目在这个环节吃过几次误判的亏，包括把显存打满读成物理变慢、把未 jit 的绘图计算当成地形开销。</p>
 <p>排查的关键是先建立一个能出数的基准，再按进程外、指标本身、代码的顺序找原因。以下给出每帧耗时的构成、几处已经被实测确认的修复、以及一张症状对照表。表里的数字都来自素材的实测记录，机器与配置不同时数值会变，但量级和判别顺序可以照搬。</p>
 <h2 id="每帧耗时构成">每帧耗时构成</h2>
-<p>观测脚本每帧的执行顺序与耗时大致如下（<code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md:16-38</code>）：</p>
+<p>观测脚本每帧的执行顺序与耗时大致如下（<code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md</code>）：</p>
 
 
 
@@ -613,7 +613,7 @@
 <p>优化前实测 373 ms 每帧、约 3 fps，优化后 19.5 ms 每帧、约 50 fps。差值几乎全部来自策略前向、物理步与扫描计算三处，与地形或物理本身无关。</p>
 <p>这张表里有两项与前一单元讲的图缓存直接相关：组指令会改地址，因此查看器必须用 WARP_STAGED；节流是补足到控制周期而不是固定 sleep，慢帧不应该再叠加等待。</p>
 <h2 id="按帧调用的jax计算必须jit">按帧调用的JAX计算必须jit</h2>
-<p>扫描点计算是差距最大的一项。项目对两种写法做了 A/B 测试，各测两轮（<code>experiment-log.md:4020-4035</code>）：</p>
+<p>扫描点计算是差距最大的一项。项目对两种写法做了 A/B 测试，各测两轮（<code>experiment-log.md</code>）：</p>
 
 
 
@@ -634,7 +634,7 @@
 <table><thead><tr><th>写法</th><th>每帧耗时（两轮）</th></tr></thead><tbody><tr><td>逐算子 eager</td><td>51.6 ms / 315.8 ms</td></tr><tr><td>jit 成一个内核</td><td>0.32 ms / 6.28 ms</td></tr></tbody></table>
 <p>两轮比值落在 50 到 160 倍之间，绝对值随机器状态波动，关键是量级差异。两种写法的数值结果一致，最大差小于 5e-07，说明快的写法没有牺牲正确性。</p>
 <p>原因在启动次数。eager 写法每帧要在 Python 侧按顺序发起一百多个小内核，每个都有启动开销与同步；jit 合并成一个内核后只有一次启动。交互式循环里没有批处理的摊销，这类固定开销会按帧数累加。</p>
-<p>修复方式是把采样点位置、地面高度与高度特征合成一个函数并加 jit，然后在预热阶段先调用一次让编译结清（<code>experiment-log.md:4035-4040</code>）。策略前向同理，jit 后稳定省下约 11 ms 每帧（<code>experiment-log.md:4145-4160</code>）。</p>
+<p>修复方式是把采样点位置、地面高度与高度特征合成一个函数并加 jit，然后在预热阶段先调用一次让编译结清（<code>experiment-log.md</code>）。策略前向同理，jit 后稳定省下约 11 ms 每帧（<code>experiment-log.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["每帧要算扫描特征"] --> B{"写法"}
   B -- "逐算子 eager" --> C["上百次内核启动"]
@@ -644,7 +644,7 @@
   D --> G["数值一致 但量级差距 50 到 160 倍"]
   F --> G</pre></div>
 <h2 id="数据搬运与同步的最小化">数据搬运与同步的最小化</h2>
-<p>从 GPU 取数据回 CPU 时，只搬渲染需要的量。项目对比过两种做法：用通用接口把整个 Data 对象搬回来，与只搬 qpos 与 qvel 两个数组（<code>观测器脚本撰写指南.md:127-140</code>）：</p>
+<p>从 GPU 取数据回 CPU 时，只搬渲染需要的量。项目对比过两种做法：用通用接口把整个 Data 对象搬回来，与只搬 qpos 与 qvel 两个数组（<code>观测器脚本撰写指南.md</code>）：</p>
 
 
 
@@ -666,7 +666,7 @@
 <p>差五十倍以上。Data 对象里包含按容量上限分配的接触数组，搬它是为几十个字节的有效数据付出整块传输。这条与前一单元的容量语义呼应：容量给大是为了物理正确，代价必须用最小搬运来抵消。</p>
 <p>同步的时机也要注意。计时点应放在数据已经落到 CPU 之后，否则测到的是异步发起的耗时。项目在性能日志里把搬运、同步与扫描分开计时，就是为了在症状出现时能指出哪一段异常。</p>
 <h2 id="显存预占与假慢">显存预占与假慢</h2>
-<p>有一类慢与代码无关。XLA 默认会预占约 75% 的显存，在 8 GiB 卡上单进程就要约 6 GiB。一旦出现第二个 GPU 进程（上一个查看器没关、并发的训练或评估），显存被打满，GPU 无法保持高频，单步从 15 ms 涨到 300 到 550 ms（<code>观测器脚本撰写指南.md:219-245</code>）：</p>
+<p>有一类慢与代码无关。XLA 默认会预占约 75% 的显存，在 8 GiB 卡上单进程就要约 6 GiB。一旦出现第二个 GPU 进程（上一个查看器没关、并发的训练或评估），显存被打满，GPU 无法保持高频，单步从 15 ms 涨到 300 到 550 ms（<code>观测器脚本撰写指南.md</code>）：</p>
 
 
 
@@ -701,12 +701,12 @@
 
 
 <table><thead><tr><th>场景</th><th>显存</th><th>时钟</th><th>帧耗时</th><th>帧率</th></tr></thead><tbody><tr><td>单进程</td><td>未打满</td><td>1500 MHz 以上</td><td>15.7 ms</td><td>63.7 fps</td></tr><tr><td>双进程默认预占</td><td>7674 / 8192 MiB</td><td>180 MHz</td><td>306.9 / 32.4 ms</td><td>3.3 / 30.8 fps</td></tr><tr><td>双进程限制预占</td><td>未打满</td><td>正常</td><td>27.1 / 27.1 ms</td><td>36.9 / 36.9 fps</td></tr></tbody></table>
-<p>中间那行还有一个误导性：两个进程通常只有一个被饿死，另一个仍有 30 fps，因此症状是「我这个查看器莫名其妙只有 3 fps」，而不是两个都慢。修复是在导入 jax 之前限制预占比例，查看器取 0.25，评估与诊断脚本取 0.3 到 0.55，训练侧取 0.80（<code>观测器脚本撰写指南.md:250-260</code>）。</p>
+<p>中间那行还有一个误导性：两个进程通常只有一个被饿死，另一个仍有 30 fps，因此症状是「我这个查看器莫名其妙只有 3 fps」，而不是两个都慢。修复是在导入 jax 之前限制预占比例，查看器取 0.25，评估与诊断脚本取 0.3 到 0.55，训练侧取 0.80（<code>观测器脚本撰写指南.md</code>）。</p>
 <p>判别的指纹有两个：显存使用接近上限，以及 GPU 的时钟掉到 200 MHz 以下。看到这两个信号就应该先查进程，而不是读代码。WSL 里的负载均值看不出异常，必须用显存与时钟查询。</p>
 <h2 id="渲染后端与cpu抢核">渲染后端与CPU抢核</h2>
-<p>渲染侧的慢另有来源。查看器日志里的 render 一项只有 2 点几毫秒，那是数据交接的耗时，实际绘制在查看器自己的线程里，不在这段计时内（<code>experiment-log.md:1464-1472</code>）。</p>
-<p>在无独立显卡直通的 WSL 环境里，渲染会落到软件光栅化实现上，占满 CPU 并抢走 JAX 的调度线程。项目实测离屏渲染与地形分辨率无关，n 从 16 到 128 都是约 108 ms，平地也一样，因此渲染慢不能用高度场来解释（<code>experiment-log.md:1473</code>）。可用的对策是给渲染指定硬件驱动路径，或限制软件渲染使用的线程数。</p>
-<p>判别顺序是先确认 GPU 没有别的进程在抢，再看指标本身是否代表目标场景，最后才怀疑代码。项目在这条顺序上踩过两次：先怀疑图模式，补上 WARP_STAGED 后反而更慢，因为真因仍在；又怀疑地形让物理变重，实测地形 9.5 ms 比平地 10.9 ms 还快（<code>experiment-log.md:1441-1474</code>）。</p>
+<p>渲染侧的慢另有来源。查看器日志里的 render 一项只有 2 点几毫秒，那是数据交接的耗时，实际绘制在查看器自己的线程里，不在这段计时内（<code>experiment-log.md</code>）。</p>
+<p>在无独立显卡直通的 WSL 环境里，渲染会落到软件光栅化实现上，占满 CPU 并抢走 JAX 的调度线程。项目实测离屏渲染与地形分辨率无关，n 从 16 到 128 都是约 108 ms，平地也一样，因此渲染慢不能用高度场来解释（<code>experiment-log.md</code>）。可用的对策是给渲染指定硬件驱动路径，或限制软件渲染使用的线程数。</p>
+<p>判别顺序是先确认 GPU 没有别的进程在抢，再看指标本身是否代表目标场景，最后才怀疑代码。项目在这条顺序上踩过两次：先怀疑图模式，补上 WARP_STAGED 后反而更慢，因为真因仍在；又怀疑地形让物理变重，实测地形 9.5 ms 比平地 10.9 ms 还快（<code>experiment-log.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   A["帧率异常"] --> B["查 GPU 进程与显存"]
   B --> C{"显存接近上限 时钟低于 200 MHz"}
@@ -716,7 +716,7 @@
   F -- "是" --> G["找进程外因素 渲染后端与线程竞争"]
   F -- "否" --> H["回到代码 检查 jit 与搬运"]</pre></div>
 <h2 id="排查顺序与症状对照">排查顺序与症状对照</h2>
-<p>项目把常见症状与首选怀疑对象整理成一张表（<code>观测器脚本撰写指南.md:445-461</code>）：</p>
+<p>项目把常见症状与首选怀疑对象整理成一张表（<code>观测器脚本撰写指南.md</code>）：</p>
 
 
 
@@ -759,7 +759,7 @@
 
 
 <table><thead><tr><th>症状</th><th>首选怀疑</th></tr></thead><tbody><tr><td>步时几百毫秒但 render 只有 2 ms</td><td>显存打满或 CPU 抢核</td></tr><tr><td>步时 300 到 550 ms 且分项都正常</td><td>显存打满，残留进程加 XLA 预占</td></tr><tr><td>GPU 时钟低于 200 MHz 或显存接近上限</td><td>同上</td></tr><tr><td>跑几千帧后崩 unknown stream</td><td>graph_mode 应设 WARP_STAGED</td></tr><tr><td>早期帧慢、之后自行恢复</td><td>窗口暂态，用预热消除</td></tr><tr><td>帧率低但各项分项都不高</td><td>节流逻辑无条件 sleep</td></tr><tr><td>观测形状不符</td><td>环境开关与训练不一致</td></tr><tr><td>改小缓冲区后变快但行为变了</td><td>物理不再等价，弃用</td></tr></tbody></table>
-<p>最后两行分别对应观测脚本必须与训练同档、以及任何省资源的改动都要先证明物理等价。项目为此给观测脚本留了一份交付清单，逐项包括策略前向是否 jit、图模式是否设置、预占比例是否限制、按帧计算是否合成一个内核、是否只搬必要数据、维度是否断言一致（<code>观测器脚本撰写指南.md:423-444</code>）。</p>
+<p>最后两行分别对应观测脚本必须与训练同档、以及任何省资源的改动都要先证明物理等价。项目为此给观测脚本留了一份交付清单，逐项包括策略前向是否 jit、图模式是否设置、预占比例是否限制、按帧计算是否合成一个内核、是否只搬必要数据、维度是否断言一致（<code>观测器脚本撰写指南.md</code>）。</p>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -849,4 +849,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md</code></td><td>每帧耗时构成（:16-38）、jit 与搬运（:39-145）、显存预占（:219-275）、交付清单与症状表（:423-461）</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>扫描计算 A/B（:4020-4040）、策略 jit 对照（:4145-4160）、渲染与地形代价（:1441-1474）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>显存预占与排查顺序（:231-275、:381-405）</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>容量与后端配置（:85-96、:319-339）</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/02-hfield%E7%A8%8B%E5%BA%8F%E5%8C%96%E5%9C%B0%E5%BD%A2/"><span class="k">← 上一篇</span><span class="t">hfield程序化地形</span><span class="d">MuJoCo 与 MJX · 4 个文件</span></a><a class="next" href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/04-%E7%BA%A6%E6%9D%9F%E9%A2%84%E7%AE%97njmax%C2%B7nefc/"><span class="k">下一篇 →</span><span class="t">约束预算njmax·nefc</span><span class="d">MuJoCo 与 MJX · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/观测器脚本撰写指南.md</code></td><td>每帧耗时构成、jit 与搬运、显存预占、交付清单与症状表</td></tr><tr><td><code>mjx-go1-getup/docs/experiment-log.md</code></td><td>扫描计算 A/B、策略 jit 对照、渲染与地形代价</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>显存预占与排查顺序</td></tr><tr><td><code>mjx-go1-getup/envs/go1_walk.py</code></td><td>容量与后端配置</td></tr><tr><td><code>~/mujoco</code></td><td>素材仓库根，正文中素材路径均相对该根</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/02-hfield%E7%A8%8B%E5%BA%8F%E5%8C%96%E5%9C%B0%E5%BD%A2/"><span class="k">← 上一篇</span><span class="t">hfield程序化地形</span><span class="d">MuJoCo 与 MJX · 4 个文件</span></a><a class="next" href="/tc63/docs/13-MuJoCo%20%E4%B8%8E%20MJX/04-%E7%BA%A6%E6%9D%9F%E9%A2%84%E7%AE%97njmax%C2%B7nefc/"><span class="k">下一篇 →</span><span class="t">约束预算njmax·nefc</span><span class="d">MuJoCo 与 MJX · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

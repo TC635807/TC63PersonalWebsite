@@ -1,7 +1,7 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>BraxPPO训练循环 · JAX 与 Brax · 王宇翔</title><meta name="description" content="沿 brax 的 ppo.train 源码展开一次训练步：从 generate_unroll 采样 rollout，到优势估计、minibatch 更新与 epoch 级 pmap 扫描，最后看吞吐指标是怎么算出来的。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/03-BraxPPO%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="BraxPPO训练循环 · JAX 与 Brax · 王宇翔"><meta property="og:description" content="沿 brax 的 ppo.train 源码展开一次训练步：从 generate_unroll 采样 rollout，到优势估计、minibatch 更新与 epoch 级 pmap 扫描，最后看吞吐指标是怎么算出来的。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/03-BraxPPO%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/">JAX 与 Brax</a><span class="sep" aria-hidden="true">/</span><span class="now">BraxPPO训练循环</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>BraxPPO训练循环</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>一次训练步的展开</span></a><ul class="toc__heads"><li><a href="#1-入口脚本交给-brax-的东西" data-depth="2" data-heading-j="0">1. 入口脚本交给 brax 的东西</a></li><li><a href="#2-rollout-的生成" data-depth="2" data-heading-j="1">2. rollout 的生成</a></li><li><a href="#3-优势估计与-minibatch-更新" data-depth="2" data-heading-j="2">3. 优势估计与 minibatch 更新</a></li><li><a href="#4-epoch-级的扫描与参数捐赠" data-depth="2" data-heading-j="3">4. epoch 级的扫描与参数捐赠</a></li><li><a href="#5-吞吐指标的计算口径" data-depth="2" data-heading-j="4">5. 吞吐指标的计算口径</a></li><li><a href="#6-训练步数的账本" data-depth="2" data-heading-j="5">6. 训练步数的账本</a></li><li><a href="#7-一次训练步的数据形状" data-depth="2" data-heading-j="6">7. 一次训练步的数据形状</a></li><li><a href="#8-进度回调与指标的对应关系" data-depth="2" data-heading-j="7">8. 进度回调与指标的对应关系</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>训练预算与评估周期</span></a><ul class="toc__heads"><li><a href="#1-预算是环境步数" data-depth="2" data-heading-j="0">1. 预算是环境步数</a></li><li><a href="#2-评估周期如何切分预算" data-depth="2" data-heading-j="1">2. 评估周期如何切分预算</a></li><li><a href="#3-初始评估与进度回调的第一次调用" data-depth="2" data-heading-j="2">3. 初始评估与进度回调的第一次调用</a></li><li><a href="#4-预算为零的边界" data-depth="2" data-heading-j="3">4. 预算为零的边界</a></li><li><a href="#5-续训的步数记账" data-depth="2" data-heading-j="4">5. 续训的步数记账</a></li><li><a href="#6-检查点间隔反推预算" data-depth="2" data-heading-j="5">6. 检查点间隔反推预算</a></li><li><a href="#7-预算档位的推进" data-depth="2" data-heading-j="6">7. 预算档位的推进</a></li><li><a href="#8-评估指标的口径" data-depth="2" data-heading-j="7">8. 评估指标的口径</a></li><li><a href="#9-冒烟档的预算设置" data-depth="2" data-heading-j="8">9. 冒烟档的预算设置</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>检查点、策略文件与评估回调</span></a><ul class="toc__heads"><li><a href="#1-检查点写什么" data-depth="2" data-heading-j="0">1. 检查点写什么</a></li><li><a href="#2-目录命名与-best-副本" data-depth="2" data-heading-j="1">2. 目录命名与 best 副本</a></li><li><a href="#3-配置里的字段与用途" data-depth="2" data-heading-j="2">3. 配置里的字段与用途</a></li><li><a href="#4-恢复路径与守卫" data-depth="2" data-heading-j="3">4. 恢复路径与守卫</a></li><li><a href="#5-策略文件的内容" data-depth="2" data-heading-j="4">5. 策略文件的内容</a></li><li><a href="#6-两种加载路径的差异" data-depth="2" data-heading-j="5">6. 两种加载路径的差异</a></li><li><a href="#7-产物的一致性验证" data-depth="2" data-heading-j="6">7. 产物的一致性验证</a></li><li><a href="#8-评估回调在产物链里的位置" data-depth="2" data-heading-j="7">8. 评估回调在产物链里的位置</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>环境包装链与数据流</span></a><ul class="toc__heads"><li><a href="#1-包装链的构造顺序" data-depth="2" data-heading-j="0">1. 包装链的构造顺序</a></li><li><a href="#2-批量维度的来源" data-depth="2" data-heading-j="1">2. 批量维度的来源</a></li><li><a href="#3-回合包装的职责" data-depth="2" data-heading-j="2">3. 回合包装的职责</a></li><li><a href="#4-自动重置的语义" data-depth="2" data-heading-j="3">4. 自动重置的语义</a></li><li><a href="#5-动作重复与环境步长" data-depth="2" data-heading-j="4">5. 动作重复与环境步长</a></li><li><a href="#6-包装链与终止语义的耦合" data-depth="2" data-heading-j="5">6. 包装链与终止语义的耦合</a></li><li><a href="#7-评估侧的口径" data-depth="2" data-heading-j="6">7. 评估侧的口径</a></li><li><a href="#8-包装链的调试手段" data-depth="2" data-heading-j="7">8. 包装链的调试手段</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>复现命令与产物归档</span></a><ul class="toc__heads"><li><a href="#1-三类命令的分工" data-depth="2" data-heading-j="0">1. 三类命令的分工</a></li><li><a href="#2-开关的三组划分" data-depth="2" data-heading-j="1">2. 开关的三组划分</a></li><li><a href="#3-日志目录与检查点归档" data-depth="2" data-heading-j="2">3. 日志目录与检查点归档</a></li><li><a href="#4-策略文件的命名" data-depth="2" data-heading-j="3">4. 策略文件的命名</a></li><li><a href="#5-复现-v18-的命令" data-depth="2" data-heading-j="4">5. 复现 v18 的命令</a></li><li><a href="#6-复现-v22-的续训命令" data-depth="2" data-heading-j="5">6. 复现 v22 的续训命令</a></li><li><a href="#7-产物清单与验收" data-depth="2" data-heading-j="6">7. 产物清单与验收</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">JAX 与 Brax</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>brax / PPO / 训练循环 / MJX / 预算 / 评估 / 检查点 / orbax</span></div><h1 class="docs__title">BraxPPO训练循环</h1><p class="docs__lead">沿 brax 的 ppo.train 源码展开一次训练步：从 generate_unroll 采样 rollout，到优势估计、minibatch 更新与 epoch 级 pmap 扫描，最后看吞吐指标是怎么算出来的。</p></header><section class="dfile" id="file-1" data-file="01-一次训练步的展开"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-一次训练步的展开</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/03-BraxPPO训练循环/01-一次训练步的展开.md</span></div><div class="dfile__body"><p>训练脚本本身很短：组装一个参数字典、把一个 <code>progress_fn</code> 交给 brax、等它返回一组参数。训练循环本身在 brax 内部，由三层嵌套构成——训练步（采样一段 rollout 并更新一次参数）、epoch（把若干训练步扫成一串）、外层的评估循环（每评估一次就打印一遍指标）。理解这三层的边界，才能解释日志里的数字与磁盘上的检查点。</p>
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>BraxPPO训练循环 · JAX 与 Brax · 王宇翔</title><meta name="description" content="沿 brax 的 ppo.train 源码展开一次训练步：从 generate_unroll 采样 rollout，到优势估计、minibatch 更新与 epoch 级 pmap 扫描，最后看吞吐指标是怎么算出来的。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/03-BraxPPO%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="BraxPPO训练循环 · JAX 与 Brax · 王宇翔"><meta property="og:description" content="沿 brax 的 ppo.train 源码展开一次训练步：从 generate_unroll 采样 rollout，到优势估计、minibatch 更新与 epoch 级 pmap 扫描，最后看吞吐指标是怎么算出来的。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/03-BraxPPO%E8%AE%AD%E7%BB%83%E5%BE%AA%E7%8E%AF/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/12-JAX%20%E4%B8%8E%20Brax/">JAX 与 Brax</a><span class="sep" aria-hidden="true">/</span><span class="now">BraxPPO训练循环</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>BraxPPO训练循环</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>一次训练步的展开</span></a><ul class="toc__heads"><li><a href="#1-入口脚本交给-brax-的东西" data-depth="2" data-heading-j="0">1. 入口脚本交给 brax 的东西</a></li><li><a href="#2-rollout-的生成" data-depth="2" data-heading-j="1">2. rollout 的生成</a></li><li><a href="#3-优势估计与-minibatch-更新" data-depth="2" data-heading-j="2">3. 优势估计与 minibatch 更新</a></li><li><a href="#4-epoch-级的扫描与参数捐赠" data-depth="2" data-heading-j="3">4. epoch 级的扫描与参数捐赠</a></li><li><a href="#5-吞吐指标的计算口径" data-depth="2" data-heading-j="4">5. 吞吐指标的计算口径</a></li><li><a href="#6-训练步数的账本" data-depth="2" data-heading-j="5">6. 训练步数的账本</a></li><li><a href="#7-一次训练步的数据形状" data-depth="2" data-heading-j="6">7. 一次训练步的数据形状</a></li><li><a href="#8-进度回调与指标的对应关系" data-depth="2" data-heading-j="7">8. 进度回调与指标的对应关系</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>训练预算与评估周期</span></a><ul class="toc__heads"><li><a href="#1-预算是环境步数" data-depth="2" data-heading-j="0">1. 预算是环境步数</a></li><li><a href="#2-评估周期如何切分预算" data-depth="2" data-heading-j="1">2. 评估周期如何切分预算</a></li><li><a href="#3-初始评估与进度回调的第一次调用" data-depth="2" data-heading-j="2">3. 初始评估与进度回调的第一次调用</a></li><li><a href="#4-预算为零的边界" data-depth="2" data-heading-j="3">4. 预算为零的边界</a></li><li><a href="#5-续训的步数记账" data-depth="2" data-heading-j="4">5. 续训的步数记账</a></li><li><a href="#6-检查点间隔反推预算" data-depth="2" data-heading-j="5">6. 检查点间隔反推预算</a></li><li><a href="#7-预算怎么一档一档加上去" data-depth="2" data-heading-j="6">7. 预算怎么一档一档加上去</a></li><li><a href="#8-评估指标的口径" data-depth="2" data-heading-j="7">8. 评估指标的口径</a></li><li><a href="#9-冒烟档的预算设置" data-depth="2" data-heading-j="8">9. 冒烟档的预算设置</a></li><li><a href="#10-小结" data-depth="2" data-heading-j="9">10. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#11-练习" data-depth="2" data-heading-j="12">11. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>检查点、策略文件与评估回调</span></a><ul class="toc__heads"><li><a href="#1-检查点写什么" data-depth="2" data-heading-j="0">1. 检查点写什么</a></li><li><a href="#2-目录命名与-best-副本" data-depth="2" data-heading-j="1">2. 目录命名与 best 副本</a></li><li><a href="#3-配置里的字段与用途" data-depth="2" data-heading-j="2">3. 配置里的字段与用途</a></li><li><a href="#4-恢复路径与守卫" data-depth="2" data-heading-j="3">4. 恢复路径与守卫</a></li><li><a href="#5-策略文件的内容" data-depth="2" data-heading-j="4">5. 策略文件的内容</a></li><li><a href="#6-两种加载路径的差异" data-depth="2" data-heading-j="5">6. 两种加载路径的差异</a></li><li><a href="#7-产物的一致性验证" data-depth="2" data-heading-j="6">7. 产物的一致性验证</a></li><li><a href="#8-评估回调在产物链里的位置" data-depth="2" data-heading-j="7">8. 评估回调在产物链里的位置</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>环境包装链与数据流</span></a><ul class="toc__heads"><li><a href="#1-包装链的构造顺序" data-depth="2" data-heading-j="0">1. 包装链的构造顺序</a></li><li><a href="#2-批量维度的来源" data-depth="2" data-heading-j="1">2. 批量维度的来源</a></li><li><a href="#3-回合包装的职责" data-depth="2" data-heading-j="2">3. 回合包装的职责</a></li><li><a href="#4-自动重置的语义" data-depth="2" data-heading-j="3">4. 自动重置的语义</a></li><li><a href="#5-动作重复与环境步长" data-depth="2" data-heading-j="4">5. 动作重复与环境步长</a></li><li><a href="#6-包装链与终止语义的耦合" data-depth="2" data-heading-j="5">6. 包装链与终止语义的耦合</a></li><li><a href="#7-评估侧的口径" data-depth="2" data-heading-j="6">7. 评估侧的口径</a></li><li><a href="#8-包装链的调试手段" data-depth="2" data-heading-j="7">8. 包装链的调试手段</a></li><li><a href="#9-小结" data-depth="2" data-heading-j="8">9. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#10-练习" data-depth="2" data-heading-j="11">10. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>复现命令与产物归档</span></a><ul class="toc__heads"><li><a href="#1-三类命令的分工" data-depth="2" data-heading-j="0">1. 三类命令的分工</a></li><li><a href="#2-开关的三组划分" data-depth="2" data-heading-j="1">2. 开关的三组划分</a></li><li><a href="#3-日志目录与检查点归档" data-depth="2" data-heading-j="2">3. 日志目录与检查点归档</a></li><li><a href="#4-策略文件的命名" data-depth="2" data-heading-j="3">4. 策略文件的命名</a></li><li><a href="#5-一条可复现命令该记哪些东西" data-depth="2" data-heading-j="4">5. 一条可复现命令该记哪些东西</a></li><li><a href="#6-续训命令的三个必要项" data-depth="2" data-heading-j="5">6. 续训命令的三个必要项</a></li><li><a href="#7-产物清单与验收" data-depth="2" data-heading-j="6">7. 产物清单与验收</a></li><li><a href="#8-小结" data-depth="2" data-heading-j="7">8. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#9-练习" data-depth="2" data-heading-j="10">9. 练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">JAX 与 Brax</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-08</span><span class="dot" aria-hidden="true">·</span><span>brax / PPO / 训练循环 / MJX / 预算 / 评估 / 检查点 / orbax</span></div><h1 class="docs__title">BraxPPO训练循环</h1><p class="docs__lead">沿 brax 的 ppo.train 源码展开一次训练步：从 generate_unroll 采样 rollout，到优势估计、minibatch 更新与 epoch 级 pmap 扫描，最后看吞吐指标是怎么算出来的。</p></header><section class="dfile" id="file-1" data-file="01-一次训练步的展开"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-一次训练步的展开</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/03-BraxPPO训练循环/01-一次训练步的展开.md</span></div><div class="dfile__body"><p>训练脚本本身很短：组装一个参数字典、把一个 <code>progress_fn</code> 交给 brax、等它返回一组参数。训练循环本身在 brax 内部，由三层嵌套构成——训练步（采样一段 rollout 并更新一次参数）、epoch（把若干训练步扫成一串）、外层的评估循环（每评估一次就打印一遍指标）。理解这三层的边界，才能解释日志里的数字与磁盘上的检查点。</p>
 <p>brax 与 playground 的实现在虚拟环境里，仓库内只有调用方；下面的路径与行号按 0.14.2 记录，仓库里没有对应文件。</p>
 <h2 id="1-入口脚本交给-brax-的东西">1. 入口脚本交给 brax 的东西</h2>
-<p>训练参数先装进一个 <code>config_dict</code>，再把 <code>network_factory</code> 摘出来单独传给 <code>make_ppo_networks</code>；两者合起来通过 <code>functools.partial(ppo.train, ...)</code> 固定，实际传入的只有两个实参：环境和进度回调（<code>train/train_go1.py:738-754</code>、<code>:803-805</code>）。</p>
+<p>训练参数先装进一个 <code>config_dict</code>，再把 <code>network_factory</code> 摘出来单独传给 <code>make_ppo_networks</code>；两者合起来通过 <code>functools.partial(ppo.train, ...)</code> 固定，实际传入的只有两个实参：环境和进度回调（<code>train/train_go1.py</code>）。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">train_fn </span><span style="color:#D73A49">=</span><span style="color:#24292E"> functools.partial(</span></span>
 <span class="line"><span style="color:#24292E">    ppo.train,</span></span>
 <span class="line"><span style="color:#D73A49">    **</span><span style="color:#24292E">training_params,          </span><span style="color:#6A737D"># num_envs / batch_size / unroll_length / minibatches ...</span></span>
@@ -13,10 +13,10 @@
 <span class="line"><span style="color:#E36209">    num_eval_envs</span><span style="color:#D73A49">=</span><span style="color:#005CC5">128</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">make_inference_fn, params, _ </span><span style="color:#D73A49">=</span><span style="color:#24292E"> train_fn(</span><span style="color:#E36209">environment</span><span style="color:#D73A49">=</span><span style="color:#24292E">env, </span><span style="color:#E36209">progress_fn</span><span style="color:#D73A49">=</span><span style="color:#24292E">progress)</span></span></code></pre>
-<p>返回值三项：推理函数、参数字典、以及一个在本工程里被忽略的指标表（<code>:803</code>）。</p>
+<p>返回值三项：推理函数、参数字典、以及一个在本工程里被忽略的指标表。</p>
 <h2 id="2-rollout-的生成">2. rollout 的生成</h2>
-<p><code>generate_unroll</code> 在 <code>jax.lax.scan</code> 里被调用，扫描长度是 <code>batch_size * num_minibatches // num_envs</code>（<code>brax/training/agents/ppo/train.py:570-591</code>）。每次扫描取 <code>unroll_length</code> 步，于是整个训练步采到的转移数是 <code>batch_size × unroll_length × num_minibatches</code>，与上一单元里的账目一致。</p>
-<p>采样用的策略是当前参数构造出来的确定性映射加上动作噪声（<code>:564-568</code>）。扫描之后数据做两次形状变换：先在第 1、2 维之间交换，再把前两维拉平，使批次维度变成 <code>batch_size × num_minibatches</code>、时间维度保留 <code>unroll_length</code>（<code>:592-597</code>）。优势估计依赖时间维度，所以第二次 reshape 必须保留它。</p>
+<p><code>generate_unroll</code> 在 <code>jax.lax.scan</code> 里被调用，扫描长度是 <code>batch_size * num_minibatches // num_envs</code>（<code>brax/training/agents/ppo/train.py</code>）。每次扫描取 <code>unroll_length</code> 步，于是整个训练步采到的转移数是 <code>batch_size × unroll_length × num_minibatches</code>，与上一单元里的账目一致。</p>
+<p>采样用的策略是当前参数构造出来的确定性映射加上动作噪声。扫描之后数据做两次形状变换：先在第 1、2 维之间交换，再把前两维拉平，使批次维度变成 <code>batch_size × num_minibatches</code>、时间维度保留 <code>unroll_length</code>。优势估计依赖时间维度，所以第二次 reshape 必须保留它。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["训练步开始"] --> B["make_policy 用当前参数"]
   B --> C["scan 采样 rollout"]
@@ -25,8 +25,8 @@
   E --> F["minibatch 循环 updates_per_batch 轮"]
   F --> G["返回新参数与指标"]</pre></div>
 <h2 id="3-优势估计与-minibatch-更新">3. 优势估计与 minibatch 更新</h2>
-<p>优势在训练步里算完，随后按 minibatch 分批做梯度更新。<code>minibatch_step</code> 负责单批的计算，<code>sgd_step</code> 负责带优化器状态的一步更新，<code>num_updates_per_batch</code> 决定每个训练步里重复多少轮（<code>:493</code>、<code>:522</code>、<code>:556</code>）。这两层没有在入口脚本里暴露，只能通过参数字典间接控制。</p>
-<p>更新轮数与 minibatch 数量相乘，得到一次训练步的梯度更新次数。v9 的映射是 384 个 minibatch 乘 10 轮等于 3840 次，与参考仓库的每个 rollout 3800 余次同量级（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:175-177</code>）。</p>
+<p>优势在训练步里算完，随后按 minibatch 分批做梯度更新。<code>minibatch_step</code> 负责单批的计算，<code>sgd_step</code> 负责带优化器状态的一步更新，<code>num_updates_per_batch</code> 决定每个训练步里重复多少轮。这两层没有在入口脚本里暴露，只能通过参数字典间接控制。</p>
+<p>更新轮数与 minibatch 数量相乘，得到一次训练步的梯度更新次数。v9 的映射是 384 个 minibatch 乘 10 轮等于 3840 次，与参考仓库的每个 rollout 3800 余次同量级（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant S as 训练步
   participant E as 环境
@@ -38,11 +38,11 @@
   A->>U: 按 minibatch 分批更新
   U->>S: 新参数与新训练状态</pre></div>
 <h2 id="4-epoch-级的扫描与参数捐赠">4. epoch 级的扫描与参数捐赠</h2>
-<p><code>training_epoch</code> 把训练步扫 <code>num_training_steps_per_epoch</code> 次，对指标取均值，然后被 <code>jax.pmap</code> 包起来，并对前两个输入开启捐赠（<code>brax/training/agents/ppo/train.py:657-676</code>）。捐赠的对象是训练状态与环境状态，含义与上一单元讲的缓冲区捐赠相同：状态在每步之后整体替换，旧 buffer 可以直接复用。</p>
+<p><code>training_epoch</code> 把训练步扫 <code>num_training_steps_per_epoch</code> 次，对指标取均值，然后被 <code>jax.pmap</code> 包起来，并对前两个输入开启捐赠（<code>brax/training/agents/ppo/train.py</code>）。捐赠的对象是训练状态与环境状态，含义与上一单元讲的缓冲区捐赠相同：状态在每步之后整体替换，旧 buffer 可以直接复用。</p>
 <p>这一层之所以用 <code>pmap</code> 而不是 <code>jit</code>，是为了支持多设备；单卡上它退化成一次普通编译。对使用者的影响是日志里的指标已经被平均过一次。</p>
 <h2 id="5-吞吐指标的计算口径">5. 吞吐指标的计算口径</h2>
-<p><code>training_epoch_with_timing</code> 包了一层计时：取时间差、累加墙钟时间，并用“epoch 内的环境步数除以耗时”算出 <code>training/sps</code>（<code>:679-700</code>）。注意它先用 <code>block_until_ready</code> 等待指标就绪再停表，所以测到的是计算完成时间而不是派发时间。</p>
-<p>入口脚本自己在 <code>progress</code> 里另算了一个 fps：用当前步数除以从启动到现在的总耗时（<code>train/train_go1.py:773-776</code>）。两个数一起看能区分“这一轮变慢”和“整体被启动开销拖累”。</p>
+<p><code>training_epoch_with_timing</code> 包了一层计时：取时间差、累加墙钟时间，并用“epoch 内的环境步数除以耗时”算出 <code>training/sps</code>。注意它先用 <code>block_until_ready</code> 等待指标就绪再停表，所以测到的是计算完成时间而不是派发时间。</p>
+<p>入口脚本自己在 <code>progress</code> 里另算了一个 fps：用当前步数除以从启动到现在的总耗时（<code>train/train_go1.py</code>）。两个数一起看能区分“这一轮变慢”和“整体被启动开销拖累”。</p>
 
 
 
@@ -75,8 +75,8 @@
 
 <table><thead><tr><th>指标</th><th>计算方式</th><th>观察用途</th></tr></thead><tbody><tr><td><code>training/sps</code></td><td>epoch 环境步数 / epoch 耗时</td><td>单轮吞吐</td></tr><tr><td>日志 fps</td><td>当前步数 / 启动至今耗时</td><td>含启动与评估的端到端吞吐</td></tr><tr><td><code>eval/episode_reward</code></td><td>评估策略的平均回报</td><td>训练质量</td></tr><tr><td><code>losses/total_loss</code></td><td>brax 损失键</td><td>排查 NaN 与键名</td></tr></tbody></table>
 <h2 id="6-训练步数的账本">6. 训练步数的账本</h2>
-<p>brax 把总预算折算成“每评估周期跑多少训练步”：<code>num_training_steps_per_epoch</code> 等于总步数除以（评估次数减一、每训练步环境步数、每评估重置次数三者之积）再向上取整（<code>brax/training/agents/ppo/train.py:370-381</code>）。评估次数取 <code>num_evals</code>，初始评估占一次，所以公式里用的是减一后的值。</p>
-<p>这套折算解释了为什么“给了 5M 步”与“跑了 5M 步”可能差很远：总步数是环境步数，而每个 epoch 的步数由评估频率切分。续训时步数从 0 重新计数，入口脚本用 <code>step_offset</code> 在日志里补上真实进度（<code>train/train_go1.py:769-781</code>）。</p>
+<p>brax 把总预算折算成“每评估周期跑多少训练步”：<code>num_training_steps_per_epoch</code> 等于总步数除以（评估次数减一、每训练步环境步数、每评估重置次数三者之积）再向上取整（<code>brax/training/agents/ppo/train.py</code>）。评估次数取 <code>num_evals</code>，初始评估占一次，所以公式里用的是减一后的值。</p>
+<p>这套折算解释了为什么“给了 5M 步”与“跑了 5M 步”可能差很远：总步数是环境步数，而每个 epoch 的步数由评估频率切分。续训时步数从 0 重新计数，入口脚本用 <code>step_offset</code> 在日志里补上真实进度（<code>train/train_go1.py</code>）。</p>
 <h2 id="7-一次训练步的数据形状">7. 一次训练步的数据形状</h2>
 <p>把形状变化列成表，便于对照源码里的两次变换。设 <code>num_envs=768</code>、<code>batch_size=2</code>、<code>num_minibatches=384</code>、<code>unroll_length=32</code>：</p>
 
@@ -110,11 +110,11 @@
 
 
 <table><thead><tr><th>阶段</th><th>形状</th><th>说明</th></tr></thead><tbody><tr><td>单次 unroll</td><td><code>(768, 32, ...)</code></td><td>每个环境一条序列</td></tr><tr><td>训练步采样总量</td><td><code>(768 × 2 × 384 / 768)</code> 条序列</td><td>扫描次数</td></tr><tr><td>reshape 后</td><td><code>(768, 32, ...)</code> 拉平成 <code>(2 × 384, 32, ...)</code></td><td>保留时间维</td></tr><tr><td>minibatch</td><td>每个 64 条转移</td><td><code>batch_size × unroll_length</code></td></tr></tbody></table>
-<p>采样数据里还夹带三样环境侧字段：截断标记、回合指标与回合结束标记（<code>brax/training/agents/ppo/train.py:573</code>）。截断标记用于区分“时间到”与“真的终止”，回合指标则会在训练步末尾汇总进日志。这两类信息由包装器提供，下一节展开。</p>
+<p>采样数据里还夹带三样环境侧字段：截断标记、回合指标与回合结束标记（<code>brax/training/agents/ppo/train.py</code>）。截断标记用于区分“时间到”与“真的终止”，回合指标则会在训练步末尾汇总进日志。这两类信息由包装器提供，下一节展开。</p>
 <p>回到形状表，<code>768</code> 与 <code>2 × 384</code> 只是同一批转移的两种组织方式：前者按环境排列，后者按 minibatch 排列。优势估计需要时间维连续，所以拉平时保留第二维。</p>
 <h2 id="8-进度回调与指标的对应关系">8. 进度回调与指标的对应关系</h2>
-<p>回调的签名是 <code>progress(num_steps, metrics)</code>，brax 每次评估后调用一次（<code>brax/training/agents/ppo/train.py:796</code>、<code>:851-855</code>）。入口脚本从指标表里取五个键打印：总损失、策略损失、价值损失、熵与评估回合长度（<code>train/train_go1.py:777-780</code>、<code>:794-797</code>）。</p>
-<p>取值函数对每个指标接受两个候选键名，取不到时返回 NaN，用于兼容 brax 版本间的前缀差异（<code>:763-767</code>）。日志里如果出现 <code>loss=nan</code>，先确认是键名问题而不是数值问题。</p>
+<p>回调的签名是 <code>progress(num_steps, metrics)</code>，brax 每次评估后调用一次（<code>brax/training/agents/ppo/train.py</code>）。入口脚本从指标表里取五个键打印：总损失、策略损失、价值损失、熵与评估回合长度（<code>train/train_go1.py</code>）。</p>
+<p>取值函数对每个指标接受两个候选键名，取不到时返回 NaN，用于兼容 brax 版本间的前缀差异。日志里如果出现 <code>loss=nan</code>，先确认是键名问题而不是数值问题。</p>
 
 
 
@@ -151,8 +151,8 @@
 
 
 <table><thead><tr><th>指标键</th><th>来源</th><th>用途</th></tr></thead><tbody><tr><td><code>eval/episode_reward</code></td><td>评估器</td><td>判断训练质量与选 best</td></tr><tr><td><code>eval/avg_episode_length</code></td><td>评估器</td><td>回合长度（多方向任务不可信）</td></tr><tr><td><code>losses/total_loss</code></td><td>训练步</td><td>排查 NaN 与发散</td></tr><tr><td><code>losses/entropy</code></td><td>训练步</td><td>观察探索强度</td></tr><tr><td><code>losses/policy_loss</code></td><td>训练步</td><td>观察信任域内的更新幅度</td></tr></tbody></table>
-<p>续训时打印的标签是 <code>num_steps(累计 step_offset + num_steps)</code>，避免把阶段步数当成总步数读（<code>:781</code>）。</p>
-<p>回调不只是打印。<code>eval_reward</code> 创新高时，回调会把该步的检查点目录整份复制到 <code>checkpoints/best/</code>，供后续评估直接取用（<code>train/train_go1.py:782-793</code>）。这份副作用让回调同时承担了“选型”和“记录”两个职责，改回调时要留意复制操作仍在发生。</p>
+<p>续训时打印的标签是 <code>num_steps(累计 step_offset + num_steps)</code>，避免把阶段步数当成总步数读。</p>
+<p>回调不只是打印。<code>eval_reward</code> 创新高时，回调会把该步的检查点目录整份复制到 <code>checkpoints/best/</code>，供后续评估直接取用（<code>train/train_go1.py</code>）。这份副作用让回调同时承担了“选型”和“记录”两个职责，改回调时要留意复制操作仍在发生。</p>
 <h2 id="9-小结">9. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -239,10 +239,10 @@
 <p>折算公式写在 brax 的 <code>train</code> 函数开头，评估循环的结构写在函数中后段。把这两处放在一起看，才能解释为什么“给了 5M 步”与“跑满 5M 步”会差出十几倍。</p>
 <p>三种“步数”口径的混淆是预算问题的根源：环境步数、训练步数与梯度更新次数各有各的用途，评估周期又把前两者切成一段一段。</p>
 <h2 id="1-预算是环境步数">1. 预算是环境步数</h2>
-<p><code>--num_timesteps</code> 直接进入 <code>ppo_params</code> 的 <code>num_timesteps</code> 字段（<code>train/train_go1.py:710-713</code>），行走入口的默认值是 100M（<code>:104</code>），起身入口是 50M（<code>train/train_getup.py:113</code>）。brax 把它当环境总步数使用，而不是训练步数或梯度更新次数。</p>
+<p><code>--num_timesteps</code> 直接进入 <code>ppo_params</code> 的 <code>num_timesteps</code> 字段（<code>train/train_go1.py</code>），行走入口的默认值是 100M，起身入口是 50M（<code>train/train_getup.py</code>）。brax 把它当环境总步数使用，而不是训练步数或梯度更新次数。</p>
 <p>一个训练步采集的环境步数是 <code>batch_size × unroll_length × num_minibatches</code>。用它除总预算，得到训练步总数；再被评估周期切分，得到每个周期的训练步数。</p>
 <h2 id="2-评估周期如何切分预算">2. 评估周期如何切分预算</h2>
-<p>brax 先算 <code>num_evals_after_init = max(num_evals - 1, 1)</code>，再做向上取整的除法：<code>num_training_steps_per_epoch</code> 等于总步数除以（评估周期数、每训练步环境步数、每评估重置次数三者之积）（<code>brax/training/agents/ppo/train.py:370-381</code>）。评估次数减一，是因为第一次评估在训练开始前单独执行。</p>
+<p>brax 先算 <code>num_evals_after_init = max(num_evals - 1, 1)</code>，再做向上取整的除法：<code>num_training_steps_per_epoch</code> 等于总步数除以（评估周期数、每训练步环境步数、每评估重置次数三者之积）（<code>brax/training/agents/ppo/train.py</code>）。评估次数减一，是因为第一次评估在训练开始前单独执行。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["num_timesteps 环境总步数"] --> B["除以每个训练步的环境步数"]
   B --> C["训练步总数"]
@@ -250,14 +250,14 @@
   D --> E["每周期训练步数 (向上取整)"]
   E --> F["每次评估后调用 progress_fn"]</pre></div>
 <h2 id="3-初始评估与进度回调的第一次调用">3. 初始评估与进度回调的第一次调用</h2>
-<p>训练开始前会先跑一次评估，并把结果通过 <code>progress_fn(0, metrics)</code> 送出来（<code>brax/training/agents/ppo/train.py:784-797</code>）。这就是日志里第一行 <code>0: eval_reward=...</code> 的来源，步数为 0、回合长度通常很短。入口脚本的初始化把 <code>best_reward</code> 设为负无穷，因此初始评估的结果一定会成为第一个 best 检查点候选（<code>train/train_go1.py:758-761</code>）。</p>
-<p>随后进入评估周期循环，循环次数是 <code>num_evals_after_init</code>，每个周期内部先跑训练、再做一次评估（<code>brax/training/agents/ppo/train.py:806-855</code>）。</p>
+<p>训练开始前会先跑一次评估，并把结果通过 <code>progress_fn(0, metrics)</code> 送出来（<code>brax/training/agents/ppo/train.py</code>）。这就是日志里第一行 <code>0: eval_reward=...</code> 的来源，步数为 0、回合长度通常很短。入口脚本的初始化把 <code>best_reward</code> 设为负无穷，因此初始评估的结果一定会成为第一个 best 检查点候选（<code>train/train_go1.py</code>）。</p>
+<p>随后进入评估周期循环，循环次数是 <code>num_evals_after_init</code>，每个周期内部先跑训练、再做一次评估（<code>brax/training/agents/ppo/train.py</code>）。</p>
 <h2 id="4-预算为零的边界">4. 预算为零的边界</h2>
-<p>brax 在初始化之后先判断 <code>num_timesteps == 0</code>，成立则直接返回推理函数、随机初始参数与空指标（<code>:745-754</code>）。这个分支的用途是让“只初始化不训练”的调用有确定行为，评估脚本和查看器都依赖它拿到一份未训练的策略。</p>
+<p>brax 在初始化之后先判断 <code>num_timesteps == 0</code>，成立则直接返回推理函数、随机初始参数与空指标。这个分支的用途是让“只初始化不训练”的调用有确定行为，评估脚本和查看器都依赖它拿到一份未训练的策略。</p>
 <p>对使用者来说，这意味着 <code>--num_timesteps 0</code> 不会报错，也不会写检查点，日志里只有初始化信息。</p>
 <h2 id="5-续训的步数记账">5. 续训的步数记账</h2>
-<p>续训时 brax 的步数计数器从 0 开始，日志里因此会同时出现“本次训练 5M 步”与“真实累计 25M 步”两种读法。入口脚本用 <code>step_offset</code> 在标签里补上累计值，并在打印格式里写成 <code>num_steps(累计 …)</code>（<code>train/train_go1.py:769-781</code>）。</p>
-<p><code>step_offset</code> 只影响日志显示，不参与训练语义；续训脚本必须另外把学习率调低，因为检查点不含优化器状态（<code>:96-99</code>）。</p>
+<p>续训时 brax 的步数计数器从 0 开始，日志里因此会同时出现“本次训练 5M 步”与“真实累计 25M 步”两种读法。入口脚本用 <code>step_offset</code> 在标签里补上累计值，并在打印格式里写成 <code>num_steps(累计 …)</code>（<code>train/train_go1.py</code>）。</p>
+<p><code>step_offset</code> 只影响日志显示，不参与训练语义；续训脚本必须另外把学习率调低，因为检查点不含优化器状态。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant C as 启动脚本
   participant B as brax.train
@@ -271,7 +271,7 @@
     B->>P: progress_fn(num_steps, metrics)
   end</pre></div>
 <h2 id="6-检查点间隔反推预算">6. 检查点间隔反推预算</h2>
-<p>检查点按步数命名目录，因此目录之间的间隔等于一次评估周期消耗的环境步数。v4 到 v8 的间隔是 786,432，等于 <code>batch_size(64) × unroll(32) × num_minibatches(384)</code>；v9 修正语义后变成 49,152，等于 <code>2 × 24576</code>；v10 是 270,336，等于 <code>11 × 24576</code>（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:164-166</code>、<code>:210</code>）。</p>
+<p>检查点按步数命名目录，因此目录之间的间隔等于一次评估周期消耗的环境步数。v4 到 v8 的间隔是 786,432，等于 <code>batch_size(64) × unroll(32) × num_minibatches(384)</code>；v9 修正语义后变成 49,152，等于 <code>2 × 24576</code>；v10 是 270,336，等于 <code>11 × 24576</code>（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -303,8 +303,8 @@
 
 <table><thead><tr><th>版本</th><th>检查点间隔</th><th>折算</th><th>判定</th></tr></thead><tbody><tr><td>v4 到 v8</td><td>786,432</td><td>64 × 32 × 384</td><td>batch_size 语义错误</td></tr><tr><td>v9</td><td>49,152</td><td>2 × 24,576</td><td>语义已改对</td></tr><tr><td>v10</td><td>270,336</td><td>11 × 24,576</td><td>与参考对齐</td></tr></tbody></table>
 <p>从间隔反推参数时要注意向上取整：当总预算不能整除周期步数时，实际间隔会比理论值略大。</p>
-<h2 id="7-预算档位的推进">7. 预算档位的推进</h2>
-<p>预算不是一次给足的，每一档都对应一次结论。v10 用 5.14M 环境步、209 个 rollout、802,560 次梯度更新达成 30 秒不摔（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:317-323</code>）；v18 用 20M 步证实“缺预算”的判断（<code>:910</code>）；v22 从 v21 续训到 40M 并只加一项奖励（<code>:4383</code>、<code>:4605</code>）；v23 跑到 60M（<code>:4726</code>）。</p>
+<h2 id="7-预算怎么一档一档加上去">7. 预算怎么一档一档加上去</h2>
+<p>预算不该一次给足，每加一档应该只回答一个问题：先用能出结果的最小预算验证方法是否成立（5.14M 环境步、209 个 rollout、802,560 次梯度更新到 30 秒不摔），再用中等预算证实“卡在预算”这一判断（20M），最后在需要更高上限时续训加码（续训到 40M、再到 60M）。每一档只改一件事，结论才归因得清。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
   state "v10: 5.14M" as A
   state "v18: 20M" as B
@@ -315,12 +315,12 @@
   B --> C: 只加 ascent 并降学习率
   C --> D: 对称正则与台阶激励</pre></div>
 <h2 id="8-评估指标的口径">8. 评估指标的口径</h2>
-<p>评估由 <code>Evaluator</code> 驱动，评估环境数是固定的 128，与训练环境数分开（<code>brax/training/agents/ppo/train.py:771-777</code>、<code>train/train_go1.py:753</code>）。评估包装器与训练包装器是同一套，因此评估里的回合长度受 <code>BraxAutoResetWrapper</code> 不回填环境信息的影响，会频繁终止的任务不能用它判断好坏（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:518-532</code>）。</p>
+<p>评估由 <code>Evaluator</code> 驱动，评估环境数是固定的 128，与训练环境数分开（<code>brax/training/agents/ppo/train.py</code>、<code>train/train_go1.py</code>）。评估包装器与训练包装器是同一套，因此评估里的回合长度受 <code>BraxAutoResetWrapper</code> 不回填环境信息的影响，会频繁终止的任务不能用它判断好坏（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <p>评估奖励 <code>eval/episode_reward</code> 受同样影响但程度较轻：它按回合结束结算，终止频繁时会把短回合的低回报一起算进去，所以看它时要配合逐指令评估工具。</p>
 <h2 id="9-冒烟档的预算设置">9. 冒烟档的预算设置</h2>
-<p>改完环境或奖励后先跑小预算确认通路，是这个工程的固定做法。起身入口的冒烟命令用 1M 环境步配两次评估，产物写到一个独立的 <code>logs/getup_v2</code> 目录（<code>train/train_getup.py:24-25</code>）。行走侧的一次通路验证用 200K 步，目的是确认新增奖励项确实进入计算、启动参数没有解析错误，而不是看收敛（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2488-2504</code>）。</p>
+<p>改完环境或奖励后先跑小预算确认通路，是这个工程的固定做法。起身入口的冒烟命令用 1M 环境步配两次评估，产物写到一个独立的 <code>logs/getup_v2</code> 目录（<code>train/train_getup.py</code>）。行走侧的一次通路验证用 200K 步，目的是确认新增奖励项确实进入计算、启动参数没有解析错误，而不是看收敛（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <p>小预算的好处是评估周期也被压小：<code>num_evals</code> 取 2 时只有一个训练周期加一次初始评估，日志能很快给出第一组指标。代价是 <code>eval_reward</code> 还停在起点附近，只能用来判断“路径通了没有”。</p>
-<p>小预算同样要指向独立的日志目录。检查点闸门只判断目标目录里是否已有内容，指向正在使用的训练目录会被直接拒绝启动，换目录是成本最低的做法（<code>train/train_go1.py:41-55</code>）。冒烟档的产物本身没有保留价值，但它的目录名要能一眼看出是通路验证，避免和正式档混在一起。</p>
+<p>小预算同样要指向独立的日志目录。检查点闸门只判断目标目录里是否已有内容，指向正在使用的训练目录会被直接拒绝启动，换目录是成本最低的做法（<code>train/train_go1.py</code>）。冒烟档的产物本身没有保留价值，但它的目录名要能一眼看出是通路验证，避免和正式档混在一起。</p>
 <p>通路验证通过后，正式档从新的日志目录开始，两者的检查点互不影响。</p>
 <h2 id="10-小结">10. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
@@ -412,8 +412,8 @@
 <p>两层之间靠一个约定对齐：参数树的顺序。查看器与评估脚本都要按同样的顺序取出归一化参数、策略参数与价值参数，顺序错了不会报错，只会得到错误的行为。</p>
 <p>检查点与策略文件是两份产物：前者用于续训与回溯，后者用于部署与对照，两者的参数顺序必须一致，差异只体现在加载方式上。</p>
 <h2 id="1-检查点写什么">1. 检查点写什么</h2>
-<p>保存动作发生在评估周期末尾，由 brax 调用 orbax 完成。写入前先构造一份配置：观测尺寸、动作维度、是否归一化观测、以及网络工厂参数（<code>brax/training/agents/ppo/train.py:837-846</code>）。这份配置就是 <code>ppo_network_config.json</code> 的内容，也是续训守卫判定“这里是不是一个 brax 检查点”的依据。</p>
-<p>被保存的参数是三棵树：归一化统计量、策略参数、价值参数。训练状态里的优化器状态与步数不在其中，这一点由入口脚本的守卫打印提醒（<code>train/train_go1.py:96-97</code>）。</p>
+<p>保存动作发生在评估周期末尾，由 brax 调用 orbax 完成。写入前先构造一份配置：观测尺寸、动作维度、是否归一化观测、以及网络工厂参数（<code>brax/training/agents/ppo/train.py</code>）。这份配置就是 <code>ppo_network_config.json</code> 的内容，也是续训守卫判定“这里是不是一个 brax 检查点”的依据。</p>
+<p>被保存的参数是三棵树：归一化统计量、策略参数、价值参数。训练状态里的优化器状态与步数不在其中，这一点由入口脚本的守卫打印提醒（<code>train/train_go1.py</code>）。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> save_checkpoint_path </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
 <span class="line"><span style="color:#24292E">    ckpt_config </span><span style="color:#D73A49">=</span><span style="color:#24292E"> checkpoint.network_config(</span></span>
 <span class="line"><span style="color:#E36209">        observation_size</span><span style="color:#D73A49">=</span><span style="color:#24292E">obs_shape,</span></span>
@@ -423,8 +423,8 @@
 <span class="line"><span style="color:#24292E">    )</span></span>
 <span class="line"><span style="color:#24292E">    checkpoint.save(save_checkpoint_path, current_step, params, ckpt_config)</span></span></code></pre>
 <h2 id="2-目录命名与-best-副本">2. 目录命名与 best 副本</h2>
-<p>检查点目录用步数命名，入口脚本按 <code>f"{num_steps:012d}"</code> 的格式去定位那一次评估对应的目录（<code>train/train_go1.py:787</code>）。十二位补零是 orbax 的命名方式，实验记录里的恢复命令指向的就是这种名字（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4549</code>）。</p>
-<p>评估奖励创新高时，回调会把该目录整份复制到 <code>checkpoints/best/</code>：先删掉旧的 best 目录，再 <code>copytree</code>（<code>train/train_go1.py:788-793</code>）。复制而不是软链接，是为了让 best 目录能独立归档。</p>
+<p>检查点目录用步数命名，入口脚本按 <code>f"{num_steps:012d}"</code> 的格式去定位那一次评估对应的目录（<code>train/train_go1.py</code>）。十二位补零是 orbax 的命名方式，实验记录里的恢复命令指向的就是这种名字（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>评估奖励创新高时，回调会把该目录整份复制到 <code>checkpoints/best/</code>：先删掉旧的 best 目录，再 <code>copytree</code>（<code>train/train_go1.py</code>）。复制而不是软链接，是为了让 best 目录能独立归档。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["评估周期结束"] --> B["构造 ckpt_config"]
   B --> C["orbax 写入 checkpoints/步数目录"]
@@ -434,7 +434,7 @@
   E --> G["训练结束后 pkl 导出参数"]
   F --> G</pre></div>
 <h2 id="3-配置里的字段与用途">3. 配置里的字段与用途</h2>
-<p><code>ppo_network_config.json</code> 至少含三类信息：观测维度的形状字典、动作维度、网络工厂参数（含策略与价值层宽）。续训守卫读前两类用于比对维度，读第三类用于打印层宽（<code>train/train_go1.py:74-84</code>）。</p>
+<p><code>ppo_network_config.json</code> 至少含三类信息：观测维度的形状字典、动作维度、网络工厂参数（含策略与价值层宽）。续训守卫读前两类用于比对维度，读第三类用于打印层宽（<code>train/train_go1.py</code>）。</p>
 
 
 
@@ -467,13 +467,13 @@
 
 <table><thead><tr><th>字段</th><th>来源</th><th>用途</th></tr></thead><tbody><tr><td><code>observation_size</code></td><td>环境的观测字典</td><td>续训维度比对</td></tr><tr><td><code>action_size</code></td><td>环境动作维度</td><td>网络输出校验</td></tr><tr><td><code>normalize_observations</code></td><td>训练参数</td><td>加载时是否带归一化</td></tr><tr><td><code>network_factory_kwargs</code></td><td>网络工厂</td><td>打印层宽、重建网络</td></tr></tbody></table>
 <h2 id="4-恢复路径与守卫">4. 恢复路径与守卫</h2>
-<p>brax 的恢复逻辑是 <code>checkpoint.load</code> 取出参数，再按开关决定要恢复策略、价值还是两者（<code>brax/training/agents/ppo/train.py:725-733</code>）。入口脚本在加载环境之前先做一次自检：路径存在、目录里有配置文件、维度与本次训练一致，任何一条不满足就退出（<code>train/train_go1.py:58-95</code>、<code>:699-702</code>）。</p>
-<p>自检通过后打印一条提示：检查点不含优化器状态与步数，续训需要降低学习率。v22 的续训命令把学习率从 3e-4 降到 1e-4，并用 <code>--step_offset</code> 保持日志累计步数与实际进度一致（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4537-4554</code>）。</p>
+<p>brax 的恢复逻辑是 <code>checkpoint.load</code> 取出参数，再按开关决定要恢复策略、价值还是两者（<code>brax/training/agents/ppo/train.py</code>）。入口脚本在加载环境之前先做一次自检：路径存在、目录里有配置文件、维度与本次训练一致，任何一条不满足就退出（<code>train/train_go1.py</code>）。</p>
+<p>自检通过后打印一条提示：检查点不含优化器状态与步数，续训需要降低学习率。v22 的续训命令把学习率从 3e-4 降到 1e-4，并用 <code>--step_offset</code> 保持日志累计步数与实际进度一致（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <h2 id="5-策略文件的内容">5. 策略文件的内容</h2>
-<p>训练结束（或被手动终止）后，入口脚本把参数树 pickle 成一份单文件，路径由 <code>--save_name</code> 与策略目录拼接而成（<code>train/train_go1.py:808-812</code>）。仓库里的 <code>policies/go1_walk_policy.pkl</code> 与 <code>policies/go1_getup_policy.pkl</code> 就是这类产物。</p>
-<p>参数树的顺序由 brax 的打包方式固定：归一化参数、策略、价值（<code>brax/training/agents/ppo/train.py:829-833</code>）。加载方按同样的顺序解包，因此这份文件与检查点目录可以互换使用，前提是网络结构一致。</p>
+<p>训练结束（或被手动终止）后，入口脚本把参数树 pickle 成一份单文件，路径由 <code>--save_name</code> 与策略目录拼接而成（<code>train/train_go1.py</code>）。仓库里的 <code>policies/go1_walk_policy.pkl</code> 与 <code>policies/go1_getup_policy.pkl</code> 就是这类产物。</p>
+<p>参数树的顺序由 brax 的打包方式固定：归一化参数、策略、价值（<code>brax/training/agents/ppo/train.py</code>）。加载方按同样的顺序解包，因此这份文件与检查点目录可以互换使用，前提是网络结构一致。</p>
 <h2 id="6-两种加载路径的差异">6. 两种加载路径的差异</h2>
-<p>从检查点目录加载时，brax 走 <code>checkpoint.load</code>，它读的是网络配置与参数两部分；从 pkl 加载时，脚本要自己读配置、按配置建网络、再灌入参数。后者容易漏掉两个必须显式传入的项：激活函数与分布类型，否则会建出一个能加载但输出错误的网络（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:239-247</code>）。</p>
+<p>从检查点目录加载时，brax 走 <code>checkpoint.load</code>，它读的是网络配置与参数两部分；从 pkl 加载时，脚本要自己读配置、按配置建网络、再灌入参数。后者容易漏掉两个必须显式传入的项：激活函数与分布类型，否则会建出一个能加载但输出错误的网络（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -505,12 +505,12 @@
 
 <table><thead><tr><th>加载入口</th><th>输入</th><th>需要人工指定</th><th>典型用途</th></tr></thead><tbody><tr><td><code>--restore</code></td><td>检查点目录</td><td>无</td><td>续训</td></tr><tr><td><code>--pkl</code></td><td>策略文件</td><td>激活与分布类型</td><td>查看器、评估</td></tr><tr><td><code>--ckpt</code></td><td>检查点目录</td><td>激活与分布类型</td><td>评估、对照</td></tr></tbody></table>
 <h2 id="7-产物的一致性验证">7. 产物的一致性验证</h2>
-<p>两条加载路径应当给出同一个策略。v10 的验收用了这个办法：分别从策略文件与检查点目录加载，跑同一条指令 30 秒，两者都得到 <code>vx=+0.492</code>、<code>up_z=1.00</code>、未摔（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:310-314</code>）。结果一致说明导出与保存两侧的参数顺序与配置都对上了。</p>
+<p>两条加载路径应当给出同一个策略。v10 的验收用了这个办法：分别从策略文件与检查点目录加载，跑同一条指令 30 秒，两者都得到 <code>vx=+0.492</code>、<code>up_z=1.00</code>、未摔（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。结果一致说明导出与保存两侧的参数顺序与配置都对上了。</p>
 <p>检查点的另一个用途是回溯：按步数命名的目录可以取出任意一档评估时的参数，用来解释“指标从哪一步开始变好”。</p>
 <p>检查点目录也承担跨阶段回溯。仓库的 <code>data/</code> 下按预算档位保留了多份检查点目录，v22 的 40M 档与 v23 的 60M 档各自独立，便于在同一档内比较不同奖励项的效果。回溯时要注意每份目录只在它自己的配置下有意义，跨档比较前先确认观测维度与网络层宽一致。</p>
-<p>策略文件在训练进程正常返回之后才写出，因此被手动终止的训练不会留下 pkl，这种情况要用检查点目录里的最后一档。入口脚本先调用训练函数、再执行导出，两步之间没有中间保存（<code>train/train_go1.py:803-812</code>）。需要中途产物的实验应额外用 <code>--save_name</code> 之外的方式从检查点目录取参数。</p>
+<p>策略文件在训练进程正常返回之后才写出，因此被手动终止的训练不会留下 pkl，这种情况要用检查点目录里的最后一档。入口脚本先调用训练函数、再执行导出，两步之间没有中间保存（<code>train/train_go1.py</code>）。需要中途产物的实验应额外用 <code>--save_name</code> 之外的方式从检查点目录取参数。</p>
 <h2 id="8-评估回调在产物链里的位置">8. 评估回调在产物链里的位置</h2>
-<p>回调是唯一能看到评估指标的地方，它同时承担三件事：打印指标、挑选 best 检查点、以及在续训时补上累计步数标签（<code>train/train_go1.py:773-800</code>）。回调不参与训练计算，但它决定了磁盘上留下哪些证据。</p>
+<p>回调是唯一能看到评估指标的地方，它同时承担三件事：打印指标、挑选 best 检查点、以及在续训时补上累计步数标签（<code>train/train_go1.py</code>）。回调不参与训练计算，但它决定了磁盘上留下哪些证据。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant B as brax.train
   participant P as progress_fn
@@ -520,7 +520,7 @@
   B->>P: 传递评估指标
   P->>O: 创新高时复制 best
   B->>F: 训练结束后 pickle 参数</pre></div>
-<p>回调里的操作要尽量短，因为它抛异常会直接终止训练。best 复制是整目录拷贝，检查点较大时这一步会占用可观时间，出现在每个评估周期的末尾（<code>train/train_go1.py:788-793</code>）。</p>
+<p>回调里的操作要尽量短，因为它抛异常会直接终止训练。best 复制是整目录拷贝，检查点较大时这一步会占用可观时间，出现在每个评估周期的末尾（<code>train/train_go1.py</code>）。</p>
 <h2 id="9-小结">9. 小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -607,12 +607,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>brax/training/agents/ppo/train.py</code></td><td>检查点写入、配置构造与恢复逻辑</td></tr><tr><td><code>train/train_go1.py</code></td><td>守卫、best 复制、pkl 导出与回调</td></tr><tr><td><code>policies/</code></td><td>策略文件产物</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>加载器问题、恢复命令与一致性验证</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-环境包装链与数据流"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-环境包装链与数据流</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/03-BraxPPO训练循环/04-环境包装链与数据流.md</span></div><div class="dfile__body"><p>环境类本身只提供 <code>reset</code> 与 <code>step</code>，brax 需要的批量维度、回合截断与自动重置都由包装器叠加。包装顺序是固定的：先补批量维，再加回合逻辑，最后加自动重置（<code>mujoco_playground/_src/wrapper.py:112-118</code>）。顺序反过来会得到不同的语义，尤其是自动重置必须包在最外层，否则重置后的状态不会反映到回合统计里。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>brax/training/agents/ppo/train.py</code></td><td>检查点写入、配置构造与恢复逻辑</td></tr><tr><td><code>train/train_go1.py</code></td><td>守卫、best 复制、pkl 导出与回调</td></tr><tr><td><code>policies/</code></td><td>策略文件产物</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>加载器问题、恢复命令与一致性验证</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-环境包装链与数据流"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-环境包装链与数据流</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/12-JAX 与 Brax/03-BraxPPO训练循环/04-环境包装链与数据流.md</span></div><div class="dfile__body"><p>环境类本身只提供 <code>reset</code> 与 <code>step</code>，brax 需要的批量维度、回合截断与自动重置都由包装器叠加。包装顺序是固定的：先补批量维，再加回合逻辑，最后加自动重置（<code>mujoco_playground/_src/wrapper.py</code>）。顺序反过来会得到不同的语义，尤其是自动重置必须包在最外层，否则重置后的状态不会反映到回合统计里。</p>
 <p>理解这条链的价值在于解释三个常被误读的量：日志里的回合长度、奖励在终止时的处理、以及评估为什么会给出与实测差五倍的回合数。三者都源自包装器，而不源自环境。</p>
 <p>包装顺序一旦改变，截断标记、回合指标与评估口径会同时变化；改动链条之前要先确认这三样分别由哪一层产生。</p>
 <h2 id="1-包装链的构造顺序">1. 包装链的构造顺序</h2>
-<p><code>wrap_for_brax_training</code> 返回的链条是：<code>VmapWrapper</code> 补批量维度，<code>EpisodeWrapper</code> 负责回合长度与截断，<code>BraxAutoResetWrapper</code> 负责在终止后重置（<code>mujoco_playground/_src/wrapper.py:112-118</code>）。若传入了域随机化函数，第一层换成 <code>BraxDomainRandomizationVmapWrapper</code>，其余两层不变。</p>
-<p>训练入口通过 <code>wrap_env_fn</code> 把这个函数交给 brax，评估侧用同一份函数，只是环境数与键不同（<code>train/train_go1.py:752-753</code>、<code>brax/training/agents/ppo/train.py:760-770</code>）。</p>
+<p><code>wrap_for_brax_training</code> 返回的链条是：<code>VmapWrapper</code> 补批量维度，<code>EpisodeWrapper</code> 负责回合长度与截断，<code>BraxAutoResetWrapper</code> 负责在终止后重置（<code>mujoco_playground/_src/wrapper.py</code>）。若传入了域随机化函数，第一层换成 <code>BraxDomainRandomizationVmapWrapper</code>，其余两层不变。</p>
+<p>训练入口通过 <code>wrap_env_fn</code> 把这个函数交给 brax，评估侧用同一份函数，只是环境数与键不同（<code>train/train_go1.py</code>、<code>brax/training/agents/ppo/train.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["MjxEnv: reset / step"] --> B["VmapWrapper 补批量维"]
   B --> C["EpisodeWrapper 回合长度与截断"]
@@ -623,8 +623,8 @@
 <p><code>VmapWrapper</code> 把单环境的 <code>step</code> 变成对批量状态的映射，brax 因此可以用一个 pytree 表示 8192 个环境的全部状态。批量维度不在环境类里定义，环境只关心单实例的物理。</p>
 <p>这一层与上一单元的 <code>vmap</code> 讨论同源：批量包装只是把 <code>jax.vmap</code> 的映射规则固定下来，并行度由设备上的形状决定。评估时批量是 128，训练时是 <code>--num_envs</code>，两者共用同一份包装代码。</p>
 <h2 id="3-回合包装的职责">3. 回合包装的职责</h2>
-<p><code>EpisodeWrapper</code> 维护每环境的步数计数，达到回合长度时把状态标记为截断而不是终止（<code>brax/training/agents/ppo/train.py:573</code>）。它还会把回合指标与回合结束标记挂到状态的附加字段上，供训练步末尾汇总（<code>:650-652</code>）。</p>
-<p>截断与终止的区分影响回报估计：截断由时间上限造成，其后的价值应当继续估计；终止由失败造成，其后的价值为零。开启超时自举后，截断还会额外写入一个 <code>time_out</code> 字段用于奖励自举（<code>:574-575</code>、<code>:599-600</code>）。环境的回合长度由 <code>episode_length</code> 参数决定，行走任务是 750 步、起身任务是 300 步（<code>train/train_go1.py:714</code>、<code>train/train_getup.py:116</code>）。</p>
+<p><code>EpisodeWrapper</code> 维护每环境的步数计数，达到回合长度时把状态标记为截断而不是终止（<code>brax/training/agents/ppo/train.py</code>）。它还会把回合指标与回合结束标记挂到状态的附加字段上，供训练步末尾汇总。</p>
+<p>截断与终止的区分影响回报估计：截断由时间上限造成，其后的价值应当继续估计；终止由失败造成，其后的价值为零。开启超时自举后，截断还会额外写入一个 <code>time_out</code> 字段用于奖励自举。环境的回合长度由 <code>episode_length</code> 参数决定，行走任务是 750 步、起身任务是 300 步（<code>train/train_go1.py</code>、<code>train/train_getup.py</code>）。</p>
 
 
 
@@ -657,8 +657,8 @@
 
 <table><thead><tr><th>字段</th><th>产生者</th><th>含义</th></tr></thead><tbody><tr><td><code>truncation</code></td><td>回合包装</td><td>达到长度上限</td></tr><tr><td><code>episode_done</code></td><td>回合包装</td><td>回合结束（含截断）</td></tr><tr><td><code>episode_metrics</code></td><td>回合包装</td><td>汇总进日志的回合指标</td></tr><tr><td><code>time_out</code></td><td>回合包装</td><td>截断专用，供奖励自举</td></tr></tbody></table>
 <h2 id="4-自动重置的语义">4. 自动重置的语义</h2>
-<p><code>BraxAutoResetWrapper</code> 在环境终止后自动重置。默认 <code>full_reset=False</code> 时，它重置到缓存的首个状态，并且只重置数据与观测，不重置环境信息；开启 <code>full_reset=True</code> 时才调用环境自己的 <code>reset</code>，代价是墙钟时间变长（<code>mujoco_playground/_src/wrapper.py:121-134</code>）。</p>
-<p>训练入口使用默认值，因此训练过程中终止后的回合信息不会完整重置。这一行为直接影响评估指标：环境信息里的步数计数在终止后不清零，评估得到的回合长度主要反映截断计数（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:518-532</code>）。</p>
+<p><code>BraxAutoResetWrapper</code> 在环境终止后自动重置。默认 <code>full_reset=False</code> 时，它重置到缓存的首个状态，并且只重置数据与观测，不重置环境信息；开启 <code>full_reset=True</code> 时才调用环境自己的 <code>reset</code>，代价是墙钟时间变长（<code>mujoco_playground/_src/wrapper.py</code>）。</p>
+<p>训练入口使用默认值，因此训练过程中终止后的回合信息不会完整重置。这一行为直接影响评估指标：环境信息里的步数计数在终止后不清零，评估得到的回合长度主要反映截断计数（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>  participant E as 环境</span></span>
 <span class="line"><span>  participant R as 自动重置包装</span></span>
 <span class="line"><span>  participant P as 训练步</span></span>
@@ -668,8 +668,8 @@
 <span class="line"><span>  R->>E: 重置 data 与 obs, 不动 info</span></span>
 <span class="line"><span>  R->>P: 返回状态与截断标记</span></span></code></pre>
 <h2 id="5-动作重复与环境步长">5. 动作重复与环境步长</h2>
-<p>回合包装在构造时接收 <code>action_repeat</code> 参数，表示一个策略动作重复执行多少次物理步进（<code>mujoco_playground/_src/wrapper.py:116</code>）。训练入口把它固定为 1，也就是策略输出与物理步一一对应（<code>train/train_go1.py:716</code>）。</p>
-<p>若把它设为大于 1，回合长度按策略步计数，环境步数按物理步计数，预算记账会立刻出现两个口径；同时策略的有效控制频率下降。本工程保持 1 的原因与控制频率有关：训练的控制周期是 0.02 秒，对应 50 Hz（<code>envs/go1_walk.py:65-67</code>）。</p>
+<p>回合包装在构造时接收 <code>action_repeat</code> 参数，表示一个策略动作重复执行多少次物理步进（<code>mujoco_playground/_src/wrapper.py</code>）。训练入口把它固定为 1，也就是策略输出与物理步一一对应（<code>train/train_go1.py</code>）。</p>
+<p>若把它设为大于 1，回合长度按策略步计数，环境步数按物理步计数，预算记账会立刻出现两个口径；同时策略的有效控制频率下降。本工程保持 1 的原因与控制频率有关：训练的控制周期是 0.02 秒，对应 50 Hz（<code>envs/go1_walk.py</code>）。</p>
 
 
 
@@ -695,18 +695,18 @@
 
 <table><thead><tr><th>action_repeat</th><th>控制频率</th><th>回合长度计数</th><th>适用场景</th></tr></thead><tbody><tr><td>1</td><td>与物理步一致</td><td>策略步</td><td>本工程</td></tr><tr><td>N</td><td>降为 1/N</td><td>策略步</td><td>降低控制频率</td></tr></tbody></table>
 <h2 id="6-包装链与终止语义的耦合">6. 包装链与终止语义的耦合</h2>
-<p>环境里的终止条件决定回合何时结束，包装器决定结束之后发生什么。行走任务用姿态角阈值判定健康终止，横滚与俯仰的上限是 10.0 度（<code>envs/go1_walk.py:307-308</code>）。v7 修正过终止语义，修正之后 NaN 的出现步数发生变化，说明终止条件与数值稳定性在同一批样本上互相影响（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:208</code>）。</p>
-<p>早期把“评估奖励恒为 0”归因于奖励下限加提前终止的正常现象，这条解释后来被证伪：恒零是动作语义错误、奖励漏项与预算记错三者叠加（<code>:395-396</code>）。包装器提供的截断标记本来可以用来区分这两类结束，但只有当终止语义本身正确时它才有意义。</p>
+<p>环境里的终止条件决定回合何时结束，包装器决定结束之后发生什么。行走任务用姿态角阈值判定健康终止，横滚与俯仰的上限是 10.0 度（<code>envs/go1_walk.py</code>）。v7 修正过终止语义，修正之后 NaN 的出现步数发生变化，说明终止条件与数值稳定性在同一批样本上互相影响（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>早期把“评估奖励恒为 0”归因于奖励下限加提前终止的正常现象，这条解释后来被证伪：恒零是动作语义错误、奖励漏项与预算记错三者叠加。包装器提供的截断标记本来可以用来区分这两类结束，但只有当终止语义本身正确时它才有意义。</p>
 <h2 id="7-评估侧的口径">7. 评估侧的口径</h2>
-<p>评估器用同一份包装链、不同的并行规模运评估环境，评估次数与回合长度由参数固定（<code>brax/training/agents/ppo/train.py:771-777</code>）。评估指标里的回合长度来自回合包装的计数，而信息字段在默认重置语义下不会被清空，于是它更像“距离截断还有多少步”而不是“活了多久”。</p>
-<p>这条口径差异在会频繁终止的任务上被放大：多方向行走的评估回合长度是 652 到 733，直接数终止步数只有 124 到 152（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:518-532</code>）。处理办法是用逐指令评估工具绕开包装器的统计。</p>
-<p>批量包装同时决定了观测字典的形状。环境的 <code>_get_obs</code> 返回 <code>state</code> 与 <code>privileged_state</code> 两个键，包装之后每个键都多出一维批量维度，网络工厂按 <code>policy_obs_key</code> 与 <code>value_obs_key</code> 各取一个（<code>train/train_go1.py:728-735</code>）。观测维度在批量维之后、特征维的最后一维上，续训守卫比对的就是这一维。</p>
-<p>第二项检查是奖励读取的状态量是否都在观测里。包装器不会替环境做这件事，相位这类内部量必须由 <code>_get_obs</code> 显式放进观测，否则奖励依赖一个策略看不到的时变量（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:3370-3382</code>）。</p>
+<p>评估器用同一份包装链、不同的并行规模运评估环境，评估次数与回合长度由参数固定（<code>brax/training/agents/ppo/train.py</code>）。评估指标里的回合长度来自回合包装的计数，而信息字段在默认重置语义下不会被清空，于是它更像“距离截断还有多少步”而不是“活了多久”。</p>
+<p>这条口径差异在会频繁终止的任务上被放大：多方向行走的评估回合长度是 652 到 733，直接数终止步数只有 124 到 152（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。处理办法是用逐指令评估工具绕开包装器的统计。</p>
+<p>批量包装同时决定了观测字典的形状。环境的 <code>_get_obs</code> 返回 <code>state</code> 与 <code>privileged_state</code> 两个键，包装之后每个键都多出一维批量维度，网络工厂按 <code>policy_obs_key</code> 与 <code>value_obs_key</code> 各取一个（<code>train/train_go1.py</code>）。观测维度在批量维之后、特征维的最后一维上，续训守卫比对的就是这一维。</p>
+<p>第二项检查是奖励读取的状态量是否都在观测里。包装器不会替环境做这件事，相位这类内部量必须由 <code>_get_obs</code> 显式放进观测，否则奖励依赖一个策略看不到的时变量（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
 <h2 id="8-包装链的调试手段">8. 包装链的调试手段</h2>
-<p>改动环境后按三项检查：启动日志打印的观测维度与预期一致；奖励函数读取的状态量都在观测里；终止条件在训练同款物理下能复现。前两项由入口脚本的维度打印与守卫覆盖（<code>train/train_go1.py:680-685</code>）。</p>
-<p>第三项尤其要注意包装链带来的差异：评估脚本用同一链条，但环境数与重置策略可能与训练不同，对照实验要一个进程只建一个环境，避免图缓存串味（<code>docs/viewer-guide.md:474-482</code>）。</p>
-<p>第三项检查是行为层面的：任何“能站起来”或“能翻过去”的动作，都要在训练同款物理里量成功率，而不是在查看器默认配置里目测（<code>docs/viewer-guide.md:451</code>）。查看器的默认动作范围与训练不同，评估脚本必须显式对齐动作裁剪上限（<code>docs/status.md:200-201</code>）。</p>
-<p>第四项是环境实例数量。包装链与 warp 的图缓存都假设一个进程里只有一个环境实例，对照实验要用两个进程并通过文件交换状态（<code>docs/viewer-guide.md:452</code>、<code>:474-482</code>）。</p>
+<p>改动环境后按三项检查：启动日志打印的观测维度与预期一致；奖励函数读取的状态量都在观测里；终止条件在训练同款物理下能复现。前两项由入口脚本的维度打印与守卫覆盖（<code>train/train_go1.py</code>）。</p>
+<p>第三项尤其要注意包装链带来的差异：评估脚本用同一链条，但环境数与重置策略可能与训练不同，对照实验要一个进程只建一个环境，避免图缓存串味（<code>docs/viewer-guide.md</code>）。</p>
+<p>第三项检查是行为层面的：任何“能站起来”或“能翻过去”的动作，都要在训练同款物理里量成功率，而不是在查看器默认配置里目测（<code>docs/viewer-guide.md</code>）。查看器的默认动作范围与训练不同，评估脚本必须显式对齐动作裁剪上限（<code>docs/status.md</code>）。</p>
+<p>第四项是环境实例数量。包装链与 warp 的图缓存都假设一个进程里只有一个环境实例，对照实验要用两个进程并通过文件交换状态（<code>docs/viewer-guide.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["改动环境或包装"] --> B["核对观测维度打印"]
   B --> C["核对奖励读取量是否在观测里"]
@@ -811,7 +811,7 @@
 <p>产物归档同样有约定：日志目录按版本分家，检查点目录按步数命名，策略文件按用途命名并放在固定的 <code>policies/</code> 下。约定之外的情况都要在实验记录里写明，否则几个月后自己也会认不出哪份检查点对应哪次改动。</p>
 <p>命令能不能复现取决于三组开关是否被完整记录，产物能不能找到取决于目录命名是否有规律，两件事都靠约定而不是靠记忆。</p>
 <h2 id="1-三类命令的分工">1. 三类命令的分工</h2>
-<p>冒烟命令用极小预算确认通路，正式命令跑满预算，续训命令从上一版的检查点接着跑。三类的开关集合基本相同，差别在预算、日志目录与恢复参数（<code>train/train_go1.py:104-107</code>）。起身入口的帮助文本里直接把冒烟与正式两条命令并列写出（<code>train/train_getup.py:24-27</code>）。</p>
+<p>冒烟命令用极小预算确认通路，正式命令跑满预算，续训命令从上一版的检查点接着跑。三类的开关集合基本相同，差别在预算、日志目录与恢复参数（<code>train/train_go1.py</code>）。起身入口的帮助文本里直接把冒烟与正式两条命令并列写出（<code>train/train_getup.py</code>）。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># 冒烟: 1M 环境步, 两次评估</span></span>
 <span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_getup</span><span style="color:#005CC5"> --num_timesteps</span><span style="color:#005CC5"> 1000000</span><span style="color:#005CC5"> --num_evals</span><span style="color:#005CC5"> 2</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">    --save_name</span><span style="color:#032F62"> go1_getup_policy_smoke.pkl</span><span style="color:#005CC5"> --logdir</span><span style="color:#032F62"> logs/getup_v2</span></span>
@@ -820,7 +820,7 @@
 <span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_getup</span><span style="color:#005CC5"> --num_timesteps</span><span style="color:#005CC5"> 50000000</span><span style="color:#005CC5"> --num_evals</span><span style="color:#005CC5"> 20</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">    --save_name</span><span style="color:#032F62"> go1_getup_policy.pkl</span><span style="color:#005CC5"> --logdir</span><span style="color:#032F62"> logs/getup_v2</span></span></code></pre>
 <h2 id="2-开关的三组划分">2. 开关的三组划分</h2>
-<p>算法分组是 <code>--sb3_full</code> 与 <code>--sb3_opt</code> 一类；环境与观测分组包含 <code>--terrain</code>、<code>--height_scan</code>、<code>--push</code>、<code>--obs_noise</code> 等；奖励分组包含 <code>--climb_reward</code>、<code>--soft_landing</code>、<code>--gait_phase</code>、<code>--ascent</code> 等。三组的覆盖代码集中在一个分支块里，每处覆盖都带注释说明动机（<code>train/train_go1.py:415-651</code>）。</p>
+<p>算法分组是 <code>--sb3_full</code> 与 <code>--sb3_opt</code> 一类；环境与观测分组包含 <code>--terrain</code>、<code>--height_scan</code>、<code>--push</code>、<code>--obs_noise</code> 等；奖励分组包含 <code>--climb_reward</code>、<code>--soft_landing</code>、<code>--gait_phase</code>、<code>--ascent</code> 等。三组的覆盖代码集中在一个分支块里，每处覆盖都带注释说明动机（<code>train/train_go1.py</code>）。</p>
 <p>划分的用处是控制变量：换算法档时环境与奖励开关保持原样，加奖励项时算法档保持原样。记录里反复出现的“唯一变量”就是要求命令之间只差一组开关。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["命令行"] --> B["算法分档"]
@@ -833,7 +833,7 @@
   F --> I["启动打印的 obs 维度"]
   G --> J["启动打印的奖励通路"]</pre></div>
 <h2 id="3-日志目录与检查点归档">3. 日志目录与检查点归档</h2>
-<p>日志目录的默认值是 <code>logs/walk</code>，实际使用时应按版本改名，例如 v22 用 <code>models/go1_v22_logs</code>（<code>train/train_go1.py:693-697</code>、<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4551</code>）。检查点写在该目录的 <code>checkpoints/</code> 子目录下，按步数命名，评估奖励最高的那一档会被复制到 <code>best/</code>。</p>
+<p>日志目录的默认值是 <code>logs/walk</code>，实际使用时应按版本改名，例如 v22 用 <code>models/go1_v22_logs</code>（<code>train/train_go1.py</code>、<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。检查点写在该目录的 <code>checkpoints/</code> 子目录下，按步数命名，评估奖励最高的那一档会被复制到 <code>best/</code>。</p>
 <p>跨档的比较产物放在 <code>data/</code> 下，例如 40M 与 60M 档各自保留一份检查点集合。归档时要注意检查点不含优化器状态，跨档比较只能比较策略行为，不能比较优化器轨迹。</p>
 
 
@@ -867,16 +867,16 @@
 
 <table><thead><tr><th>产物</th><th>位置约定</th><th>用途</th></tr></thead><tbody><tr><td>检查点目录</td><td><code>&#x3C;logdir>/checkpoints/&#x3C;步数></code></td><td>续训与回溯</td></tr><tr><td>最佳档</td><td><code>&#x3C;logdir>/checkpoints/best</code></td><td>选型与演示</td></tr><tr><td>策略文件</td><td><code>policies/&#x3C;用途>_policy.pkl</code></td><td>查看器与评估</td></tr><tr><td>跨档对照</td><td><code>data/&#x3C;版本>_checks/</code></td><td>版本对比</td></tr></tbody></table>
 <h2 id="4-策略文件的命名">4. 策略文件的命名</h2>
-<p><code>policies/</code> 下保留两份主产物：行走策略与起身策略（<code>policies/go1_walk_policy.pkl</code>、<code>policies/go1_getup_policy.pkl</code>）。冒烟档的产物用 <code>_smoke</code> 后缀区分（<code>train/train_getup.py:25</code>）。命名规则的作用是让查看器与评估脚本的默认参数不必改动就能取到最新产物。</p>
-<p>README 的查看器用法直接引用这两个文件名，说明命名已经成为命令行约定的一部分（<code>README.md:66-70</code>）。</p>
-<h2 id="5-复现-v18-的命令">5. 复现 v18 的命令</h2>
-<p>v18 的命令由算法档、环境开关、姿态阈值、步态项与网络覆盖组成，预算 20M（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:1698-1700</code>）：</p>
+<p><code>policies/</code> 下保留两份主产物：行走策略与起身策略（<code>policies/go1_walk_policy.pkl</code>、<code>policies/go1_getup_policy.pkl</code>）。冒烟档的产物用 <code>_smoke</code> 后缀区分（<code>train/train_getup.py</code>）。命名规则的作用是让查看器与评估脚本的默认参数不必改动就能取到最新产物。</p>
+<p>README 的查看器用法直接引用这两个文件名，说明命名已经成为命令行约定的一部分（<code>README.md</code>）。</p>
+<h2 id="5-一条可复现命令该记哪些东西">5. 一条可复现命令该记哪些东西</h2>
+<p>要复现一次实验，命令、实际生效值与恢复点三者必须成对保留。一次完整改动可以同时带上算法档、环境开关、阈值、奖励项与网络覆盖，下面这条行走实验的命令就是这种完整形态：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_go1</span><span style="color:#005CC5"> --sb3_full</span><span style="color:#005CC5"> --hard_contact</span><span style="color:#005CC5"> --sample_cmd</span><span style="color:#005CC5"> --fwd_turn</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">  --body_frame</span><span style="color:#005CC5"> --tilt_deg</span><span style="color:#005CC5"> 17.5</span><span style="color:#005CC5"> --natural_gait</span><span style="color:#005CC5"> --dangle_penalty</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">  --layers</span><span style="color:#032F62"> 128,128</span><span style="color:#005CC5"> --num_timesteps</span><span style="color:#005CC5"> 20000000</span></span></code></pre>
-<p>记录里专门提醒 <code>--layers 128,128</code> 覆盖了 <code>sb3_full</code> 分支里的 (64,64)，因此实际网络是两层 128 宽而不是 64（<code>:1702-1703</code>）。这正是“命令 + 实际生效表”必须成对保留的原因。</p>
-<h2 id="6-复现-v22-的续训命令">6. 复现 v22 的续训命令</h2>
-<p>v22 从 v21 的检查点续训到 40M，与 v21 的差异只有两处：新增 <code>--ascent</code> 奖励，以及续训所需的学习率从 3e-4 降到 1e-4（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:4537-4554</code>）：</p>
+<p>这里最容易看错的是覆盖关系：命令里的 <code>--layers 128,128</code> 覆盖了算法档默认的 (64,64)，实际网络因此是两层 128 宽。只看命令或只看默认值都会记错，所以命令必须与“实际生效值”成对保留。</p>
+<h2 id="6-续训命令的三个必要项">6. 续训命令的三个必要项</h2>
+<p>续训与正式训练只差三处：恢复来源、学习率与步数记账。恢复要指向具体步数目录，学习率要下调（检查点不含优化器状态），步数偏移要让日志里的累计步数与真实进度一致。下面这条续训命令是完整形态：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">python</span><span style="color:#005CC5"> -u</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> train.train_go1</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">  --num_timesteps</span><span style="color:#005CC5"> 20000000</span><span style="color:#005CC5"> --num_evals</span><span style="color:#005CC5"> 5</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">  --sb3_full</span><span style="color:#005CC5"> --hard_contact</span><span style="color:#005CC5"> --sample_cmd</span><span style="color:#005CC5"> --fwd_turn</span><span style="color:#005CC5"> --body_frame</span><span style="color:#005CC5"> \</span></span>
@@ -887,7 +887,7 @@
 <span class="line"><span style="color:#005CC5">  --restore</span><span style="color:#032F62"> models/go1_v21_logs/checkpoints/000020054016</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">  --step_offset</span><span style="color:#005CC5"> 20054016</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">  --save_name</span><span style="color:#032F62"> go1_walk_policy_v22_40M.pkl</span><span style="color:#005CC5"> --logdir</span><span style="color:#032F62"> models/go1_v22_logs</span></span></code></pre>
-<p><code>--restore</code> 指向具体步数目录而不是 logs 根目录，<code>--step_offset</code> 与恢复步数一致，这两点是续训命令的必要项（<code>:4549-4551</code>）。</p>
+<p><code>--restore</code> 指向具体步数目录而不是 logs 根目录，<code>--step_offset</code> 与恢复步数一致，这两点是续训命令的必要项。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
   participant M as 冒烟档
   participant T as 正式档
@@ -899,7 +899,7 @@
   R->>R: 降学习率并设 step_offset
   R->>R: 只加一组新开关</pre></div>
 <h2 id="7-产物清单与验收">7. 产物清单与验收</h2>
-<p>一次正式训练结束后，验收要看到四项：日志里评估奖励与回合长度的曲线；检查点目录按周期递增；<code>best/</code> 与最优评估对应；策略文件已写出并可被查看器加载（<code>train/train_go1.py:808-812</code>）。</p>
+<p>一次正式训练结束后，验收要看到四项：日志里评估奖励与回合长度的曲线；检查点目录按周期递增；<code>best/</code> 与最优评估对应；策略文件已写出并可被查看器加载（<code>train/train_go1.py</code>）。</p>
 
 
 

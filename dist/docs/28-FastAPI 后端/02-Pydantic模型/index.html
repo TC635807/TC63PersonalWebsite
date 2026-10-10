@@ -2,6 +2,7 @@
 <p>后端的数据模型集中在 <code>backend/models/</code>，六个模块共 585 行，定义了卡片、会话、用户、Hub、订单与任务相关的结构。模型既用于请求与响应，也用于存储层的读写，因此字段约定同时受 HTTP 契约与数据库结构约束。</p>
 <p>先理清模型清单与导入路径。校验规则在 <code>02-字段约束与校验器.md</code>，请求与响应的分工在 <code>03-请求与响应模型.md</code>，枚举与序列化在 <code>04-枚举与序列化.md</code>。</p>
 <h2 id="1-六个模块与类清单">1. 六个模块与类清单</h2>
+<p>模型层通常按领域分文件：一个领域一个模块，模块内聚该领域的实体与它的创建、更新变体。判断切分是否合理，看的是同一文件里有没有混进两个领域、或模型是否兼了存储职责，行数只是粗略信号。本项目六个模块的分布如下：</p>
 
 
 
@@ -48,7 +49,7 @@
 <p><code>backend/models/__init__.py</code> 只有 7 行，导出两张卡片相关的类与两个会话请求模型：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">from</span><span style="color:#24292E"> .card </span><span style="color:#D73A49">import</span><span style="color:#24292E"> Card  </span><span style="color:#6A737D"># noqa: F401</span></span>
 <span class="line"><span style="color:#D73A49">from</span><span style="color:#24292E"> .session </span><span style="color:#D73A49">import</span><span style="color:#24292E"> Session, SessionCreate, SessionUpdate  </span><span style="color:#6A737D"># noqa: F401</span></span></code></pre>
-<p>用户、Hub、订单、任务的模型都没有进入包级导出。于是仓库里出现两种导入路径：<code>from backend.models import Card</code> 出现在九处（如 <code>backend/routes/cards.py:19</code>、<code>backend/export/markdown_exporter.py:14</code>），而 <code>from backend.models.user import ...</code> 这类逐模块导入有 52 处。</p>
+<p>用户、Hub、订单、任务的模型都没有进入包级导出。于是仓库里出现两种导入路径：<code>from backend.models import Card</code> 出现在九处（<code>backend/routes/cards.py</code>、<code>backend/export/markdown_exporter.py</code>），而 <code>from backend.models.user import ...</code> 这类逐模块导入有 52 处。</p>
 
 
 
@@ -79,7 +80,7 @@
   C --> E
   D --> F["from backend.models.user import User 等 52 处"]</pre></div>
 <h2 id="3-必填字段与默认值的分布">3. 必填字段与默认值的分布</h2>
-<p>三类模型对待默认值的方式不同。<code>Card</code> 把身份、正文与来源相关信息设为必填（<code>backend/models/card.py:23-34</code>），<code>User</code> 把会员与积分设为带默认值的字段（<code>backend/models/user.py:14-23</code>），<code>HubManifest</code> 则几乎每个字段都有默认值（<code>backend/models/hub.py:28-40</code>）。</p>
+<p>三类模型对待默认值的方式不同。<code>Card</code> 把身份、正文与来源相关信息设为必填（<code>backend/models/card.py</code>），<code>User</code> 把会员与积分设为带默认值的字段（<code>backend/models/user.py</code>），<code>HubManifest</code> 则几乎每个字段都有默认值（<code>backend/models/hub.py</code>）。</p>
 
 
 
@@ -111,9 +112,9 @@
 
 
 <table><thead><tr><th>模型</th><th>必填字段</th><th>带默认值字段</th></tr></thead><tbody><tr><td><code>Card</code></td><td><code>id</code>、<code>title</code>、<code>content</code>、<code>metadata</code>、<code>created_at</code>、<code>updated_at</code>、<code>confidence</code></td><td><code>links</code>、<code>backlinks</code>、<code>parent_id</code>、<code>sources</code>、<code>tags</code></td></tr><tr><td><code>User</code></td><td><code>username</code>、<code>hashed_password</code>、<code>created_at</code></td><td><code>avatar_url</code>、<code>membership</code>、<code>membership_expiry</code>、<code>points</code>、<code>last_points_refill</code></td></tr><tr><td><code>Session</code></td><td><code>id</code>、<code>name</code>、<code>created_at</code>、<code>updated_at</code></td><td><code>card_count</code></td></tr><tr><td><code>HubManifest</code></td><td><code>name</code>、<code>creator</code></td><td>其余九个字段</td></tr></tbody></table>
-<p>默认值的写法也有两种：不可变默认值直接赋值，如 <code>card_count: int = 0</code>（<code>models/session.py:44</code>）；可变默认值用 <code>Field(default_factory=...)</code>，如 <code>links</code> 与 <code>topics</code>（<code>models/card.py:27</code>、<code>models/hub.py:34</code>）。直接给列表或字典赋值会在 Pydantic 中被复制，但仓库统一使用 <code>default_factory</code>。</p>
+<p>默认值的写法也有两种：不可变默认值直接赋值，如 <code>card_count: int = 0</code>（<code>models/session.py</code>）；可变默认值用 <code>Field(default_factory=...)</code>，如 <code>links</code> 与 <code>topics</code>（<code>models/card.py</code>、<code>models/hub.py</code>）。直接给列表或字典赋值会在 Pydantic 中被复制，但仓库统一使用 <code>default_factory</code>。</p>
 <h2 id="4-默认值里的时间来源">4. 默认值里的时间来源</h2>
-<p>Hub 模型用 <code>Field(default_factory=datetime.utcnow)</code> 生成时间戳（<code>backend/models/hub.py:20</code>、<code>:31-32</code>），<code>Card</code> 与 <code>Session</code> 的 <code>created_at</code> 则是必填，由调用方传入。</p>
+<p>Hub 模型用 <code>Field(default_factory=datetime.utcnow)</code> 生成时间戳（<code>backend/models/hub.py</code>），<code>Card</code> 与 <code>Session</code> 的 <code>created_at</code> 则是必填，由调用方传入。</p>
 
 
 
@@ -148,9 +149,9 @@
 <p><code>datetime.utcnow()</code> 在较新的 Python 中已被标记为遗留接口，仓库仍在使用；这一条属语言层面的提示，不影响当前行为。</p>
 <h2 id="5-模型与存储层的字段重合">5. 模型与存储层的字段重合</h2>
 <p>模型字段直接决定存储写入内容。卡片存储把 <code>Card</code> 序列化后落盘（文件系统实现写 frontmatter 与正文，SQLite 实现写列），会话存储围绕 <code>Session</code> 的五个字段组织。Hub 与订单模块各自还有独立的存储实现。</p>
-<p>存储层读取时会重新构造模型，因此字段改名会同时影响接口与历史数据。<code>TaskProgress</code> 与 <code>TaskEvent</code> 是例外：它们只用于 SSE 推送，不落库（<code>backend/models/task.py:45-59</code>）。</p>
+<p>存储层读取时会重新构造模型，因此字段改名会同时影响接口与历史数据。<code>TaskProgress</code> 与 <code>TaskEvent</code> 是例外：它们只用于 SSE 推送，不落库（<code>backend/models/task.py</code>）。</p>
 <h2 id="6-模型数量与模块边界">6. 模型数量与模块边界</h2>
-<p>六个模块按业务划分，模块内不互相导入，只有 <code>task.py</code> 例外：它从 <code>backend.models</code> 导入 <code>Card</code>（<code>backend/models/task.py:22</code>），用于保存任务生成的卡片列表。这条例外让 <code>task.py</code> 依赖包级导出，若 <code>__init__.py</code> 调整，任务模块会一并受影响。</p>
+<p>六个模块按业务划分，模块内不互相导入，只有 <code>task.py</code> 例外：它从 <code>backend.models</code> 导入 <code>Card</code>（<code>backend/models/task.py</code>），用于保存任务生成的卡片列表。这条例外让 <code>task.py</code> 依赖包级导出，若 <code>__init__.py</code> 调整，任务模块会一并受影响。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">graph LR
   A["models/card.py Card"] --> B["models/__init__.py"]
   C["models/session.py 三个类"] --> B
@@ -203,7 +204,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为 <code>backend.models</code> 导出全部模型</td><td>导入 <code>User</code> 报错</td><td><code>models/__init__.py:6-7</code></td></tr><tr><td>用包级路径导入未导出的类</td><td><code>ImportError</code></td><td>同上</td></tr><tr><td>以为 <code>Card.metadata</code> 可省略</td><td>构造时报缺字段</td><td><code>models/card.py:26</code></td></tr><tr><td>用可变对象直接作默认值</td><td>与仓库现有写法不一致</td><td>统一用 <code>default_factory</code>（<code>:27</code>）</td></tr><tr><td>认为 <code>Task</code> 是 Pydantic 模型</td><td>没有 <code>model_dump</code> 方法</td><td><code>models/task.py:62</code></td></tr><tr><td>忽略 <code>task.py</code> 对包级导出的依赖</td><td>调整 <code>__init__.py</code> 后任务模块受影响</td><td><code>models/task.py:22</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为 <code>backend.models</code> 导出全部模型</td><td>导入 <code>User</code> 报错</td><td><code>models/__init__.py</code></td></tr><tr><td>用包级路径导入未导出的类</td><td><code>ImportError</code></td><td>同上</td></tr><tr><td>以为 <code>Card.metadata</code> 可省略</td><td>构造时报缺字段</td><td><code>models/card.py</code></td></tr><tr><td>用可变对象直接作默认值</td><td>与仓库现有写法不一致</td><td>统一用 <code>default_factory</code></td></tr><tr><td>认为 <code>Task</code> 是 Pydantic 模型</td><td>没有 <code>model_dump</code> 方法</td><td><code>models/task.py</code></td></tr><tr><td>忽略 <code>task.py</code> 对包级导出的依赖</td><td>调整 <code>__init__.py</code> 后任务模块受影响</td><td><code>models/task.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -338,8 +339,8 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/__init__.py</code></td><td>包级导出（:6-7）</td></tr><tr><td><code>backend/models/card.py</code></td><td>必填与默认字段（:23-34）</td></tr><tr><td><code>backend/models/user.py</code></td><td>用户字段与默认值（:14-23）</td></tr><tr><td><code>backend/models/session.py</code></td><td>会话字段（:35-44）</td></tr><tr><td><code>backend/models/hub.py</code></td><td>Hub 字段与时间工厂（:16-40）</td></tr><tr><td><code>backend/models/order.py</code></td><td>订单模型与枚举（:15-51）</td></tr><tr><td><code>backend/models/task.py</code></td><td>类清单与包级依赖（:22、:27-80）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>包级导入示例（:19）</td></tr><tr><td><code>backend/export/markdown_exporter.py</code></td><td>包级导入示例（:14）</td></tr><tr><td><code>requirements.txt</code></td><td>依赖版本（pydantic 2.12.5、fastapi 0.135.3）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-字段约束与校验器"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-字段约束与校验器</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/02-字段约束与校验器.md</span></div><div class="dfile__body"><h1 id="字段约束与校验器">字段约束与校验器</h1>
-<p>模型层的校验分两处：字段声明上的 <code>Field</code> 约束负责长度与必填，类里的校验器函数负责格式规则。请求体进入端点之前，FastAPI 会先用模型解析一次，解析失败直接走全局的 422 处理器（<code>backend/main.py:103-114</code>），端点函数不会执行。</p>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/__init__.py</code></td><td>包级导出</td></tr><tr><td><code>backend/models/card.py</code></td><td>必填与默认字段</td></tr><tr><td><code>backend/models/user.py</code></td><td>用户字段与默认值</td></tr><tr><td><code>backend/models/session.py</code></td><td>会话字段</td></tr><tr><td><code>backend/models/hub.py</code></td><td>Hub 字段与时间工厂</td></tr><tr><td><code>backend/models/order.py</code></td><td>订单模型与枚举</td></tr><tr><td><code>backend/models/task.py</code></td><td>类清单与包级依赖</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>包级导入示例</td></tr><tr><td><code>backend/export/markdown_exporter.py</code></td><td>包级导入示例</td></tr><tr><td><code>requirements.txt</code></td><td>依赖版本（pydantic 2.12.5、fastapi 0.135.3）</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-字段约束与校验器"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-字段约束与校验器</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/02-字段约束与校验器.md</span></div><div class="dfile__body"><h1 id="字段约束与校验器">字段约束与校验器</h1>
+<p>模型层的校验分两处：字段声明上的 <code>Field</code> 约束负责长度与必填，类里的校验器函数负责格式规则。请求体进入端点之前，FastAPI 会先用模型解析一次，解析失败直接走全局的 422 处理器（<code>backend/main.py</code>），端点函数不会执行。</p>
 <p>约束与校验器在仓库里的分布与写法有差异。模型清单在 <code>01-模型清单与导出约定.md</code>，请求与响应模型的分工在 <code>03-请求与响应模型.md</code>。</p>
 <h2 id="1-field-约束的三种用法">1. Field 约束的三种用法</h2>
 <p><code>Field</code> 在仓库里只用于请求模型，且都带 <code>description</code>：</p>
@@ -384,13 +385,13 @@
 
 
 
-<table><thead><tr><th>模型</th><th>字段</th><th>约束</th><th>位置</th></tr></thead><tbody><tr><td><code>UserCreate</code></td><td><code>username</code></td><td>长度 1 到 16</td><td><code>models/user.py:28</code></td></tr><tr><td><code>UserCreate</code></td><td><code>password</code></td><td>长度 1 到 20</td><td><code>models/user.py:29</code></td></tr><tr><td><code>SessionCreate</code></td><td><code>name</code></td><td>长度 1 到 100</td><td><code>models/session.py:49</code></td></tr><tr><td><code>SessionUpdate</code></td><td><code>name</code></td><td>长度 1 到 100</td><td><code>models/session.py:59</code></td></tr><tr><td><code>HubCommentCreate</code></td><td><code>content</code></td><td>长度 1 到 2000</td><td><code>models/hub.py:65</code></td></tr></tbody></table>
+<table><thead><tr><th>模型</th><th>字段</th><th>约束</th><th>位置</th></tr></thead><tbody><tr><td><code>UserCreate</code></td><td><code>username</code></td><td>长度 1 到 16</td><td><code>models/user.py</code></td></tr><tr><td><code>UserCreate</code></td><td><code>password</code></td><td>长度 1 到 20</td><td><code>models/user.py</code></td></tr><tr><td><code>SessionCreate</code></td><td><code>name</code></td><td>长度 1 到 100</td><td><code>models/session.py</code></td></tr><tr><td><code>SessionUpdate</code></td><td><code>name</code></td><td>长度 1 到 100</td><td><code>models/session.py</code></td></tr><tr><td><code>HubCommentCreate</code></td><td><code>content</code></td><td>长度 1 到 2000</td><td><code>models/hub.py</code></td></tr></tbody></table>
 <p>三处都写成 <code>Field(..., min_length=..., max_length=..., description=...)</code>，第一个位置参数 <code>...</code> 表示必填。域模型（<code>Card</code>、<code>User</code>、<code>Session</code>）不使用 <code>Field</code> 做长度约束，只对可变默认值用 <code>default_factory</code>。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">username: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> Field(</span><span style="color:#005CC5">...</span><span style="color:#24292E">, </span><span style="color:#E36209">min_length</span><span style="color:#D73A49">=</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#E36209">max_length</span><span style="color:#D73A49">=</span><span style="color:#005CC5">16</span><span style="color:#24292E">, </span><span style="color:#E36209">description</span><span style="color:#D73A49">=</span><span style="color:#032F62">"用户名，1-16个字符"</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">password: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> Field(</span><span style="color:#005CC5">...</span><span style="color:#24292E">, </span><span style="color:#E36209">min_length</span><span style="color:#D73A49">=</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#E36209">max_length</span><span style="color:#D73A49">=</span><span style="color:#005CC5">20</span><span style="color:#24292E">, </span><span style="color:#E36209">description</span><span style="color:#D73A49">=</span><span style="color:#032F62">"密码，1-20个字符"</span><span style="color:#24292E">)</span></span></code></pre>
 <p>长度约束与校验器并不重复：长度在解析阶段先判定，格式规则在校验器里补充。用户名长度 16 的上限由 <code>Field</code> 保证，字符集由校验器保证。</p>
 <h2 id="2-校验器的两种写法">2. 校验器的两种写法</h2>
-<p>仓库同时存在两代写法。<code>UserCreate</code> 与 <code>SessionCreate</code> 使用 <code>@field_validator</code> 加 <code>@classmethod</code>（<code>models/user.py:31-32</code>、<code>models/session.py:51-52</code>），<code>Card</code> 使用 v1 风格的 <code>@validator</code>（<code>models/card.py:36</code>、<code>:45</code>、<code>:58</code>）。</p>
+<p>仓库同时存在两代写法。<code>UserCreate</code> 与 <code>SessionCreate</code> 使用 <code>@field_validator</code> 加 <code>@classmethod</code>（<code>models/user.py</code>、<code>models/session.py</code>），<code>Card</code> 使用 v1 风格的 <code>@validator</code>（<code>models/card.py</code>）。</p>
 
 
 
@@ -424,7 +425,7 @@
   G --> H["RequestValidationError"]
   H --> I["全局 422 处理器"]</pre></div>
 <h2 id="3-用户名与密码的规则">3. 用户名与密码的规则</h2>
-<p><code>UserCreate</code> 两个校验器的规则都可以用一行读出来（<code>backend/models/user.py:31-47</code>）：</p>
+<p><code>UserCreate</code> 两个校验器的规则都可以用一行读出来（<code>backend/models/user.py</code>）：</p>
 
 
 
@@ -446,9 +447,9 @@
 
 
 <table><thead><tr><th>字段</th><th>规则</th><th>失败提示</th></tr></thead><tbody><tr><td><code>username</code></td><td>只允许字母、数字、下划线、短横线、点；且不能是 <code>.</code> 或 <code>..</code></td><td>用户名只能包含字母、数字、下划线、短横线和点</td></tr><tr><td><code>password</code></td><td>每个字符的码点在 32 到 126 之间</td><td>密码只能包含ASCII可见字符</td></tr></tbody></table>
-<p>用户名规则里的正则允许点号，所以单独挡掉 <code>.</code> 与 <code>..</code> 两个路径穿越敏感值（<code>:37-38</code>）。密码只检查可见 ASCII，没有长度以外的强度要求，长度上限由 <code>Field</code> 的 20 承担。</p>
+<p>用户名规则里的正则允许点号，所以单独挡掉 <code>.</code> 与 <code>..</code> 两个路径穿越敏感值。密码只检查可见 ASCII，没有长度以外的强度要求，长度上限由 <code>Field</code> 的 20 承担。</p>
 <h2 id="4-会话名的共享校验函数">4. 会话名的共享校验函数</h2>
-<p>会话的 <code>SessionCreate</code> 与 <code>SessionUpdate</code> 字段完全相同，校验逻辑抽成模块级函数 <code>_validate_name</code>（<code>backend/models/session.py:17-32</code>），两个校验器都调用它（<code>:53-54</code>、<code>:63-64</code>）。函数做四件事：判类型、去首尾空白、把连续空白折叠成单空格、判空与长度上限。</p>
+<p>会话的 <code>SessionCreate</code> 与 <code>SessionUpdate</code> 字段完全相同，校验逻辑抽成模块级函数 <code>_validate_name</code>（<code>backend/models/session.py</code>），两个校验器都调用它。函数做四件事：判类型、去首尾空白、把连续空白折叠成单空格、判空与长度上限。</p>
 
 
 
@@ -487,7 +488,7 @@
 <table><thead><tr><th>步骤</th><th>行为</th><th>失败条件</th></tr></thead><tbody><tr><td>类型检查</td><td>非字符串直接报错</td><td>输入非字符串</td></tr><tr><td><code>strip()</code></td><td>去首尾空白</td><td>无</td></tr><tr><td>折叠空白</td><td>连续空白变单空格</td><td>无</td></tr><tr><td>判空</td><td>折叠后为空则报错</td><td>名称全是空白</td></tr><tr><td>长度</td><td>超过 100 报错</td><td>折叠后仍超长</td></tr></tbody></table>
 <p>注意顺序：长度判断在折叠之后，所以 <code>"   a   b   "</code> 这类输入会先被压缩再检查长度。<code>Session</code> 域模型本身没有这个名字校验，直接构造 <code>Session(name="  ")</code> 不会报错，只有经过 <code>SessionCreate</code> 的请求路径才受约束。</p>
 <h2 id="5-card-的三处校验">5. Card 的三处校验</h2>
-<p><code>Card</code> 的校验器覆盖身份、元数据与置信度（<code>backend/models/card.py:36-63</code>）：</p>
+<p><code>Card</code> 的校验器覆盖身份、元数据与置信度（<code>backend/models/card.py</code>）：</p>
 
 
 
@@ -513,11 +514,11 @@
 
 
 
-<table><thead><tr><th>校验器</th><th>检查内容</th><th>依据</th></tr></thead><tbody><tr><td><code>id_must_be_uuid</code></td><td><code>uuid.UUID(str(v))</code> 能否解析</td><td><code>:36-43</code></td></tr><tr><td><code>metadata_munsure</code></td><td>键为字符串，值为字符串、数值或字符串列表</td><td><code>:45-56</code></td></tr><tr><td><code>confidence_in_range</code></td><td>0.0 到 1.0 之间</td><td><code>:58-63</code></td></tr></tbody></table>
-<p>元数据校验器对列表值还检查元素类型（<code>:53-55</code>），保证 <code>metadata</code> 的结构在写库前一致。置信度用闭区间判断，0 与 1 都合法。</p>
+<table><thead><tr><th>校验器</th><th>检查内容</th><th>依据</th></tr></thead><tbody><tr><td><code>id_must_be_uuid</code></td><td><code>uuid.UUID(str(v))</code> 能否解析</td><td><code>backend/models/card.py</code></td></tr><tr><td><code>metadata_munsure</code></td><td>键为字符串，值为字符串、数值或字符串列表</td><td><code>backend/models/card.py</code></td></tr><tr><td><code>confidence_in_range</code></td><td>0.0 到 1.0 之间</td><td><code>backend/models/card.py</code></td></tr></tbody></table>
+<p>元数据校验器对列表值还检查元素类型，保证 <code>metadata</code> 的结构在写库前一致。置信度用闭区间判断，0 与 1 都合法。</p>
 <p>这三个校验器在构造 <code>Card</code> 时生效，因此存储层读回数据时也会走一遍。历史数据里若有越界值，读取会直接失败，而不是被静默修正。</p>
 <h2 id="6-校验失败后的响应">6. 校验失败后的响应</h2>
-<p>FastAPI 把解析失败包装成 <code>RequestValidationError</code>，全局处理器返回 422、固定中文文案与 <code>exc.errors()</code>（<code>backend/main.py:103-114</code>）：</p>
+<p>FastAPI 把解析失败包装成 <code>RequestValidationError</code>，全局处理器返回 422、固定中文文案与 <code>exc.errors()</code>（<code>backend/main.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> JSONResponse(</span></span>
 <span class="line"><span style="color:#E36209">    status_code</span><span style="color:#D73A49">=</span><span style="color:#005CC5">422</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#E36209">    content</span><span style="color:#D73A49">=</span><span style="color:#24292E">{</span></span>
@@ -539,7 +540,7 @@
   H-->>C: 422 JSON
   Note over H: errors 直接进 JSONResponse 未编码</pre></div>
 <h2 id="7-校验边界与模型分工">7. 校验边界与模型分工</h2>
-<p>仓库把校验集中在 Create 类型上：<code>UserCreate</code>、<code>SessionCreate</code>、<code>SessionUpdate</code>、<code>HubCommentCreate</code> 都带校验器或 <code>Field</code> 约束，而 <code>UserLogin</code> 是纯字段模型（<code>models/user.py:50-53</code>），没有长度或字符集限制。登录场景下用户名与密码只要类型是字符串就能通过解析，格式判断留给存储层的凭据校验。</p>
+<p>仓库把校验集中在 Create 类型上：<code>UserCreate</code>、<code>SessionCreate</code>、<code>SessionUpdate</code>、<code>HubCommentCreate</code> 都带校验器或 <code>Field</code> 约束，而 <code>UserLogin</code> 是纯字段模型（<code>models/user.py</code>），没有长度或字符集限制。登录场景下用户名与密码只要类型是字符串就能通过解析，格式判断留给存储层的凭据校验。</p>
 
 
 
@@ -612,7 +613,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为所有请求模型都有校验器</td><td>登录模型无任何约束</td><td><code>models/user.py:50-53</code></td></tr><tr><td>直接构造域模型期望被校验</td><td><code>Session(name="  ")</code> 不报错</td><td>校验只在 <code>SessionCreate</code>（<code>session.py:51-54</code>）</td></tr><tr><td>混用两代校验器写法</td><td>新增代码风格不一致</td><td><code>card.py</code> 用 v1，其余用 v2</td></tr><tr><td>认为 422 的 detail 能区分字段</td><td>detail 是固定文案</td><td><code>backend/main.py:111</code></td></tr><tr><td>忽略折叠后长度检查</td><td>超长空白串被压缩后通过</td><td><code>session.py:26-31</code></td></tr><tr><td>依赖 errors 一定可序列化</td><td>未经过 <code>jsonable_encoder</code></td><td><code>backend/main.py:112</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为所有请求模型都有校验器</td><td>登录模型无任何约束</td><td><code>models/user.py</code></td></tr><tr><td>直接构造域模型期望被校验</td><td><code>Session(name="  ")</code> 不报错</td><td>校验只在 <code>SessionCreate</code>（<code>session.py</code>）</td></tr><tr><td>混用两代校验器写法</td><td>新增代码风格不一致</td><td><code>card.py</code> 用 v1，其余用 v2</td></tr><tr><td>认为 422 的 detail 能区分字段</td><td>detail 是固定文案</td><td><code>backend/main.py</code></td></tr><tr><td>忽略折叠后长度检查</td><td>超长空白串被压缩后通过</td><td><code>session.py</code></td></tr><tr><td>依赖 errors 一定可序列化</td><td>未经过 <code>jsonable_encoder</code></td><td><code>backend/main.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -692,7 +693,7 @@
 </ol>
 <p>挑战题：</p>
 <ol start="5">
-<li>把 <code>backend/main.py:112</code> 的 <code>exc.errors()</code> 换成编码后的形式，说明需要引入的导入与对响应体的影响。</li>
+<li>把 <code>backend/main.py</code> 的 <code>exc.errors()</code> 换成编码后的形式，说明需要引入的导入与对响应体的影响。</li>
 <li>为 <code>UserLogin</code> 补上与 <code>UserCreate</code> 一致的用户名规则，评估对现有客户端的影响。</li>
 <li>设计一个把 <code>card.py</code> 迁移到 v2 校验器写法的方案，列出需要改写的三处与回归测试要点。</li>
 </ol>
@@ -731,7 +732,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/user.py</code></td><td><code>Field</code> 约束（:28-29）、两个校验器（:31-47）、登录模型（:50-53）</td></tr><tr><td><code>backend/models/session.py</code></td><td><code>_validate_name</code>（:17-32）、两个校验器（:51-54、:61-64）、<code>Field</code> 约束（:49、:59）</td></tr><tr><td><code>backend/models/hub.py</code></td><td>评论长度约束（:65）</td></tr><tr><td><code>backend/models/card.py</code></td><td>三个 v1 校验器（:36-63）</td></tr><tr><td><code>backend/main.py</code></td><td>422 处理器（:103-114）</td></tr><tr><td><code>requirements.txt</code></td><td><code>pydantic==2.12.5</code></td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-请求与响应模型"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-请求与响应模型</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/03-请求与响应模型.md</span></div><div class="dfile__body"><h1 id="请求与响应模型">请求与响应模型</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/user.py</code></td><td><code>Field</code> 约束、两个校验器、登录模型</td></tr><tr><td><code>backend/models/session.py</code></td><td><code>_validate_name</code>、两个校验器、<code>Field</code> 约束</td></tr><tr><td><code>backend/models/hub.py</code></td><td>评论长度约束</td></tr><tr><td><code>backend/models/card.py</code></td><td>三个 v1 校验器</td></tr><tr><td><code>backend/main.py</code></td><td>422 处理器</td></tr><tr><td><code>requirements.txt</code></td><td><code>pydantic==2.12.5</code></td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-请求与响应模型"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-请求与响应模型</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/03-请求与响应模型.md</span></div><div class="dfile__body"><h1 id="请求与响应模型">请求与响应模型</h1>
 <p>模型在 HTTP 层有两个方向：进站方向由请求模型约束输入，出站方向由 <code>response_model</code> 描述输出。仓库对进站方向的划分比较细，每个业务模块都定义自己的请求类；出站方向只在部分端点声明响应模型，其余端点靠手动序列化。</p>
 <p>请求与响应两个方向的分布与写法在这里对照。模型清单在 <code>01-模型清单与导出约定.md</code>，校验过程在 <code>02-字段约束与校验器.md</code>，枚举序列化在 <code>04-枚举与序列化.md</code>。</p>
 <h2 id="1-请求模型的两种放置位置">1. 请求模型的两种放置位置</h2>
@@ -757,7 +758,7 @@
 
 
 <table><thead><tr><th>位置</th><th>模型</th><th>数量</th></tr></thead><tbody><tr><td><code>models/</code></td><td><code>UserCreate</code>、<code>UserLogin</code>、<code>SessionCreate</code>、<code>SessionUpdate</code>、<code>HubCommentCreate</code></td><td>5</td></tr><tr><td>路由与业务模块</td><td><code>CardCreateRequest</code>、<code>CardUpdateRequest</code>、<code>ExportRequest</code>、<code>LinkRequest</code>、<code>UnlinkRequest</code>、<code>SuggestRequest</code>、<code>ReclassifyRequest</code>、<code>GeneratePayload</code>、<code>AgentChatRequest</code>、<code>ScrapeRequest</code>、<code>SearchRequest</code></td><td>11</td></tr></tbody></table>
-<p>放进 <code>models/</code> 的是被多个模块或存储层复用的结构：<code>SessionCreate</code> 会被会话路由与 Hub 导入使用，<code>UserCreate</code> 与登录注册直接相关。留在路由模块里的是只服务单组端点的请求体，例如卡片的两个请求类就定义在 <code>backend/routes/cards.py:31-43</code>。</p>
+<p>放进 <code>models/</code> 的是被多个模块或存储层复用的结构：<code>SessionCreate</code> 会被会话路由与 Hub 导入使用，<code>UserCreate</code> 与登录注册直接相关。留在路由模块里的是只服务单组端点的请求体，例如卡片的两个请求类就定义在 <code>backend/routes/cards.py</code>。</p>
 <p>两种位置都能被 FastAPI 用作端点参数类型，区别在复用范围与导入成本。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["一个请求体类"] --> B{"是否被多处复用"}
@@ -795,7 +796,7 @@
 
 
 <table><thead><tr><th>后缀</th><th>含义</th><th>例子</th></tr></thead><tbody><tr><td><code>*Create</code></td><td>创建请求</td><td><code>UserCreate</code>、<code>SessionCreate</code>、<code>HubCommentCreate</code></td></tr><tr><td><code>*Update</code></td><td>更新请求</td><td><code>SessionUpdate</code>、<code>CardUpdateRequest</code></td></tr><tr><td><code>*Request</code></td><td>通用请求体</td><td><code>ExportRequest</code>、<code>LinkRequest</code>、<code>AgentChatRequest</code></td></tr></tbody></table>
-<p>同一个模块内出现 <code>*Request</code> 后缀时，字段的可选性差异明显。<code>CardCreateRequest</code> 三个字段都有默认值（<code>backend/routes/cards.py:31-35</code>），<code>CardUpdateRequest</code> 四个字段全是 <code>Optional</code> 且默认为 <code>None</code>（<code>:38-43</code>）：</p>
+<p>同一个模块内出现 <code>*Request</code> 后缀时，字段的可选性差异明显。<code>CardCreateRequest</code> 三个字段都有默认值（<code>backend/routes/cards.py</code>），<code>CardUpdateRequest</code> 四个字段全是 <code>Optional</code> 且默认为 <code>None</code>：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> CardUpdateRequest</span><span style="color:#24292E">(</span><span style="color:#6F42C1">BaseModel</span><span style="color:#24292E">):</span></span>
 <span class="line"><span style="color:#032F62">    """更新卡片请求体。"""</span></span>
 <span class="line"><span style="color:#24292E">    title: Optional[</span><span style="color:#005CC5">str</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span></span>
@@ -804,7 +805,7 @@
 <span class="line"><span style="color:#24292E">    links: Optional[List[</span><span style="color:#005CC5">str</span><span style="color:#24292E">]] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span></span></code></pre>
 <p>全可选的更新模型带来一个语义问题：区分「字段没传」与「字段传了空值」要靠 <code>exclude_unset</code> 或端点里的显式判断，仓库在端点侧处理这一区分。</p>
 <h2 id="3-带嵌套的请求模型">3. 带嵌套的请求模型</h2>
-<p><code>ExportRequest</code> 的 <code>options</code> 字段类型是另一个 Pydantic 模型（<code>backend/routes/export.py:22-25</code>）：</p>
+<p><code>ExportRequest</code> 的 <code>options</code> 字段类型是另一个 Pydantic 模型（<code>backend/routes/export.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> ExportRequest</span><span style="color:#24292E">(</span><span style="color:#6F42C1">BaseModel</span><span style="color:#24292E">):</span></span>
 <span class="line"><span style="color:#032F62">    """导出请求体。"""</span></span>
 <span class="line"><span style="color:#24292E">    root_id: Optional[</span><span style="color:#005CC5">str</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> None</span></span>
@@ -847,18 +848,12 @@
 
 
 
-
-
-
-
-
-
-<table><thead><tr><th>模块</th><th>端点</th><th>响应模型</th><th>位置</th></tr></thead><tbody><tr><td><code>routes/auth.py</code></td><td>注册、登录</td><td><code>Token</code></td><td><code>:58</code>、<code>:74</code></td></tr><tr><td><code>routes/sessions.py</code></td><td>列表、创建、详情、更新</td><td><code>Session</code> 或 <code>List[Session]</code></td><td><code>:24</code>、<code>:30</code>、<code>:42</code>、<code>:54</code></td></tr><tr><td><code>routes/hub.py</code></td><td>列表、详情</td><td><code>HubSessionSummary</code>、<code>HubSessionDetail</code></td><td><code>:38</code>、<code>:50</code></td></tr><tr><td><code>routes/scraper.py</code></td><td>单条、批量</td><td><code>ScrapedContent</code></td><td><code>:24</code>、<code>:34</code></td></tr><tr><td><code>routes/search.py</code></td><td>搜索</td><td><code>SearchResponse</code></td><td><code>:27</code></td></tr></tbody></table>
-<p>声明响应模型后，FastAPI 会按模型过滤返回值中的多余字段，并在 OpenAPI 里生成响应结构。<code>Token</code> 只有两个字段，其中 <code>token_type</code> 有默认值 <code>"bearer"</code>（<code>backend/models/user.py:56-59</code>）。</p>
+<table><thead><tr><th>模块</th><th>端点</th><th>响应模型</th></tr></thead><tbody><tr><td><code>routes/auth.py</code></td><td>注册、登录</td><td><code>Token</code></td></tr><tr><td><code>routes/sessions.py</code></td><td>列表、创建、详情、更新</td><td><code>Session</code> 或 <code>List[Session]</code></td></tr><tr><td><code>routes/hub.py</code></td><td>列表、详情</td><td><code>HubSessionSummary</code>、<code>HubSessionDetail</code></td></tr><tr><td><code>routes/scraper.py</code></td><td>单条、批量</td><td><code>ScrapedContent</code></td></tr><tr><td><code>routes/search.py</code></td><td>搜索</td><td><code>SearchResponse</code></td></tr></tbody></table>
+<p>声明响应模型后，FastAPI 会按模型过滤返回值中的多余字段，并在 OpenAPI 里生成响应结构。<code>Token</code> 只有两个字段，其中 <code>token_type</code> 有默认值 <code>"bearer"</code>（<code>backend/models/user.py</code>）。</p>
 <h2 id="5-没有响应模型时的返回形态">5. 没有响应模型时的返回形态</h2>
-<p>卡片路由没有声明 <code>response_model</code>，而是把模型逐条转成字典（<code>backend/routes/cards.py:54</code>）：</p>
+<p>卡片路由没有声明 <code>response_model</code>，而是把模型逐条转成字典（<code>backend/routes/cards.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> [card.model_dump(</span><span style="color:#E36209">mode</span><span style="color:#D73A49">=</span><span style="color:#032F62">"json"</span><span style="color:#24292E">) </span><span style="color:#D73A49">for</span><span style="color:#24292E"> card </span><span style="color:#D73A49">in</span><span style="color:#24292E"> cards]</span></span></code></pre>
-<p><code>mode="json"</code> 让 <code>datetime</code> 等类型转成 JSON 可用的字符串，<code>UUID</code> 也会转成字符串。同样的写法出现在语义搜索端点（<code>:80</code>）、流水线的卡片返回（<code>backend/pipeline/api.py:490-493</code>）与质量评分的序列化（<code>backend/quality/scorer.py:512</code>）。</p>
+<p><code>mode="json"</code> 让 <code>datetime</code> 等类型转成 JSON 可用的字符串，<code>UUID</code> 也会转成字符串。同样的写法出现在语义搜索端点、流水线的卡片返回（<code>backend/pipeline/api.py</code>）与质量评分的序列化（<code>backend/quality/scorer.py</code>）。</p>
 
 
 
@@ -883,7 +878,7 @@
 
 
 <table><thead><tr><th>写法</th><th>返回类型</th><th>是否过滤字段</th><th>是否生成响应 schema</th></tr></thead><tbody><tr><td>返回模型加 <code>response_model</code></td><td>模型实例</td><td>是</td><td>是</td></tr><tr><td>返回 <code>model_dump(mode="json")</code></td><td>字典列表</td><td>否</td><td>端点自己标注 <code>List[dict]</code></td></tr></tbody></table>
-<p><code>cards.py</code> 的端点签名标注 <code>List[dict]</code>（<code>:50</code>），文档里因此只显示通用对象结构，字段说明丢失。</p>
+<p><code>cards.py</code> 的端点签名标注 <code>List[dict]</code>，文档里因此只显示通用对象结构，字段说明丢失。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["端点返回值"] --> B{"声明了 response_model 吗"}
   B -->|是| C["按模型校验并过滤字段"]
@@ -895,7 +890,7 @@
   G --> H
   D --> H</pre></div>
 <h2 id="6-两个方向的模型是否共用">6. 两个方向的模型是否共用</h2>
-<p><code>Session</code> 既是域模型也是响应模型，会话端点在创建与更新时直接把 <code>Session</code> 作为 <code>response_model</code>（<code>backend/routes/sessions.py:30</code>、<code>:54</code>）。<code>Card</code> 没有进入响应模型，卡片响应走字典路径。<code>User</code> 也没有被声明为响应模型，个人信息端点返回的是手动组装的结构。</p>
+<p>请求模型与响应模型要不要共用，本质上是输入校验与输出裁剪要不要分成两层：共用一个模型省一层定义，但模型新增字段会同时影响写入与读取两侧，也容易把内部字段暴露出去。本项目的做法是两者大多分开，只有少数模型身兼两职——<code>Session</code> 既是域模型也是响应模型，会话端点在创建与更新时直接把 <code>Session</code> 作为 <code>response_model</code>（<code>backend/routes/sessions.py</code>）。<code>Card</code> 没有进入响应模型，卡片响应走字典路径。<code>User</code> 也没有被声明为响应模型，个人信息端点返回的是手动组装的结构。</p>
 
 
 
@@ -934,7 +929,7 @@
 <table><thead><tr><th>模型</th><th>用作请求</th><th>用作响应</th></tr></thead><tbody><tr><td><code>Session</code></td><td>否（用 <code>SessionCreate</code> / <code>SessionUpdate</code>）</td><td>是</td></tr><tr><td><code>SessionCreate</code></td><td>是</td><td>否</td></tr><tr><td><code>Card</code></td><td>否（用路由内的两个请求类）</td><td>否</td></tr><tr><td><code>User</code></td><td>否</td><td>否</td></tr><tr><td><code>Token</code></td><td>否</td><td>是</td></tr></tbody></table>
 <p>共用时要注意模型新增必填字段会同时影响写入与读取两侧；<code>Session</code> 的 <code>card_count</code> 有默认值 0，读取时会用存储层给出的值覆盖。</p>
 <h2 id="7-请求模型与域模型的字段差异">7. 请求模型与域模型的字段差异</h2>
-<p>请求模型是域模型的子集或变体，不继承关系。例如 <code>CardCreateRequest</code> 只有标题、正文与父卡三个字段，而 <code>Card</code> 有十一个字段（<code>backend/models/card.py:23-34</code>）。端点负责把请求模型的字段映射到域模型，并补齐 <code>id</code>、时间戳与置信度等必填项。</p>
+<p>请求模型是域模型的子集或变体，不继承关系。例如 <code>CardCreateRequest</code> 只有标题、正文与父卡三个字段，而 <code>Card</code> 有十一个字段（<code>backend/models/card.py</code>）。端点负责把请求模型的字段映射到域模型，并补齐 <code>id</code>、时间戳与置信度等必填项。</p>
 <p>这种手工映射的好处是域模型的必填字段不必全部暴露给客户端；代价是映射代码分散在各端点里，字段增删要同时改两处。</p>
 <h2 id="8-易错点">8. 易错点</h2>
 
@@ -977,7 +972,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>在 <code>models/</code> 里找卡片的请求类</td><td>它定义在路由模块内</td><td><code>routes/cards.py:31-43</code></td></tr><tr><td>认为更新请求能区分未传字段</td><td>四个字段默认都是 <code>None</code></td><td><code>:38-43</code></td></tr><tr><td>以为所有端点都有响应模型</td><td>卡片路径返回字典</td><td><code>:54</code></td></tr><tr><td>用 <code>model_dump()</code> 不带 <code>mode</code></td><td><code>datetime</code> 不转字符串</td><td>对照 <code>:54</code></td></tr><tr><td>认为 <code>Token.token_type</code> 必传</td><td>有默认值 <code>"bearer"</code></td><td><code>models/user.py:59</code></td></tr><tr><td>以为请求模型继承域模型</td><td>各自独立定义</td><td>字段要手工映射</td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>在 <code>models/</code> 里找卡片的请求类</td><td>它定义在路由模块内</td><td><code>routes/cards.py</code></td></tr><tr><td>认为更新请求能区分未传字段</td><td>四个字段默认都是 <code>None</code></td><td>—</td></tr><tr><td>以为所有端点都有响应模型</td><td>卡片路径返回字典</td><td>—</td></tr><tr><td>用 <code>model_dump()</code> 不带 <code>mode</code></td><td><code>datetime</code> 不转字符串</td><td>对照</td></tr><tr><td>认为 <code>Token.token_type</code> 必传</td><td>有默认值 <code>"bearer"</code></td><td><code>models/user.py</code></td></tr><tr><td>以为请求模型继承域模型</td><td>各自独立定义</td><td>字段要手工映射</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -1120,11 +1115,11 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/cards.py</code></td><td>两个请求类（:31-43）、字典返回（:54、:80）、端点签名（:50）</td></tr><tr><td><code>backend/routes/export.py</code></td><td>嵌套请求模型（:22-25）</td></tr><tr><td><code>backend/routes/sessions.py</code></td><td>响应模型声明（:24、:30、:42、:54）</td></tr><tr><td><code>backend/routes/auth.py</code></td><td><code>Token</code> 响应（:58、:74）</td></tr><tr><td><code>backend/routes/hub.py</code></td><td>Hub 响应模型（:38、:50）</td></tr><tr><td><code>backend/routes/scraper.py</code></td><td><code>ScrapedContent</code> 响应（:24、:34）</td></tr><tr><td><code>backend/routes/search.py</code></td><td><code>SearchResponse</code> 响应（:27）</td></tr><tr><td><code>backend/models/user.py</code></td><td><code>UserCreate</code> 与 <code>Token</code>（:26-29、:56-59）</td></tr><tr><td><code>backend/models/session.py</code></td><td>会话请求模型（:47-64）</td></tr><tr><td><code>backend/models/card.py</code></td><td><code>Card</code> 字段（:23-34）</td></tr><tr><td><code>backend/pipeline/api.py</code></td><td>卡片序列化（:490-493）</td></tr><tr><td><code>backend/agent/schemas.py</code></td><td><code>AgentChatRequest</code>（:24-26）</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-枚举与序列化"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-枚举与序列化</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/04-枚举与序列化.md</span></div><div class="dfile__body"><h1 id="枚举与序列化">枚举与序列化</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/routes/cards.py</code></td><td>两个请求类、字典返回、端点签名</td></tr><tr><td><code>backend/routes/export.py</code></td><td>嵌套请求模型</td></tr><tr><td><code>backend/routes/sessions.py</code></td><td>响应模型声明</td></tr><tr><td><code>backend/routes/auth.py</code></td><td><code>Token</code> 响应</td></tr><tr><td><code>backend/routes/hub.py</code></td><td>Hub 响应模型</td></tr><tr><td><code>backend/routes/scraper.py</code></td><td><code>ScrapedContent</code> 响应</td></tr><tr><td><code>backend/routes/search.py</code></td><td><code>SearchResponse</code> 响应</td></tr><tr><td><code>backend/models/user.py</code></td><td><code>UserCreate</code> 与 <code>Token</code></td></tr><tr><td><code>backend/models/session.py</code></td><td>会话请求模型</td></tr><tr><td><code>backend/models/card.py</code></td><td><code>Card</code> 字段</td></tr><tr><td><code>backend/pipeline/api.py</code></td><td>卡片序列化</td></tr><tr><td><code>backend/agent/schemas.py</code></td><td><code>AgentChatRequest</code></td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-枚举与序列化"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-枚举与序列化</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/04-枚举与序列化.md</span></div><div class="dfile__body"><h1 id="枚举与序列化">枚举与序列化</h1>
 <p>订单与任务模块用枚举表达固定集合，卡片、会话与用户模块则一律用 <code>str</code> 字段。枚举类都继承 <code>str</code> 与 <code>Enum</code>，因此既能在 Python 里比较，也能直接进 JSON。序列化侧有两套写法：带 <code>response_model</code> 的端点交给框架编码，其余端点在代码里调用 <code>model_dump</code>。</p>
 <p>枚举定义与序列化路径在这里对照。请求与响应模型的分工在 <code>03-请求与响应模型.md</code>，模型清单在 <code>01-模型清单与导出约定.md</code>。</p>
 <h2 id="1-四个-str-枚举">1. 四个 str 枚举</h2>
-<p><code>backend/models/order.py:15-28</code> 与 <code>backend/models/task.py:27-42</code> 各定义两个枚举：</p>
+<p><code>backend/models/order.py</code> 与 <code>backend/models/task.py</code> 各定义两个枚举：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">class</span><span style="color:#6F42C1"> OrderStatus</span><span style="color:#24292E">(</span><span style="color:#005CC5">str</span><span style="color:#24292E">, </span><span style="color:#6F42C1">Enum</span><span style="color:#24292E">):</span></span>
 <span class="line"><span style="color:#005CC5">    PENDING</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> "pending"</span></span>
 <span class="line"><span style="color:#005CC5">    PAYING</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> "paying"</span></span>
@@ -1166,12 +1161,12 @@
 
 
 
-<table><thead><tr><th>枚举</th><th>成员数</th><th>取值</th><th>位置</th></tr></thead><tbody><tr><td><code>OrderStatus</code></td><td>5</td><td>pending、paying、paid、cancelled、expired</td><td><code>order.py:15-21</code></td></tr><tr><td><code>OrderProduct</code></td><td>3</td><td>pro、plus、points_24</td><td><code>order.py:24-28</code></td></tr><tr><td><code>TaskType</code></td><td>5</td><td>collect、expand、refresh、document、gap_driven</td><td><code>task.py:27-34</code></td></tr><tr><td><code>TaskStatus</code></td><td>5</td><td>pending、running、completed、error、cancelled</td><td><code>task.py:36-42</code></td></tr></tbody></table>
+<table><thead><tr><th>枚举</th><th>成员数</th><th>取值</th><th>位置</th></tr></thead><tbody><tr><td><code>OrderStatus</code></td><td>5</td><td>pending、paying、paid、cancelled、expired</td><td><code>order.py</code></td></tr><tr><td><code>OrderProduct</code></td><td>3</td><td>pro、plus、points_24</td><td><code>order.py</code></td></tr><tr><td><code>TaskType</code></td><td>5</td><td>collect、expand、refresh、document、gap_driven</td><td><code>task.py</code></td></tr><tr><td><code>TaskStatus</code></td><td>5</td><td>pending、running、completed、error、cancelled</td><td><code>task.py</code></td></tr></tbody></table>
 <p>继承 <code>str</code> 的作用有两个：成员可以直接与字符串比较，FastAPI 编码时会输出其字符串值而不是枚举对象。四个枚举都用在后端内部，没有出现在请求或响应模型里：订单接口传的是商品字符串，任务状态在 SSE 事件里以字符串发送。</p>
 <h2 id="2-状态字段存字符串">2. 状态字段存字符串</h2>
-<p><code>Order</code> 的 <code>status</code> 字段类型是 <code>str</code>，默认值取枚举的值（<code>backend/models/order.py:43</code>）：</p>
+<p><code>Order</code> 的 <code>status</code> 字段类型是 <code>str</code>，默认值取枚举的值（<code>backend/models/order.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">status: </span><span style="color:#005CC5">str</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> OrderStatus.</span><span style="color:#005CC5">PENDING</span><span style="color:#24292E">.value   </span><span style="color:#6A737D"># 订单状态</span></span></code></pre>
-<p>同类情况出现在 <code>product</code>（<code>:39</code>，注释列出三个取值）与 <code>Task.status</code>（<code>backend/models/task.py:78</code> 初始化为 <code>TaskStatus.PENDING</code> 成员）。字段类型与枚举类型不一致，意味着模型层面不校验取值范围，写入非法状态不会报错。</p>
+<p>同类情况出现在 <code>product</code>（注释列出三个取值）与 <code>Task.status</code>（<code>backend/models/task.py</code>）。字段类型与枚举类型不一致，意味着模型层面不校验取值范围，写入非法状态不会报错。</p>
 <p>端点侧的判断方式也不统一。支付路由有一半用枚举值比较，另一半直接用字符串字面量：</p>
 
 
@@ -1198,10 +1193,10 @@
 
 
 
-<table><thead><tr><th>判断</th><th>写法</th><th>位置</th></tr></thead><tbody><tr><td>已支付</td><td><code>order.status == OrderStatus.PAID.value</code></td><td><code>backend/routes/payment.py:170</code>、<code>:251</code></td></tr><tr><td>待支付或支付中</td><td><code>order.status in (OrderStatus.PENDING.value, OrderStatus.PAYING.value)</code></td><td><code>:246</code></td></tr><tr><td>积分包</td><td><code>order.product == "points_24"</code></td><td><code>:196</code>、<code>:262</code></td></tr></tbody></table>
+<table><thead><tr><th>判断</th><th>写法</th><th>位置</th></tr></thead><tbody><tr><td>已支付</td><td><code>order.status == OrderStatus.PAID.value</code></td><td><code>backend/routes/payment.py</code></td></tr><tr><td>待支付或支付中</td><td><code>order.status in (OrderStatus.PENDING.value, OrderStatus.PAYING.value)</code></td><td>—</td></tr><tr><td>积分包</td><td><code>order.product == "points_24"</code></td><td>—</td></tr></tbody></table>
 <p>字符串字面量与 <code>OrderProduct.POINTS_24.value</code> 等价，但字面量绕过了枚举的集中定义，改值时容易漏改。</p>
 <h2 id="3-枚举值的序列化位置">3. 枚举值的序列化位置</h2>
-<p>任务模块把枚举序列化集中在 <code>Task.to_dict</code>：状态取 <code>.value</code>，进度用 <code>model_dump()</code>，时间用 <code>isoformat()</code>（<code>backend/models/task.py:95-104</code>）：</p>
+<p>任务模块把枚举序列化集中在 <code>Task.to_dict</code>：状态取 <code>.value</code>，进度用 <code>model_dump()</code>，时间用 <code>isoformat()</code>（<code>backend/models/task.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#032F62">"status"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">.status.value,</span></span>
 <span class="line"><span style="color:#032F62">"progress"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">.progress.model_dump() </span><span style="color:#D73A49">if</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.progress </span><span style="color:#D73A49">else</span><span style="color:#005CC5"> None</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#032F62">"created_at"</span><span style="color:#24292E">: </span><span style="color:#005CC5">self</span><span style="color:#24292E">.created_at.isoformat(),</span></span>
@@ -1237,7 +1232,7 @@
 
 
 
-<table><thead><tr><th>序列化点</th><th>写法</th><th>位置</th></tr></thead><tbody><tr><td>任务快照</td><td><code>self.status.value</code>、<code>isoformat()</code></td><td><code>task.py:99-101</code></td></tr><tr><td>SSE 事件数据</td><td><code>data.model_dump(mode="json")</code></td><td><code>task.py:109</code></td></tr><tr><td>卡片响应</td><td><code>card.model_dump(mode="json")</code></td><td><code>routes/cards.py:54</code></td></tr><tr><td>语义搜索响应</td><td><code>card.model_dump(mode="json")</code></td><td><code>routes/cards.py:80</code></td></tr></tbody></table>
+<table><thead><tr><th>序列化点</th><th>写法</th><th>位置</th></tr></thead><tbody><tr><td>任务快照</td><td><code>self.status.value</code>、<code>isoformat()</code></td><td><code>task.py</code></td></tr><tr><td>SSE 事件数据</td><td><code>data.model_dump(mode="json")</code></td><td><code>task.py</code></td></tr><tr><td>卡片响应</td><td><code>card.model_dump(mode="json")</code></td><td><code>routes/cards.py</code></td></tr><tr><td>语义搜索响应</td><td><code>card.model_dump(mode="json")</code></td><td><code>routes/cards.py</code></td></tr></tbody></table>
 <h2 id="4-两种-model_dump-模式的差别">4. 两种 model_dump 模式的差别</h2>
 <p><code>model_dump()</code> 返回 Python 对象视图，<code>datetime</code> 仍是 <code>datetime</code>；<code>model_dump(mode="json")</code> 返回可直接进 JSON 的结构，时间变成 ISO 字符串。是否带 <code>mode</code> 取决于结果去往哪里：</p>
 
@@ -1260,7 +1255,7 @@
 
 
 
-<table><thead><tr><th>去向</th><th>建议用法</th><th>仓库实例</th></tr></thead><tbody><tr><td>放进 SSE 事件体或 HTTP JSON</td><td><code>mode="json"</code></td><td><code>task.py:109</code>、<code>cards.py:54</code></td></tr><tr><td>只用于日志或内部再处理</td><td>默认</td><td><code>task.py:100</code></td></tr></tbody></table>
+<table><thead><tr><th>去向</th><th>建议用法</th><th>仓库实例</th></tr></thead><tbody><tr><td>放进 SSE 事件体或 HTTP JSON</td><td><code>mode="json"</code></td><td><code>task.py</code>、<code>cards.py</code></td></tr><tr><td>只用于日志或内部再处理</td><td>默认</td><td><code>task.py</code></td></tr></tbody></table>
 <p>若把默认模式的字典直接交给 <code>JSONResponse</code>，<code>datetime</code> 会成为编码错误；仓库在需要 JSON 的位置都显式带了 <code>mode="json"</code>。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["Pydantic 模型实例"] --> B{"调用 model_dump 的模式"}
@@ -1271,7 +1266,7 @@
   A --> G["response_model 交给 FastAPI"]
   G --> F</pre></div>
 <h2 id="5-任务事件的载荷处理">5. 任务事件的载荷处理</h2>
-<p><code>TaskEvent</code> 的 <code>data</code> 字段类型是 <code>Any</code>（<code>backend/models/task.py:55-59</code>），事件类型决定载荷形态：进度事件是 <code>TaskProgress</code>，卡片事件是卡片字典或模型，错误事件是字符串。<code>Task.emit</code> 用一个 <code>hasattr</code> 判断统一处理（<code>:106-112</code>）：</p>
+<p><code>TaskEvent</code> 的 <code>data</code> 字段类型是 <code>Any</code>（<code>backend/models/task.py</code>），事件类型决定载荷形态：进度事件是 <code>TaskProgress</code>，卡片事件是卡片字典或模型，错误事件是字符串。<code>Task.emit</code> 用一个 <code>hasattr</code> 判断统一处理：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">data</span><span style="color:#D73A49">=</span><span style="color:#24292E">data.model_dump(</span><span style="color:#E36209">mode</span><span style="color:#D73A49">=</span><span style="color:#032F62">"json"</span><span style="color:#24292E">) </span><span style="color:#D73A49">if</span><span style="color:#005CC5"> hasattr</span><span style="color:#24292E">(data, </span><span style="color:#032F62">"model_dump"</span><span style="color:#24292E">) </span><span style="color:#D73A49">else</span><span style="color:#24292E"> data,</span></span></code></pre>
 <p>传模型时转成 JSON 字典，传普通对象时原样保留。这个判断让 <code>emit</code> 能接受多种入参，代价是 <code>data</code> 的实际结构只能从调用点推断，模型层不再提供保证。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
@@ -1289,10 +1284,10 @@
   E->>E: timestamp 取 utcnow
   T->>Q: 放入事件队列</pre></div>
 <h2 id="6-任务状态机的状态取值">6. 任务状态机的状态取值</h2>
-<p><code>TaskStatus</code> 的五个成员覆盖任务的完整生命周期（<code>backend/models/task.py:36-42</code>）。任务对象初始化为 <code>PENDING</code>（<code>:78</code>），运行、完成、出错与取消分别对应另外四个。状态迁移的代码在 <code>TaskManager</code> 与流水线模块里，模型层只定义取值集合。</p>
+<p><code>TaskStatus</code> 的五个成员覆盖任务的完整生命周期（<code>backend/models/task.py</code>）。任务对象初始化为 <code>PENDING</code>，运行、完成、出错与取消分别对应另外四个。状态迁移的代码在 <code>TaskManager</code> 与流水线模块里，模型层只定义取值集合。</p>
 <p>状态以字符串形式进入 SSE 事件与快照，因此前端无需枚举知识，按字符串判断即可。这一约定让枚举成为后端内部约定，跨端契约是字符串。</p>
 <h2 id="7-与-pydantic-校验的关系">7. 与 Pydantic 校验的关系</h2>
-<p>枚举类型字段在 Pydantic 里会自动校验取值，非法成员会被拒绝。仓库里四个枚举都没有用作字段类型，唯一接近的是 <code>TaskProgress.stage</code>：它是 <code>str</code>，注释列出四个合法阶段（<code>backend/models/task.py:47</code>），同样没有取值校验。</p>
+<p>枚举类型字段在 Pydantic 里会自动校验取值，非法成员会被拒绝。仓库里四个枚举都没有用作字段类型，唯一接近的是 <code>TaskProgress.stage</code>：它是 <code>str</code>，注释列出四个合法阶段（<code>backend/models/task.py</code>），同样没有取值校验。</p>
 
 
 
@@ -1366,7 +1361,7 @@
 
 
 
-<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为 <code>Order.status</code> 是枚举类型</td><td>它是 <code>str</code>，非法值不报错</td><td><code>models/order.py:43</code></td></tr><tr><td>用枚举比较却忘了取值</td><td><code>order.status == OrderStatus.PAID</code> 永远为假</td><td><code>routes/payment.py:170</code> 用的是 <code>.value</code></td></tr><tr><td>混用字面量与枚举</td><td>改枚举值时漏改字面量</td><td><code>:196</code>、<code>:262</code></td></tr><tr><td>给 <code>JSONResponse</code> 传默认模式字典</td><td><code>datetime</code> 无法编码</td><td>需要 <code>mode="json"</code></td></tr><tr><td>认为 <code>TaskEvent.data</code> 有固定结构</td><td>类型是 <code>Any</code></td><td><code>models/task.py:58</code></td></tr><tr><td>依赖 <code>stage</code> 自动校验</td><td>它是 <code>str</code>，无约束</td><td><code>models/task.py:47</code></td></tr></tbody></table>
+<table><thead><tr><th>易错点</th><th>现象</th><th>位置</th></tr></thead><tbody><tr><td>以为 <code>Order.status</code> 是枚举类型</td><td>它是 <code>str</code>，非法值不报错</td><td><code>models/order.py</code></td></tr><tr><td>用枚举比较却忘了取值</td><td><code>order.status == OrderStatus.PAID</code> 永远为假</td><td><code>routes/payment.py</code> 用的是 <code>.value</code></td></tr><tr><td>混用字面量与枚举</td><td>改枚举值时漏改字面量</td><td>—</td></tr><tr><td>给 <code>JSONResponse</code> 传默认模式字典</td><td><code>datetime</code> 无法编码</td><td>需要 <code>mode="json"</code></td></tr><tr><td>认为 <code>TaskEvent.data</code> 有固定结构</td><td>类型是 <code>Any</code></td><td><code>models/task.py</code></td></tr><tr><td>依赖 <code>stage</code> 自动校验</td><td>它是 <code>str</code>，无约束</td><td><code>models/task.py</code></td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <p>核心概念：</p>
 
@@ -1485,7 +1480,7 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/order.py</code></td><td>两个订单枚举（:15-28）、订单模型与状态字段（:31-51）</td></tr><tr><td><code>backend/models/task.py</code></td><td>两个任务枚举（:27-42）、<code>TaskProgress</code> 与 <code>TaskEvent</code>（:45-59）、状态初始化（:78）、快照与事件（:95-112）</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>状态比较（:170、:246、:251、:284）与商品字面量（:196、:262）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>卡片序列化（:54、:80）</td></tr><tr><td><code>backend/pipeline/api.py</code></td><td>卡片返回序列化（:490-493）</td></tr><tr><td><code>backend/quality/scorer.py</code></td><td>模型展开序列化（:512）</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="模型层的易错点与排查">模型层的易错点与排查</h1>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/order.py</code></td><td>两个订单枚举、订单模型与状态字段</td></tr><tr><td><code>backend/models/task.py</code></td><td>两个任务枚举、<code>TaskProgress</code> 与 <code>TaskEvent</code>、状态初始化、快照与事件</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>状态比较与商品字面量</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>卡片序列化</td></tr><tr><td><code>backend/pipeline/api.py</code></td><td>卡片返回序列化</td></tr><tr><td><code>backend/quality/scorer.py</code></td><td>模型展开序列化</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-易错点与排查"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与排查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/28-FastAPI 后端/02-Pydantic模型/05-易错点与排查.md</span></div><div class="dfile__body"><h1 id="模型层的易错点与排查">模型层的易错点与排查</h1>
 <p>模型层的问题往往在别处爆发：导入路径不通表现为启动失败，必填字段变化表现为历史数据读不出来，枚举与字符串混用表现为判断永远为假。风险按「导入期、解析期、运行期」分组，并给出一条从报错反推到模型定义的排查顺序。</p>
 <p>模型清单见 <code>01-模型清单与导出约定.md</code>，校验规则见 <code>02-字段约束与校验器.md</code>，序列化见 <code>04-枚举与序列化.md</code>。</p>
 <h2 id="1-风险清单">1. 风险清单</h2>
@@ -1554,9 +1549,9 @@
 
 
 
-<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>两代校验器写法并存</td><td><code>models/card.py:36</code> 与 <code>models/user.py:31</code></td><td>迁移时容易只改一处</td></tr><tr><td>R2</td><td>域模型不校验，校验只在请求模型</td><td><code>models/session.py:35-44</code> 与 <code>:51-54</code></td><td>直接构造可绕过规则</td></tr><tr><td>R3</td><td><code>models/__init__.py</code> 只导出两个模块</td><td><code>models/__init__.py:6-7</code></td><td>包级导入其余类报 <code>ImportError</code></td></tr><tr><td>R4</td><td><code>TokenData</code> 定义后无引用</td><td><code>models/user.py:62-64</code></td><td>易被误当成在用结构</td></tr><tr><td>R5</td><td>会员与积分字段是 <code>str</code> 与 <code>int</code></td><td><code>models/user.py:20-22</code></td><td>取值不受约束，默认值与配置重复</td></tr><tr><td>R6</td><td><code>Card</code> 必填字段多且无默认</td><td><code>models/card.py:23-34</code></td><td>历史数据缺字段时构造失败</td></tr><tr><td>R7</td><td>422 处理器直接输出 <code>exc.errors()</code></td><td><code>backend/main.py:112</code></td><td>某些错误项可能无法序列化</td></tr><tr><td>R8</td><td>状态比较依赖 <code>.value</code> 与字面量混用</td><td><code>backend/routes/payment.py:170</code>、<code>:196</code></td><td>改枚举值时遗漏</td></tr><tr><td>R9</td><td><code>Task</code> 是普通类</td><td><code>models/task.py:62</code></td><td>不能作为 <code>response_model</code>，没有 <code>model_dump</code></td></tr></tbody></table>
+<table><thead><tr><th>编号</th><th>风险</th><th>位置</th><th>现象</th></tr></thead><tbody><tr><td>R1</td><td>两代校验器写法并存</td><td><code>models/card.py</code> 与 <code>models/user.py</code></td><td>迁移时容易只改一处</td></tr><tr><td>R2</td><td>域模型不校验，校验只在请求模型</td><td><code>models/session.py</code> 与</td><td>直接构造可绕过规则</td></tr><tr><td>R3</td><td><code>models/__init__.py</code> 只导出两个模块</td><td><code>models/__init__.py</code></td><td>包级导入其余类报 <code>ImportError</code></td></tr><tr><td>R4</td><td><code>TokenData</code> 定义后无引用</td><td><code>models/user.py</code></td><td>易被误当成在用结构</td></tr><tr><td>R5</td><td>会员与积分字段是 <code>str</code> 与 <code>int</code></td><td><code>models/user.py</code></td><td>取值不受约束，默认值与配置重复</td></tr><tr><td>R6</td><td><code>Card</code> 必填字段多且无默认</td><td><code>models/card.py</code></td><td>历史数据缺字段时构造失败</td></tr><tr><td>R7</td><td>422 处理器直接输出 <code>exc.errors()</code></td><td><code>backend/main.py</code></td><td>某些错误项可能无法序列化</td></tr><tr><td>R8</td><td>状态比较依赖 <code>.value</code> 与字面量混用</td><td><code>backend/routes/payment.py</code></td><td>改枚举值时遗漏</td></tr><tr><td>R9</td><td><code>Task</code> 是普通类</td><td><code>models/task.py</code></td><td>不能作为 <code>response_model</code>，没有 <code>model_dump</code></td></tr></tbody></table>
 <h2 id="2-导入期包级导出不完整">2. 导入期：包级导出不完整</h2>
-<p><code>backend/models/__init__.py</code> 只导出 <code>Card</code> 与三个会话类（<code>:6-7</code>），而用户、Hub、订单、任务的模型各有自己的模块路径。包级导入出现在九处，全部是 <code>Card</code>（如 <code>backend/routes/cards.py:19</code>）；其余模型走模块级导入。</p>
+<p><code>backend/models/__init__.py</code> 只导出 <code>Card</code> 与三个会话类，而用户、Hub、订单、任务的模型各有自己的模块路径。包级导入出现在九处，全部是 <code>Card</code>（<code>backend/routes/cards.py</code>）；其余模型走模块级导入。</p>
 <p>新增模型时若按包级方式导入而未补 <code>__init__.py</code>，错误发生在模块导入阶段，应用直接启动失败。排查这类报错时先看 <code>ImportError</code> 指向的名字在 <code>__init__.py</code> 里是否存在。</p>
 
 
@@ -1581,7 +1576,7 @@
 <table><thead><tr><th>导入形式</th><th>覆盖对象</th><th>失败时机</th></tr></thead><tbody><tr><td><code>from backend.models import X</code></td><td>仅 <code>Card</code> 与三个会话类</td><td>导入该模块时</td></tr><tr><td><code>from backend.models.user import X</code></td><td>对应模块的全部类</td><td>导入该模块时</td></tr></tbody></table>
 <h2 id="3-解析期校验只覆盖请求路径">3. 解析期：校验只覆盖请求路径</h2>
 <p>校验器挂在 <code>UserCreate</code>、<code>SessionCreate</code> 等请求模型上，域模型 <code>User</code>、<code>Session</code> 本身没有格式校验。直接构造域模型的代码路径不受约束，例如会话存储读回一行数据后构造 <code>Session</code>，名称里的空白不会被清理。</p>
-<p><code>Card</code> 是例外：它的三个校验器挂在域模型上（<code>models/card.py:36-63</code>），因此构造 <code>Card</code> 的任何路径都会走校验，包括从数据库读回。历史数据里若有非 UUID 的 <code>id</code>、越界的 <code>confidence</code> 或结构不符的 <code>metadata</code>，读取会抛校验错误而不是返回对象。</p>
+<p><code>Card</code> 是例外：它的三个校验器挂在域模型上（<code>models/card.py</code>），因此构造 <code>Card</code> 的任何路径都会走校验，包括从数据库读回。历史数据里若有非 UUID 的 <code>id</code>、越界的 <code>confidence</code> 或结构不符的 <code>metadata</code>，读取会抛校验错误而不是返回对象。</p>
 
 
 
@@ -1614,7 +1609,7 @@
 
 <table><thead><tr><th>模型</th><th>校验位置</th><th>直接构造是否校验</th></tr></thead><tbody><tr><td><code>User</code></td><td>请求模型 <code>UserCreate</code></td><td>否</td></tr><tr><td><code>Session</code></td><td>请求模型 <code>SessionCreate</code></td><td>否</td></tr><tr><td><code>Card</code></td><td>域模型自身</td><td>是</td></tr><tr><td><code>Order</code></td><td>无</td><td>否</td></tr></tbody></table>
 <h2 id="4-解析期422-响应体的不确定性">4. 解析期：422 响应体的不确定性</h2>
-<p>全局处理器把 <code>exc.errors()</code> 直接放进 <code>JSONResponse</code>（<code>backend/main.py:108-113</code>）。Pydantic 的错误列表里通常只有字符串与数字，但自定义校验器抛出的 <code>ValueError</code> 可能以 <code>ctx</code> 形式进入错误项。这一条属推理，未在本仓库实测；表现会是处理器自身抛序列化异常，最终由全局 <code>Exception</code> 处理器返回 500 而不是 422。</p>
+<p>全局处理器把 <code>exc.errors()</code> 直接放进 <code>JSONResponse</code>（<code>backend/main.py</code>）。Pydantic 的错误列表里通常只有字符串与数字，但自定义校验器抛出的 <code>ValueError</code> 可能以 <code>ctx</code> 形式进入错误项。这一条属推理，未在本仓库实测；表现会是处理器自身抛序列化异常，最终由全局 <code>Exception</code> 处理器返回 500 而不是 422。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   A["请求体解析失败"] --> B["RequestValidationError"]
   B --> C["validation_exception_handler"]
@@ -1624,7 +1619,7 @@
   F --> G["general_exception_handler 返回 500"]
   E --> H["客户端可读字段级错误"]</pre></div>
 <h2 id="5-运行期枚举与字符串">5. 运行期：枚举与字符串</h2>
-<p>订单状态在模型里是 <code>str</code>，枚举只提供候选值。支付路由里的比较分两类（<code>backend/routes/payment.py:170</code> 用 <code>OrderStatus.PAID.value</code>，<code>:196</code> 用 <code>"points_24"</code> 字面量）。改动枚举定义时，字面量不会跟着变，因此判断会静默失效。</p>
+<p>订单状态在模型里是 <code>str</code>，枚举只提供候选值。支付路由里的比较分两类（<code>backend/routes/payment.py</code>）。改动枚举定义时，字面量不会跟着变，因此判断会静默失效。</p>
 <p>排查判断失效的步骤：先确认字段里的实际字符串，再确认比较右侧的来源是枚举值还是字面量，最后确认两侧大小写一致。</p>
 
 
@@ -1651,12 +1646,12 @@
 
 
 
-<table><thead><tr><th>比较写法</th><th>是否随枚举改动</th><th>位置</th></tr></thead><tbody><tr><td><code>OrderStatus.PAID.value</code></td><td>是</td><td><code>:170</code>、<code>:251</code></td></tr><tr><td><code>OrderStatus.PENDING.value</code> 等元组</td><td>是</td><td><code>:246</code></td></tr><tr><td><code>"points_24"</code></td><td>否</td><td><code>:196</code>、<code>:262</code></td></tr></tbody></table>
+<table><thead><tr><th>比较写法</th><th>是否随枚举改动</th><th>位置</th></tr></thead><tbody><tr><td><code>OrderStatus.PAID.value</code></td><td>是</td><td>—</td></tr><tr><td><code>OrderStatus.PENDING.value</code> 等元组</td><td>是</td><td><code>backend/routes/payment.py</code></td></tr><tr><td><code>"points_24"</code></td><td>否</td><td>—</td></tr></tbody></table>
 <h2 id="6-运行期序列化模式">6. 运行期：序列化模式</h2>
-<p>需要把模型放进 JSON 的地方要带 <code>mode="json"</code>。仓库里所有发往 HTTP 或 SSE 的转换都带了（<code>backend/routes/cards.py:54</code>、<code>backend/models/task.py:109</code>），只有任务快照里的进度转换使用默认模式（<code>:100</code>），因为那条路径里的时间已经单独 <code>isoformat</code>。</p>
+<p>需要把模型放进 JSON 的地方要带 <code>mode="json"</code>。仓库里所有发往 HTTP 或 SSE 的转换都带了（<code>backend/routes/cards.py</code>、<code>backend/models/task.py</code>），只有任务快照里的进度转换使用默认模式，因为那条路径里的时间已经单独 <code>isoformat</code>。</p>
 <p>排查编码错误时先确认失败对象的字段类型，再看 <code>model_dump</code> 的调用是否带模式。</p>
 <h2 id="7-运行期非模型类">7. 运行期：非模型类</h2>
-<p><code>Task</code> 与 <code>TaskManager</code> 是普通 Python 类（<code>backend/models/task.py:62</code>、<code>:193</code>），没有 Pydantic 基类。它们不能被用作 <code>response_model</code>，也没有 <code>model_dump</code>。任务相关的输出靠 <code>to_dict</code> 手工组装（<code>:95-104</code>），因此字段增减要在这个方法里同步。</p>
+<p><code>Task</code> 与 <code>TaskManager</code> 是普通 Python 类（<code>backend/models/task.py</code>），没有 Pydantic 基类。它们不能被用作 <code>response_model</code>，也没有 <code>model_dump</code>。任务相关的输出靠 <code>to_dict</code> 手工组装，因此字段增减要在这个方法里同步。</p>
 
 
 
@@ -1874,4 +1869,4 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/__init__.py</code></td><td>包级导出（:6-7）</td></tr><tr><td><code>backend/models/card.py</code></td><td>必填字段（:23-34）与三个校验器（:36-63）</td></tr><tr><td><code>backend/models/session.py</code></td><td>域模型（:35-44）与请求模型校验（:51-54）</td></tr><tr><td><code>backend/models/user.py</code></td><td>会员与积分字段（:20-22）、校验器（:31-47）、<code>TokenData</code>（:62-64）</td></tr><tr><td><code>backend/models/order.py</code></td><td>枚举与状态字段（:15-51）</td></tr><tr><td><code>backend/models/task.py</code></td><td>非模型类（:62、:193）、快照与事件（:95-112）</td></tr><tr><td><code>backend/main.py</code></td><td>422 处理器（:103-114）</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>状态与商品比较（:170、:196、:246、:262）</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>包级导入（:19）与序列化（:54）</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/01-%E8%B7%AF%E7%94%B1%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5/"><span class="k">← 上一篇</span><span class="t">路由与依赖注入</span><span class="d">FastAPI 后端 · 5 个文件</span></a><a class="next" href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/03-%E9%89%B4%E6%9D%83/"><span class="k">下一篇 →</span><span class="t">鉴权</span><span class="d">FastAPI 后端 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>backend/models/__init__.py</code></td><td>包级导出</td></tr><tr><td><code>backend/models/card.py</code></td><td>必填字段与三个校验器</td></tr><tr><td><code>backend/models/session.py</code></td><td>域模型与请求模型校验</td></tr><tr><td><code>backend/models/user.py</code></td><td>会员与积分字段、校验器、<code>TokenData</code></td></tr><tr><td><code>backend/models/order.py</code></td><td>枚举与状态字段</td></tr><tr><td><code>backend/models/task.py</code></td><td>非模型类、快照与事件</td></tr><tr><td><code>backend/main.py</code></td><td>422 处理器</td></tr><tr><td><code>backend/routes/payment.py</code></td><td>状态与商品比较</td></tr><tr><td><code>backend/routes/cards.py</code></td><td>包级导入与序列化</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/01-%E8%B7%AF%E7%94%B1%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5/"><span class="k">← 上一篇</span><span class="t">路由与依赖注入</span><span class="d">FastAPI 后端 · 5 个文件</span></a><a class="next" href="/tc63/docs/28-FastAPI%20%E5%90%8E%E7%AB%AF/03-%E9%89%B4%E6%9D%83/"><span class="k">下一篇 →</span><span class="t">鉴权</span><span class="d">FastAPI 后端 · 5 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

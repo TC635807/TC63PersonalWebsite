@@ -2,16 +2,45 @@
 <p>首页首屏右侧有一块会缓慢流动的紫色墨迹。系统开了”减少动效”、浏览器能力不足，或者干脆没有脚本时，这块区域不会强行播放动画——它安静地停在那里，页面其余部分照常可读。</p>
 <p>组件 <code>src/components/FluidBackground.astro</code>（41 行）只做两件事：放一个画布容器，然后判断是否启动模拟。模拟实现在 <code>src/scripts/fluid.js</code>（1631 行）里，那是一个从上游开源项目改编过来的完整实现。</p>
 <h2 id="组件只决定启动与否">组件只决定启动与否</h2>
-<p>组件的标记部分只有一个画布，外面包一层容器，画布标了装饰性（<code>FluidBackground.astro</code>）：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#24292E">&#x3C;</span><span style="color:#22863A">div</span><span style="color:#6F42C1"> class</span><span style="color:#D73A49">=</span><span style="color:#032F62">"fluid-wrap"</span><span style="color:#24292E">></span></span>
-<span class="line"><span style="color:#24292E">  &#x3C;</span><span style="color:#22863A">canvas</span><span style="color:#6F42C1"> id</span><span style="color:#D73A49">=</span><span style="color:#24292E">{id} </span><span style="color:#6F42C1">aria-hidden</span><span style="color:#D73A49">=</span><span style="color:#032F62">"true"</span><span style="color:#24292E">>&#x3C;/</span><span style="color:#22863A">canvas</span><span style="color:#24292E">></span></span>
+<p>组件的标记部分只有一个画布，外面包一层容器：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="astro"><code><span class="line"><span style="color:#6A737D">---</span></span>
+<span class="line"><span style="color:#D73A49">interface</span><span style="color:#6F42C1"> Props</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#E36209">  id</span><span style="color:#D73A49">?:</span><span style="color:#005CC5"> string</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#24292E"> { </span><span style="color:#005CC5">id</span><span style="color:#D73A49"> =</span><span style="color:#032F62"> 'fluid-canvas'</span><span style="color:#24292E"> } </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Astro.props;</span></span>
+<span class="line"><span style="color:#6A737D">---</span></span>
+<span class="line"><span style="color:#24292E">&#x3C;</span><span style="color:#22863A">div</span><span style="color:#6F42C1"> class</span><span style="color:#24292E">=</span><span style="color:#032F62">"fluid-wrap"</span><span style="color:#24292E">></span></span>
+<span class="line"><span style="color:#24292E">  &#x3C;</span><span style="color:#22863A">canvas</span><span style="color:#6F42C1"> id</span><span style="color:#24292E">={id} </span><span style="color:#6F42C1">aria-hidden</span><span style="color:#24292E">=</span><span style="color:#032F62">"true"</span><span style="color:#24292E">>&#x3C;/</span><span style="color:#22863A">canvas</span><span style="color:#24292E">></span></span>
 <span class="line"><span style="color:#24292E">&#x3C;/</span><span style="color:#22863A">div</span><span style="color:#24292E">></span></span></code></pre>
-<p>标识默认叫 <code>fluid-canvas</code>，可以由属性覆盖，但脚本里按默认标识查找，因此一个页面只放一个该组件。画布对辅助技术隐藏，因为它不承载信息，只是装饰。</p>
+<p><code>&#x3C;canvas></code> 是浏览器提供的位图画布，WebGL 的所有绘制都落在这块画布上；<code>aria-hidden="true"</code> 表示它对辅助技术隐藏——它不承载信息，只是装饰。标识默认叫 <code>fluid-canvas</code>，可以由属性覆盖，但脚本按默认标识查找，因此一个页面只放一个该组件。</p>
 <p>脚本段先读用户的动效偏好，再取画布元素，两个条件都满足才调用初始化：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> reduce</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> window.</span><span style="color:#6F42C1">matchMedia</span><span style="color:#24292E">(</span><span style="color:#032F62">'(prefers-reduced-motion: reduce)'</span><span style="color:#24292E">).matches</span></span>
-<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> canvas</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> document.</span><span style="color:#6F42C1">getElementById</span><span style="color:#24292E">(</span><span style="color:#032F62">'fluid-canvas'</span><span style="color:#24292E">)</span></span>
-<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (canvas </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#D73A49"> !</span><span style="color:#24292E">reduce) { </span><span style="color:#6F42C1">initFluid</span><span style="color:#24292E">({ </span><span style="color:#D73A49">...</span><span style="color:#24292E"> }) }</span></span></code></pre>
-<p>这是一个”宁可不动”的选择：模拟本身不提供任何功能，省略它不影响内容。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="astro"><code><span class="line"><span style="color:#24292E">&#x3C;</span><span style="color:#22863A">script</span><span style="color:#24292E">></span></span>
+<span class="line"><span style="color:#D73A49">  import</span><span style="color:#24292E"> { initFluid } </span><span style="color:#D73A49">from</span><span style="color:#032F62"> '../scripts/fluid.js'</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">  import</span><span style="color:#24292E"> { url } </span><span style="color:#D73A49">from</span><span style="color:#032F62"> '../lib/url'</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> reduce</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> window.</span><span style="color:#6F42C1">matchMedia</span><span style="color:#24292E">(</span><span style="color:#032F62">'(prefers-reduced-motion: reduce)'</span><span style="color:#24292E">).matches;</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> canvas</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> document.</span><span style="color:#6F42C1">getElementById</span><span style="color:#24292E">(</span><span style="color:#032F62">'fluid-canvas'</span><span style="color:#24292E">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (canvas </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#D73A49"> !</span><span style="color:#24292E">reduce) {</span></span>
+<span class="line"><span style="color:#6F42C1">    initFluid</span><span style="color:#24292E">({</span></span>
+<span class="line"><span style="color:#24292E">      canvasSelector: </span><span style="color:#032F62">'#fluid-canvas'</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">      ditheringTexture: </span><span style="color:#6F42C1">url</span><span style="color:#24292E">(</span><span style="color:#032F62">'/fluid/LDR_LLL1_0.png'</span><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#24292E">      hueRange: [</span><span style="color:#005CC5">0.70</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.82</span><span style="color:#24292E">],</span></span>
+<span class="line"><span style="color:#24292E">      config: {</span></span>
+<span class="line"><span style="color:#24292E">        BACK_COLOR: { r: </span><span style="color:#005CC5">255</span><span style="color:#24292E">, g: </span><span style="color:#005CC5">255</span><span style="color:#24292E">, b: </span><span style="color:#005CC5">255</span><span style="color:#24292E"> },</span></span>
+<span class="line"><span style="color:#24292E">        TRANSPARENT: </span><span style="color:#005CC5">false</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">        BLOOM: </span><span style="color:#005CC5">false</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">        SUNRAYS: </span><span style="color:#005CC5">false</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">        DENSITY_DISSIPATION: </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">        SPLAT_RADIUS: </span><span style="color:#005CC5">0.16</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">      },</span></span>
+<span class="line"><span style="color:#24292E">      pointerColorScale: </span><span style="color:#005CC5">0.55</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">      ambientIntervalMs: </span><span style="color:#005CC5">5000</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">      initialSplats: </span><span style="color:#005CC5">6</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">      initialColorScale: </span><span style="color:#005CC5">0.5</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    });</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#24292E">&#x3C;/</span><span style="color:#22863A">script</span><span style="color:#24292E">></span></span></code></pre>
+<p><code>matchMedia</code> 读取的 <code>prefers-reduced-motion</code> 是用户系统里的减少动效偏好。这是一个”宁可不动”的选择：模拟本身不提供任何功能，省略它不影响内容。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[组件挂载] --> B[渲染容器与画布]
     B --> C{用户要求减少动效?}
@@ -22,7 +51,7 @@
     F --> G[内部做能力检测与降级]</pre></div>
 <h2 id="白底相乘的观感">白底相乘的观感</h2>
 <p>画布样式在全局样式表里（<code>src/styles/global.css</code> 的主视觉段）：外层图形容器固定四比三比例并裁掉溢出，流体容器绝对定位铺满，画布宽高百分之百并使用相乘混合模式。</p>
-<p>相乘混合是这套主题的关键：模拟本身在白底上画颜色，直接叠加会显得像实色块；与白底相乘之后，紫色变成浅紫、深色变成灰紫，整体像在白纸上晕开的墨。这也解释了配置里为什么关掉发光类效果——在白底上发光会发灰。</p>
+<p><code>mix-blend-mode: multiply</code> 是 CSS 混合模式，让画布像素与它下面的背景按通道相乘（结果只会更暗或不变，不会变亮）。这是这套主题的关键：模拟本身在白底上画颜色，直接叠加会显得像实色块；与白底相乘之后，紫色变成浅紫、深色变成灰紫，整体像在白纸上晕开的墨。这也解释了配置里为什么关掉发光类效果——在白底上发光会发灰。</p>
 <h2 id="初始化参数">初始化参数</h2>
 <p>调用初始化时传了一组参数，覆盖默认配置并限定配色（<code>FluidBackground.astro</code> 的脚本段）：</p>
 
@@ -72,12 +101,51 @@
 
 <table><thead><tr><th>参数</th><th>值</th><th>作用</th></tr></thead><tbody><tr><td><code>canvasSelector</code></td><td><code>#fluid-canvas</code></td><td>限定作用对象</td></tr><tr><td><code>ditheringTexture</code></td><td><code>/fluid/LDR_LLL1_0.png</code></td><td>抖动纹理，减轻色带</td></tr><tr><td><code>hueRange</code></td><td>0.70 到 0.82</td><td>把色相收在紫段，避免偏品红</td></tr><tr><td><code>pointerColorScale</code></td><td>0.55</td><td>悬停笔触亮度，压暗成”搅一下”</td></tr><tr><td><code>ambientIntervalMs</code></td><td>5000</td><td>空闲时每五秒自落一团墨</td></tr><tr><td><code>initialSplats</code></td><td>6</td><td>开场墨团数量</td></tr><tr><td><code>initialColorScale</code></td><td>0.5</td><td>开场墨团亮度</td></tr></tbody></table>
 <p>配置覆盖里还显式设置了白色背景、关闭透明、关闭发光与阳光、把密度衰减从默认的 0.85 提到 1.0、把笔触半径从 0.25 收到 0.16。注释解释了每一条的理由，都是围绕”白纸上的薄墨”这个目标调的。</p>
+<p>覆盖是在脚本里合并的，不是去改上游默认值：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> function</span><span style="color:#6F42C1"> initFluid</span><span style="color:#24292E"> (</span><span style="color:#E36209">opts</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> {}) {</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> canvasSelector</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.canvasSelector </span><span style="color:#D73A49">||</span><span style="color:#032F62"> '#fluid-canvas'</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> pointerColorScale</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.pointerColorScale </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> null</span><span style="color:#D73A49"> ?</span><span style="color:#24292E"> opts.pointerColorScale </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> 0.8</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">  ...</span></span>
+<span class="line"><span style="color:#6A737D">  // ── 本站扩展：opts 覆盖配色（白紫主题）与色相范围 ──</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (opts.config) Object.</span><span style="color:#6F42C1">assign</span><span style="color:#24292E">(config, opts.config);</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> hueMin</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.hueRange </span><span style="color:#D73A49">?</span><span style="color:#24292E"> opts.hueRange[</span><span style="color:#005CC5">0</span><span style="color:#24292E">] </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> 0.0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> hueMax</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.hueRange </span><span style="color:#D73A49">?</span><span style="color:#24292E"> opts.hueRange[</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> 1.0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>Object.assign</code> 把传入的 <code>config</code> 逐项盖到默认对象上，因此上游默认值仍留在文件里可对照；<code>opts.hueRange</code> 被拆成两个常量，供后续生成颜色时使用。代价是”当前实际生效的值”要同时看默认对象和调用处两处。</p>
 <h2 id="能力不足时的处理">能力不足时的处理</h2>
-<p>初始化函数内部先取 WebGL 上下文并检测扩展能力（<code>fluid.js</code> 开头的上下文与能力检测段）。检测到不支持线性滤波时会下调染料分辨率到 512、关闭着色与发光类效果；识别为移动端时也会把染料分辨率降到 512。</p>
+<p>初始化函数内部先取 WebGL 上下文并检测扩展能力（<code>fluid.js</code> 开头的上下文与能力检测段）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#24292E"> { </span><span style="color:#005CC5">gl</span><span style="color:#24292E">, </span><span style="color:#005CC5">ext</span><span style="color:#24292E"> } </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> getWebGLContext</span><span style="color:#24292E">(canvas);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">isMobile</span><span style="color:#24292E">()) {</span></span>
+<span class="line"><span style="color:#24292E">    config.</span><span style="color:#005CC5">DYE_RESOLUTION</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 512</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">ext.supportLinearFiltering) {</span></span>
+<span class="line"><span style="color:#24292E">    config.</span><span style="color:#005CC5">DYE_RESOLUTION</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 512</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    config.</span><span style="color:#005CC5">SHADING</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    config.</span><span style="color:#005CC5">BLOOM</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    config.</span><span style="color:#005CC5">SUNRAYS</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>gl</code> 是 WebGL 渲染上下文，所有绘制调用都发给它；<code>ext</code> 是探测到的扩展能力集合。线性滤波指纹理放大缩小时按插值采样，关掉后画面会更”硬”，所以这里同时把染料分辨率降到 512 来抵消；移动端也走同一条降配路径。</p>
 <p>这套判断是能力驱动的：能跑就跑，不能跑就减配，而不是直接退出。直接的退出点只有两个——找不到画布，或用户要求减少动效。</p>
 <h2 id="改编边界与许可">改编边界与许可</h2>
-<p>文件头部保留了上游项目的 MIT 许可全文，并用一段注释列出针对本站的改动（<code>fluid.js</code> 的文件头）。改动清单包括：包成初始化函数、只作用于自己的画布；删除移动端推广弹窗、分析调用与调试面板；删除会劫持页面滚动的全局快捷键；新增标签页隐藏时暂停模拟。</p>
-<p>许可要求保留版权与许可声明，注释里明确写了”请勿删除”。改编与上游的边界因此是显式的：读代码时能一眼看出哪些是上游算法、哪些是本站改动。</p>
+<p>文件头部保留了上游项目的 MIT 许可全文，并用一段注释列出针对本站的改动：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#6A737D">/*</span></span>
+<span class="line"><span style="color:#6A737D">MIT License</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">Copyright (c) 2017 Pavel Dobryakov</span></span>
+<span class="line"><span style="color:#6A737D">...</span></span>
+<span class="line"><span style="color:#6A737D">*/</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D">/* ────────────────────────────────────────────────────────────────</span></span>
+<span class="line"><span style="color:#6A737D"> * 本文件改编自 PavelDoGreat/WebGL-Fluid-Simulation（MIT，见上方许可原文）。</span></span>
+<span class="line"><span style="color:#6A737D"> * 针对本站的改动（非上游内容）：</span></span>
+<span class="line"><span style="color:#6A737D"> *   1. 包成 initFluid({ canvasSelector }) —— 只作用于我们自己的 &#x3C;canvas></span></span>
+<span class="line"><span style="color:#6A737D"> *   2. 删除：移动端推广弹窗、Google Analytics 调用、dat.GUI 调试面板、推广 window.open()</span></span>
+<span class="line"><span style="color:#6A737D"> *   3. 删除：全局 keydown 快捷键（P 暂停 / 空格喷溅）——它会劫持页面滚动</span></span>
+<span class="line"><span style="color:#6A737D"> *   4. 新增：标签页隐藏时暂停模拟，避免后台烧 GPU</span></span>
+<span class="line"><span style="color:#6A737D"> * 上游许可要求保留版权与许可声明 —— 上方 MIT 全文即为该声明，请勿删除。</span></span>
+<span class="line"><span style="color:#6A737D"> * ──────────────────────────────────────────────────────────────── */</span></span></code></pre>
+<p>MIT 是宽松的开源许可：允许修改与再发布，条件是保留版权与许可声明，所以注释里明确写了”请勿删除”。改编与上游的边界因此是显式的——读代码时能一眼看出哪些是上游算法、哪些是本站改动。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant P as 页面
     participant C as 组件脚本
@@ -233,6 +301,7 @@
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/components/FluidBackground.astro</code></td><td>画布挂载与启动判断</td></tr><tr><td><code>src/scripts/fluid.js</code></td><td>流体模拟实现与改编清单</td></tr><tr><td><code>src/styles/global.css</code></td><td>容器与画布样式</td></tr><tr><td><code>src/pages/index.astro</code></td><td>组件使用位置</td></tr><tr><td><code>public/fluid/</code></td><td>抖动纹理资源</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-流体模拟的帧循环与渲染目标"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-流体模拟的帧循环与渲染目标</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/31-网站前端（Astro）/04-WebGL流体背景/02-流体模拟的帧循环与渲染目标.md</span></div><div class="dfile__body"><h1 id="流体模拟的帧循环与渲染目标">流体模拟的帧循环与渲染目标</h1>
 <p>一帧里发生了什么？画面上的墨迹为什么能保持形状又慢慢散开？要回答这个问题，只需要跟着主循环走一遍：它每秒被调用约六十次，每次把模拟往前推一小步，再把结果画到屏幕上。</p>
 <p>模拟的数值参数集中在一个配置对象里（<code>src/scripts/fluid.js</code> 开头的配置段），算法部分则是标准的不可压缩流体求解：速度场、压力场、涡度与染料依次更新，每一步都在离屏纹理上完成。</p>
+<p>这块背景是实时解一遍流体方程得到的，不是循环播放的视频：画面能跟着指针动、颜色随主题调，体积也只是一段脚本。代价是每帧都要花掉一部分 GPU 时间，帧循环里的那些取舍正是为此。</p>
 <h2 id="配置参数">配置参数</h2>
 <p>默认配置里有几组关键数字（<code>fluid.js</code> 的配置段）：</p>
 
@@ -291,25 +360,56 @@
 
 
 <table><thead><tr><th>参数</th><th>默认值</th><th>含义</th></tr></thead><tbody><tr><td><code>SIM_RESOLUTION</code></td><td>128</td><td>速度与压力场的分辨率</td></tr><tr><td><code>DYE_RESOLUTION</code></td><td>1024</td><td>染料（颜色）纹理分辨率</td></tr><tr><td><code>DENSITY_DISSIPATION</code></td><td>0.85</td><td>染料衰减速度</td></tr><tr><td><code>VELOCITY_DISSIPATION</code></td><td>0.2</td><td>速度衰减速度</td></tr><tr><td><code>PRESSURE</code></td><td>0.8</td><td>压力系数</td></tr><tr><td><code>PRESSURE_ITERATIONS</code></td><td>20</td><td>压力迭代次数</td></tr><tr><td><code>CURL</code></td><td>30</td><td>涡度强度</td></tr><tr><td><code>SPLAT_RADIUS</code></td><td>0.25</td><td>落墨半径</td></tr><tr><td><code>SPLAT_FORCE</code></td><td>6000</td><td>落墨施加的速度</td></tr></tbody></table>
-<p>本站的调用覆盖了其中几项：密度衰减提到 1.0 让墨更薄，落墨半径收到 0.16 让笔触更小，同时关闭发光与阳光。分辨率与迭代次数保持默认，它们是画质与开销的主要旋钮。</p>
+<p>配置对象就写在文件顶部，本站只覆盖其中几项：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">let</span><span style="color:#24292E"> config </span><span style="color:#D73A49">=</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#24292E">    SIM_RESOLUTION: </span><span style="color:#005CC5">128</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    DYE_RESOLUTION: </span><span style="color:#005CC5">1024</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    CAPTURE_RESOLUTION: </span><span style="color:#005CC5">512</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    DENSITY_DISSIPATION: </span><span style="color:#005CC5">0.85</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    VELOCITY_DISSIPATION: </span><span style="color:#005CC5">0.2</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    PRESSURE: </span><span style="color:#005CC5">0.8</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    PRESSURE_ITERATIONS: </span><span style="color:#005CC5">20</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    CURL: </span><span style="color:#005CC5">30</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    SPLAT_RADIUS: </span><span style="color:#005CC5">0.25</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    SPLAT_FORCE: </span><span style="color:#005CC5">6000</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    SHADING: </span><span style="color:#005CC5">true</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    COLORFUL: </span><span style="color:#005CC5">true</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    PAUSED: </span><span style="color:#005CC5">false</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    BACK_COLOR: { r: </span><span style="color:#005CC5">0</span><span style="color:#24292E">, g: </span><span style="color:#005CC5">0</span><span style="color:#24292E">, b: </span><span style="color:#005CC5">0</span><span style="color:#24292E"> },</span></span>
+<span class="line"><span style="color:#24292E">    TRANSPARENT: </span><span style="color:#005CC5">false</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    BLOOM: </span><span style="color:#005CC5">true</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">    SUNRAYS: </span><span style="color:#005CC5">true</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>SIM_RESOLUTION</code> 与 <code>DYE_RESOLUTION</code> 是”速度场与染料场各自多少像素”的档位：前者低、后者高。本站的调用覆盖了其中几项：密度衰减提到 1.0 让墨更薄，落墨半径收到 0.16 让笔触更小，同时关闭发光与阳光。分辨率与迭代次数保持默认，它们是画质与开销的主要旋钮。</p>
 <h2 id="帧循环">帧循环</h2>
 <p>主循环很短（<code>fluid.js</code> 的 <code>update</code>）：</p>
-<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> update</span><span style="color:#24292E">() {</span></span>
-<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (document.hidden) {</span></span>
-<span class="line"><span style="color:#24292E">    lastUpdateTime </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Date.</span><span style="color:#6F42C1">now</span><span style="color:#24292E">()</span></span>
-<span class="line"><span style="color:#6F42C1">    requestAnimationFrame</span><span style="color:#24292E">(update)</span></span>
-<span class="line"><span style="color:#D73A49">    return</span></span>
-<span class="line"><span style="color:#24292E">  }</span></span>
-<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> dt</span><span style="color:#D73A49"> =</span><span style="color:#6F42C1"> calcDeltaTime</span><span style="color:#24292E">()</span></span>
-<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">resizeCanvas</span><span style="color:#24292E">()) </span><span style="color:#6F42C1">initFramebuffers</span><span style="color:#24292E">()</span></span>
-<span class="line"><span style="color:#6F42C1">  updateColors</span><span style="color:#24292E">(dt)</span></span>
-<span class="line"><span style="color:#6F42C1">  applyInputs</span><span style="color:#24292E">()</span></span>
-<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">config.</span><span style="color:#005CC5">PAUSED</span><span style="color:#24292E">) </span><span style="color:#6F42C1">step</span><span style="color:#24292E">(dt)</span></span>
-<span class="line"><span style="color:#6F42C1">  render</span><span style="color:#24292E">(</span><span style="color:#005CC5">null</span><span style="color:#24292E">)</span></span>
-<span class="line"><span style="color:#6F42C1">  requestAnimationFrame</span><span style="color:#24292E">(update)</span></span>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> update</span><span style="color:#24292E"> () {</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (document.hidden) {</span></span>
+<span class="line"><span style="color:#24292E">        lastUpdateTime </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Date.</span><span style="color:#6F42C1">now</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#6F42C1">        requestAnimationFrame</span><span style="color:#24292E">(update);</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> dt</span><span style="color:#D73A49"> =</span><span style="color:#6F42C1"> calcDeltaTime</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (</span><span style="color:#6F42C1">resizeCanvas</span><span style="color:#24292E">())</span></span>
+<span class="line"><span style="color:#6F42C1">        initFramebuffers</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#6F42C1">    updateColors</span><span style="color:#24292E">(dt);</span></span>
+<span class="line"><span style="color:#6F42C1">    applyInputs</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">config.</span><span style="color:#005CC5">PAUSED</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6F42C1">        step</span><span style="color:#24292E">(dt);</span></span>
+<span class="line"><span style="color:#6F42C1">    render</span><span style="color:#24292E">(</span><span style="color:#005CC5">null</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#6F42C1">    requestAnimationFrame</span><span style="color:#24292E">(update);</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>标签页隐藏时循环仍在排队，但只更新时间戳就返回——这样回到前台时不会因为累积了巨大的时间差而”炸开”，同时后台不消耗 GPU。</p>
-<p>时间步长按秒计算并封顶在十六毫秒左右（<code>calcDeltaTime</code>），也就是即使帧率掉到很低，模拟每步推进的量也不会突然变大导致不稳定。</p>
+<p><code>requestAnimationFrame</code> 是浏览器的帧调度 API：把回调排进下一帧，屏幕刷新时调用一次（通常每秒 60 次），不需要自己写定时器；页面切到后台时浏览器还会自动降频或暂停它。<code>document.hidden</code> 读的是页面可见性状态：标签页隐藏时循环仍会排队，但只更新时间戳就返回——这样回到前台时不会因为累积了巨大的时间差而”炸开”，同时后台不消耗 GPU。</p>
+<p>时间步长按秒计算并封顶：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> calcDeltaTime</span><span style="color:#24292E"> () {</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> now </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Date.</span><span style="color:#6F42C1">now</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> dt </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (now </span><span style="color:#D73A49">-</span><span style="color:#24292E"> lastUpdateTime) </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 1000</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    dt </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">min</span><span style="color:#24292E">(dt, </span><span style="color:#005CC5">0.016666</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">    lastUpdateTime </span><span style="color:#D73A49">=</span><span style="color:#24292E"> now;</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> dt;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>除以 1000 把毫秒换成秒，封顶在 1/60 秒左右：即使帧率掉到很低，模拟每步推进的量也不会突然变大导致不稳定。<code>render(null)</code> 里的 <code>null</code> 表示”画到默认帧缓冲”，也就是屏幕。</p>
 <p>画布尺寸变化时重算尺寸并重建帧缓冲（<code>resizeCanvas</code> 与 <code>initFramebuffers</code>）。因此窗口缩放、侧栏变化都会正确反映到模拟分辨率上。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[帧开始] --> B{"标签页隐藏?"}
@@ -325,7 +425,32 @@
     J --> K[请求下一帧]
     C --> K</pre></div>
 <h2 id="模拟一步的六个阶段">模拟一步的六个阶段</h2>
-<p>推进函数把所有求解步骤串起来（<code>fluid.js</code> 的 <code>step</code>）：先算涡度并施加涡度约束，再算散度，然后用若干部迭代求解压力场，最后用压力梯度修正速度场；速度场更新完，再用它把染料平流到新位置。</p>
+<p>推进函数把所有求解步骤串起来（<code>fluid.js</code> 的 <code>step</code>）：先算涡度并施加涡度约束，再算散度，然后用若干部迭代求解压力场，最后用压力梯度修正速度场；速度场更新完，再用它把染料平流到新位置。每一步都是一次”选着色器 + 传参数 + 画一遍”：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> step</span><span style="color:#24292E"> (</span><span style="color:#E36209">dt</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">disable</span><span style="color:#24292E">(gl.</span><span style="color:#005CC5">BLEND</span><span style="color:#24292E">);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">    curlProgram.</span><span style="color:#6F42C1">bind</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1i</span><span style="color:#24292E">(curlProgram.uniforms.uVelocity, velocity.read.</span><span style="color:#6F42C1">attach</span><span style="color:#24292E">(</span><span style="color:#005CC5">0</span><span style="color:#24292E">));</span></span>
+<span class="line"><span style="color:#6F42C1">    blit</span><span style="color:#24292E">(curl);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">    vorticityProgram.</span><span style="color:#6F42C1">bind</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1i</span><span style="color:#24292E">(vorticityProgram.uniforms.uVelocity, velocity.read.</span><span style="color:#6F42C1">attach</span><span style="color:#24292E">(</span><span style="color:#005CC5">0</span><span style="color:#24292E">));</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1i</span><span style="color:#24292E">(vorticityProgram.uniforms.uCurl, curl.</span><span style="color:#6F42C1">attach</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">));</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1f</span><span style="color:#24292E">(vorticityProgram.uniforms.curl, config.</span><span style="color:#005CC5">CURL</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1f</span><span style="color:#24292E">(vorticityProgram.uniforms.dt, dt);</span></span>
+<span class="line"><span style="color:#6F42C1">    blit</span><span style="color:#24292E">(velocity.write);</span></span>
+<span class="line"><span style="color:#24292E">    velocity.</span><span style="color:#6F42C1">swap</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#24292E">    pressureProgram.</span><span style="color:#6F42C1">bind</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1i</span><span style="color:#24292E">(pressureProgram.uniforms.uDivergence, divergence.</span><span style="color:#6F42C1">attach</span><span style="color:#24292E">(</span><span style="color:#005CC5">0</span><span style="color:#24292E">));</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> (</span><span style="color:#D73A49">let</span><span style="color:#24292E"> i </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">; i </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> config.</span><span style="color:#005CC5">PRESSURE_ITERATIONS</span><span style="color:#24292E">; i</span><span style="color:#D73A49">++</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">        gl.</span><span style="color:#6F42C1">uniform1i</span><span style="color:#24292E">(pressureProgram.uniforms.uPressure, pressure.read.</span><span style="color:#6F42C1">attach</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">));</span></span>
+<span class="line"><span style="color:#6F42C1">        blit</span><span style="color:#24292E">(pressure.write);</span></span>
+<span class="line"><span style="color:#24292E">        pressure.</span><span style="color:#6F42C1">swap</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>bind()</code> 选中一个着色器程序，<code>uniform*</code> 把参数传进去，<code>attach(n)</code> 把纹理挂到第 n 个纹理槽并返回槽号，<code>blit()</code> 用当前程序画一次全屏四边形——“在 GPU 上算一遍”就是这么表达的。<code>velocity.swap()</code> 交换读写两张纹理，下面帧缓冲一节会讲。</p>
 
 
 
@@ -362,7 +487,17 @@
 <table><thead><tr><th>阶段</th><th>作用</th></tr></thead><tbody><tr><td>涡度</td><td>计算旋转量，补充小尺度涡旋</td></tr><tr><td>涡度约束</td><td>把涡旋能量加回速度场</td></tr><tr><td>散度</td><td>计算速度场的不可压缩误差</td></tr><tr><td>压力迭代</td><td>迭代求解压力，使速度场趋于无散</td></tr><tr><td>梯度修正</td><td>用压力梯度减掉散度</td></tr><tr><td>平流</td><td>用速度场搬运速度与染料</td></tr></tbody></table>
 <p>迭代次数是二十次，这是精度与开销的直接交换：次数越多速度场越接近无散，画面越平滑，但每帧的着色器调用也越多。</p>
 <h2 id="渲染的三个层次">渲染的三个层次</h2>
-<p>渲染函数按需组合几层（<code>fluid.js</code> 的 <code>render</code>）：先铺背景，可能是纯色、棋盘格或透明；如果开启发光，就对高亮区域做多级模糊再叠加；如果开启阳光，就生成一层射线遮罩；最后用显示材质把染料画到屏幕，并用抖动纹理做一点噪声来减轻色带。</p>
+<p>渲染函数按需组合几层（<code>fluid.js</code> 的 <code>render</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> render</span><span style="color:#24292E"> (</span><span style="color:#E36209">target</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (config.</span><span style="color:#005CC5">BLOOM</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6F42C1">        applyBloom</span><span style="color:#24292E">(dye.read, bloom);</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (config.</span><span style="color:#005CC5">SUNRAYS</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#6F42C1">        applySunrays</span><span style="color:#24292E">(dye.read, dye.write, sunrays);</span></span>
+<span class="line"><span style="color:#6F42C1">        blur</span><span style="color:#24292E">(sunrays, sunraysTemp, </span><span style="color:#005CC5">1</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>先铺背景，可能是纯色、棋盘格或透明；如果开启发光，就对高亮区域做多级模糊再叠加；如果开启阳光，就生成一层射线遮罩；最后用显示材质把染料画到屏幕，并用抖动纹理做一点噪声来减轻色带。</p>
 <p>本站关掉了发光与阳光，因此实际路径只剩背景与显示两段。代码保留完整分支，是因为主题切换时可能重新打开——这也解释了为什么读代码时会看到未被本站启用的效果。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant S as step
@@ -376,8 +511,38 @@
     S->>A: 搬运速度与染料
     A-->>S: 更新后的染料纹理</pre></div>
 <h2 id="帧缓冲与分辨率">帧缓冲与分辨率</h2>
-<p>所有中间结果都存在帧缓冲纹理里（<code>fluid.js</code> 的帧缓冲段）：单目标用于中间结果，双目标用于需要读写交替的场（速度、压力、染料），切换时交换读写指针。目标尺寸按配置里的分辨率与画布比例换算（<code>getResolution</code>），并按像素比缩放，保证高分屏上不会模糊。</p>
-<p>尺寸变化时不是重建全部：能复用的目标用拷贝方式迁移旧内容（<code>resizeFBO</code> 与 <code>resizeDoubleFBO</code>），避免缩放时画面突然清空。必须重建的是分辨率档位变化的场景，例如从桌面切到移动端能力档。</p>
+<p>所有中间结果都存在帧缓冲纹理里（<code>fluid.js</code> 的帧缓冲段）：单目标用于中间结果，双目标用于需要读写交替的场（速度、压力、染料），切换时交换读写指针。目标尺寸按配置里的分辨率与画布比例换算：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> getResolution</span><span style="color:#24292E"> (</span><span style="color:#E36209">resolution</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> aspectRatio </span><span style="color:#D73A49">=</span><span style="color:#24292E"> gl.drawingBufferWidth </span><span style="color:#D73A49">/</span><span style="color:#24292E"> gl.drawingBufferHeight;</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (aspectRatio </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">        aspectRatio </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> /</span><span style="color:#24292E"> aspectRatio;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> min </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">round</span><span style="color:#24292E">(resolution);</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> max </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">round</span><span style="color:#24292E">(resolution </span><span style="color:#D73A49">*</span><span style="color:#24292E"> aspectRatio);</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (gl.drawingBufferWidth </span><span style="color:#D73A49">></span><span style="color:#24292E"> gl.drawingBufferHeight)</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> { width: max, height: min };</span></span>
+<span class="line"><span style="color:#D73A49">    else</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> { width: min, height: max };</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>“帧缓冲”（framebuffer）是可以当作纹理再读回来的离屏画布：一步算完写进它，下一步把它当输入读——在 GPU 上做迭代计算靠的就是这套。<code>gl.drawingBufferWidth/Height</code> 是实际像素尺寸（已经含像素比缩放），所以高分屏上模拟不会因为逻辑尺寸小而模糊。</p>
+<p>尺寸变化时不是重建全部，能复用的目标用拷贝方式迁移旧内容：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> resizeFBO</span><span style="color:#24292E"> (</span><span style="color:#E36209">target</span><span style="color:#24292E">, </span><span style="color:#E36209">w</span><span style="color:#24292E">, </span><span style="color:#E36209">h</span><span style="color:#24292E">, </span><span style="color:#E36209">internalFormat</span><span style="color:#24292E">, </span><span style="color:#E36209">format</span><span style="color:#24292E">, </span><span style="color:#E36209">type</span><span style="color:#24292E">, </span><span style="color:#E36209">param</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> newFBO </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> createFBO</span><span style="color:#24292E">(w, h, internalFormat, format, type, param);</span></span>
+<span class="line"><span style="color:#24292E">    copyProgram.</span><span style="color:#6F42C1">bind</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#24292E">    gl.</span><span style="color:#6F42C1">uniform1i</span><span style="color:#24292E">(copyProgram.uniforms.uTexture, target.</span><span style="color:#6F42C1">attach</span><span style="color:#24292E">(</span><span style="color:#005CC5">0</span><span style="color:#24292E">));</span></span>
+<span class="line"><span style="color:#6F42C1">    blit</span><span style="color:#24292E">(newFBO);</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> newFBO;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> resizeDoubleFBO</span><span style="color:#24292E"> (</span><span style="color:#E36209">target</span><span style="color:#24292E">, </span><span style="color:#E36209">w</span><span style="color:#24292E">, </span><span style="color:#E36209">h</span><span style="color:#24292E">, </span><span style="color:#E36209">internalFormat</span><span style="color:#24292E">, </span><span style="color:#E36209">format</span><span style="color:#24292E">, </span><span style="color:#E36209">type</span><span style="color:#24292E">, </span><span style="color:#E36209">param</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (target.width </span><span style="color:#D73A49">==</span><span style="color:#24292E"> w </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> target.height </span><span style="color:#D73A49">==</span><span style="color:#24292E"> h)</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> target;</span></span>
+<span class="line"><span style="color:#24292E">    target.read </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> resizeFBO</span><span style="color:#24292E">(target.read, w, h, internalFormat, format, type, param);</span></span>
+<span class="line"><span style="color:#24292E">    target.write </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> createFBO</span><span style="color:#24292E">(w, h, internalFormat, format, type, param);</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>迁移的做法是用拷贝着色器把旧纹理画进新尺寸的纹理，避免缩放时画面突然清空；双目标只迁移读的那一张，写的直接新建。必须重建的是分辨率档位变化的场景，例如从桌面切到移动端能力档。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -508,9 +673,22 @@
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>src/scripts/fluid.js</code></td><td>帧循环、求解步骤与渲染</td></tr><tr><td><code>src/components/FluidBackground.astro</code></td><td>传入的配置覆盖</td></tr><tr><td><code>src/styles/global.css</code></td><td>画布尺寸与混合模式</td></tr><tr><td><code>public/fluid/</code></td><td>抖动纹理</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-指针输入与墨迹生成"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-指针输入与墨迹生成</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/31-网站前端（Astro）/04-WebGL流体背景/03-指针输入与墨迹生成.md</span></div><div class="dfile__body"><h1 id="指针输入与墨迹生成">指针输入与墨迹生成</h1>
 <p>把鼠标移到首屏图形区域里，画面会跟着手指方向拖出一条紫色墨迹；停下来几秒，它会自己冒出一小团。这两个行为来自同一套机制：指针把位置变化换算成速度，再以”落墨”的形式注入模拟。</p>
 <p>输入处理集中在脚本的后半段（<code>src/scripts/fluid.js</code> 的指针段），前半段是模拟本身。理解这段的关键是两个概念：指针对象保存上一帧位置，用于算增量；落墨是把增量与颜色写进速度场与染料场的动作。</p>
+<p>模拟本身是被动的：没有输入，画面只会按开场那几团墨慢慢散开。指针事件是这套背景唯一的交互入口，它决定墨迹往哪走、什么时候重新开始，也是这块区域不显得像一张静态图的原因。</p>
 <h2 id="指针对象">指针对象</h2>
-<p>每个指针是一组状态（<code>fluid.js</code> 的 <code>pointerPrototype</code>）：编号、当前与上一次的归一化坐标、两个方向的增量、是否按下、是否移动过，以及本次轨迹使用的颜色。</p>
-<p>坐标是归一化的纹理坐标，纵轴做了翻转，因为浏览器坐标从上往下、纹理坐标从下往上。指针第一次按下时颜色才生成（<code>updatePointerDownData</code>），一条轨迹内颜色保持不变，所以拖出的墨迹是同一色相；松开或移出区域后重新开始，颜色才会变。</p>
+<p>每个指针是一组状态（<code>fluid.js</code> 的 <code>pointerPrototype</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> pointerPrototype</span><span style="color:#24292E"> () {</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.id </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">1</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.texcoordX </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.texcoordY </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.prevTexcoordX </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.prevTexcoordY </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.deltaX </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.deltaY </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.down </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.moved </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#005CC5">    this</span><span style="color:#24292E">.color </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [</span><span style="color:#005CC5">30</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">, </span><span style="color:#005CC5">300</span><span style="color:#24292E">];</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>编号、当前与上一次的归一化坐标、两个方向的增量、是否按下、是否移动过，以及本次轨迹使用的颜色都在这里。坐标是归一化的纹理坐标（0 到 1），纵轴做了翻转，因为浏览器坐标从上往下、纹理坐标从下往上。指针第一次按下时颜色才生成（<code>updatePointerDownData</code> 里的 <code>pointer.color = generateColor(...)</code>），一条轨迹内颜色保持不变，所以拖出的墨迹是同一色相；松开或移出区域后重新开始，颜色才会变。</p>
 <p>鼠标用一个固定编号的指针；悬停另有一个专用指针，编号为负二，用来区分”按住拖动”与”悬停搅动”两种输入。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
     [*] --> 空闲
@@ -522,7 +700,15 @@
     悬停 --> 悬停: 继续移动
     悬停 --> 空闲: 移出区域</pre></div>
 <h2 id="事件绑定">事件绑定</h2>
-<p>绑定目标由参数决定，默认是窗口（<code>fluid.js</code> 的 <code>interactionTarget</code>），悬停可以通过参数关掉。鼠标事件挂在绑定目标上，触屏事件挂在画布上（<code>fluid.js</code> 的事件段）：</p>
+<p>绑定目标由参数决定，默认是窗口，悬停可以通过参数关掉：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#6A737D">// ── 交互（本站改造，比上游好用）──────────────────────────────</span></span>
+<span class="line"><span style="color:#6A737D">// 上游的两个问题：① 事件只绑在 canvas 上，Hero 的文字容器会挡在它上面；</span></span>
+<span class="line"><span style="color:#6A737D">//                ② mousemove 里有 if (!pointer.down) return，必须按住鼠标才有轨迹。</span></span>
+<span class="line"><span style="color:#6A737D">// 这里：绑到 window、坐标按 canvas 矩形换算、悬停即可拖出轨迹（带节流）。</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> interactionTarget</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.interactionTarget </span><span style="color:#D73A49">||</span><span style="color:#24292E"> window;</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> hoverEnabled</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.hover </span><span style="color:#D73A49">!==</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> HOVER_THROTTLE_MS</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 16</span><span style="color:#24292E">;</span></span></code></pre>
+<p>注释把”为什么改上游”写清楚了：绑定目标是窗口，指针从区域外移进来也能被感知。鼠标事件挂在绑定目标上，触屏事件挂在画布上（<code>fluid.js</code> 的事件段）：</p>
 
 
 
@@ -557,11 +743,51 @@
 
 
 <table><thead><tr><th>事件</th><th>处理</th></tr></thead><tbody><tr><td>按下</td><td>找到空闲指针并记录起点</td></tr><tr><td>移动（按住）</td><td>更新位置并计算增量</td></tr><tr><td>移动（未按住）</td><td>走悬停路径，按节流间隔更新</td></tr><tr><td>松开</td><td>标记指针抬起</td></tr><tr><td>触屏开始与移动</td><td>阻止默认行为，为每根手指分配指针</td></tr><tr><td>触屏结束</td><td>按标识符找到指针并抬起</td></tr></tbody></table>
-<p>鼠标移出区域时会显式重置悬停状态（<code>resetHover</code>）。注释解释了这个处理的目的：如果只靠坐标判断，指针移出再回来会拉出一条横跨画面的长线。</p>
-<p>每次移动前都会换算坐标，落在画布之外时返回空值并结束当前轨迹（<code>canvasPos</code>）。这条判断同时服务鼠标与触屏。</p>
+<p>鼠标移出区域时会显式重置悬停状态：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#24292E">interactionTarget.</span><span style="color:#6F42C1">addEventListener</span><span style="color:#24292E">(</span><span style="color:#032F62">'mousemove'</span><span style="color:#24292E">, </span><span style="color:#E36209">e</span><span style="color:#D73A49"> =></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> pos</span><span style="color:#D73A49"> =</span><span style="color:#6F42C1"> canvasPos</span><span style="color:#24292E">(e.clientX, e.clientY);</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (pos </span><span style="color:#D73A49">==</span><span style="color:#005CC5"> null</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#6A737D">        // 移出 Hero 区域：结束这一段轨迹，下次进入时重新落点，不会拉出一条长线</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> (hoverActive) </span><span style="color:#6F42C1">resetHover</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">hoverEnabled) </span><span style="color:#D73A49">return</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> now</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> performance.</span><span style="color:#6F42C1">now</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (now </span><span style="color:#D73A49">-</span><span style="color:#24292E"> lastHoverTime </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> HOVER_THROTTLE_MS</span><span style="color:#24292E">) </span><span style="color:#D73A49">return</span><span style="color:#24292E">;   </span><span style="color:#6A737D">// 16ms 节流</span></span>
+<span class="line"><span style="color:#24292E">    lastHoverTime </span><span style="color:#D73A49">=</span><span style="color:#24292E"> now;</span></span>
+<span class="line"><span style="color:#D73A49">    ...</span></span>
+<span class="line"><span style="color:#24292E">});</span></span></code></pre>
+<p>注释解释了这个处理的目的：如果只靠坐标判断，指针移出再回来会拉出一条横跨画面的长线。<code>HOVER_THROTTLE_MS</code> 那两行是节流——每 16 毫秒最多处理一次悬停移动，避免高刷设备上落墨过密。</p>
+<p>每次移动前都会换算坐标，落在画布之外时返回空值并结束当前轨迹（<code>canvasPos</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> canvasPos</span><span style="color:#24292E"> (</span><span style="color:#E36209">clientX</span><span style="color:#24292E">, </span><span style="color:#E36209">clientY</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> rect</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> canvas.</span><span style="color:#6F42C1">getBoundingClientRect</span><span style="color:#24292E">();</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (rect.width </span><span style="color:#D73A49">===</span><span style="color:#005CC5"> 0</span><span style="color:#D73A49"> ||</span><span style="color:#24292E"> rect.height </span><span style="color:#D73A49">===</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">) </span><span style="color:#D73A49">return</span><span style="color:#005CC5"> null</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> x</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> clientX </span><span style="color:#D73A49">-</span><span style="color:#24292E"> rect.left;</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> y</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> clientY </span><span style="color:#D73A49">-</span><span style="color:#24292E"> rect.top;</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (x </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#D73A49"> ||</span><span style="color:#24292E"> y </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 0</span><span style="color:#D73A49"> ||</span><span style="color:#24292E"> x </span><span style="color:#D73A49">></span><span style="color:#24292E"> rect.width </span><span style="color:#D73A49">||</span><span style="color:#24292E"> y </span><span style="color:#D73A49">></span><span style="color:#24292E"> rect.height) </span><span style="color:#D73A49">return</span><span style="color:#005CC5"> null</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> { x: </span><span style="color:#6F42C1">scaleByPixelRatio</span><span style="color:#24292E">(x), y: </span><span style="color:#6F42C1">scaleByPixelRatio</span><span style="color:#24292E">(y) };</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>getBoundingClientRect()</code> 给出元素在视口中的位置与大小，用它把鼠标的页面坐标换成画布内坐标；<code>scaleByPixelRatio</code> 再乘上设备像素比，与按像素比设置的画布尺寸对齐。这条判断同时服务鼠标与触屏。</p>
 <h2 id="归一化与增量校正">归一化与增量校正</h2>
-<p>位置换算成归一化坐标后，增量还要按画布宽高比校正（<code>correctDeltaX</code> 与 <code>correctDeltaY</code>）：画布宽大于高时横向增量按比例缩小，反之纵向缩小。没有这步校正，非正方形画布上的笔触会被拉长。</p>
-<p>移动处理里还有一个”是否真的动了”的判断（<code>updatePointerMoveData</code>）：两个方向的增量都为极小值时不算移动，避免静止时反复落墨。这个标记在输入被消费后清除。</p>
+<p>位置换算成归一化坐标后，增量还要按画布宽高比校正：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> updatePointerMoveData</span><span style="color:#24292E"> (</span><span style="color:#E36209">pointer</span><span style="color:#24292E">, </span><span style="color:#E36209">posX</span><span style="color:#24292E">, </span><span style="color:#E36209">posY</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#24292E">    pointer.prevTexcoordX </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pointer.texcoordX;</span></span>
+<span class="line"><span style="color:#24292E">    pointer.prevTexcoordY </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pointer.texcoordY;</span></span>
+<span class="line"><span style="color:#24292E">    pointer.texcoordX </span><span style="color:#D73A49">=</span><span style="color:#24292E"> posX </span><span style="color:#D73A49">/</span><span style="color:#24292E"> canvas.width;</span></span>
+<span class="line"><span style="color:#24292E">    pointer.texcoordY </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> -</span><span style="color:#24292E"> posY </span><span style="color:#D73A49">/</span><span style="color:#24292E"> canvas.height;</span></span>
+<span class="line"><span style="color:#24292E">    pointer.deltaX </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> correctDeltaX</span><span style="color:#24292E">(pointer.texcoordX </span><span style="color:#D73A49">-</span><span style="color:#24292E"> pointer.prevTexcoordX);</span></span>
+<span class="line"><span style="color:#24292E">    pointer.deltaY </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> correctDeltaY</span><span style="color:#24292E">(pointer.texcoordY </span><span style="color:#D73A49">-</span><span style="color:#24292E"> pointer.prevTexcoordY);</span></span>
+<span class="line"><span style="color:#24292E">    pointer.moved </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">abs</span><span style="color:#24292E">(pointer.deltaX) </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0</span><span style="color:#D73A49"> ||</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">abs</span><span style="color:#24292E">(pointer.deltaY) </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> correctDeltaX</span><span style="color:#24292E"> (</span><span style="color:#E36209">delta</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> aspectRatio </span><span style="color:#D73A49">=</span><span style="color:#24292E"> canvas.width </span><span style="color:#D73A49">/</span><span style="color:#24292E"> canvas.height;</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (aspectRatio </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">) delta </span><span style="color:#D73A49">*=</span><span style="color:#24292E"> aspectRatio;</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> delta;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>1.0 - posY / canvas.height</code> 就是纵轴翻转；校正规则是画布宽大于高时横向增量按比例缩小，反之纵向缩小。没有这步校正，非正方形画布上的笔触会被拉长。</p>
+<p>移动处理里还有一个”是否真的动了”的判断（上面 <code>pointer.moved</code> 那行）：两个方向的增量都为极小值时不算移动，避免静止时反复落墨。这个标记在输入被消费后清除。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[指针事件] --> B[换算为归一化坐标]
     B --> C{"落在画布内?"}
@@ -574,12 +800,43 @@
     F --> I[标记为已移动]
     I --> J[下一帧消费并落墨]</pre></div>
 <h2 id="从增量到落墨">从增量到落墨</h2>
-<p>主循环每帧把输入转成模拟变化（<code>fluid.js</code> 的 <code>applyInputs</code>）：先处理积压的墨团请求，再把移动过的指针逐一转成落墨，最后清掉移动标记。</p>
-<p>落墨函数按指针的坐标、增量与颜色调用（<code>splatPointer</code> 到 <code>splat</code>）：增量乘以配置里的落墨力度作为速度，半径按画布比例校正后再用（<code>correctRadius</code>）。力度与半径都在配置里，本站把半径从 0.25 收到 0.16。</p>
-<p>自动墨团走同一个落墨函数，只是位置与颜色随机。它由两个来源驱动：开场时按预置位置一次性铺若干团（<code>initialSplats</code> 与 <code>initialColorScale</code>），之后每五秒在标签页可见时补一团（<code>ambientIntervalMs</code> 对应的定时器）。</p>
+<p>主循环每帧把输入转成模拟变化（<code>fluid.js</code> 的 <code>applyInputs</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> applyInputs</span><span style="color:#24292E"> () {</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> (splatStack.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> ></span><span style="color:#005CC5"> 0</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6F42C1">        multipleSplats</span><span style="color:#24292E">(splatStack.</span><span style="color:#6F42C1">pop</span><span style="color:#24292E">());</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">    pointers.</span><span style="color:#6F42C1">forEach</span><span style="color:#24292E">(</span><span style="color:#E36209">p</span><span style="color:#D73A49"> =></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> (p.moved) {</span></span>
+<span class="line"><span style="color:#24292E">            p.moved </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> false</span><span style="color:#24292E">;      </span><span style="color:#6A737D">// 消费掉标记，下一帧不再重复落墨</span></span>
+<span class="line"><span style="color:#6F42C1">            splatPointer</span><span style="color:#24292E">(p);</span></span>
+<span class="line"><span style="color:#24292E">        }</span></span>
+<span class="line"><span style="color:#24292E">    });</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>先处理积压的墨团请求，再把移动过的指针逐一转成落墨，最后清掉移动标记。落墨函数按指针的坐标、增量与颜色调用：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> splatPointer</span><span style="color:#24292E"> (</span><span style="color:#E36209">pointer</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> dx </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pointer.deltaX </span><span style="color:#D73A49">*</span><span style="color:#24292E"> config.</span><span style="color:#005CC5">SPLAT_FORCE</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> dy </span><span style="color:#D73A49">=</span><span style="color:#24292E"> pointer.deltaY </span><span style="color:#D73A49">*</span><span style="color:#24292E"> config.</span><span style="color:#005CC5">SPLAT_FORCE</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#6F42C1">    splat</span><span style="color:#24292E">(pointer.texcoordX, pointer.texcoordY, dx, dy, pointer.color);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>增量乘以配置里的落墨力度作为速度，半径按画布比例校正后再用（<code>correctRadius</code>）。力度与半径都在配置里，本站把半径从 0.25 收到 0.16。</p>
+<p>自动墨团走同一个落墨函数，只是位置与颜色随机。它由两个来源驱动：开场时按预置位置一次性铺若干团（<code>initialSplats</code> 与 <code>initialColorScale</code>），之后每五秒在标签页可见时补一团：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> ambientMs</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> opts.ambientIntervalMs </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> null</span><span style="color:#D73A49"> ?</span><span style="color:#24292E"> opts.ambientIntervalMs </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> 5000</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (ambientMs </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#6F42C1">    setInterval</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> { </span><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">document.hidden) splatStack.</span><span style="color:#6F42C1">push</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">); }, ambientMs);</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>定时器不直接落墨，而是往 <code>splatStack</code> 里压一个请求，交给下一帧的 <code>applyInputs</code> 统一处理——避免在定时器回调里直接操作 GPU 状态。<code>document.hidden</code> 时跳过，不在后台白白消耗。</p>
 <h2 id="颜色从哪来">颜色从哪来</h2>
-<p>颜色用色相范围里的随机值生成（<code>generateColor</code>）：在最小值与最大值之间取一个色相，按满饱和与满亮度转成 RGB，再乘一个亮度系数并归一化。本站把色相限制在 0.70 到 0.82 之间，也就是紫色段。</p>
-<p>亮度系数有两个来源：指针轨迹用调用参数传入的 0.55，开场与自动墨团用 0.5。两处都比上游默认值暗，目的是让墨在白纸上更薄，不压过内容。</p>
+<p>颜色用色相范围里的随机值生成（<code>generateColor</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="js"><code><span class="line"><span style="color:#6A737D">// 本站扩展：色相限制在 hueRange（白紫）内，并接受亮度倍率（指针 / 开场用不同墨量）</span></span>
+<span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> generateColor</span><span style="color:#24292E"> (</span><span style="color:#E36209">colorScale</span><span style="color:#24292E">) {</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> scale</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> colorScale </span><span style="color:#D73A49">!=</span><span style="color:#005CC5"> null</span><span style="color:#D73A49"> ?</span><span style="color:#24292E"> colorScale </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> 1.0</span><span style="color:#24292E">;</span></span>
+<span class="line"><span style="color:#D73A49">    let</span><span style="color:#24292E"> c </span><span style="color:#D73A49">=</span><span style="color:#6F42C1"> HSVtoRGB</span><span style="color:#24292E">(hueMin </span><span style="color:#D73A49">+</span><span style="color:#24292E"> Math.</span><span style="color:#6F42C1">random</span><span style="color:#24292E">() </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (hueMax </span><span style="color:#D73A49">-</span><span style="color:#24292E"> hueMin), </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">, </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">);</span></span>
+<span class="line"><span style="color:#24292E">    c.r </span><span style="color:#D73A49">*=</span><span style="color:#005CC5"> 0.15</span><span style="color:#D73A49"> *</span><span style="color:#24292E"> scale;</span></span>
+<span class="line"><span style="color:#24292E">    c.g </span><span style="color:#D73A49">*=</span><span style="color:#005CC5"> 0.15</span><span style="color:#D73A49"> *</span><span style="color:#24292E"> scale;</span></span>
+<span class="line"><span style="color:#24292E">    c.b </span><span style="color:#D73A49">*=</span><span style="color:#005CC5"> 0.15</span><span style="color:#D73A49"> *</span><span style="color:#24292E"> scale;</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> c;</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>在最小值与最大值之间取一个色相，按满饱和与满亮度转成 RGB，再乘一个亮度系数。<code>hueMin</code>/<code>hueMax</code> 就是调用处传进来的 0.70 到 0.82，也就是紫色段。亮度系数有两个来源：指针轨迹用调用参数传入的 0.55，开场与自动墨团用 0.5。两处都比上游默认值暗，目的是让墨在白纸上更薄，不压过内容。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant M as 主循环
     participant A as applyInputs

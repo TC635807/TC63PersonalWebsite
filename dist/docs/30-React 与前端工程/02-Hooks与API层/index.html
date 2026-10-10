@@ -2,14 +2,14 @@
 <p><code>src/api/</code> 下有十二个模块，除了 <code>auth.ts</code> 提供请求底座，其余都只做一件事：把某个业务域的端点包装成带类型的函数。组件与 Hook 不直接调用 <code>fetch</code>，也不自己拼 <code>Authorization</code> 头，这两件事都收在 <code>src/api/auth.ts</code> 里。</p>
 <p>请求层没有引入 axios 之类的库，也没有统一的响应包装类型。每个函数直接声明自己的返回类型，错误通过抛 <code>Error</code> 向上传，调用方决定是弹窗、写状态还是静默忽略。 底座函数的约定、各业务域的模块清单、类型层与几处不一致，构成这条链路的全貌。</p>
 <h2 id="两个请求函数的分工">两个请求函数的分工</h2>
-<p>底座有两个函数。<code>authFetch</code> 允许匿名，用于登录与注册（<code>src/api/auth.ts:17-39</code>）；<code>authFetchWithToken</code> 要求必须有 token，否则直接抛错（<code>src/api/auth.ts:76-80</code>）：</p>
+<p>底座有两个函数。<code>authFetch</code> 允许匿名，用于登录与注册（<code>src/api/auth.ts</code>）；<code>authFetchWithToken</code> 要求必须有 token，否则直接抛错：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> async</span><span style="color:#D73A49"> function</span><span style="color:#6F42C1"> authFetchWithToken</span><span style="color:#24292E">&#x3C;</span><span style="color:#6F42C1">T</span><span style="color:#24292E">>(</span><span style="color:#E36209">url</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> string</span><span style="color:#24292E">, </span><span style="color:#E36209">options</span><span style="color:#D73A49">:</span><span style="color:#6F42C1"> RequestInit</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> {})</span><span style="color:#D73A49">:</span><span style="color:#6F42C1"> Promise</span><span style="color:#24292E">&#x3C;</span><span style="color:#6F42C1">T</span><span style="color:#24292E">> {</span></span>
 <span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> token</span><span style="color:#D73A49"> =</span><span style="color:#6F42C1"> getToken</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#24292E">token) {</span></span>
 <span class="line"><span style="color:#D73A49">    throw</span><span style="color:#D73A49"> new</span><span style="color:#6F42C1"> Error</span><span style="color:#24292E">(</span><span style="color:#032F62">'未认证'</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">  }</span></span></code></pre>
-<p>两者都在调用时现读 token（<code>src/api/auth.ts:18</code>、<code>src/api/auth.ts:77</code>），而不是把 token 缓存在模块变量里。这样登录写入 token 后，下一个请求立刻生效；退出清掉 token 后，后续请求不会带着旧凭证。</p>
-<p>内容类型上有两处差别。<code>authFetch</code> 默认写死 <code>Content-Type: application/json</code>，可以被调用方覆盖（<code>src/api/auth.ts:19-22</code>）；<code>authFetchWithToken</code> 在请求体是 <code>FormData</code> 时不设置该头，避免覆盖浏览器生成的 multipart 边界（<code>src/api/auth.ts:85-88</code>）。后者还会把调用方传入的头合并进来（<code>src/api/auth.ts:89-91</code>）。</p>
+<p>两者都在调用时现读 token（<code>src/api/auth.ts</code>），而不是把 token 缓存在模块变量里。这样登录写入 token 后，下一个请求立刻生效；退出清掉 token 后，后续请求不会带着旧凭证。</p>
+<p>内容类型上有两处差别。<code>authFetch</code> 默认写死 <code>Content-Type: application/json</code>，可以被调用方覆盖（<code>src/api/auth.ts</code>）；<code>authFetchWithToken</code> 在请求体是 <code>FormData</code> 时不设置该头，避免覆盖浏览器生成的 multipart 边界。后者还会把调用方传入的头合并进来。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant H as Hook 或组件
     participant A as api/auth.ts
@@ -31,7 +31,7 @@
         end
     end</pre></div>
 <h2 id="错误信息的提取">错误信息的提取</h2>
-<p>两个函数共用同一个提取器（<code>src/api/auth.ts:41-48</code>）。后端返回的 <code>detail</code> 可能是字符串、对象数组或缺失，提取器分别处理：</p>
+<p>两个函数共用同一个提取器（<code>src/api/auth.ts</code>）。后端返回的 <code>detail</code> 可能是字符串、对象数组或缺失，提取器分别处理：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">function</span><span style="color:#6F42C1"> extractErrorMessage</span><span style="color:#24292E">(</span><span style="color:#E36209">error</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> any</span><span style="color:#24292E">)</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> string</span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> detail</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> error.detail</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">typeof</span><span style="color:#24292E"> detail </span><span style="color:#D73A49">===</span><span style="color:#032F62"> 'string'</span><span style="color:#24292E">) </span><span style="color:#D73A49">return</span><span style="color:#24292E"> detail </span><span style="color:#D73A49">||</span><span style="color:#032F62"> '请求失败'</span></span>
@@ -40,9 +40,10 @@
 <span class="line"><span style="color:#24292E">  }</span></span>
 <span class="line"><span style="color:#D73A49">  return</span><span style="color:#6F42C1"> String</span><span style="color:#24292E">(detail </span><span style="color:#D73A49">||</span><span style="color:#032F62"> '请求失败'</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>数组分支对应 FastAPI 的校验错误格式，每个元素取 <code>msg</code> 字段并用分号连接，界面上能直接显示。响应体不是 JSON 时用 <code>response.json().catch(...)</code> 兜底成 <code>{ detail: '请求失败' }</code>（<code>src/api/auth.ts:33-34</code>、<code>src/api/auth.ts:99-100</code>），因此提取器永远能拿到一个对象。</p>
-<p>错误一路以 <code>Error</code> 向上抛，调用方按场景处理：Hook 里写进状态并弹 <code>alert</code>（<code>src/hooks/useSessionManager.ts:95-97</code>），或在组件里 <code>console.error</code> 后保持原状（<code>src/hooks/useCardManager.ts:77-79</code>）。</p>
+<p>数组分支对应 FastAPI 的校验错误格式，每个元素取 <code>msg</code> 字段并用分号连接，界面上能直接显示。响应体不是 JSON 时用 <code>response.json().catch(...)</code> 兜底成 <code>{ detail: '请求失败' }</code>（<code>src/api/auth.ts</code>），因此提取器永远能拿到一个对象。</p>
+<p>错误一路以 <code>Error</code> 向上抛，调用方按场景处理：Hook 里写进状态并弹 <code>alert</code>（<code>src/hooks/useSessionManager.ts</code>），或在组件里 <code>console.error</code> 后保持原状（<code>src/hooks/useCardManager.ts</code>）。</p>
 <h2 id="十二个模块的职责划分">十二个模块的职责划分</h2>
+<p>按”资源”切分是 API 层最常见的组织方式：一个后端资源（卡片、会话、任务……）对应一个文件，文件名就是资源名，找调用点时不必先猜它属于哪个大类。切得过粗，单文件会堆满互不相关的端点；切得过细，又会出现大量只有一两个函数的文件。下表的最后一列是规模参考：</p>
 
 
 
@@ -121,7 +122,7 @@
 
 
 <table><thead><tr><th>模块</th><th>职责</th><th>导出数</th><th>行数</th></tr></thead><tbody><tr><td><code>src/api/auth.ts</code></td><td>token 存取、登录注册、当前用户、带 token 请求底座</td><td>8</td><td>105</td></tr><tr><td><code>src/api/agent.ts</code></td><td>Agent 工具调用类型、历史读取、上下文清空、两条 SSE 流</td><td>10</td><td>255</td></tr><tr><td><code>src/api/gapAnalysis.ts</code></td><td>卡片评分、质量分析、聚类报告、缺口计划、探索启动</td><td>14</td><td>189</td></tr><tr><td><code>src/api/session.ts</code></td><td>会话增删改查、卡片迁移、导入导出与分享</td><td>12</td><td>128</td></tr><tr><td><code>src/api/hub.ts</code></td><td>Hub 搜索、用户主页、会话详情、点赞评论与导入</td><td>10</td><td>126</td></tr><tr><td><code>src/api/config.ts</code></td><td>模型配置的连接测试、保存与读取</td><td>3</td><td>77</td></tr><tr><td><code>src/api/payment.ts</code></td><td>下单、查询订单、取消订单、订单列表</td><td>7</td><td>55</td></tr><tr><td><code>src/api/task.ts</code></td><td>任务列表、运行中任务、取消与移除、流地址</td><td>6</td><td>33</td></tr><tr><td><code>src/api/documents.ts</code></td><td>文档上传并创建采集任务</td><td>1</td><td>33</td></tr><tr><td><code>src/api/stream.ts</code></td><td>采集流的 <code>EventSource</code> 帮助函数与消息解析</td><td>3</td><td>25</td></tr><tr><td><code>src/api/cards.ts</code></td><td>卡片原始来源读取</td><td>2</td><td>19</td></tr></tbody></table>
-<p>模块之间只允许依赖 <code>auth.ts</code>。例如任务模块只导入请求函数与类型（<code>src/api/task.ts:1-2</code>），卡片模块只导入请求函数（<code>src/api/cards.ts:1</code>）。</p>
+<p>模块之间只允许依赖 <code>auth.ts</code>。例如任务模块只导入请求函数与类型（<code>src/api/task.ts</code>），卡片模块只导入请求函数（<code>src/api/cards.ts</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[api/auth.ts 请求底座] --> B[api/session.ts]
     A --> C[api/cards.ts]
@@ -137,13 +138,13 @@
     M --> D
     M --> I</pre></div>
 <h2 id="类型层与返回契约">类型层与返回契约</h2>
-<p>类型集中在 <code>src/types/</code>，按域拆分：认证 28 行、配置 17 行、卡片 14 行、会话 14 行、任务流水线 51 行、Hub 46 行。请求函数用泛型声明返回类型，例如读取原始来源时把后端的 <code>{ sources: ... }</code> 包一层（<code>src/api/cards.ts:15-18</code>）：</p>
+<p>类型集中在 <code>src/types/</code>，按域拆分：认证 28 行、配置 17 行、卡片 14 行、会话 14 行、任务流水线 51 行、Hub 46 行。请求函数用泛型声明返回类型，例如读取原始来源时把后端的 <code>{ sources: ... }</code> 包一层（<code>src/api/cards.ts</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> data</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> await</span><span style="color:#6F42C1"> authFetchWithToken</span><span style="color:#24292E">&#x3C;{ </span><span style="color:#E36209">sources</span><span style="color:#D73A49">:</span><span style="color:#6F42C1"> RawSource</span><span style="color:#24292E">[] }>(</span></span>
 <span class="line"><span style="color:#032F62">  `/api/cards/${</span><span style="color:#24292E">cardId</span><span style="color:#032F62">}/raw?${</span><span style="color:#24292E">params</span><span style="color:#032F62">}`</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> data.sources </span><span style="color:#D73A49">||</span><span style="color:#24292E"> []</span></span></code></pre>
 <p>这种”在 API 层解包”的写法只出现在少数函数上，多数函数直接把数组或对象返回给调用方。<code>|| []</code> 兜底说明该字段可能缺失，调用方不必再判空。</p>
-<p><code>src/api/stream.ts</code> 是唯一绕过底座的文件（<code>src/api/stream.ts:5-8</code>），它直接创建 <code>EventSource</code> 拼查询串。这条路径没有携带 token，属于早期实现的遗留；当前任务流的实际入口在任务管理 Hook 与 Agent 数据层里（<code>src/hooks/useTaskManager.ts:64-71</code>）。</p>
+<p><code>src/api/stream.ts</code> 是唯一绕过底座的文件，它直接创建 <code>EventSource</code> 拼查询串。这条路径没有携带 token，属于早期实现的遗留；当前任务流的实际入口在任务管理 Hook 与 Agent 数据层里（<code>src/hooks/useTaskManager.ts</code>）。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -180,15 +181,15 @@
 
 
 
-<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/auth.ts:33-34</code></td><td>非 JSON 响应体用固定文案兜底，服务端文本错误会丢失</td><td>先读一次 <code>response.text()</code>，失败再退回固定文案</td></tr><tr><td><code>src/api/auth.ts:41-48</code></td><td>提取器参数类型是 <code>any</code>，<code>detail</code> 为对象时会被 <code>String</code> 成 <code>[object Object]</code></td><td>补对象分支，取 <code>message</code> 或 <code>msg</code> 字段</td></tr><tr><td><code>src/api/stream.ts:5-8</code></td><td><code>EventSource</code> 路径不带 token，且与服务端要求的鉴权方式不一致</td><td>与 Agent 流一样改用 <code>fetch</code> 加流式读取</td></tr><tr><td><code>src/api/auth.ts:19-22</code></td><td><code>authFetch</code> 默认写死 JSON 头，上传类请求需要显式覆盖</td><td>与另一个函数一样按 <code>FormData</code> 判断</td></tr><tr><td><code>src/api/task.ts:5-7</code></td><td>会话参数可选时返回全部任务，容易把别的会话数据混进界面</td><td>调用方始终传会话 ID，或在返回处标注来源</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/auth.ts</code></td><td>非 JSON 响应体用固定文案兜底，服务端文本错误会丢失</td><td>先读一次 <code>response.text()</code>，失败再退回固定文案</td></tr><tr><td><code>src/api/auth.ts</code></td><td>提取器参数类型是 <code>any</code>，<code>detail</code> 为对象时会被 <code>String</code> 成 <code>[object Object]</code></td><td>补对象分支，取 <code>message</code> 或 <code>msg</code> 字段</td></tr><tr><td><code>src/api/stream.ts</code></td><td><code>EventSource</code> 路径不带 token，且与服务端要求的鉴权方式不一致</td><td>与 Agent 流一样改用 <code>fetch</code> 加流式读取</td></tr><tr><td><code>src/api/auth.ts</code></td><td><code>authFetch</code> 默认写死 JSON 头，上传类请求需要显式覆盖</td><td>与另一个函数一样按 <code>FormData</code> 判断</td></tr><tr><td><code>src/api/task.ts</code></td><td>会话参数可选时返回全部任务，容易把别的会话数据混进界面</td><td>调用方始终传会话 ID，或在返回处标注来源</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
-<li>请求底座有两个函数：允许匿名的 <code>authFetch</code> 与强制登录的 <code>authFetchWithToken</code>（<code>src/api/auth.ts:17-39</code>、<code>:76-105</code>）。</li>
-<li>token 每次调用现读，登录与退出都能立刻影响后续请求（<code>src/api/auth.ts:18</code>、<code>:77</code>）。</li>
-<li><code>FormData</code> 请求不设置 <code>Content-Type</code>，避免覆盖 multipart 边界（<code>src/api/auth.ts:85-88</code>）。</li>
-<li>错误统一由 <code>extractErrorMessage</code> 提取为可读字符串（<code>src/api/auth.ts:41-48</code>）。</li>
-<li>十二个业务模块只依赖 <code>auth.ts</code>，各自把端点包装成带类型函数（<code>src/api/cards.ts:1</code>、<code>src/api/task.ts:1-2</code>）。</li>
+<li>请求底座有两个函数：允许匿名的 <code>authFetch</code> 与强制登录的 <code>authFetchWithToken</code>（<code>src/api/auth.ts</code>）。</li>
+<li>token 每次调用现读，登录与退出都能立刻影响后续请求（<code>src/api/auth.ts</code>）。</li>
+<li><code>FormData</code> 请求不设置 <code>Content-Type</code>，避免覆盖 multipart 边界（<code>src/api/auth.ts</code>）。</li>
+<li>错误统一由 <code>extractErrorMessage</code> 提取为可读字符串（<code>src/api/auth.ts</code>）。</li>
+<li>十二个业务模块只依赖 <code>auth.ts</code>，各自把端点包装成带类型函数（<code>src/api/cards.ts</code>、<code>src/api/task.ts</code>）。</li>
 <li>类型集中在 <code>src/types/</code>，按域拆成六个文件。</li>
 </ul>
 <h3 id="设计权衡">设计权衡</h3>
@@ -283,10 +284,10 @@
 
 
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/api/auth.ts</code></td><td>请求底座、token 与错误提取</td></tr><tr><td><code>src/api/cards.ts</code></td><td>卡片原始来源接口</td></tr><tr><td><code>src/api/task.ts</code></td><td>任务列表与取消移除接口</td></tr><tr><td><code>src/api/stream.ts</code></td><td>采集流的早期 <code>EventSource</code> 实现</td></tr><tr><td><code>src/api/documents.ts</code></td><td>文档上传接口</td></tr><tr><td><code>src/api/session.ts</code></td><td>会话相关接口</td></tr><tr><td><code>src/types/</code></td><td>按域拆分的类型定义</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-配置的读取校验与保存"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-配置的读取校验与保存</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/02-Hooks与API层/02-配置的读取校验与保存.md</span></div><div class="dfile__body"><h1 id="配置的读取校验与保存">配置的读取、校验与保存</h1>
-<p>模型配置是一个表单，字段有接口地址、密钥、模型名、温度、最大 token 与代理端口，共六项（<code>src/types/config.ts:1-8</code>）。它同时存在三个地方：后端、浏览器存储与组件状态。<code>src/hooks/useConfig.ts</code> 负责三者的同步，<code>src/api/config.ts</code> 负责两个端点与本地存储的读写，<code>src/utils/validation.ts</code> 提供五个逐项校验函数。</p>
-<p>消费方只有一个：配置页组件 <code>src/components/ApiConfig.tsx:23</code>。 读取顺序与温度、token 两个字段的处理是理解成本最高的部分。</p>
+<p>模型配置是一个表单，字段有接口地址、密钥、模型名、温度、最大 token 与代理端口，共六项（<code>src/types/config.ts</code>）。它同时存在三个地方：后端、浏览器存储与组件状态。<code>src/hooks/useConfig.ts</code> 负责三者的同步，<code>src/api/config.ts</code> 负责两个端点与本地存储的读写，<code>src/utils/validation.ts</code> 提供五个逐项校验函数。</p>
+<p>消费方只有一个：配置页组件 <code>src/components/ApiConfig.tsx</code>。 读取顺序与温度、token 两个字段的处理是理解成本最高的部分。</p>
 <h2 id="配置的三级读取顺序">配置的三级读取顺序</h2>
-<p><code>loadConfig</code> 先请求后端，失败或响应异常时读浏览器存储，再兜底到默认值（<code>src/api/config.ts:50-77</code>）。后端成功时会重新组装字段，其中两个字段是写死的：</p>
+<p><code>loadConfig</code> 先请求后端，失败或响应异常时读浏览器存储，再兜底到默认值（<code>src/api/config.ts</code>）。后端成功时会重新组装字段，其中两个字段是写死的：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#24292E">  apiUrl: data.api_url,</span></span>
 <span class="line"><span style="color:#24292E">  apiKey: data.api_key,</span></span>
@@ -295,8 +296,8 @@
 <span class="line"><span style="color:#24292E">  maxTokens: </span><span style="color:#005CC5">2000</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#24292E">  proxyPort: data.proxy_port </span><span style="color:#D73A49">??</span><span style="color:#005CC5"> DEFAULT_CONFIG</span><span style="color:#24292E">.proxyPort,</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>后端返回的下划线命名在这里映射成前端的驼峰命名，密钥与模型名也一并回填。温度与最大 token 不采用后端值，而是固定常量，且最大 token 的常量是 2000，与默认配置里的 4096 不一致（<code>src/types/config.ts:14-15</code>）。</p>
-<p>浏览器存储使用固定键名（<code>src/api/config.ts:42</code>、<code>src/api/config.ts:68</code>），内容就是配置对象的 JSON。解析失败时只打警告（<code>src/api/config.ts:73-75</code>），随后落到默认值。</p>
+<p>后端返回的下划线命名在这里映射成前端的驼峰命名，密钥与模型名也一并回填。温度与最大 token 不采用后端值，而是固定常量，且最大 token 的常量是 2000，与默认配置里的 4096 不一致（<code>src/types/config.ts</code>）。</p>
+<p>浏览器存储使用固定键名（<code>src/api/config.ts</code>），内容就是配置对象的 JSON。解析失败时只打警告，随后落到默认值。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[loadConfig 调用] --> B["fetch /api/ai/config"]
     B -->|响应 ok| C[下划线字段转驼峰]
@@ -305,7 +306,7 @@
     E -->|解析成功| F[返回存储值]
     E -->|缺失或解析失败| G[返回 DEFAULT_CONFIG]</pre></div>
 <h2 id="hook-内部的三组状态">Hook 内部的三组状态</h2>
-<p><code>useConfig</code> 里有五份状态，按用途分三组（<code>src/hooks/useConfig.ts:11-15</code>）：</p>
+<p><code>useConfig</code> 里有五份状态，按用途分三组（<code>src/hooks/useConfig.ts</code>）：</p>
 
 
 
@@ -332,7 +333,7 @@
 
 
 <table><thead><tr><th>分组</th><th>状态</th><th>初始值</th></tr></thead><tbody><tr><td>表单数据</td><td><code>config</code></td><td><code>DEFAULT_CONFIG</code></td></tr><tr><td>连接测试</td><td><code>testState</code>、<code>testError</code></td><td><code>idle</code> 与 <code>null</code></td></tr><tr><td>保存</td><td><code>saveState</code>、<code>saveError</code></td><td><code>idle</code> 与 <code>null</code></td></tr></tbody></table>
-<p>挂载时用一个 <code>mounted</code> 标志防止卸载后写状态（<code>src/hooks/useConfig.ts:17-32</code>）：</p>
+<p>挂载时用一个 <code>mounted</code> 标志防止卸载后写状态（<code>src/hooks/useConfig.ts</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#24292E">React.</span><span style="color:#6F42C1">useEffect</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#D73A49">  let</span><span style="color:#24292E"> mounted </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> true</span></span>
 <span class="line"><span style="color:#24292E">  (</span><span style="color:#D73A49">async</span><span style="color:#24292E"> () </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
@@ -343,9 +344,9 @@
 <span class="line"><span style="color:#24292E">  })()</span></span>
 <span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> () </span><span style="color:#D73A49">=></span><span style="color:#24292E"> { mounted </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> false</span><span style="color:#24292E"> }</span></span>
 <span class="line"><span style="color:#24292E">}, [])</span></span></code></pre>
-<p>这个守卫只出现在挂载加载里。手动重新加载的 <code>load</code> 没有守卫（<code>src/hooks/useConfig.ts:58-65</code>），如果用户在请求返回前离开页面，仍会调用一次状态更新函数（React 18 之后不会再警告，但状态写入无效）。</p>
+<p>这个守卫只出现在挂载加载里。手动重新加载的 <code>load</code> 没有守卫（<code>src/hooks/useConfig.ts</code>），如果用户在请求返回前离开页面，仍会调用一次状态更新函数（React 18 之后不会再警告，但状态写入无效）。</p>
 <h2 id="保存流程与状态机">保存流程与状态机</h2>
-<p>保存有三个状态：进行中、已保存、出错（<code>src/hooks/useConfig.ts:7</code>）。<code>save</code> 先把状态置为 <code>saving</code>，调用接口，再按结果分流（<code>src/hooks/useConfig.ts:39-51</code>）：</p>
+<p>保存有三个状态：进行中、已保存、出错（<code>src/hooks/useConfig.ts</code>）。<code>save</code> 先把状态置为 <code>saving</code>，调用接口，再按结果分流：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#6F42C1">setSaveState</span><span style="color:#24292E">(</span><span style="color:#032F62">'saving'</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> result</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> await</span><span style="color:#6F42C1"> saveToStorage</span><span style="color:#24292E">(config)</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (result.success) {</span></span>
@@ -356,7 +357,7 @@
 <span class="line"><span style="color:#6F42C1">  setSaveError</span><span style="color:#24292E">(result.error </span><span style="color:#D73A49">??</span><span style="color:#032F62"> '保存失败'</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
 <p>“已保存”是一个短暂提示，两秒后自动回到空闲。定时器没有保存引用，组件卸载时不会被清理；在提示显示期间离开页面，两秒后仍会触发一次状态更新。</p>
-<p>表单编辑会把保存状态重置为空闲（<code>src/hooks/useConfig.ts:34-37</code>），这样修改字段后提示不会停留在”已保存”。重置默认值只改组件状态，不写后端也不写存储（<code>src/hooks/useConfig.ts:53-56</code>），要落盘还得再点一次保存。</p>
+<p>表单编辑会把保存状态重置为空闲（<code>src/hooks/useConfig.ts</code>），这样修改字段后提示不会停留在”已保存”。重置默认值只改组件状态，不写后端也不写存储，要落盘还得再点一次保存。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
     [*] --> idle
     idle --> saving: save 被调用
@@ -367,7 +368,16 @@
     saved --> idle: update 修改任意字段
     error --> idle: update 修改任意字段</pre></div>
 <h2 id="校验规则">校验规则</h2>
-<p>校验由五个独立函数提供，Hook 把它们组合成一个返回错误列表的函数（<code>src/hooks/useConfig.ts:67-75</code>）：</p>
+<p>校验由五个独立函数提供，Hook 把它们组合成一个返回错误列表的函数（<code>src/hooks/useConfig.ts</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#6F42C1"> validate</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> ()</span><span style="color:#D73A49">:</span><span style="color:#6F42C1"> ValidationResult</span><span style="color:#D73A49"> =></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> errors</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> string</span><span style="color:#24292E">[] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> []</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#6F42C1">validateApiUrl</span><span style="color:#24292E">(config.apiUrl)) errors.</span><span style="color:#6F42C1">push</span><span style="color:#24292E">(</span><span style="color:#032F62">'API URL 无效'</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#6F42C1">validateApiKey</span><span style="color:#24292E">(config.apiKey)) errors.</span><span style="color:#6F42C1">push</span><span style="color:#24292E">(</span><span style="color:#032F62">'需要填写 API Key'</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">!</span><span style="color:#6F42C1">validateTemperature</span><span style="color:#24292E">(config.temperature)) errors.</span><span style="color:#6F42C1">push</span><span style="color:#24292E">(</span><span style="color:#032F62">'Temperature 必须在 0 到 2 之间'</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#6A737D">  // …另外两项：模型名、最大 token</span></span>
+<span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> { valid: errors.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> ===</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">, errors }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>代码块是节选，五个校验函数分别对应：</p>
 
 
 
@@ -409,18 +419,18 @@
 
 
 
-<table><thead><tr><th>字段</th><th>校验函数</th><th>规则</th><th>行号</th></tr></thead><tbody><tr><td>接口地址</td><td><code>validateApiUrl</code></td><td>必须能构造出有效 URL</td><td><code>src/utils/validation.ts:3-12</code></td></tr><tr><td>密钥</td><td><code>validateApiKey</code></td><td>非空</td><td><code>src/utils/validation.ts:14-16</code></td></tr><tr><td>模型名</td><td><code>validateModel</code></td><td>非空</td><td><code>src/utils/validation.ts:18-20</code></td></tr><tr><td>温度</td><td><code>validateTemperature</code></td><td>取值在 0 到 2 之间</td><td><code>src/utils/validation.ts:22-25</code></td></tr><tr><td>最大 token</td><td><code>validateMaxTokens</code></td><td>大于 0</td><td><code>src/utils/validation.ts:27-29</code></td></tr></tbody></table>
-<p>校验是纯函数，读取的是当前闭包里的 <code>config</code>，由调用方决定何时触发。它不返回字段到错误的映射，只有一串按顺序拼接的中文提示（<code>src/hooks/useConfig.ts:69-73</code>），表单要逐项标红需要再拆一层。</p>
+<table><thead><tr><th>字段</th><th>校验函数</th><th>规则</th><th>位置</th></tr></thead><tbody><tr><td>接口地址</td><td><code>validateApiUrl</code></td><td>必须能构造出有效 URL</td><td><code>src/utils/validation.ts</code></td></tr><tr><td>密钥</td><td><code>validateApiKey</code></td><td>非空</td><td><code>src/utils/validation.ts</code></td></tr><tr><td>模型名</td><td><code>validateModel</code></td><td>非空</td><td><code>src/utils/validation.ts</code></td></tr><tr><td>温度</td><td><code>validateTemperature</code></td><td>取值在 0 到 2 之间</td><td><code>src/utils/validation.ts</code></td></tr><tr><td>最大 token</td><td><code>validateMaxTokens</code></td><td>大于 0</td><td><code>src/utils/validation.ts</code></td></tr></tbody></table>
+<p>校验是纯函数，读取的是当前闭包里的 <code>config</code>，由调用方决定何时触发。它不返回字段到错误的映射，只有一串按顺序拼接的中文提示（<code>src/hooks/useConfig.ts</code>），表单要逐项标红需要再拆一层。</p>
 <h2 id="连接测试">连接测试</h2>
-<p>连接测试把整个配置对象发给后端（<code>src/api/config.ts:3-9</code>），后端返回体的结构有两种约定（<code>src/api/config.ts:16-22</code>）：</p>
+<p>连接测试把整个配置对象发给后端（<code>src/api/config.ts</code>），后端返回体的结构有两种约定：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> data</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> res.</span><span style="color:#6F42C1">json</span><span style="color:#24292E">().</span><span style="color:#6F42C1">catch</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> ({} </span><span style="color:#D73A49">as</span><span style="color:#005CC5"> any</span><span style="color:#24292E">))</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (</span><span style="color:#D73A49">typeof</span><span style="color:#24292E"> data?.success </span><span style="color:#D73A49">===</span><span style="color:#032F62"> 'boolean'</span><span style="color:#24292E">) {</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (data.success) </span><span style="color:#D73A49">return</span><span style="color:#24292E"> { success: </span><span style="color:#005CC5">true</span><span style="color:#24292E"> }</span></span>
 <span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> { success: </span><span style="color:#005CC5">false</span><span style="color:#24292E">, error: data.error </span><span style="color:#D73A49">??</span><span style="color:#032F62"> '连接测试失败'</span><span style="color:#24292E"> }</span></span>
 <span class="line"><span style="color:#24292E">}</span></span>
 <span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> { success: </span><span style="color:#005CC5">true</span><span style="color:#24292E"> }</span></span></code></pre>
-<p>显式的 <code>success</code> 布尔值优先；没有这个字段时按成功处理，因为能返回 2xx 且能解析 JSON 已经说明网关通了。网络异常与响应非 2xx 都走失败分支，错误文案取响应文本或 <code>HTTP 状态码</code>（<code>src/api/config.ts:11-13</code>、<code>src/api/config.ts:23-26</code>）。</p>
-<p>Hook 层把测试状态映射成四个值：<code>loading</code> 时置为加载中，成功置为 <code>success</code>，失败写入 <code>testError</code>（<code>src/hooks/useConfig.ts:77-89</code>）。与保存一样，“成功”没有自动复位，会一直显示到下一次测试。</p>
+<p>显式的 <code>success</code> 布尔值优先；没有这个字段时按成功处理，因为能返回 2xx 且能解析 JSON 已经说明网关通了。网络异常与响应非 2xx 都走失败分支，错误文案取响应文本或 <code>HTTP 状态码</code>（<code>src/api/config.ts</code>）。</p>
+<p>Hook 层把测试状态映射成四个值：<code>loading</code> 时置为加载中，成功置为 <code>success</code>，失败写入 <code>testError</code>（<code>src/hooks/useConfig.ts</code>）。与保存一样，“成功”没有自动复位，会一直显示到下一次测试。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -462,16 +472,16 @@
 
 
 
-<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/config.ts:59-60</code></td><td>读取时写死温度 0.7 与最大 token 2000，用户在表单里保存的 4096 会被覆盖</td><td>采用后端返回值，缺失时再回落到 <code>DEFAULT_CONFIG</code></td></tr><tr><td><code>src/types/config.ts:15</code></td><td>默认最大 token 是 4096，与读取时常量不一致</td><td>统一为一个常量，两处引用同一来源</td></tr><tr><td><code>src/api/config.ts:31-35</code></td><td>配置接口直接调用 <code>fetch</code>，不带 token，与其他模块的鉴权方式不一致</td><td>确认这些端点是否应当放行匿名；若需登录，改用带 token 的请求函数</td></tr><tr><td><code>src/hooks/useConfig.ts:45</code></td><td><code>setTimeout</code> 没有清理，卸载后仍会写一次状态</td><td>保存定时器引用并在卸载时清除</td></tr><tr><td><code>src/hooks/useConfig.ts:58-65</code></td><td>手动重新加载没有 <code>mounted</code> 守卫，与挂载加载不一致</td><td>抽出带守卫的加载函数供两处复用</td></tr><tr><td><code>src/api/config.ts:8</code></td><td>连接测试把密钥放在请求体里发给自家后端</td><td>属预期用法，但要确认后端不把密钥写进日志</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/config.ts</code></td><td>读取时写死温度 0.7 与最大 token 2000，用户在表单里保存的 4096 会被覆盖</td><td>采用后端返回值，缺失时再回落到 <code>DEFAULT_CONFIG</code></td></tr><tr><td><code>src/types/config.ts</code></td><td>默认最大 token 是 4096，与读取时常量不一致</td><td>统一为一个常量，两处引用同一来源</td></tr><tr><td><code>src/api/config.ts</code></td><td>配置接口直接调用 <code>fetch</code>，不带 token，与其他模块的鉴权方式不一致</td><td>确认这些端点是否应当放行匿名；若需登录，改用带 token 的请求函数</td></tr><tr><td><code>src/hooks/useConfig.ts</code></td><td><code>setTimeout</code> 没有清理，卸载后仍会写一次状态</td><td>保存定时器引用并在卸载时清除</td></tr><tr><td><code>src/hooks/useConfig.ts</code></td><td>手动重新加载没有 <code>mounted</code> 守卫，与挂载加载不一致</td><td>抽出带守卫的加载函数供两处复用</td></tr><tr><td><code>src/api/config.ts</code></td><td>连接测试把密钥放在请求体里发给自家后端</td><td>属预期用法，但要确认后端不把密钥写进日志</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
-<li>配置读取顺序是后端、浏览器存储、默认值三级（<code>src/api/config.ts:50-77</code>）。</li>
-<li>Hook 内有表单数据、连接测试状态与保存状态三组状态（<code>src/hooks/useConfig.ts:11-15</code>）。</li>
-<li>挂载加载用 <code>mounted</code> 标志避免卸载后写状态（<code>src/hooks/useConfig.ts:17-32</code>）。</li>
-<li>保存有四态状态机，成功后两秒自动复位（<code>src/hooks/useConfig.ts:39-51</code>）。</li>
-<li>编辑字段会把保存提示重置为空闲（<code>src/hooks/useConfig.ts:34-37</code>）。</li>
-<li>校验由五个纯函数组合，提示是扁平列表（<code>src/hooks/useConfig.ts:67-75</code>）。</li>
+<li>配置读取顺序是后端、浏览器存储、默认值三级（<code>src/api/config.ts</code>）。</li>
+<li>Hook 内有表单数据、连接测试状态与保存状态三组状态（<code>src/hooks/useConfig.ts</code>）。</li>
+<li>挂载加载用 <code>mounted</code> 标志避免卸载后写状态（<code>src/hooks/useConfig.ts</code>）。</li>
+<li>保存有四态状态机，成功后两秒自动复位（<code>src/hooks/useConfig.ts</code>）。</li>
+<li>编辑字段会把保存提示重置为空闲（<code>src/hooks/useConfig.ts</code>）。</li>
+<li>校验由五个纯函数组合，提示是扁平列表（<code>src/hooks/useConfig.ts</code>）。</li>
 </ul>
 <h3 id="设计权衡">设计权衡</h3>
 
@@ -557,10 +567,10 @@
 
 
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/hooks/useConfig.ts</code></td><td>配置表单的状态、保存与校验组合</td></tr><tr><td><code>src/api/config.ts</code></td><td>连接测试、保存与三级读取</td></tr><tr><td><code>src/types/config.ts</code></td><td>配置类型与默认值</td></tr><tr><td><code>src/utils/validation.ts</code></td><td>五个逐项校验函数</td></tr><tr><td><code>src/components/ApiConfig.tsx</code></td><td>配置页组件，本 Hook 的唯一消费方</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-Agent数据层与消息历史"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-Agent数据层与消息历史</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/02-Hooks与API层/03-Agent数据层与消息历史.md</span></div><div class="dfile__body"><h1 id="agent-数据层与消息历史">Agent 数据层与消息历史</h1>
-<p>Agent 栏有桌面嵌入与移动端抽屉两种形态，两者共用同一个 Hook：<code>src/hooks/useAgent.ts</code>，291 行（<code>src/components/AgentPanel.tsx:18-21</code>、<code>src/components/AgentDrawer.tsx:18</code>）。它对外只暴露四样东西：消息数组、是否流式进行中、发送与清空。</p>
-<p>数据来源分成两条：进入会话时拉取历史消息，事件通过 SSE 推来。 消息模型、历史转换、事件处理与渲染节流是这里的内容；SSE 的流解析、超时判定与端点细节见 <code>src/api/agent.ts:123-255</code>。</p>
+<p>Agent 栏有桌面嵌入与移动端抽屉两种形态，两者共用同一个 Hook：<code>src/hooks/useAgent.ts</code>，291 行（<code>src/components/AgentPanel.tsx</code>、<code>src/components/AgentDrawer.tsx</code>）。它对外只暴露四样东西：消息数组、是否流式进行中、发送与清空。</p>
+<p>数据来源分成两条：进入会话时拉取历史消息，事件通过 SSE 推来。 消息模型、历史转换、事件处理与渲染节流是这里的内容；SSE 的流解析、超时判定与端点细节见 <code>src/api/agent.ts</code>。</p>
 <h2 id="消息与事件的类型">消息与事件的类型</h2>
-<p>消息模型有三个角色：用户、Agent 与工具，并额外带工具名、工具是否成功、是否正在流式输出与时间戳四个可选字段（<code>src/api/agent.ts:25-33</code>）：</p>
+<p>消息模型有三个角色：用户、Agent 与工具，并额外带工具名、工具是否成功、是否正在流式输出与时间戳四个可选字段（<code>src/api/agent.ts</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> interface</span><span style="color:#6F42C1"> AgentMessage</span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#E36209">  id</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> string</span><span style="color:#24292E">;</span></span>
 <span class="line"><span style="color:#E36209">  role</span><span style="color:#D73A49">:</span><span style="color:#032F62"> 'user'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'agent'</span><span style="color:#D73A49"> |</span><span style="color:#032F62"> 'tool'</span><span style="color:#24292E">;</span></span>
@@ -570,7 +580,7 @@
 <span class="line"><span style="color:#E36209">  isStreaming</span><span style="color:#D73A49">?:</span><span style="color:#005CC5"> boolean</span><span style="color:#24292E">;</span></span>
 <span class="line"><span style="color:#E36209">  timestamp</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> number</span><span style="color:#24292E">;</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>事件是五类判别联合（<code>src/api/agent.ts:18-23</code>）：工具调用、工具结果、文本增量、完成与错误。工具结果的载荷结构固定（<code>src/api/agent.ts:11-16</code>），包含工具名、是否成功、摘要与可选数据；摘要由后端生成，前端只在缺少数据时使用它。</p>
+<p>事件是五类判别联合（<code>src/api/agent.ts</code>）：工具调用、工具结果、文本增量、完成与错误。工具结果的载荷结构固定，包含工具名、是否成功、摘要与可选数据；摘要由后端生成，前端只在缺少数据时使用它。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[SSE 事件] --> B{"event.type"}
     B -->|tool_call| C[插入一条工具消息]
@@ -579,7 +589,7 @@
     B -->|complete| F[流式标记置假]
     B -->|error| G[追加一条错误消息]</pre></div>
 <h2 id="历史消息的转换">历史消息的转换</h2>
-<p>历史接口返回原始的后端消息格式，字段名与前端模型不同（<code>src/api/agent.ts:68-73</code>）。转换函数做三件事（<code>src/api/agent.ts:86-121</code>）：</p>
+<p>历史接口返回原始的后端消息格式，字段名与前端模型不同（<code>src/api/agent.ts</code>）。转换函数做三件事：</p>
 
 
 
@@ -615,16 +625,31 @@
 
 
 
-<table><thead><tr><th>后端角色</th><th>处理方式</th><th>结果</th></tr></thead><tbody><tr><td><code>system</code></td><td>直接跳过（<code>src/api/agent.ts:92</code>）</td><td>不进入消息列表</td></tr><tr><td><code>user</code></td><td>取内容</td><td>用户消息（<code>src/api/agent.ts:94-96</code>）</td></tr><tr><td><code>assistant</code> 带工具调用</td><td>每个工具调用生成一条工具消息</td><td><code>role: 'tool'</code>，文案为”调用工具”（<code>src/api/agent.ts:97-106</code>）</td></tr><tr><td><code>assistant</code> 带正文</td><td>取内容</td><td>Agent 消息（<code>src/api/agent.ts:107-109</code>）</td></tr><tr><td><code>tool</code></td><td>取内容并把成功标记置真</td><td>工具结果消息（<code>src/api/agent.ts:110-118</code>）</td></tr></tbody></table>
-<p>时间戳是合成的。后端消息不带时间，转换时用当前时间减去消息总数作为起点，再每条递增一秒（<code>src/api/agent.ts:88-91</code>）：</p>
+<table><thead><tr><th>后端角色</th><th>处理方式</th><th>结果</th></tr></thead><tbody><tr><td><code>system</code></td><td>直接跳过（<code>src/api/agent.ts</code>）</td><td>不进入消息列表</td></tr><tr><td><code>user</code></td><td>取内容</td><td>用户消息（<code>src/api/agent.ts</code>）</td></tr><tr><td><code>assistant</code> 带工具调用</td><td>每个工具调用生成一条工具消息</td><td><code>role: 'tool'</code>，文案为”调用工具”（<code>src/api/agent.ts</code>）</td></tr><tr><td><code>assistant</code> 带正文</td><td>取内容</td><td>Agent 消息（<code>src/api/agent.ts</code>）</td></tr><tr><td><code>tool</code></td><td>取内容并把成功标记置真</td><td>工具结果消息（<code>src/api/agent.ts</code>）</td></tr></tbody></table>
+<p>时间戳是合成的。后端消息不带时间，转换时用当前时间减去消息总数作为起点，再每条递增一秒（<code>src/api/agent.ts</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">let</span><span style="color:#24292E"> ts </span><span style="color:#D73A49">=</span><span style="color:#24292E"> Date.</span><span style="color:#6F42C1">now</span><span style="color:#24292E">() </span><span style="color:#D73A49">-</span><span style="color:#24292E"> raw.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> 1000</span></span>
 <span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> (</span><span style="color:#D73A49">const</span><span style="color:#005CC5"> m</span><span style="color:#D73A49"> of</span><span style="color:#24292E"> raw) {</span></span>
 <span class="line"><span style="color:#24292E">  ts </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1000</span></span>
 <span class="line"><span style="color:#D73A49">  ...</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>这样界面上相对时间会显示成”若干条消息按秒排列”，与真实发送时间无关，只用于排序稳定。历史读取失败时返回空数组（<code>src/api/agent.ts:81-83</code>），界面表现为没有历史，不弹错误。</p>
+<p>这样界面上相对时间会显示成”若干条消息按秒排列”，与真实发送时间无关，只用于排序稳定。历史读取失败时返回空数组（<code>src/api/agent.ts</code>），界面表现为没有历史，不弹错误。</p>
 <h2 id="工具结果的中文化摘要">工具结果的中文化摘要</h2>
-<p>后端返回的摘要字段是英文的通用描述，前端按工具名覆盖成中文提示（<code>src/hooks/useAgent.ts:4-41</code>）。六个工具各有分支，成功与失败用同一个前缀变量（<code>src/hooks/useAgent.ts:5</code>）：</p>
+<p>后端返回的摘要字段是英文的通用描述，前端按工具名覆盖成中文提示。这类”把机器可读的结果转成人能读的文案”放在数据层做，比散进各个展示组件更好维护：工具到文案的映射只有一份，组件不必理解每种工具返回什么。下面是 <code>toolSummary</code> 的骨架（<code>src/hooks/useAgent.ts</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> prefix</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> r.success </span><span style="color:#D73A49">?</span><span style="color:#032F62"> '✅'</span><span style="color:#D73A49"> :</span><span style="color:#032F62"> '❌'</span></span>
+<span class="line"><span style="color:#D73A49">switch</span><span style="color:#24292E"> (r.tool) {</span></span>
+<span class="line"><span style="color:#D73A49">  case</span><span style="color:#032F62"> 'get_card_info'</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> title</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> (r.data </span><span style="color:#D73A49">as</span><span style="color:#6F42C1"> Record</span><span style="color:#24292E">&#x3C;</span><span style="color:#005CC5">string</span><span style="color:#24292E">, </span><span style="color:#005CC5">unknown</span><span style="color:#24292E">> </span><span style="color:#D73A49">|</span><span style="color:#005CC5"> undefined</span><span style="color:#24292E">)?.title</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#032F62"> `${</span><span style="color:#24292E">prefix</span><span style="color:#032F62">} 已读取卡片「${</span><span style="color:#24292E">title</span><span style="color:#D73A49"> ||</span><span style="color:#032F62"> '未知'}」`</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#D73A49">  case</span><span style="color:#032F62"> 'list_cards'</span><span style="color:#24292E">: {</span></span>
+<span class="line"><span style="color:#D73A49">    const</span><span style="color:#005CC5"> total</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> (r.data </span><span style="color:#D73A49">as</span><span style="color:#6F42C1"> Record</span><span style="color:#24292E">&#x3C;</span><span style="color:#005CC5">string</span><span style="color:#24292E">, </span><span style="color:#005CC5">unknown</span><span style="color:#24292E">> </span><span style="color:#D73A49">|</span><span style="color:#005CC5"> undefined</span><span style="color:#24292E">)?.total</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#032F62"> `${</span><span style="color:#24292E">prefix</span><span style="color:#032F62">} 知识库共 ${</span><span style="color:#24292E">total</span><span style="color:#D73A49"> ??</span><span style="color:#032F62"> '?'} 张卡片`</span></span>
+<span class="line"><span style="color:#24292E">  }</span></span>
+<span class="line"><span style="color:#6A737D">  // …其余四个 case 省略</span></span>
+<span class="line"><span style="color:#D73A49">  default</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#032F62"> `${</span><span style="color:#24292E">prefix</span><span style="color:#032F62">} ${</span><span style="color:#24292E">r</span><span style="color:#032F62">.</span><span style="color:#24292E">summary</span><span style="color:#032F62">}`</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>六个工具各有分支，成功与失败用同一个前缀变量（<code>src/hooks/useAgent.ts</code>）：</p>
 
 
 
@@ -665,19 +690,19 @@
 
 
 
-<table><thead><tr><th>工具名</th><th>摘要内容</th><th>行号</th></tr></thead><tbody><tr><td><code>get_card_info</code></td><td>读取到的卡片标题</td><td><code>src/hooks/useAgent.ts:7-10</code></td></tr><tr><td><code>search_similar_cards</code></td><td>相关卡片条数与前五条标题</td><td><code>src/hooks/useAgent.ts:11-17</code></td></tr><tr><td><code>search_by_keyword</code></td><td>生成的卡片数与标题</td><td><code>src/hooks/useAgent.ts:18-23</code></td></tr><tr><td><code>expand_from_card</code></td><td>扩展生成的卡片数与标题</td><td><code>src/hooks/useAgent.ts:24-29</code></td></tr><tr><td><code>list_cards</code></td><td>知识库总卡片数</td><td><code>src/hooks/useAgent.ts:30-33</code></td></tr><tr><td><code>get_linked_cards</code></td><td>关联卡片数量或”没有关联”</td><td><code>src/hooks/useAgent.ts:34-37</code></td></tr></tbody></table>
-<p>未命中的工具走默认分支，直接用后端摘要（<code>src/hooks/useAgent.ts:38-40</code>）。数据访问统一写成 <code>(r.data as Record&#x3C;string, unknown> | undefined)?.字段</code>，因为工具返回的结构按工具而变，没有一个共同的类型。</p>
+<table><thead><tr><th>工具名</th><th>摘要内容</th><th>位置</th></tr></thead><tbody><tr><td><code>get_card_info</code></td><td>读取到的卡片标题</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td><code>search_similar_cards</code></td><td>相关卡片条数与前五条标题</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td><code>search_by_keyword</code></td><td>生成的卡片数与标题</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td><code>expand_from_card</code></td><td>扩展生成的卡片数与标题</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td><code>list_cards</code></td><td>知识库总卡片数</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td><code>get_linked_cards</code></td><td>关联卡片数量或”没有关联”</td><td><code>src/hooks/useAgent.ts</code></td></tr></tbody></table>
+<p>未命中的工具走默认分支，直接用后端摘要（<code>src/hooks/useAgent.ts</code>）。数据访问统一写成 <code>(r.data as Record&#x3C;string, unknown> | undefined)?.字段</code>，因为工具返回的结构按工具而变，没有一个共同的类型。</p>
 <h2 id="事件处理与渲染节流">事件处理与渲染节流</h2>
-<p><code>handleEvent</code> 是一个按事件类型分发的回调（<code>src/hooks/useAgent.ts:62-165</code>），其中三处需要单独说明。</p>
-<p>工具调用事件会插到正在流式的消息之前（<code>src/hooks/useAgent.ts:70-85</code>），这样界面上工具提示出现在正文上方，而不是被追加到末尾。若当前没有流式消息，就直接追加。</p>
-<p>工具结果事件改写数组末尾那条同名的工具消息（<code>src/hooks/useAgent.ts:89-101</code>），并把结果里的任务信息上报给外壳（<code>src/hooks/useAgent.ts:102-107</code>）：</p>
+<p><code>handleEvent</code> 是一个按事件类型分发的回调（<code>src/hooks/useAgent.ts</code>），其中三处需要单独说明。</p>
+<p>工具调用事件会插到正在流式的消息之前（<code>src/hooks/useAgent.ts</code>），这样界面上工具提示出现在正文上方，而不是被追加到末尾。若当前没有流式消息，就直接追加。</p>
+<p>工具结果事件改写数组末尾那条同名的工具消息（<code>src/hooks/useAgent.ts</code>），并把结果里的任务信息上报给外壳：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> last</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> updated[updated.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">]</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (last?.role </span><span style="color:#D73A49">===</span><span style="color:#032F62"> 'tool'</span><span style="color:#D73A49"> &#x26;&#x26;</span><span style="color:#24292E"> last.toolName </span><span style="color:#D73A49">===</span><span style="color:#24292E"> event.data.tool) {</span></span>
 <span class="line"><span style="color:#24292E">  updated[updated.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> { </span><span style="color:#D73A49">...</span><span style="color:#24292E">last, content: </span><span style="color:#6F42C1">toolSummary</span><span style="color:#24292E">(event.data), toolSuccess: event.data.success }</span></span>
 <span class="line"><span style="color:#24292E">}</span></span>
 <span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> taskId</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> (event.data.data </span><span style="color:#D73A49">as</span><span style="color:#24292E"> ...)?.task_id</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> (taskId </span><span style="color:#D73A49">&#x26;&#x26;</span><span style="color:#24292E"> onTaskCreated) </span><span style="color:#6F42C1">onTaskCreated</span><span style="color:#24292E">(taskId, keyword, taskType)</span></span></code></pre>
-<p>文本增量不直接写状态，而是累加到一个引用对象上，再用 <code>requestAnimationFrame</code> 把渲染压到每帧最多一次（<code>src/hooks/useAgent.ts:124-141</code>）。注释给出了原因：Markdown 渲染每次都要重新解析全部累积文本（<code>src/hooks/useAgent.ts:125-126</code>）。</p>
+<p>文本增量不直接写状态，而是累加到一个引用对象上，再用 <code>requestAnimationFrame</code> 把渲染压到每帧最多一次（<code>src/hooks/useAgent.ts</code>）。注释给出了原因：Markdown 渲染每次都要重新解析全部累积文本。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant S as SSE 流
     participant H as handleEvent
@@ -690,9 +715,13 @@
     S->>H: complete
     H->>U: 流式标记置假</pre></div>
 <h2 id="两条订阅路径与发送分支">两条订阅路径与发送分支</h2>
-<p>进入会话时同时做两件事：拉历史消息、订阅后台仍在运行的循环（<code>src/hooks/useAgent.ts:199-204</code>）。用一个引用记住已加载的会话，避免同一个会话重复拉取；订阅函数先把上一次的订阅中止，再新建控制器（<code>src/hooks/useAgent.ts:168-172</code>）。后台循环的首个事件如果是错误，说明没有在跑的循环，直接返回（<code>src/hooks/useAgent.ts:175</code>）。</p>
-<p>消息数组有上限。超过一百条时截取最后一百条（<code>src/hooks/useAgent.ts:56-60</code>），注释写明是为了避免浏览器内存耗尽。这个效果的依赖写成 <code>messages.length > 100 ? messages.length : 0</code>，只有越过阈值后才会重新运行。</p>
-<p>发送有三条路径（<code>src/hooks/useAgent.ts:213-258</code>）：</p>
+<p>进入会话时同时做两件事：拉历史消息、订阅后台仍在运行的循环（<code>src/hooks/useAgent.ts</code>）。用一个引用记住已加载的会话，避免同一个会话重复拉取；订阅函数先把上一次的订阅中止，再新建控制器。后台循环的首个事件如果是错误，说明没有在跑的循环，直接返回。</p>
+<p>消息数组有上限，超过一百条时截取最后一百条（<code>src/hooks/useAgent.ts</code>）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#6F42C1">useEffect</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (messages.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> ></span><span style="color:#005CC5"> 100</span><span style="color:#24292E">) </span><span style="color:#6F42C1">setMessages</span><span style="color:#24292E">(</span><span style="color:#E36209">prev</span><span style="color:#D73A49"> =></span><span style="color:#24292E"> prev.</span><span style="color:#6F42C1">slice</span><span style="color:#24292E">(</span><span style="color:#D73A49">-</span><span style="color:#005CC5">100</span><span style="color:#24292E">))</span></span>
+<span class="line"><span style="color:#24292E">}, [messages.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> ></span><span style="color:#005CC5"> 100</span><span style="color:#D73A49"> ?</span><span style="color:#24292E"> messages.</span><span style="color:#005CC5">length</span><span style="color:#D73A49"> :</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">])</span></span></code></pre>
+<p>依赖写成 <code>messages.length > 100 ? messages.length : 0</code>，是为了让超过一百条之前这个值恒为 0、效果不重跑，越过阈值后才按长度变化重新运行。注释写明截断是为了避免浏览器内存耗尽。</p>
+<p>发送有三条路径（<code>src/hooks/useAgent.ts</code>）：</p>
 
 
 
@@ -718,8 +747,8 @@
 
 
 
-<table><thead><tr><th>场景</th><th>行为</th><th>行号</th></tr></thead><tbody><tr><td>空闲</td><td>新建用户消息与占位 Agent 消息，走新流</td><td><code>src/hooks/useAgent.ts:231-258</code></td></tr><tr><td>流进行中且注入成功</td><td>只追加用户消息，交给后端桥接</td><td><code>src/hooks/useAgent.ts:217-226</code></td></tr><tr><td>流进行中但注入失败</td><td>中止旧流，按空闲路径重启</td><td><code>src/hooks/useAgent.ts:226-228</code></td></tr></tbody></table>
-<p>走新流之前会中止后台循环订阅，避免两个订阅者抢同一队列（<code>src/hooks/useAgent.ts:247-249</code>）。取消只调用控制器中止（<code>src/hooks/useAgent.ts:286-288</code>），卸载时同时中止两条流并取消未执行的动画帧（<code>src/hooks/useAgent.ts:207-211</code>）。</p>
+<table><thead><tr><th>场景</th><th>行为</th><th>位置</th></tr></thead><tbody><tr><td>空闲</td><td>新建用户消息与占位 Agent 消息，走新流</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td>流进行中且注入成功</td><td>只追加用户消息，交给后端桥接</td><td><code>src/hooks/useAgent.ts</code></td></tr><tr><td>流进行中但注入失败</td><td>中止旧流，按空闲路径重启</td><td><code>src/hooks/useAgent.ts</code></td></tr></tbody></table>
+<p>走新流之前会中止后台循环订阅，避免两个订阅者抢同一队列（<code>src/hooks/useAgent.ts</code>）。取消只调用控制器中止，卸载时同时中止两条流并取消未执行的动画帧。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -761,16 +790,16 @@
 
 
 
-<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/agent.ts:88-91</code></td><td>历史消息时间戳按条数合成，与真实时间无关</td><td>若后端能提供时间，改为读取真实字段</td></tr><tr><td><code>src/hooks/useAgent.ts:56-60</code></td><td>上限效果的依赖表达式只在跨过阈值时变化，恰好等于一百条时不会触发</td><td>直接依赖 <code>messages.length</code>，条件写在回调内</td></tr><tr><td><code>src/hooks/useAgent.ts:93</code></td><td>工具结果只改写数组末尾同名消息，事件乱序时匹配不到</td><td>用工具调用 ID 关联而不是靠末尾位置</td></tr><tr><td><code>src/hooks/useAgent.ts:124</code></td><td>文本累加到引用对象上，不触发渲染，只有 rAF 回调用最新值</td><td>保留该设计，但不要在其他地方直接读该引用做判断</td></tr><tr><td><code>src/hooks/useAgent.ts:102-107</code></td><td>工具结果上报任务时从 <code>data</code> 里取值，字段名缺失就回落到工具名当关键词</td><td>明确约定字段，缺失时不要用工具名冒充关键词</td></tr><tr><td><code>src/api/agent.ts:35-46</code></td><td>清空上下文失败只返回假值，调用方仍会清空本地消息</td><td>失败时保留本地消息或提示用户</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/agent.ts</code></td><td>历史消息时间戳按条数合成，与真实时间无关</td><td>若后端能提供时间，改为读取真实字段</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>上限效果的依赖表达式只在跨过阈值时变化，恰好等于一百条时不会触发</td><td>直接依赖 <code>messages.length</code>，条件写在回调内</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>工具结果只改写数组末尾同名消息，事件乱序时匹配不到</td><td>用工具调用 ID 关联而不是靠末尾位置</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>文本累加到引用对象上，不触发渲染，只有 rAF 回调用最新值</td><td>保留该设计，但不要在其他地方直接读该引用做判断</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>工具结果上报任务时从 <code>data</code> 里取值，字段名缺失就回落到工具名当关键词</td><td>明确约定字段，缺失时不要用工具名冒充关键词</td></tr><tr><td><code>src/api/agent.ts</code></td><td>清空上下文失败只返回假值，调用方仍会清空本地消息</td><td>失败时保留本地消息或提示用户</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
-<li>Agent 消息有三个角色与四个可选字段（<code>src/api/agent.ts:25-33</code>）。</li>
-<li>SSE 事件是五类判别联合，工具结果载荷结构固定（<code>src/api/agent.ts:11-23</code>）。</li>
-<li>历史转换跳过系统消息，把工具调用展开成独立消息（<code>src/api/agent.ts:86-121</code>）。</li>
-<li>工具结果按工具名映射成中文摘要（<code>src/hooks/useAgent.ts:4-41</code>）。</li>
-<li>文本增量累加到引用并每帧最多渲染一次（<code>src/hooks/useAgent.ts:124-141</code>）。</li>
-<li>发送分空闲、注入成功、注入失败三条路径（<code>src/hooks/useAgent.ts:213-258</code>）。</li>
+<li>Agent 消息有三个角色与四个可选字段（<code>src/api/agent.ts</code>）。</li>
+<li>SSE 事件是五类判别联合，工具结果载荷结构固定（<code>src/api/agent.ts</code>）。</li>
+<li>历史转换跳过系统消息，把工具调用展开成独立消息（<code>src/api/agent.ts</code>）。</li>
+<li>工具结果按工具名映射成中文摘要（<code>src/hooks/useAgent.ts</code>）。</li>
+<li>文本增量累加到引用并每帧最多渲染一次（<code>src/hooks/useAgent.ts</code>）。</li>
+<li>发送分空闲、注入成功、注入失败三条路径（<code>src/hooks/useAgent.ts</code>）。</li>
 </ul>
 <h3 id="设计权衡">设计权衡</h3>
 
@@ -856,10 +885,10 @@
 
 
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>Agent 消息状态、事件处理与发送</td></tr><tr><td><code>src/api/agent.ts</code></td><td>消息类型、历史转换与两条 SSE 生成器</td></tr><tr><td><code>src/components/AgentPanel.tsx</code></td><td>桌面嵌入式 Agent 栏</td></tr><tr><td><code>src/components/AgentDrawer.tsx</code></td><td>移动端 Agent 抽屉</td></tr><tr><td><code>src/types/pipeline.ts</code></td><td>任务流水线类型，与工具结果字段相关</td></tr></tbody></table></div></section><section class="dfile" id="file-4" data-file="04-分析与运营类接口"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-分析与运营类接口</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/02-Hooks与API层/04-分析与运营类接口.md</span></div><div class="dfile__body"><h1 id="分析与运营类接口">分析与运营类接口</h1>
-<p>除了卡片、会话与任务这些高频接口，前端还接了两组端点：一组做质量分析与缺口探索，一组做社区分享与订单支付。前者返回结构复杂，字段多达十几个；后者偏运营，动作多而返回简单。</p>
+<p>接口模块的粒度通常跟着资源走：动作多的资源就一个模块放十来个函数，返回结构简单的资源就单独一小块；规模差异不是问题，一个模块里混进职责不同的端点才是。除了卡片、会话与任务这些高频接口，本项目还接了两组端点：一组做质量分析与缺口探索，一组做社区分享与订单支付。前者返回结构复杂，字段多达十几个；后者偏运营，动作多而返回简单。</p>
 <p>这两组接口还暴露了请求层的第二条路径。需要下载文件、上传表单或长期保持连接的请求没有走 <code>authFetchWithToken</code>，而是自己读取 token 再调用 <code>fetch</code>。 先看分析接口的数据结构，再看第二条路径的写法与它带来的差异。</p>
 <h2 id="分析接口的输入输出">分析接口的输入输出</h2>
-<p>分析的核心是单卡评分。一个卡片评分包含九个数值字段与两组维度（<code>src/api/gapAnalysis.ts:3-23</code>）：</p>
+<p>分析的核心是单卡评分。一个卡片评分包含九个数值字段与两组维度（<code>src/api/gapAnalysis.ts</code>）：</p>
 
 
 
@@ -890,15 +919,15 @@
 
 
 
-<table><thead><tr><th>字段组</th><th>内容</th><th>行号</th></tr></thead><tbody><tr><td>总分</td><td><code>gap_score</code>、<code>quality_score</code></td><td><code>src/api/gapAnalysis.ts:5-6</code></td></tr><tr><td>分项分</td><td>结构、语义、图谱、置信度四个分数</td><td><code>src/api/gapAnalysis.ts:7-10</code></td></tr><tr><td>内容维度</td><td>内容、来源、关联三项</td><td><code>src/api/gapAnalysis.ts:11-15</code></td></tr><tr><td>图谱维度</td><td>中介中心性、聚类系数、社区规模</td><td><code>src/api/gapAnalysis.ts:16-20</code></td></tr></tbody></table>
-<p>整份分析结果是聚合值加两张榜单（<code>src/api/gapAnalysis.ts:24-37</code>）：总数、各分项平均分、最弱卡片数量与占比，以及最弱与最强各一批卡片。请求函数只做参数拼装（<code>src/api/gapAnalysis.ts:38-47</code>）：</p>
+<table><thead><tr><th>字段组</th><th>内容</th><th>位置</th></tr></thead><tbody><tr><td>总分</td><td><code>gap_score</code>、<code>quality_score</code></td><td><code>src/api/gapAnalysis.ts</code></td></tr><tr><td>分项分</td><td>结构、语义、图谱、置信度四个分数</td><td><code>src/api/gapAnalysis.ts</code></td></tr><tr><td>内容维度</td><td>内容、来源、关联三项</td><td><code>src/api/gapAnalysis.ts</code></td></tr><tr><td>图谱维度</td><td>中介中心性、聚类系数、社区规模</td><td><code>src/api/gapAnalysis.ts</code></td></tr></tbody></table>
+<p>整份分析结果是聚合值加两张榜单（<code>src/api/gapAnalysis.ts</code>）：总数、各分项平均分、最弱卡片数量与占比，以及最弱与最强各一批卡片。请求函数只做参数拼装：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">export</span><span style="color:#D73A49"> async</span><span style="color:#D73A49"> function</span><span style="color:#6F42C1"> getGapAnalysis</span><span style="color:#24292E">(</span><span style="color:#E36209">sessionId</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> string</span><span style="color:#24292E">, </span><span style="color:#E36209">gapThreshold</span><span style="color:#D73A49">:</span><span style="color:#005CC5"> number</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 0.5</span><span style="color:#24292E">)</span><span style="color:#D73A49">:</span><span style="color:#6F42C1"> Promise</span><span style="color:#24292E">&#x3C;</span><span style="color:#6F42C1">GapAnalysisResult</span><span style="color:#24292E">> {</span></span>
 <span class="line"><span style="color:#D73A49">  const</span><span style="color:#005CC5"> params</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> new</span><span style="color:#6F42C1"> URLSearchParams</span><span style="color:#24292E">({ session_id: sessionId, gap_threshold: gapThreshold.</span><span style="color:#6F42C1">toString</span><span style="color:#24292E">() })</span></span>
 <span class="line"><span style="color:#D73A49">  return</span><span style="color:#6F42C1"> authFetchWithToken</span><span style="color:#24292E">&#x3C;</span><span style="color:#6F42C1">GapAnalysisResult</span><span style="color:#24292E">>(</span><span style="color:#032F62">`/api/pipeline/gap-analysis?${</span><span style="color:#24292E">params</span><span style="color:#032F62">}`</span><span style="color:#24292E">)</span></span>
 <span class="line"><span style="color:#24292E">}</span></span></code></pre>
-<p>聚类报告是另一份结果，包含聚类维度、聚类明细与覆盖不足的卡片（<code>src/api/gapAnalysis.ts:49-85</code>），并在此之上生成缺口补齐计划，计划项带目标聚类与建议动作（<code>src/api/gapAnalysis.ts:86-96</code>）。三个请求函数分别负责取报告、生成计划与启动探索（<code>src/api/gapAnalysis.ts:97</code>、<code>:102</code>、<code>:116</code>）。</p>
+<p>聚类报告是另一份结果，包含聚类维度、聚类明细与覆盖不足的卡片（<code>src/api/gapAnalysis.ts</code>），并在此之上生成缺口补齐计划，计划项带目标聚类与建议动作。三个请求函数分别负责取报告、生成计划与启动探索。</p>
 <h2 id="缺口驱动探索用长请求">缺口驱动探索用长请求</h2>
-<p>探索启动函数把八个参数拼进查询串，其中六个允许调用方覆盖，未传时用默认值（<code>src/api/gapAnalysis.ts:116-140</code>）：</p>
+<p>探索启动函数把八个参数拼进查询串，其中六个允许调用方覆盖，未传时用默认值（<code>src/api/gapAnalysis.ts</code>）：</p>
 
 
 
@@ -940,7 +969,7 @@
 
 
 <table><thead><tr><th>参数</th><th>默认值</th><th>说明</th></tr></thead><tbody><tr><td><code>max_sources</code></td><td>5</td><td>每轮最多抓取的来源数</td></tr><tr><td><code>gap_threshold</code></td><td>0.5</td><td>触发补齐的缺口阈值</td></tr><tr><td><code>structure_threshold</code></td><td>0.5</td><td>结构分阈值</td></tr><tr><td><code>max_iterations</code></td><td>3</td><td>最多迭代轮数</td></tr><tr><td><code>search_level</code></td><td><code>default</code></td><td>检索深度</td></tr><tr><td><code>search_provider</code></td><td><code>bocha</code></td><td>检索提供方</td></tr></tbody></table>
-<p>这个函数不走底座，而是自己读 token 并校验（<code>src/api/gapAnalysis.ts:130-131</code>），再发起请求。函数里创建了一个 <code>AbortController</code> 并传给请求（<code>src/api/gapAnalysis.ts:141-145</code>），但没有任何地方调用它的 <code>abort</code>，也没有把外部信号接进来。响应非 2xx 时读文本作为错误信息（<code>src/api/gapAnalysis.ts:147-150</code>），与底座的做法一致。</p>
+<p>这个函数不走底座，而是自己读 token 并校验（<code>src/api/gapAnalysis.ts</code>），再发起请求。函数里创建了一个 <code>AbortController</code> 并传给请求，但没有任何地方调用它的 <code>abort</code>，也没有把外部信号接进来。响应非 2xx 时读文本作为错误信息，与底座的做法一致。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[请求进入] --> B{"需要下载、上传或长连接?"}
     B -->|否| C["authFetchWithToken: 自动带 token 与 JSON 头"]
@@ -951,7 +980,7 @@
     G -->|否| H["从 detail 或文本提取错误并抛出"]
     G -->|是| I["blob 或 JSON 返回调用方"]</pre></div>
 <h2 id="第二条请求路径的写法">第二条请求路径的写法</h2>
-<p>会话下载是这条路径里最完整的一例（<code>src/api/session.ts:69-88</code>）：手动读 token、请求、检查状态、取 <code>blob</code>、创建临时链接并触发点击，最后释放对象地址。</p>
+<p>会话下载是这条路径里最完整的一例（<code>src/api/session.ts</code>）：手动读 token、请求、检查状态、取 <code>blob</code>、创建临时链接并触发点击，最后释放对象地址。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> blob</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> await</span><span style="color:#24292E"> response.</span><span style="color:#6F42C1">blob</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> url</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> window.</span><span style="color:#005CC5">URL</span><span style="color:#24292E">.</span><span style="color:#6F42C1">createObjectURL</span><span style="color:#24292E">(blob)</span></span>
 <span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> a</span><span style="color:#D73A49"> =</span><span style="color:#24292E"> document.</span><span style="color:#6F42C1">createElement</span><span style="color:#24292E">(</span><span style="color:#032F62">'a'</span><span style="color:#24292E">)</span></span>
@@ -961,7 +990,7 @@
 <span class="line"><span style="color:#24292E">a.</span><span style="color:#6F42C1">click</span><span style="color:#24292E">()</span></span>
 <span class="line"><span style="color:#24292E">document.body.</span><span style="color:#6F42C1">removeChild</span><span style="color:#24292E">(a)</span></span>
 <span class="line"><span style="color:#24292E">window.</span><span style="color:#005CC5">URL</span><span style="color:#24292E">.</span><span style="color:#6F42C1">revokeObjectURL</span><span style="color:#24292E">(url)</span></span></code></pre>
-<p>下载失败时它直接取 <code>error.detail</code> 当字符串用（<code>src/api/session.ts:76-79</code>），而底座用的是能处理数组的提取器。文档上传同样是手写路径，用 <code>FormData</code> 装文件与会话 ID（<code>src/api/documents.ts:8-33</code>），错误只取 <code>detail</code> 一次。</p>
+<p>下载失败时它直接取 <code>error.detail</code> 当字符串用（<code>src/api/session.ts</code>），而底座用的是能处理数组的提取器。文档上传同样是手写路径，用 <code>FormData</code> 装文件与会话 ID（<code>src/api/documents.ts</code>），错误只取 <code>detail</code> 一次。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant H as 会话 Hook
     participant A as api/session.ts
@@ -974,9 +1003,15 @@
     A->>A: 创建 blob 与临时 a 标签
     A->>A: 触发点击并释放 URL
     A-->>H: 无返回值, 只切按钮状态</pre></div>
-<p>其余手写路径的模块还有缺口探索（<code>src/api/gapAnalysis.ts:130-145</code>）与文档上传（<code>src/api/documents.ts:19-27</code>）。它们的共同点是先做 token 检查、再自己拼头，错误处理各写一遍。</p>
+<p>其余手写路径的模块还有缺口探索（<code>src/api/gapAnalysis.ts</code>）与文档上传（<code>src/api/documents.ts</code>）。它们的共同点是先做 token 检查、再自己拼头，错误处理各写一遍。</p>
 <h2 id="hub-与支付接口">Hub 与支付接口</h2>
-<p>Hub 模块是动作最多的一个，十个函数覆盖搜索、用户主页、会话详情、分享、导入、点赞与评论（<code>src/api/hub.ts:6-126</code>）：</p>
+<p>Hub 模块是动作最多的一个，十个函数覆盖搜索、用户主页、会话详情、分享、导入、点赞与评论（<code>src/api/hub.ts</code>）。下面这两个函数只差动作词，返回结构完全一致。以下是点赞函数的简化片段（点踩只差动作词）：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="ts"><code><span class="line"><span style="color:#6A737D">// 点赞与点踩：都返回最新的两个计数</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#6F42C1"> authFetchWithToken</span><span style="color:#24292E">(</span></span>
+<span class="line"><span style="color:#032F62">  `${</span><span style="color:#005CC5">HUB_BASE</span><span style="color:#032F62">}/${</span><span style="color:#6F42C1">encodeURIComponent</span><span style="color:#032F62">(</span><span style="color:#24292E">username</span><span style="color:#032F62">)</span><span style="color:#032F62">}/${</span><span style="color:#6F42C1">encodeURIComponent</span><span style="color:#032F62">(</span><span style="color:#24292E">sessionName</span><span style="color:#032F62">)</span><span style="color:#032F62">}/like`</span><span style="color:#24292E">,</span></span>
+<span class="line"><span style="color:#24292E">  { method: </span><span style="color:#032F62">'POST'</span><span style="color:#24292E"> }</span></span>
+<span class="line"><span style="color:#24292E">)</span></span></code></pre>
+<p>函数清单如下：</p>
 
 
 
@@ -1027,9 +1062,9 @@
 
 
 
-<table><thead><tr><th>动作</th><th>函数</th><th>行号</th></tr></thead><tbody><tr><td>搜索</td><td><code>searchHub</code></td><td><code>src/api/hub.ts:6-24</code></td></tr><tr><td>读用户主页</td><td><code>getUserProfile</code></td><td><code>src/api/hub.ts:32-36</code></td></tr><tr><td>读用户会话列表</td><td><code>getUserSessions</code></td><td><code>src/api/hub.ts:38-50</code></td></tr><tr><td>读会话详情</td><td><code>getHubSession</code></td><td><code>src/api/hub.ts:52-56</code></td></tr><tr><td>分享与取消分享</td><td><code>shareToHub</code>、<code>unshareFromHub</code></td><td><code>src/api/hub.ts:58-76</code></td></tr><tr><td>导入到本地</td><td><code>importFromHub</code></td><td><code>src/api/hub.ts:78-86</code></td></tr><tr><td>点赞与点踩</td><td><code>likeHubSession</code>、<code>dislikeHubSession</code></td><td><code>src/api/hub.ts:88-100</code></td></tr><tr><td>评论增删</td><td><code>addHubComment</code>、<code>deleteHubComment</code></td><td><code>src/api/hub.ts:102-126</code></td></tr></tbody></table>
-<p>点赞与点踩的返回结构一致，都是最新的两个计数（<code>src/api/hub.ts:88-100</code>），因此组件可以在不重新拉详情的前提下更新数字。</p>
-<p>支付模块只有四个函数：下单、查单、取消与列表（<code>src/api/payment.ts:29-55</code>）。订单有两种类型：创建结果只带订单号与支付参数（<code>src/api/payment.ts:3-12</code>），订单详情在此基础上加创建时间与状态（<code>src/api/payment.ts:13-28</code>）。查单返回详情类型，取消与列表返回较轻的结构。</p>
+<table><thead><tr><th>动作</th><th>函数</th><th>位置</th></tr></thead><tbody><tr><td>搜索</td><td><code>searchHub</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>读用户主页</td><td><code>getUserProfile</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>读用户会话列表</td><td><code>getUserSessions</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>读会话详情</td><td><code>getHubSession</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>分享与取消分享</td><td><code>shareToHub</code>、<code>unshareFromHub</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>导入到本地</td><td><code>importFromHub</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>点赞与点踩</td><td><code>likeHubSession</code>、<code>dislikeHubSession</code></td><td><code>src/api/hub.ts</code></td></tr><tr><td>评论增删</td><td><code>addHubComment</code>、<code>deleteHubComment</code></td><td><code>src/api/hub.ts</code></td></tr></tbody></table>
+<p>点赞与点踩的返回结构一致，都是最新的两个计数（<code>src/api/hub.ts</code>），因此组件可以在不重新拉详情的前提下更新数字。</p>
+<p>支付模块只有四个函数：下单、查单、取消与列表（<code>src/api/payment.ts</code>）。订单有两种类型：创建结果只带订单号与支付参数，订单详情在此基础上加创建时间与状态。查单返回详情类型，取消与列表返回较轻的结构。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -1071,16 +1106,16 @@
 
 
 
-<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/gapAnalysis.ts:141-145</code></td><td>创建了 <code>AbortController</code> 却从不调用 <code>abort</code>，也没有把外部信号接入</td><td>把信号做成参数，或在超时后主动中止</td></tr><tr><td><code>src/api/session.ts:76-79</code></td><td>直接读 <code>detail</code> 当字符串，后端返回校验数组时会显示成对象字样</td><td>复用底座的错误提取器</td></tr><tr><td><code>src/api/documents.ts:29-31</code></td><td>与上一处相同的单一 <code>detail</code> 处理</td><td>统一错误提取，避免每个模块各写一遍</td></tr><tr><td><code>src/api/gapAnalysis.ts:38-47</code></td><td>阈值默认 0.5 写在前端，与后端默认值需要保持一致</td><td>后端默认值变化时同步修改，或在接口文档里声明</td></tr><tr><td><code>src/api/hub.ts:88-100</code></td><td>点赞与点踩各自实现一遍，仅端点不同</td><td>抽成公共函数，减少重复</td></tr><tr><td><code>src/api/payment.ts:43-45</code></td><td>查单没有轮询或超时约定，调用方要自己循环</td><td>在 API 层提供带退避的等待函数</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/api/gapAnalysis.ts</code></td><td>创建了 <code>AbortController</code> 却从不调用 <code>abort</code>，也没有把外部信号接入</td><td>把信号做成参数，或在超时后主动中止</td></tr><tr><td><code>src/api/session.ts</code></td><td>直接读 <code>detail</code> 当字符串，后端返回校验数组时会显示成对象字样</td><td>复用底座的错误提取器</td></tr><tr><td><code>src/api/documents.ts</code></td><td>与上一处相同的单一 <code>detail</code> 处理</td><td>统一错误提取，避免每个模块各写一遍</td></tr><tr><td><code>src/api/gapAnalysis.ts</code></td><td>阈值默认 0.5 写在前端，与后端默认值需要保持一致</td><td>后端默认值变化时同步修改，或在接口文档里声明</td></tr><tr><td><code>src/api/hub.ts</code></td><td>点赞与点踩各自实现一遍，仅端点不同</td><td>抽成公共函数，减少重复</td></tr><tr><td><code>src/api/payment.ts</code></td><td>查单没有轮询或超时约定，调用方要自己循环</td><td>在 API 层提供带退避的等待函数</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
-<li>卡片评分由九个数值字段与两组维度组成（<code>src/api/gapAnalysis.ts:3-23</code>）。</li>
-<li>分析结果是聚合值加最弱、最强两张榜单（<code>src/api/gapAnalysis.ts:24-37</code>）。</li>
-<li>缺口探索把六个可覆盖参数拼进查询串（<code>src/api/gapAnalysis.ts:116-140</code>）。</li>
-<li>下载、上传与长请求走手写 <code>fetch</code> 加手动 token 检查（<code>src/api/session.ts:69-88</code>、<code>src/api/documents.ts:8-33</code>）。</li>
-<li>Hub 模块有十个函数，点赞与点踩返回同样的计数结构（<code>src/api/hub.ts:88-100</code>）。</li>
-<li>支付模块四个函数，创建结果与订单详情是两个类型（<code>src/api/payment.ts:3-28</code>）。</li>
+<li>卡片评分由九个数值字段与两组维度组成（<code>src/api/gapAnalysis.ts</code>）。</li>
+<li>分析结果是聚合值加最弱、最强两张榜单（<code>src/api/gapAnalysis.ts</code>）。</li>
+<li>缺口探索把六个可覆盖参数拼进查询串（<code>src/api/gapAnalysis.ts</code>）。</li>
+<li>下载、上传与长请求走手写 <code>fetch</code> 加手动 token 检查（<code>src/api/session.ts</code>、<code>src/api/documents.ts</code>）。</li>
+<li>Hub 模块有十个函数，点赞与点踩返回同样的计数结构（<code>src/api/hub.ts</code>）。</li>
+<li>支付模块四个函数，创建结果与订单详情是两个类型（<code>src/api/payment.ts</code>）。</li>
 </ul>
 <h3 id="设计权衡">设计权衡</h3>
 
@@ -1180,7 +1215,7 @@
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td>/mnt/d/KnowledgeDiver/frontend/</td><td>前端工程根目录，文中相对路径均相对它</td></tr><tr><td><code>src/api/gapAnalysis.ts</code></td><td>质量分析、聚类报告与缺口探索</td></tr><tr><td><code>src/api/session.ts</code></td><td>会话增删改查、导入导出与分享</td></tr><tr><td><code>src/api/documents.ts</code></td><td>文档上传</td></tr><tr><td><code>src/api/hub.ts</code></td><td>社区搜索、分享与评论</td></tr><tr><td><code>src/api/payment.ts</code></td><td>下单、查单与订单列表</td></tr><tr><td><code>src/api/auth.ts</code></td><td>请求底座与 token 读取</td></tr><tr><td><code>src/types/hub.ts</code></td><td>Hub 会话与评论类型</td></tr><tr><td><code>src/types/pipeline.ts</code></td><td>任务与流水线类型</td></tr></tbody></table></div></section><section class="dfile" id="file-5" data-file="05-数据Hook的共同结构与防抖保存"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-数据Hook的共同结构与防抖保存</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/30-React 与前端工程/02-Hooks与API层/05-数据Hook的共同结构与防抖保存.md</span></div><div class="dfile__body"><h1 id="数据-hook-的共同结构与防抖保存">数据 Hook 的共同结构与防抖保存</h1>
 <p>这一层里除了管理会话、卡片与任务的那三个 Hook，还有三个与接口直接打交道的 Hook：<code>useAgent</code>（291 行）、<code>useConfig</code>（92 行）与 <code>useAutoSave</code>（25 行）。它们规模差别很大，但结构上共享同一套骨架：挂载时取一次数据、把请求状态写进自己的状态、对外暴露一个显式重载或动作函数。 这些共同结构抽出来对比之后，最短的那个 Hook——防抖保存——显出它的特殊：依赖设计决定了它是这一层里唯一不会在卸载后写状态的实现。</p>
 <h2 id="防抖保存的依赖设计">防抖保存的依赖设计</h2>
-<p><code>useAutoSave</code> 只做一件事：值变化后等一段时间再调用保存函数，期间再次变化就重新计时（<code>src/hooks/useAutoSave.ts:4-24</code>）：</p>
+<p><code>useAutoSave</code> 只做一件事：值变化后等一段时间再调用保存函数，期间再次变化就重新计时（这种”只执行最后一次”的策略叫防抖，用来把连续输入合并成一次请求；反过来，每次变化都保存会打出成串请求，还可能被乱序返回的旧响应覆盖新值，而防抖的代价是最后一次修改要等 <code>delay</code> 结束才落盘）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="tsx"><code><span class="line"><span style="color:#D73A49">const</span><span style="color:#005CC5"> dep</span><span style="color:#D73A49"> =</span><span style="color:#D73A49"> typeof</span><span style="color:#24292E"> value </span><span style="color:#D73A49">===</span><span style="color:#032F62"> 'string'</span><span style="color:#D73A49"> ?</span><span style="color:#24292E"> value </span><span style="color:#D73A49">:</span><span style="color:#005CC5"> JSON</span><span style="color:#24292E">.</span><span style="color:#6F42C1">stringify</span><span style="color:#24292E">(value)</span></span>
 <span class="line"><span style="color:#6F42C1">useEffect</span><span style="color:#24292E">(() </span><span style="color:#D73A49">=></span><span style="color:#24292E"> {</span></span>
 <span class="line"><span style="color:#D73A49">  if</span><span style="color:#24292E"> (timerRef.current) window.</span><span style="color:#6F42C1">clearTimeout</span><span style="color:#24292E">(timerRef.current)</span></span>
@@ -1188,8 +1223,8 @@
 <span class="line"><span style="color:#D73A49">  return</span><span style="color:#24292E"> () </span><span style="color:#D73A49">=></span><span style="color:#24292E"> { </span><span style="color:#D73A49">if</span><span style="color:#24292E"> (timerRef.current) window.</span><span style="color:#6F42C1">clearTimeout</span><span style="color:#24292E">(timerRef.current) }</span></span>
 <span class="line"><span style="color:#6A737D">// eslint-disable-next-line react-hooks/exhaustive-deps</span></span>
 <span class="line"><span style="color:#24292E">}, [dep, delay])</span></span></code></pre>
-<p>依赖数组里放的是序列化后的值而不是原值（<code>src/hooks/useAutoSave.ts:7</code>、<code>src/hooks/useAutoSave.ts:24</code>），这样对象每次重建但内容不变时不会重新计时。保存函数与原始值被排除在依赖之外，由关闭了 lint 检查的那一行保证效果只跟着序列化值与延时变化（<code>src/hooks/useAutoSave.ts:23</code>）。</p>
-<p>清理函数在值变化与卸载时都会清掉定时器（<code>src/hooks/useAutoSave.ts:18-22</code>），因此不存在卸载后写状态的问题。这一点与配置 Hook 里的两秒提示形成对照。</p>
+<p>依赖数组里放的是序列化后的值而不是原值（<code>src/hooks/useAutoSave.ts</code>），这样对象每次重建但内容不变时不会重新计时。保存函数与原始值被排除在依赖之外，由关闭了 lint 检查的那一行保证效果只跟着序列化值与延时变化。</p>
+<p>清理函数在值变化与卸载时都会清掉定时器（<code>src/hooks/useAutoSave.ts</code>），因此不存在卸载后写状态的问题。这一点与配置 Hook 里的两秒提示形成对照。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
     participant U as 用户输入
     participant H as useAutoSave
@@ -1201,10 +1236,10 @@
     H->>S: 计时结束, 调用 saveFunction(value)</pre></div>
 <h2 id="数据-hook-的共同结构">数据 Hook 的共同结构</h2>
 <p>三个 Hook 的骨架可以拆成四步。</p>
-<p>第一步是挂载加载。<code>useConfig</code> 用一个 <code>mounted</code> 标志保护首次写入（<code>src/hooks/useConfig.ts:17-32</code>）；<code>useAgent</code> 用 <code>loadedSession</code> 引用记住已加载的会话，避免重复请求（<code>src/hooks/useAgent.ts:199-204</code>）。两种写法都解决”异步返回时组件是否还在”或”是否已经加载过”的问题。</p>
-<p>第二步是显式重载。<code>useConfig</code> 暴露 <code>load</code> 供手动刷新（<code>src/hooks/useConfig.ts:58-65</code>），<code>useAgent</code> 在会话变化时由效果重新拉取（<code>src/hooks/useAgent.ts:199-204</code>）。前者没有挂载守卫（见易错点）。</p>
-<p>第三步是状态机。配置层有保存与测试两套四态状态机（<code>src/hooks/useConfig.ts:7-8</code>），Agent 层用”是否流式进行中”一个布尔值加消息上的流式标记（<code>src/hooks/useAgent.ts:48</code>、<code>src/api/agent.ts:31</code>）。状态粒度不同，但都避免用字符串描述复合情况。</p>
-<p>第四步是错误处理。有的写进状态并弹窗（<code>src/hooks/useSessionManager.ts:95-97</code>），有的只打日志保留旧数据（<code>src/hooks/useCardManager.ts:77-79</code>），有的直接静默返回空值（<code>src/api/agent.ts:81-83</code>）。</p>
+<p>第一步是挂载加载。<code>useConfig</code> 用一个 <code>mounted</code> 标志保护首次写入（<code>src/hooks/useConfig.ts</code>）；<code>useAgent</code> 用 <code>loadedSession</code> 引用记住已加载的会话，避免重复请求（<code>src/hooks/useAgent.ts</code>）。两种写法都解决”异步返回时组件是否还在”或”是否已经加载过”的问题。</p>
+<p>第二步是显式重载。<code>useConfig</code> 暴露 <code>load</code> 供手动刷新（<code>src/hooks/useConfig.ts</code>），<code>useAgent</code> 在会话变化时由效果重新拉取（<code>src/hooks/useAgent.ts</code>）。前者没有挂载守卫（见易错点）。</p>
+<p>第三步是状态机。配置层有保存与测试两套四态状态机（<code>src/hooks/useConfig.ts</code>），Agent 层用”是否流式进行中”一个布尔值加消息上的流式标记（<code>src/hooks/useAgent.ts</code>、<code>src/api/agent.ts</code>）。状态粒度不同，但都避免用字符串描述复合情况。</p>
+<p>第四步是错误处理。有的写进状态并弹窗（<code>src/hooks/useSessionManager.ts</code>），有的只打日志保留旧数据（<code>src/hooks/useCardManager.ts</code>），有的直接静默返回空值（<code>src/api/agent.ts</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A[组件挂载] --> B[效果触发首次加载]
     B --> C{"请求成功?"}
@@ -1257,7 +1292,7 @@
 
 
 
-<table><thead><tr><th>触发源</th><th>被调用的加载</th><th>位置</th></tr></thead><tbody><tr><td>切换到某个会话</td><td>卡片列表</td><td><code>src/hooks/useSessionManager.ts:79-85</code></td></tr><tr><td>采集任务完成</td><td>卡片列表与用户积分</td><td><code>src/hooks/useTaskManager.ts:113-130</code></td></tr><tr><td>保存卡片编辑</td><td>卡片列表</td><td><code>src/hooks/useCardManager.ts:133-161</code></td></tr><tr><td>批量删除卡片</td><td>卡片列表</td><td><code>src/hooks/useCardManager.ts:190-210</code></td></tr><tr><td>上传文档成功</td><td>任务表新增一条</td><td><code>src/hooks/useTaskManager.ts:73-87</code></td></tr><tr><td>会话导入成功</td><td>会话列表</td><td><code>src/hooks/useSessionManager.ts:200-223</code></td></tr></tbody></table>
+<table><thead><tr><th>触发源</th><th>被调用的加载</th><th>位置</th></tr></thead><tbody><tr><td>切换到某个会话</td><td>卡片列表</td><td><code>src/hooks/useSessionManager.ts</code></td></tr><tr><td>采集任务完成</td><td>卡片列表与用户积分</td><td><code>src/hooks/useTaskManager.ts</code></td></tr><tr><td>保存卡片编辑</td><td>卡片列表</td><td><code>src/hooks/useCardManager.ts</code></td></tr><tr><td>批量删除卡片</td><td>卡片列表</td><td><code>src/hooks/useCardManager.ts</code></td></tr><tr><td>上传文档成功</td><td>任务表新增一条</td><td><code>src/hooks/useTaskManager.ts</code></td></tr><tr><td>会话导入成功</td><td>会话列表</td><td><code>src/hooks/useSessionManager.ts</code></td></tr></tbody></table>
 <p>这些调用都发生在 Hook 内部，由外壳传进来的函数或本 Hook 自己的函数完成。没有观察者或事件订阅，因此读代码时要顺着调用点找刷新时机。</p>
 <h2 id="未接入的-hook-与静默失败">未接入的 Hook 与静默失败</h2>
 <p><code>useAutoSave</code> 目前在源码里找不到消费方（在 <code>src</code> 下检索该名字，组件中没有引入），它是一段已实现但未接线的能力。判断它是否可用要单独验证，不要假设保存逻辑已经在跑。</p>
@@ -1287,7 +1322,7 @@
 
 
 
-<table><thead><tr><th>位置</th><th>失败表现</th><th>影响</th></tr></thead><tbody><tr><td><code>src/api/agent.ts:81-83</code></td><td>历史读取返回空数组</td><td>界面像没有历史，用户无法区分”新会话”与”加载失败”</td></tr><tr><td><code>src/api/agent.ts:35-46</code></td><td>清空上下文返回假值</td><td>调用方仍会清空本地消息（<code>src/hooks/useAgent.ts:279-284</code>）</td></tr><tr><td><code>src/hooks/useConfig.ts:25-27</code></td><td>配置加载只打警告</td><td>表单停留在默认值，用户可能直接保存默认配置</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>失败表现</th><th>影响</th></tr></thead><tbody><tr><td><code>src/api/agent.ts</code></td><td>历史读取返回空数组</td><td>界面像没有历史，用户无法区分”新会话”与”加载失败”</td></tr><tr><td><code>src/api/agent.ts</code></td><td>清空上下文返回假值</td><td>调用方仍会清空本地消息（<code>src/hooks/useAgent.ts</code>）</td></tr><tr><td><code>src/hooks/useConfig.ts</code></td><td>配置加载只打警告</td><td>表单停留在默认值，用户可能直接保存默认配置</td></tr></tbody></table>
 <h2 id="易错点">易错点</h2>
 
 
@@ -1329,15 +1364,15 @@
 
 
 
-<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/hooks/useAutoSave.ts:23-24</code></td><td>保存函数被排除在依赖外，父组件传入内联函数时会调用到旧闭包</td><td>用引用保存最新的保存函数，或要求调用方传稳定引用</td></tr><tr><td><code>src/hooks/useConfig.ts:58-65</code></td><td><code>load</code> 没有挂载守卫，与首次加载不一致</td><td>抽出公共加载函数统一加守卫</td></tr><tr><td><code>src/hooks/useConfig.ts:45</code></td><td>保存提示的两秒定时器没有清理</td><td>与 <code>useAutoSave</code> 一样保存引用并在清理函数里清除</td></tr><tr><td><code>src/hooks/useAgent.ts:199-204</code></td><td>会话切换靠引用去重，同一会话重新进入不会重载</td><td>数据可能被后端改动，提供手动刷新入口</td></tr><tr><td><code>src/api/agent.ts:81-83</code></td><td>历史读取失败静默返回空数组</td><td>区分空历史与失败，至少在控制台标注会话 ID</td></tr><tr><td><code>src/hooks/useAgent.ts:279-284</code></td><td>清空上下文失败也会清空本地消息</td><td>只在接口返回成功时清空，或提示”仅清空了界面”</td></tr></tbody></table>
+<table><thead><tr><th>位置</th><th>问题</th><th>建议</th></tr></thead><tbody><tr><td><code>src/hooks/useAutoSave.ts</code></td><td>保存函数被排除在依赖外，父组件传入内联函数时会调用到旧闭包</td><td>用引用保存最新的保存函数，或要求调用方传稳定引用</td></tr><tr><td><code>src/hooks/useConfig.ts</code></td><td><code>load</code> 没有挂载守卫，与首次加载不一致</td><td>抽出公共加载函数统一加守卫</td></tr><tr><td><code>src/hooks/useConfig.ts</code></td><td>保存提示的两秒定时器没有清理</td><td>与 <code>useAutoSave</code> 一样保存引用并在清理函数里清除</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>会话切换靠引用去重，同一会话重新进入不会重载</td><td>数据可能被后端改动，提供手动刷新入口</td></tr><tr><td><code>src/api/agent.ts</code></td><td>历史读取失败静默返回空数组</td><td>区分空历史与失败，至少在控制台标注会话 ID</td></tr><tr><td><code>src/hooks/useAgent.ts</code></td><td>清空上下文失败也会清空本地消息</td><td>只在接口返回成功时清空，或提示”仅清空了界面”</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
-<li><code>useAutoSave</code> 用序列化值做依赖，值内容不变时不会重新计时（<code>src/hooks/useAutoSave.ts:7</code>、<code>:24</code>）。</li>
-<li>防抖定时器在值变化与卸载时都被清理（<code>src/hooks/useAutoSave.ts:18-22</code>）。</li>
+<li><code>useAutoSave</code> 用序列化值做依赖，值内容不变时不会重新计时（<code>src/hooks/useAutoSave.ts</code>）。</li>
+<li>防抖定时器在值变化与卸载时都被清理（<code>src/hooks/useAutoSave.ts</code>）。</li>
 <li>数据 Hook 的共同骨架是挂载加载、显式重载、状态机与错误处理四步。</li>
-<li>挂载守卫有两种写法：<code>mounted</code> 标志与已加载会话引用（<code>src/hooks/useConfig.ts:17-32</code>、<code>src/hooks/useAgent.ts:199-204</code>）。</li>
-<li>刷新由多个动作触发，没有事件订阅，需要顺着调用点查找（<code>src/hooks/useTaskManager.ts:113-130</code>）。</li>
+<li>挂载守卫有两种写法：<code>mounted</code> 标志与已加载会话引用（<code>src/hooks/useConfig.ts</code>、<code>src/hooks/useAgent.ts</code>）。</li>
+<li>刷新由多个动作触发，没有事件订阅，需要顺着调用点查找（<code>src/hooks/useTaskManager.ts</code>）。</li>
 <li>静默失败在 Agent 与配置层各出现若干次，界面表现与真实原因不一致。</li>
 </ul>
 <h3 id="设计权衡">设计权衡</h3>

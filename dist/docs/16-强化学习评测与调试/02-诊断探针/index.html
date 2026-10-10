@@ -3,7 +3,7 @@
 <p>探针把这件事换了个做法：把待验证的假设搬到一个无头脚本里，冻结一批状态或固定一批输入，一次跑多个方案，用同一套标量输出结果。它的价值不在自动化，而在可比性——同一次运行里，除被验证的变量之外，其他条件全部相同。</p>
 <h2 id="什么时候该先写探针">什么时候该先写探针</h2>
 <p>判断标准可以归结成两句话：需要对照两个以上方案时，先写探针；需要在同一批状态上重复测量时，先写探针。查看器适合确认「现象存在」，不适合回答「哪个方案更好」。</p>
-<p>本项目的一条经验是把这条顺序写进流程：修改查看器之前，先用探针拿到数据。交还方案的选择就是典型例子——查看器里只能看到「抽搐、摔倒、再起身」，而探针把交还瞬间冻结下来，在同一批终态上跑十种处理方式（<code>probe_handover.py:2-13</code>）。</p>
+<p>本项目的一条经验是把这条顺序写进流程：修改查看器之前，先用探针拿到数据。交还方案的选择就是典型例子——查看器里只能看到「抽搐、摔倒、再起身」，而探针把交还瞬间冻结下来，在同一批终态上跑十种处理方式（<code>probe_handover.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["现场现象"] --> B{"能否用一个标量判断好坏"}
     B -->|"能"| C["写探针: 冻结状态, 多方案对照"]
@@ -53,8 +53,17 @@
     B --> E2["慢在哪"]
     C --> E3["选哪个方案"]
     D --> E4["能不能采纳这个提速"]</pre></div>
+<p>探针的共性是「固定输入 + 只输出要看的量」，结构可以很短：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：一个最小探针的骨架</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> probe</span><span style="color:#24292E">(env, policy, seed: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">, steps: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 300</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    state </span><span style="color:#D73A49">=</span><span style="color:#24292E"> env.reset(seed)                 </span><span style="color:#6A737D"># 固定种子、固定出生分布</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> _ </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(steps):</span></span>
+<span class="line"><span style="color:#24292E">        action </span><span style="color:#D73A49">=</span><span style="color:#24292E"> policy(state.obs)          </span><span style="color:#6A737D"># 固定策略，不额外采样</span></span>
+<span class="line"><span style="color:#24292E">        state </span><span style="color:#D73A49">=</span><span style="color:#24292E"> env.step(state, action)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> summarize(state)                 </span><span style="color:#6A737D"># 只打印要判断的那几个量</span></span></code></pre>
+<p>固定种子、固定步数、固定策略，变量只剩一个，结论才可归因。探针一旦引入随机策略或多重环境，输出就不再能被重复解释——这也是下面「一个进程只建一个环境」的原因。</p>
 <h2 id="一个进程只建一个环境">一个进程只建一个环境</h2>
-<p>写探针时会自然想在同一个进程里先跑平地、再跑地形，省一次启动时间。这条路在本项目走不通：两个环境的缓冲区尺寸相同时会落在同一批地址上，warp 的 CUDA 图按地址缓存，于是第二次建的模型复用了第一次的捕获图，现象是「地形里关键帧动作完全不动」或者「平地里莫名翻倒」（<code>probe_getup_mjx_trace.py:2-11</code>）。</p>
+<p>写探针时会自然想在同一个进程里先跑平地、再跑地形，省一次启动时间。这条路在本项目走不通：两个环境的缓冲区尺寸相同时会落在同一批地址上，warp 的 CUDA 图按地址缓存，于是第二次建的模型复用了第一次的捕获图，现象是「地形里关键帧动作完全不动」或者「平地里莫名翻倒」（<code>probe_getup_mjx_trace.py</code>）。</p>
 
 
 
@@ -73,7 +82,7 @@
 
 
 <table><thead><tr><th>做法</th><th>结果</th></tr></thead><tbody><tr><td>一个进程一个环境</td><td>正常</td></tr><tr><td>一个进程两个环境</td><td>图缓存命中错误，行为与预期不符</td></tr></tbody></table>
-<p>因此探针普遍采用两段式：一段跑一个环境，把中间状态 dump 成 npz，下一段另起进程读回来（<code>probe_handover.py:19-22</code>）。这也是为什么探针的命令行通常要分 <code>--stage</code>。</p>
+<p>因此探针普遍采用两段式：一段跑一个环境，把中间状态 dump 成 npz，下一段另起进程读回来（<code>probe_handover.py</code>）。这也是为什么探针的命令行通常要分 <code>--stage</code>。</p>
 <h2 id="用固定输入换可比性">用固定输入换可比性</h2>
 <p>可比性来自「除了被验证的变量，其他都一样」。探针里有三种固定手段：</p>
 
@@ -140,7 +149,7 @@
 
 
 <table><thead><tr><th>现场现象</th><th>先怀疑</th><th>该跑的探针</th></tr></thead><tbody><tr><td>查看器里策略不动或姿势怪异</td><td>物理后端或地形档不一致</td><td>环境闸门探针</td></tr><tr><td>越训练越慢、越跑越慢</td><td>预热、热降频或真漂移</td><td>逐块计时探针</td></tr><tr><td>交还后抽搐摔倒</td><td>交还瞬间的动作处理</td><td>方案对照探针</td></tr><tr><td>某个提速改动省了很多时间</td><td>是否改了物理</td><td>固定动作序列的等价性检查</td></tr><tr><td>指标说好但看着不对</td><td>指标测的不是要修的东西</td><td>换指标或加接触级指标</td></tr></tbody></table>
-<p>最后一条来自项目里的一次教训：几何近似的指标无法区分「被认为正常」与「被指出拖地」的两版策略，两版的小腿触地率分别是 30% 与 24%，后者反而更低；换用 MuJoCo 自己的接触判定后才出现干净的区分（<code>check_body_contact.py:2-8</code>）。指标报出意料之外的结果时，先怀疑指标。</p>
+<p>最后一条来自项目里的一次教训：几何近似的指标无法区分「被认为正常」与「被指出拖地」的两版策略，两版的小腿触地率分别是 30% 与 24%，后者反而更低；换用 MuJoCo 自己的接触判定后才出现干净的区分（<code>check_body_contact.py</code>）。指标报出意料之外的结果时，先怀疑指标。</p>
 <h2 id="探针的代价">探针的代价</h2>
 <p>探针不是免费的，写之前要知道代价在哪里：</p>
 
@@ -169,7 +178,7 @@
 
 
 <table><thead><tr><th>代价</th><th>说明</th></tr></thead><tbody><tr><td>启动与编译</td><td>每次运行都要付 JIT 与预热时间</td></tr><tr><td>双份代码</td><td>判据要与查看器保持一致，否则数字对不上</td></tr><tr><td>判据漂移</td><td>查看器改了阈值，探针不跟着改就会给出旧结论</td></tr><tr><td>环境约束</td><td>一个进程一个环境，多档位要多次运行</td></tr></tbody></table>
-<p>判据一致性尤其要留意：探针的注释里通常写着「与查看器逐行同款」，改查看器判据时要把这些地方一起改（<code>probe_handover.py:12-13</code>、<code>实验记录_Go1复现.md:6454-6455</code>）。</p>
+<p>判据一致性尤其要留意：探针的注释里通常写着「与查看器逐行同款」，改查看器判据时要把这些地方一起改（<code>probe_handover.py</code>、<code>实验记录_Go1复现.md</code>）。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -306,12 +315,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/probe_handover.py</code></td><td>离线冻结终态做交还方案对照的写法（<code>:2-22</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_getup_mjx_trace.py</code></td><td>两环境同进程导致图缓存错误的记录（<code>:2-11</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/check_body_contact.py</code></td><td>接触级指标与两版策略参照值（<code>:2-12</code>、<code>:33-37</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/diag_speed.py</code></td><td>逐块计时与 GPU 状态采样（<code>:2-15</code>、<code>:30-40</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>越界重生与判据同款说明（<code>:6443-6470</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/probe_handover.py</code></td><td>离线冻结终态做交还方案对照的写法（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_getup_mjx_trace.py</code></td><td>两环境同进程导致图缓存错误的记录（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/check_body_contact.py</code></td><td>接触级指标与两版策略参照值（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/diag_speed.py</code></td><td>逐块计时与 GPU 状态采样（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>越界重生与判据同款说明（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-2" data-file="02-环境闸门与单步探针"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-环境闸门与单步探针</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/16-强化学习评测与调试/02-诊断探针/02-环境闸门与单步探针.md</span></div><div class="dfile__body"><h1 id="环境闸门与单步探针">环境闸门与单步探针</h1>
 <p>一套关键帧起身动作在 CPU MuJoCo 上跑出接近 100% 的成功率，搬到查看器里只剩一成左右。这种落差容易让人怀疑策略或动作序列本身，但差别在环境：CPU 版是平面地板、500 Hz 单进程，查看器跑的是 MJX/warp、高度场地形、50 Hz 控制。物理后端、地面模型与控制频率同时变了，动作的可行性也就变了。</p>
 <p>环境闸门探针要回答的就是这一步：这套东西在目标环境上还成立吗。它不优化策略，只给出「能不能搬过去」的结论，并且在多数情况下给出不能搬的具体原因。</p>
 <h2 id="为什么要在目标后端上重验">为什么要在目标后端上重验</h2>
-<p>同一段动作在两种地面上的接触情况完全不同。实测记录里，关键帧动作在平面上只有 4 到 8 个接触、机器人离地 35 cm；换成高度场地形后有 20 到 40 个接触，腿被格子拖住，躯干只抬起 9 cm（<code>probe_getup_mjx.py:4-10</code>）。动作序列没变，物理条件变了，结果自然不同。</p>
+<p>同一段动作在两种地面上的接触情况完全不同。实测记录里，关键帧动作在平面上只有 4 到 8 个接触、机器人离地 35 cm；换成高度场地形后有 20 到 40 个接触，腿被格子拖住，躯干只抬起 9 cm（<code>probe_getup_mjx.py</code>）。动作序列没变，物理条件变了，结果自然不同。</p>
 
 
 
@@ -351,7 +360,7 @@
     D --> E["成功率掉到约一成"]
     E --> F["结论: 不能直接搬, 需按地形重做"]</pre></div>
 <h2 id="环境闸门探针的判据">环境闸门探针的判据</h2>
-<p>闸门探针的判据与站住判据一致，但高度基准换成相对足下地面，因为地形不是平的（<code>probe_getup_mjx.py:12-14</code>）：</p>
+<p>闸门探针的判据与站住判据一致，但高度基准换成相对足下地面，因为地形不是平的（<code>probe_getup_mjx.py</code>）：</p>
 
 
 
@@ -374,7 +383,7 @@
 
 
 <table><thead><tr><th>条件</th><th>阈值</th></tr></thead><tbody><tr><td>竖直度</td><td><code>up_z > 0.99</code></td></tr><tr><td>姿态</td><td>横滚与俯仰的绝对值小于 2 度</td></tr><tr><td>高度</td><td>躯干相对足下地面不小于 0.26 m</td></tr></tbody></table>
-<p>探针的运行方式给了三个档位，用来分辨「动作本身不行」与「地形拖住了它」（<code>probe_getup_mjx.py:16-19</code>）：</p>
+<p>探针的运行方式给了三个档位，用来分辨「动作本身不行」与「地形拖住了它」（<code>probe_getup_mjx.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./.venv/bin/python</span><span style="color:#032F62"> sim/probe_getup_mjx.py</span><span style="color:#6A737D">                       # 平地, 64 trials</span></span>
 <span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./.venv/bin/python</span><span style="color:#032F62"> sim/probe_getup_mjx.py</span><span style="color:#005CC5"> --terrain</span><span style="color:#005CC5"> --trials</span><span style="color:#005CC5"> 96</span><span style="color:#6A737D"> # 地形 (查看器实际档)</span></span>
 <span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./.venv/bin/python</span><span style="color:#032F62"> sim/probe_getup_mjx.py</span><span style="color:#005CC5"> --terrain</span><span style="color:#005CC5"> --origin</span><span style="color:#6A737D">    # 地形但落在原点压平区</span></span></code></pre>
@@ -404,9 +413,9 @@
 
 
 <table><thead><tr><th>档位</th><th>用途</th><th>读法</th></tr></thead><tbody><tr><td>平地</td><td>确认动作本身可行</td><td>平地高、地形低说明地形是障碍</td></tr><tr><td>地形</td><td>查看器实际档</td><td>成功率直接决定能不能搬</td></tr><tr><td>地形加原点</td><td>排除地形起伏</td><td>接近平地说明后端不是问题</td></tr></tbody></table>
-<p>单次 trial 的预算写在脚本里：最多 2600 个控制步，其中包含最多 4 次关键帧重试（<code>probe_getup_mjx.py:38</code>）。预算用完仍不满足判据就算失败，这个上限要与其他地方保持一致，否则成功率不可比。</p>
+<p>单次 trial 的预算写在脚本里：最多 2600 个控制步，其中包含最多 4 次关键帧重试（<code>probe_getup_mjx.py</code>）。预算用完仍不满足判据就算失败，这个上限要与其他地方保持一致，否则成功率不可比。</p>
 <h2 id="单环境逐步-trace">单环境逐步 trace</h2>
-<p>闸门探针给出的是「成不成」，逐步 trace 给出的是「哪一步开始不成」。它在每个相位切换点打印状态量（<code>probe_getup_mjx_trace.py:2-13</code>）：</p>
+<p>闸门探针给出的是「成不成」，逐步 trace 给出的是「哪一步开始不成」。它在每个相位切换点打印状态量（<code>probe_getup_mjx_trace.py</code>）：</p>
 
 
 
@@ -433,14 +442,14 @@
 
 
 <table><thead><tr><th>输出项</th><th>用途</th></tr></thead><tbody><tr><td>高度与竖直度</td><td>看是否抬起、是否竖直</td></tr><tr><td>横滚与俯仰</td><td>看姿态在哪一步开始偏</td></tr><tr><td>最大执行器力</td><td>看是否顶在出力上限</td></tr><tr><td>塌落后状态</td><td>给出失败时刻的完整快照</td></tr></tbody></table>
-<p>这支探针还有一个附带用途：验证图模式。它支持显式指定 <code>--graph_mode WARP_STAGED</code>，因此可以对比同一场景在不同图模式下的逐步行为（<code>probe_getup_mjx_trace.py:7-11</code>）。</p>
+<p>这支探针还有一个附带用途：验证图模式。它支持显式指定 <code>--graph_mode WARP_STAGED</code>，因此可以对比同一场景在不同图模式下的逐步行为（<code>probe_getup_mjx_trace.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["相位 1"] --> B["打印高度/竖直度/横滚俯仰/力"]
     B --> C["相位 2"]
     C --> D["打印同样几项"]
     D --> E["定位第一个偏离的相位"]</pre></div>
 <h2 id="移植版环境的自检">移植版环境的自检</h2>
-<p>环境从一个仓库移植到另一个仓库时，行为可能与原版悄悄不同。移植版自检探针的做法是把奖励项与终态指标一起打出来，与环境文件里定义的名字逐项对应（<code>probe_getup_v2.py:1-27</code>）。</p>
+<p>环境从一个仓库移植到另一个仓库时，行为可能与原版悄悄不同。移植版自检探针的做法是把奖励项与终态指标一起打出来，与环境文件里定义的名字逐项对应（<code>probe_getup_v2.py</code>）。</p>
 
 
 
@@ -467,10 +476,10 @@
 
 
 <table><thead><tr><th>输出</th><th>来源</th><th>用途</th></tr></thead><tbody><tr><td>各奖励项的平均每步值</td><td>环境指标字典</td><td>与训练侧奖励项对照</td></tr><tr><td>终态姿态与高度</td><td>状态快照</td><td>与判据对照</td></tr><tr><td>非有限值计数</td><td>状态量检查</td><td>判断是否发生数值溢出</td></tr></tbody></table>
-<p>脚本里还硬编码了一组名义关节角（<code>probe_getup_v2.py:16-17</code>），用于确认「名义站姿」在移植后仍然是同一个姿态。这类常量看着琐碎，却是发现移植偏差最便宜的检查。</p>
+<p>脚本里还硬编码了一组名义关节角（<code>probe_getup_v2.py</code>），用于确认「名义站姿」在移植后仍然是同一个姿态。这类常量看着琐碎，却是发现移植偏差最便宜的检查。</p>
 <h2 id="约束行数上限探针">约束行数上限探针</h2>
-<p><code>njmax</code> 是每个世界允许的约束行数上限，而摔倒时躯干与大腿、小腿互相挤压，自碰撞约束会暴涨（<code>probe_nefc.py:2-5</code>）。项目把走路档的上限设成 256，这在走路上够用，在起身任务上需要单独验证。</p>
-<p>这支探针用 768 个环境跑 300 步，直接统计状态量里的非有限值个数（<code>probe_nefc.py:6-11</code>）：</p>
+<p><code>njmax</code> 是每个世界允许的约束行数上限，而摔倒时躯干与大腿、小腿互相挤压，自碰撞约束会暴涨（<code>probe_nefc.py</code>）。项目把走路档的上限设成 256，这在走路上够用，在起身任务上需要单独验证。</p>
+<p>这支探针用 768 个环境跑 300 步，直接统计状态量里的非有限值个数（<code>probe_nefc.py</code>）：</p>
 
 
 
@@ -492,7 +501,7 @@
 
 
 <table><thead><tr><th>观察</th><th>含义</th><th>后续影响</th></tr></thead><tbody><tr><td>无溢出</td><td>上限够用</td><td>可以继续</td></tr><tr><td>溢出且出现非有限值</td><td>上限不足</td><td>训练里 episode 会被数值护栏杀掉</td></tr></tbody></table>
-<p>记录里的实测是另一个方向的证据：起身环境下单个世界需要的约束数约 1300，而配置里只有 256，溢出告警在一次训练里出现 719 次（<code>当前状态.md</code> 的环境与性能事实段）。溢出会让「用力收腿」这类接触最密的动作被惩罚，策略转而学会避免制造接触，形成趴平的退化姿态（<code>probe_nefc.py:8-10</code>）。</p>
+<p>记录里的实测是另一个方向的证据：起身环境下单个世界需要的约束数约 1300，而配置里只有 256，溢出告警在一次训练里出现 719 次（<code>当前状态.md</code> 的环境与性能事实段）。溢出会让「用力收腿」这类接触最密的动作被惩罚，策略转而学会避免制造接触，形成趴平的退化姿态（<code>probe_nefc.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["起身时自碰撞约束暴涨"] --> B{"约束行数上限是否够用"}
     B -->|"够用"| C["正常求解"]
@@ -500,7 +509,7 @@
     D --> E["数值护栏终止 episode"]
     E --> F["接触密的动作被惩罚 -> 学会少接触"]</pre></div>
 <h2 id="判据可行性的三个问题">判据可行性的三个问题</h2>
-<p>有些失败的责任不在策略，而在判据：它在目标场景里不可达。可行性探针把这类问题拆成三问（<code>probe_standability.py:2-8</code>）：</p>
+<p>有些失败的责任不在策略，而在判据：它在目标场景里不可达。可行性探针把这类问题拆成三问（<code>probe_standability.py</code>）：</p>
 
 
 
@@ -674,12 +683,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/probe_getup_mjx.py</code></td><td>环境闸门探针的判据、三档位与预算（<code>:2-38</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_getup_mjx_trace.py</code></td><td>逐步 trace 的输出与图模式对比（<code>:2-13</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_getup_v2.py</code></td><td>移植版环境自检（<code>:1-27</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_nefc.py</code></td><td>约束行数上限与数值溢出（<code>:1-11</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_standability.py</code></td><td>判据可行性的三个问题（<code>:1-12</code>）</td></tr><tr><td><code>当前状态.md</code></td><td>起身环境约束数与溢出告警的待办记录</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/probe_getup_mjx.py</code></td><td>环境闸门探针的判据、三档位与预算（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_getup_mjx_trace.py</code></td><td>逐步 trace 的输出与图模式对比（）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_getup_v2.py</code></td><td>移植版环境自检（）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_nefc.py</code></td><td>约束行数上限与数值溢出（）</td></tr><tr><td><code>mjx-go1-getup/sim/probe_standability.py</code></td><td>判据可行性的三个问题（）</td></tr><tr><td><code>当前状态.md</code></td><td>起身环境约束数与溢出告警的待办记录</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-3" data-file="03-逐块计时与漂移诊断"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-逐块计时与漂移诊断</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/16-强化学习评测与调试/02-诊断探针/03-逐块计时与漂移诊断.md</span></div><div class="dfile__body"><h1 id="逐块计时与漂移诊断">逐块计时与漂移诊断</h1>
 <p>同一个基准脚本，跑 40 次迭代得到 6958 环境-步每秒，跑 300 次得到 12965，差了一倍。这个差距有几种互不相容的解释：前 40 次被 JIT 与 autotune 的预热污染了；或者环境确实越跑越慢；又或者 GPU 因为温度上升降了频。分不清是哪一种，后面的性能数字就都不能用。</p>
-<p>逐块计时探针把一次长跑切成若干块，每块打印耗时与 GPU 状态，用「耗时是否单调上升」配合「时钟是否下降」来区分这几种解释（<code>diag_speed.py:2-8</code>）。这是性能类问题的第一支探针，先跑它再谈优化。</p>
+<p>逐块计时探针把一次长跑切成若干块，每块打印耗时与 GPU 状态，用「耗时是否单调上升」配合「时钟是否下降」来区分这几种解释（<code>diag_speed.py</code>）。这是性能类问题的第一支探针，先跑它再谈优化。</p>
 <h2 id="三种解释与对应证据">三种解释与对应证据</h2>
-<p>三种解释在数据上的特征各不相同（<code>diag_speed.py:6-8</code>）：</p>
+<p>三种解释在数据上的特征各不相同（<code>diag_speed.py</code>）：</p>
 
 
 
@@ -719,7 +728,7 @@
     E -->|"上升"| F["场景变复杂, 不是底层变慢"]
     E -->|"平稳"| G["真实漂移: 查环境侧状态"]</pre></div>
 <h2 id="逐块计时的做法">逐块计时的做法</h2>
-<p>脚本的结构是「先空跑、再分块、每块同时采样三个维度」（<code>diag_speed.py:2-8</code>）：</p>
+<p>脚本的结构是「先空跑、再分块、每块同时采样三个维度」（<code>diag_speed.py</code>）：</p>
 
 
 
@@ -753,7 +762,7 @@
     C --> D["块 n: 计时 + 采样"]
     D --> E["比较各块 ms/迭代"]</pre></div>
 <h2 id="gpu-侧的采样量">GPU 侧的采样量</h2>
-<p>采样用一条 <code>nvidia-smi</code> 查询完成，取四个量（<code>diag_speed.py:30-40</code>）：</p>
+<p>采样用一条 <code>nvidia-smi</code> 查询完成，取四个量（<code>diag_speed.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6F42C1">nvidia-smi</span><span style="color:#005CC5"> --query-gpu=clocks.sm,temperature.gpu,power.draw,utilization.gpu</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">         --format=csv,noheader,nounits</span></span></code></pre>
 
@@ -789,7 +798,7 @@
 <table><thead><tr><th>量</th><th>回答的问题</th><th>异常时的含义</th></tr></thead><tbody><tr><td>流处理器时钟</td><td>是否降频</td><td>明显低于常态说明被限频</td></tr><tr><td>温度</td><td>是否触到温度墙</td><td>接近上限时降频是保护行为</td></tr><tr><td>功耗</td><td>是否触到功耗墙</td><td>顶到上限时会主动降频</td></tr><tr><td>利用率</td><td>GPU 是否真的在忙</td><td>很低却还慢，说明瓶颈在别处</td></tr></tbody></table>
 <p>最后一项尤其重要：利用率低而耗时高，说明等待发生在 GPU 之外。此时要看 CPU 侧是否被别的进程抢核，判断依据是渲染后端与实际帧率分项，而不是这里的数字（相关机理见 <code>15-仿真查看器与性能/02-渲染后端</code>）。</p>
 <h2 id="查看器帧率的分项测量">查看器帧率的分项测量</h2>
-<p>查看器慢帧还有一支专门的探针，把一次迭代拆成两段分别测（<code>diag_viewer_perf.py:1-15</code>）：</p>
+<p>查看器慢帧还有一支专门的探针，把一次迭代拆成两段分别测（<code>diag_viewer_perf.py</code>）：</p>
 
 
 
@@ -811,7 +820,7 @@
 
 
 <table><thead><tr><th>模式</th><th>测什么</th><th>对照变量</th></tr></thead><tbody><tr><td><code>step</code></td><td>策略推理加环境一步的墙钟耗时</td><td>四种图模式与是否捐赠</td></tr><tr><td><code>copy</code></td><td>状态搬回 CPU 的耗时</td><td>整块 Data 对 qpos/qvel 加 <code>mj_forward</code></td></tr></tbody></table>
-<p><code>step</code> 模式覆盖的四种组合是：默认图模式、默认图模式加捐赠、关闭图模式、关闭图模式加捐赠（<code>diag_viewer_perf.py:2-11</code>）。这个二维对照把「图模式」与「是否捐赠」两个变量分开，避免把两种改动的效果混在一起。</p>
+<p><code>step</code> 模式覆盖的四种组合是：默认图模式、默认图模式加捐赠、关闭图模式、关闭图模式加捐赠（<code>diag_viewer_perf.py</code>）。这个二维对照把「图模式」与「是否捐赠」两个变量分开，避免把两种改动的效果混在一起。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["查看器慢帧"] --> B["step 模式: 四种组合对照"]
     A --> C["copy 模式: 整块搬 vs 只搬 qpos/qvel"]
@@ -820,7 +829,7 @@
     D --> F["再决定改哪一处"]
     E --> F</pre></div>
 <h2 id="冷热-ab-排除进程早期效应">冷热 A/B 排除进程早期效应</h2>
-<p>进程早期的编译与热机效应会让第一次测量偏慢，所以「两个方案各测一次」的做法不可靠。项目里做这件事的写法是在同一个进程内交替测量，并各跑两轮（<code>实验记录_Go1复现.md:4155-4163</code>）：</p>
+<p>进程早期的编译与热机效应会让第一次测量偏慢，所以「两个方案各测一次」的做法不可靠。项目里做这件事的写法是在同一个进程内交替测量，并各跑两轮（<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -847,9 +856,9 @@
 
 
 <table><thead><tr><th>变体</th><th>冷，第一轮</th><th>热，第二轮</th></tr></thead><tbody><tr><td>策略 jit</td><td>16.95 ms</td><td>17.06 ms</td></tr><tr><td>策略 eager</td><td>28.90 ms</td><td>27.24 ms</td></tr><tr><td>策略 jit，再测一次</td><td>17.06 ms</td><td>16.94 ms</td></tr></tbody></table>
-<p>两轮都保持约 11 ms 的差距，说明差异来自写法。记录里把这支冷热对照的探针列在交付文件里，但当前检出中已看不到该脚本文件，只能从记录读取结论（<code>实验记录_Go1复现.md:4257-4259</code>）。要做同类对照时按这个结构重写即可：同进程、同输入、交替测量、各两轮。</p>
+<p>两轮都保持约 11 ms 的差距，说明差异来自写法。记录里把这支冷热对照的探针列在交付文件里，但当前检出中已看不到该脚本文件，只能从记录读取结论（<code>实验记录_Go1复现.md</code>）。要做同类对照时按这个结构重写即可：同进程、同输入、交替测量、各两轮。</p>
 <h2 id="无头复现慢帧">无头复现慢帧</h2>
-<p>现场帧率突然掉到个位数时，第一件事是把帧流程搬到无头环境里复刻一遍。项目的做法分三步（<code>viewer-guide.md:277-281</code>）：</p>
+<p>现场帧率突然掉到个位数时，第一件事是把帧流程搬到无头环境里复刻一遍。项目的做法分三步（<code>viewer-guide.md</code>）：</p>
 
 
 
@@ -1019,12 +1028,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/sim/diag_speed.py</code></td><td>逐块计时、GPU 采样与三种解释（<code>:2-45</code>）</td></tr><tr><td><code>RLcontroller_go1/sim/diag_viewer_perf.py</code></td><td>查看器 step 与 copy 两段测量（<code>:1-15</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_viewer_slow.py</code></td><td>帧率塌方的无头复现脚本</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>冷热 A/B 数据与探针清单（<code>:4155-4163</code>、<code>:4257-4259</code>）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>无头基准与双进程定位过程（<code>:277-281</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>RLcontroller_go1_moreinformation/sim/diag_speed.py</code></td><td>逐块计时、GPU 采样与三种解释（）</td></tr><tr><td><code>RLcontroller_go1/sim/diag_viewer_perf.py</code></td><td>查看器 step 与 copy 两段测量（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/probe_viewer_slow.py</code></td><td>帧率塌方的无头复现脚本</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>冷热 A/B 数据与探针清单（）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>无头基准与双进程定位过程（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-4" data-file="04-对照探针与等价性检查"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-对照探针与等价性检查</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/16-强化学习评测与调试/02-诊断探针/04-对照探针与等价性检查.md</span></div><div class="dfile__body"><h1 id="对照探针与等价性检查">对照探针与等价性检查</h1>
-<p>交还瞬间该不该清零上一动作？这个问题在查看器里争不出结果：每次摔倒的姿态都不一样，两次观察之间没有可比性，改完还要重新走到同样的场景才看得到差别。对照探针把交还那一帧冻结下来，在同一批终态上跑十种处理方式，用几个标量一次比出高低（<code>probe_handover.py:2-10</code>）。</p>
+<p>交还瞬间该不该清零上一动作？这个问题在查看器里争不出结果：每次摔倒的姿态都不一样，两次观察之间没有可比性，改完还要重新走到同样的场景才看得到差别。对照探针把交还那一帧冻结下来，在同一批终态上跑十种处理方式，用几个标量一次比出高低（<code>probe_handover.py</code>）。</p>
 <p>同类的思路还有两个变种：用固定动作序列检查「改了一个参数之后物理是否还等价」，以及用与环境特征同源的检查确认「画出来的东西就是算出来的东西」。这三种都属于对照类探针，共同点是输入固定、只让被验证的变量变化。</p>
 <h2 id="冻结终态做方案对照">冻结终态做方案对照</h2>
-<p>冻结的对象是「起身策略刚刚满足站住判据的那一帧」。这一帧在查看器里是交还发生的时刻，也是抽搐现象出现的位置。把它连同随机密钥一起 dump 下来，后续所有方案面对完全相同的起点（<code>probe_handover.py:8-13</code>）。</p>
+<p>冻结的对象是「起身策略刚刚满足站住判据的那一帧」。这一帧在查看器里是交还发生的时刻，也是抽搐现象出现的位置。把它连同随机密钥一起 dump 下来，后续所有方案面对完全相同的起点（<code>probe_handover.py</code>）。</p>
 
 
 
@@ -1047,14 +1056,14 @@
 
 
 <table><thead><tr><th>冻结内容</th><th>作用</th></tr></thead><tbody><tr><td>终态状态量</td><td>所有方案起点一致</td></tr><tr><td>随机密钥</td><td>随机数序列一致</td></tr><tr><td>环境配置</td><td>物理与奖励配置一致</td></tr></tbody></table>
-<p>被冻结的终态里有一个关键字段：上一动作 <code>last_act</code>。走路策略的观测是单帧的，其中 48 维基础量里有 12 维是上一动作，语义是上一步的控制目标（绝对位置目标，缩放系数为 1.0）。起身用锚定动作时它可能到名义值加减 4 rad，而走路时只在加减 1.5 附近——这个量级差正是交还瞬间最容易出问题的地方（<code>probe_handover.py:15-17</code>）。</p>
+<p>被冻结的终态里有一个关键字段：上一动作 <code>last_act</code>。走路策略的观测是单帧的，其中 48 维基础量里有 12 维是上一动作，语义是上一步的控制目标（绝对位置目标，缩放系数为 1.0）。起身用锚定动作时它可能到名义值加减 4 rad，而走路时只在加减 1.5 附近——这个量级差正是交还瞬间最容易出问题的地方（<code>probe_handover.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["起身跑到满足判据"] --> B["dump 终态与随机密钥"]
     B --> C["另起进程读回"]
     C --> D["同一批起点上跑多种方案"]
     D --> E["用统一标量比较"]</pre></div>
 <h2 id="四个可比标量">四个可比标量</h2>
-<p>方案之间的差别必须能被标量说清，否则还是回到「看着像」。探针定义的四个量分别覆盖跳变、抖动、摔倒与站住（<code>probe_handover.py:10-13</code>）：</p>
+<p>方案之间的差别必须能被标量说清，否则还是回到「看着像」。探针定义的四个量分别覆盖跳变、抖动、摔倒与站住（<code>probe_handover.py</code>）：</p>
 
 
 
@@ -1097,7 +1106,7 @@
     C --> E
     D --> E</pre></div>
 <h2 id="十种方案与两段式">十种方案与两段式</h2>
-<p>探针的方案表把交还瞬间的处理拆成两个维度：上一动作怎么取，以及是否做混合（<code>probe_handover.py:46-60</code>）。</p>
+<p>探针的方案表把交还瞬间的处理拆成两个维度：上一动作怎么取，以及是否做混合（<code>probe_handover.py</code>）。</p>
 
 
 
@@ -1158,18 +1167,18 @@
 
 
 <table><thead><tr><th>方案</th><th>上一动作</th><th>混合帧数</th><th>目的</th></tr></thead><tbody><tr><td>原生基准</td><td>走路策略自己出生</td><td>0</td><td>参照，不是交还</td></tr><tr><td>不交还</td><td>保持起身末目标</td><td>0</td><td>判断终态本身稳不稳</td></tr><tr><td>保留真值</td><td>起身最后的目标</td><td>0</td><td>相当于什么都不做</td></tr><tr><td>清零重算</td><td>清零并重算观测</td><td>0</td><td>查看器原本想做的事</td></tr><tr><td>自洽首帧</td><td>换成不动点动作</td><td>0</td><td>用自洽的目标开局</td></tr><tr><td>混合 10 帧</td><td>起身最后的目标</td><td>10</td><td>平滑过渡</td></tr><tr><td>混合 30 帧</td><td>起身最后的目标</td><td>30</td><td>更长过渡</td></tr><tr><td>清零加混合 10 帧</td><td>清零并重算</td><td>10</td><td>两种处理叠加</td></tr></tbody></table>
-<p>运行结构是两段式：第一段建起身环境，跑到满足判据后把那一帧状态 dump 成文件；第二段另起进程，建走路环境，从 dump 的状态出发跑各方案并输出标量（<code>probe_handover.py:19-27</code>）。分两个进程是因为同进程建两个环境会命中错误的图缓存，这一点在选型页里已经说明。</p>
+<p>运行结构是两段式：第一段建起身环境，跑到满足判据后把那一帧状态 dump 成文件；第二段另起进程，建走路环境，从 dump 的状态出发跑各方案并输出标量（<code>probe_handover.py</code>）。分两个进程是因为同进程建两个环境会命中错误的图缓存，这一点在选型页里已经说明。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["stage spawn: 起身到满足判据"] --> B["dump npz"]
     B --> C["stage walk: 另起进程读回"]
     C --> D["跑方案表逐项对照"]
     D --> E["输出四个标量"]</pre></div>
-<p>实测结论与查看器对照表一致：从发力顶裁的状态直接混合会把机器人推倒，混合越久摔倒比例越高；不混合直接交还的摔倒比例反而是最低的一档（<code>当前状态.md:108-118</code>）。根因是「站住」那一帧的动作顶在裁剪上限上——动作绝对值中位数等于上限 8.0，目标偏离关节实际位置 2.7 rad（<code>当前状态.md:119-120</code>）。</p>
+<p>实测结论与查看器对照表一致：从发力顶裁的状态直接混合会把机器人推倒，混合越久摔倒比例越高；不混合直接交还的摔倒比例反而是最低的一档（<code>当前状态.md</code>）。根因是「站住」那一帧的动作顶在裁剪上限上——动作绝对值中位数等于上限 8.0，目标偏离关节实际位置 2.7 rad（<code>当前状态.md</code>）。</p>
 <h2 id="真摔倒档与越界重生">真摔倒档与越界重生</h2>
-<p>出生分布是方案对照之外的另一半。真摔倒档的探针把「第一次被判定摔倒的那一帧」冻结下来作为起点，而不是用随机姿态模拟摔倒（<code>当前状态.md:45</code>）。它同样分两段：先让走路策略跑到摔倒，冻结该帧；再让起身策略从该帧出发，最多 600 帧内判断是否站住，判据与查看器一致（<code>实验记录_Go1复现.md:6443-6455</code>）。</p>
+<p>出生分布是方案对照之外的另一半。真摔倒档的探针把「第一次被判定摔倒的那一帧」冻结下来作为起点，而不是用随机姿态模拟摔倒（<code>当前状态.md</code>）。它同样分两段：先让走路策略跑到摔倒，冻结该帧；再让起身策略从该帧出发，最多 600 帧内判断是否站住，判据与查看器一致（<code>实验记录_Go1复现.md</code>）。</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./.venv/bin/python</span><span style="color:#032F62"> sim/probe_handover.py</span><span style="color:#005CC5"> --stage</span><span style="color:#032F62"> realfall</span><span style="color:#005CC5"> --envs</span><span style="color:#005CC5"> 128</span><span style="color:#005CC5"> \</span></span>
 <span class="line"><span style="color:#005CC5">    --steps</span><span style="color:#005CC5"> 1500</span><span style="color:#005CC5"> --getup_steps</span><span style="color:#005CC5"> 600</span><span style="color:#005CC5"> --cmd</span><span style="color:#005CC5"> 0.5</span><span style="color:#005CC5"> --bound_xy</span><span style="color:#005CC5"> 5.0</span></span></code></pre>
-<p>这里有一个必须处理的边界：水平边界取 5.0 m 时，地形半边长只有 6.0 m，走出边缘之后没有地面，环境会一直自由落体。未修正的一批 128 个环境里有 124 个掉出地形，统计出的成功率因此失真；修法是在界内重新生成出生点，把真摔倒样本稳定在 128 个（<code>实验记录_Go1复现.md:6457-6470</code>）。</p>
+<p>这里有一个必须处理的边界：水平边界取 5.0 m 时，地形半边长只有 6.0 m，走出边缘之后没有地面，环境会一直自由落体。未修正的一批 128 个环境里有 124 个掉出地形，统计出的成功率因此失真；修法是在界内重新生成出生点，把真摔倒样本稳定在 128 个（<code>实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -1207,7 +1216,7 @@
 
 <table><thead><tr><th>参数</th><th>值</th><th>作用</th></tr></thead><tbody><tr><td>环境数</td><td>128</td><td>统计样本量</td></tr><tr><td>走路步数</td><td>1500</td><td>跑到第一次摔倒</td></tr><tr><td>起身步数上限</td><td>600</td><td>单次尝试的预算</td></tr><tr><td>水平边界</td><td>5.0 m</td><td>出生范围</td></tr><tr><td>起身判据</td><td>与查看器一致</td><td>数字可搬回现场</td></tr></tbody></table>
 <h2 id="接触级指标对照">接触级指标对照</h2>
-<p>不是所有问题都能用成功率描述。某版策略在指标上看着正常，实际后腿一直拖地；当时用的指标基于几何近似，反而给出「拖地版本触地率更低」的结论。换用 MuJoCo 自己的接触判定后区分才干净（<code>check_body_contact.py:2-8</code>）。</p>
+<p>不是所有问题都能用成功率描述。某版策略在指标上看着正常，实际后腿一直拖地；当时用的指标基于几何近似，反而给出「拖地版本触地率更低」的结论。换用 MuJoCo 自己的接触判定后区分才干净（<code>check_body_contact.py</code>）。</p>
 
 
 
@@ -1234,14 +1243,14 @@
 
 
 <table><thead><tr><th>指标</th><th>公认正常的一版</th><th>拖地的那一版</th></tr></thead><tbody><tr><td>大腿与膝部触地率</td><td>0.0%</td><td>6.6%</td></tr><tr><td>后腿小腿轴向倾角</td><td>55.6 度</td><td>74.1 度</td></tr><tr><td>前后腿倾角差</td><td>11.9 度</td><td>22.6 度</td></tr></tbody></table>
-<p>这三行参照值被直接写进脚本当基线（<code>check_body_contact.py:33-37</code>），新策略跑出来与它们对比即可判断是否出现同类退化。接触级指标的代价是要额外建模型、逐环境统计，因此只在怀疑步态问题时使用。</p>
+<p>这三行参照值被直接写进脚本当基线（<code>check_body_contact.py</code>），新策略跑出来与它们对比即可判断是否出现同类退化。接触级指标的代价是要额外建模型、逐环境统计，因此只在怀疑步态问题时使用。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["指标说好但看着不对"] --> B{"指标是否基于几何近似"}
     B -->|"是"| C["换 MuJoCo 接触判定重测"]
     B -->|"否"| D["检查指标测的是否是要修的东西"]
     C --> E["用参照值判断退化"]</pre></div>
 <h2 id="等价性检查">等价性检查</h2>
-<p>提速改动的第一道闸门是「物理有没有变」。做法是保存一串动作，逐步回放，对比轨迹。项目里被否决的一次优化正好说明判据的形状：把接触数组容量从 65536 降到 512 到 2048，单环境步耗时从 14.94 ms 降到 12.28 ms，省 18%；但固定动作序列跑 500 步后，从第 1 步就出现 1.67e-03 的偏差，远超浮点舍入，随后被混沌放大到接近 0.5 m（<code>实验记录_Go1复现.md:4173-4187</code>、<code>viewer-guide.md:416-430</code>）。</p>
+<p>提速改动的第一道闸门是「物理有没有变」。做法是保存一串动作，逐步回放，对比轨迹。项目里被否决的一次优化正好说明判据的形状：把接触数组容量从 65536 降到 512 到 2048，单环境步耗时从 14.94 ms 降到 12.28 ms，省 18%；但固定动作序列跑 500 步后，从第 1 步就出现 1.67e-03 的偏差，远超浮点舍入，随后被混沌放大到接近 0.5 m（<code>实验记录_Go1复现.md</code>、<code>viewer-guide.md</code>）。</p>
 
 
 
@@ -1275,7 +1284,7 @@
     C -->|"偏差在舍入量级"| D["物理等价, 可以采纳提速"]
     C -->|"偏差远超舍入"| E["物理已变, 否决"]</pre></div>
 <h2 id="自绘几何同源校验">自绘几何同源校验</h2>
-<p>查看器里有两种地形数据：环境用于物理与观测的高度，以及自绘可视化画的网格。两者若不同源，画面会与物理脱节。检查办法是对同一批采样点分别取两个来源的值并比较（<code>实验记录_Go1复现.md:4220-4223</code>）：</p>
+<p>查看器里有两种地形数据：环境用于物理与观测的高度，以及自绘可视化画的网格。两者若不同源，画面会与物理脱节。检查办法是对同一批采样点分别取两个来源的值并比较（<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -1439,5 +1448,5 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/probe_handover.py</code></td><td>冻结终态、方案表、四个标量与两段式（<code>:2-60</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/check_body_contact.py</code></td><td>接触级指标与参照值（<code>:2-12</code>、<code>:33-37</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>越界重生与判据一致性、被否决的等价性对照、自绘几何校验（<code>:4173-4187</code>、<code>:4220-4223</code>、<code>:6443-6470</code>）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>固定动作序列的等价性判据（<code>:416-430</code>）</td></tr><tr><td><code>当前状态.md</code></td><td>真摔倒探针命令与交还对照表（<code>:45</code>、<code>:108-120</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/probe_handover.py</code></td><td>冻结终态、方案表、四个标量与两段式（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/sim/check_body_contact.py</code></td><td>接触级指标与参照值（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>越界重生与判据一致性、被否决的等价性对照、自绘几何校验（）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>固定动作序列的等价性判据（）</td></tr><tr><td><code>当前状态.md</code></td><td>真摔倒探针命令与交还对照表（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/16-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E8%AF%95/01-%E5%88%A4%E6%8D%AE%E5%8F%A3%E5%BE%84/"><span class="k">← 上一篇</span><span class="t">判据口径</span><span class="d">强化学习评测与调试 · 4 个文件</span></a><a class="next" href="/tc63/docs/16-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E8%AF%95/03-%E5%A4%8D%E7%8E%B0%E5%AE%9E%E9%AA%8C%E4%B8%8E%E8%84%9A%E6%9C%AC/"><span class="k">下一篇 →</span><span class="t">复现实验与脚本</span><span class="d">强化学习评测与调试 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

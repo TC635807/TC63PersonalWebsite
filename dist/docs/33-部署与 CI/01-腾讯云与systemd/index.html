@@ -2,7 +2,23 @@
 <p>买完一台云主机、把域名解析过去之后，最先要回答的问题是「线上到底有几个进程在跑、它们各自守着哪个端口」，“怎么装环境”可以放到后面再管。KnowledgeDiver 的答案写在 <code>deploy/</code> 目录里：一个 nginx 守着 80 与 443，一个 uvicorn 后端守着本机的 8000，前端则被编译成静态文件交给 nginx 直接发。把这条路径理顺之后，后面 systemd 的每一行配置、部署脚本的每一步都能对上位置。</p>
 <p>把这条路径画出来之后，为什么后端只监听 127.0.0.1、为什么前端还留着一个没被对外使用的 service 都能对上位置；腾讯云控制台里必须手动做的两件事与首次启动会下载的东西也一并列出。</p>
 <h2 id="一台云主机上的三个角色">一台云主机上的三个角色</h2>
-<p>线上对外只有一个入口，就是 nginx 的 80 与 443。<code>deploy/deploy.sh:40-64</code> 生成的 server 块里，<code>location /</code> 指向 <code>frontend/dist</code>，<code>location /api/</code> 转发到 <code>http://127.0.0.1:8000/api/</code>。也就是说，浏览器看到的页面来自磁盘上的静态文件，页面里的接口请求被 nginx 转交给本机的后端进程。</p>
+<p>线上对外只有一个入口，就是 nginx 的 80 与 443。<code>deploy/deploy.sh</code> 生成的 server 块里，<code>location /</code> 指向 <code>frontend/dist</code>，<code>location /api/</code> 转发到 <code>http://127.0.0.1:8000/api/</code>。也就是说，浏览器看到的页面来自磁盘上的静态文件，页面里的接口请求被 nginx 转交给本机的后端进程。</p>
+<p>nginx 本身是一个静态文件服务器加反向代理软件：它对外监听端口，按 URL 前缀决定一个请求是「自己读磁盘回」还是「转给别的进程」。下面是 <code>deploy/deploy.sh</code> 生成的那份 server 块节选，<code>...</code> 表示省略掉的配置行：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">server</span><span style="color:#24292E"> {</span></span>
+<span class="line"><span style="color:#D73A49">    listen </span><span style="color:#005CC5">80</span><span style="color:#24292E">;                       </span><span style="color:#6A737D"># 对外监听 80；443 由同一个文件的另一个 server 块负责</span></span>
+<span class="line"><span style="color:#D73A49">    server_name </span><span style="color:#24292E">$DOMAIN www.$DOMAIN; </span><span style="color:#6A737D"># 只接管这两个域名的请求</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    location</span><span style="color:#6F42C1"> / </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">        root </span><span style="color:#24292E">$APP_DIR/frontend/dist;       </span><span style="color:#6A737D"># 静态文件的根目录</span></span>
+<span class="line"><span style="color:#D73A49">        try_files </span><span style="color:#24292E">$uri $uri/ /index.html;  </span><span style="color:#6A737D"># 先找同名文件、再找目录，都没有就回退到 index.html</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">    location</span><span style="color:#6F42C1"> /api/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">        proxy_pass </span><span style="color:#24292E">http://127.0.0.1:8000/api/;  </span><span style="color:#6A737D"># 前缀匹配到 /api/ 的请求转给本机后端</span></span>
+<span class="line"><span style="color:#24292E">        ...</span></span>
+<span class="line"><span style="color:#24292E">    }</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p><code>location</code> 是 nginx 的<strong>前缀匹配</strong>：写 <code>/api/</code> 就表示所有以它开头的 URL 都走这一段，所以前端页面与接口能共用 80 端口。<code>try_files</code> 解决的是刷新页面就 404 的问题——用户直接打开 <code>/projects/</code> 时磁盘上并没有这个文件，回退到 <code>index.html</code> 交给前端路由。这段配置在部署脚本里是用 here-doc（<code>cat > 目标文件 &#x3C;&#x3C; NGINXEOF</code> … <code>NGINXEOF</code>）写出来的：shell 把中间那段文本原样写进文件，写之前把 <code>$DOMAIN</code>、<code>$APP_DIR</code> 替换成真实值，所以仓库里存的是模板，机器上生成的是成品。</p>
 
 
 
@@ -39,7 +55,7 @@
 
 
 <table><thead><tr><th>角色</th><th>监听</th><th>由谁拉起</th><th>对外可见</th></tr></thead><tbody><tr><td>nginx</td><td>0.0.0.0:80、443</td><td>系统包自带的 nginx.service</td><td>是</td></tr><tr><td>uvicorn 后端</td><td>127.0.0.1:8000</td><td><code>knowledgediver.service</code></td><td>否，只经 nginx 转发</td></tr><tr><td>前端构建产物</td><td>不监听，磁盘目录</td><td>不需要进程</td><td>是，由 nginx 读文件</td></tr><tr><td>前端预览进程</td><td>127.0.0.1:5173</td><td><code>knowledgediver-frontend.service</code></td><td>否，nginx 并未指向它</td></tr></tbody></table>
-<p>这张表里最容易被忽略的是最后一行。仓库里确实有一个前端 service（<code>deploy/knowledgediver-frontend.service:8</code>），它执行 <code>npm run preview -- --host 127.0.0.1 --port 5173</code>，但 <code>deploy/nginx.conf</code> 与 <code>deploy.sh</code> 生成的配置都只读 <code>dist</code> 目录，没有任何一行把请求转给 5173。它是早期把前端也当常驻进程时的遗留，实际线上不起决定作用。</p>
+<p>这张表里最容易被忽略的是最后一行。仓库里确实有一个前端 service（<code>deploy/knowledgediver-frontend.service</code>），它执行 <code>npm run preview -- --host 127.0.0.1 --port 5173</code>，但 <code>deploy/nginx.conf</code> 与 <code>deploy.sh</code> 生成的配置都只读 <code>dist</code> 目录，没有任何一行把请求转给 5173。它是早期把前端也当常驻进程时的遗留，实际线上不起决定作用。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   U["浏览器&#x3C;br/>https://knowledgediver.cloud"] -->|"443 / 80"| N["nginx"]
   N -->|"location /&#x3C;br/>读磁盘"| D["frontend/dist&#x3C;br/>静态文件"]
@@ -49,10 +65,21 @@
   P["npm run preview&#x3C;br/>127.0.0.1:5173"] -.->|"无转发规则"| N</pre></div>
 <h2 id="请求从公网进来之后走哪条路">请求从公网进来之后走哪条路</h2>
 <p>以一次页面加载为例。浏览器先取 <code>/</code>，nginx 在 <code>dist</code> 里找到 <code>index.html</code>；页面里的脚本再请求 <code>/api/...</code>，nginx 按前缀匹配到代理规则，把请求交给 8000 端口，拿到响应之后再回给浏览器。整个过程里 nginx 是唯一接触公网的进程。</p>
-<p>代理段里有两行与流式响应有关：<code>proxy_buffering off</code>（<code>deploy/nginx.conf:23</code>）和 <code>proxy_read_timeout 86400</code>（<code>deploy/nginx.conf:24</code>）。前者关掉 nginx 的响应缓冲，避免边生成边发送的结果被攒在 nginx 里；后者把读超时放到 24 小时，给长任务留空间。这两行是 SSE 场景的配置，具体机制见 <code>docs/32-nginx 配置/03-SSE与流式代理/</code>。</p>
-<p>还有一行 <code>client_max_body_size 25m</code>（<code>deploy/nginx.conf:22</code>）。默认值 1m 会在上传稍大的文件时直接返回 413，而 413 是 nginx 自己回的，后端日志里什么都看不到，这是排查时容易走错方向的一个点。</p>
+<p><code>deploy/nginx.conf</code> 的代理段里有两行与流式响应有关：<code>proxy_buffering off</code> 和 <code>proxy_read_timeout 86400</code>。前者关掉 nginx 的响应缓冲，避免边生成边发送的结果被攒在 nginx 里；后者把读超时放到 24 小时，给长任务留空间。这两行是 SSE 场景的配置，具体机制见 <code>docs/32-nginx 配置/03-SSE与流式代理/</code>。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="nginx"><code><span class="line"><span style="color:#D73A49">location</span><span style="color:#6F42C1"> /api/ </span><span style="color:#24292E">{</span></span>
+<span class="line"><span style="color:#D73A49">    proxy_pass </span><span style="color:#24292E">http://127.0.0.1:8000/api/;</span></span>
+<span class="line"><span style="color:#24292E">    ...</span></span>
+<span class="line"><span style="color:#D73A49">    proxy_buffering </span><span style="color:#005CC5">off</span><span style="color:#24292E">;      </span><span style="color:#6A737D"># 默认是 on：nginx 会先攒满一段再回给浏览器</span></span>
+<span class="line"><span style="color:#D73A49">    proxy_read_timeout </span><span style="color:#005CC5">86400</span><span style="color:#24292E">; </span><span style="color:#6A737D"># 默认 60s：超过这段时间没读到上游数据就断开</span></span>
+<span class="line"><span style="color:#24292E">}</span></span></code></pre>
+<p>SSE（Server-Sent Events）是「服务端把响应保持成长连接、逐步把文字推给浏览器」的做法，抓取与生成类接口需要的正是边算边出。开着缓冲时，最先算出来的内容会被存在 nginx 里等一起发，用户只能看着页面转圈；<code>proxy_read_timeout</code> 则是防止一个跑了很久、中间没有新数据的任务被 nginx 按默认超时掐断。</p>
+<p>还有一行 <code>client_max_body_size 25m</code>，同样写在 <code>deploy/nginx.conf</code> 里。默认值 1m 会在上传稍大的文件时直接返回 413，而 413 是 nginx 自己回的，后端日志里什么都看不到，这是排查时容易走错方向的一个点。</p>
 <h2 id="为什么后端只监听-127001">为什么后端只监听 127.0.0.1</h2>
-<p><code>ExecStart</code> 里的 <code>--host 127.0.0.1</code>（<code>deploy/knowledgediver.service:10</code>）让 uvicorn 只接受来自本机的连接。这样做有两层好处：公网无法绕过 nginx 直接访问 8000；后端也不需要自己处理 TLS 与跨域。代价是调试时必须通过 nginx，或者先 ssh 登上去再访问本机端口。</p>
+<p><code>deploy/knowledgediver.service</code> 的 <code>ExecStart</code> 里写着 <code>--host 127.0.0.1</code>，让 uvicorn 只接受来自本机的连接。这样做有两层好处：公网无法绕过 nginx 直接访问 8000；后端也不需要自己处理 TLS 与跨域。代价是调试时必须通过 nginx，或者先 ssh 登上去再访问本机端口。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="ini"><code><span class="line"><span style="color:#6A737D"># deploy/knowledgediver.service 的 [Service] 段（节选）</span></span>
+<span class="line"><span style="color:#D73A49">WorkingDirectory</span><span style="color:#24292E">=/opt/knowledgediver</span></span>
+<span class="line"><span style="color:#D73A49">ExecStart</span><span style="color:#24292E">=/opt/knowledgediver/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000</span></span></code></pre>
+<p>uvicorn 是 Python 的 ASGI 服务器，负责把 <code>backend.main:app</code> 这个应用对象跑起来并监听端口；<code>--host</code> 与 <code>--port</code> 就是监听地址。<code>127.0.0.1</code> 是回环地址，只在本机网络栈内可达，公网无论怎么扫都连不上——「后端不对外」就是靠这一行实现的。</p>
 <p>如果临时想让后端直接接受外部请求，把 <code>--host</code> 改成 <code>0.0.0.0</code> 并在云主机安全组里放行 8000 也能通，但这等于让接口完全暴露且没有证书，不应当作为常规做法。</p>
 <h2 id="安全组与域名解析控制台里的两步">安全组与域名解析：控制台里的两步</h2>
 <p>仓库里没有安全组与 DNS 的配置，因为它们不在代码里，而在腾讯云控制台：</p>
@@ -60,9 +87,9 @@
 <li>安全组入站规则放行 TCP 22、80、443。只放行 22 时，nginx 装好了也访问不到。</li>
 <li>域名解析把 <code>knowledgediver.cloud</code> 与 <code>www.knowledgediver.cloud</code> 的 A 记录指向云主机的公网 IP。解析没生效时，<code>certbot</code> 申请证书会失败。</li>
 </ol>
-<p><code>deploy.sh</code> 默认域名就是 <code>knowledgediver.cloud</code>（<code>deploy/deploy.sh:8</code>），也可以在执行时把域名作为第一个参数传进去。脚本不会替你检查解析，它只是把域名写进 nginx 配置并尝试申请证书。</p>
+<p><code>deploy.sh</code> 默认域名就是 <code>knowledgediver.cloud</code>，也可以在执行时把域名作为第一个参数传进去。脚本不会替你检查解析，它只是把域名写进 nginx 配置并尝试申请证书。</p>
 <h2 id="目录布局与文件归属">目录布局与文件归属</h2>
-<p>部署脚本假设应用目录是仓库根目录（<code>deploy/deploy.sh:10</code> 取脚本所在目录的上一级），而仓库自带的 service 文件写死为 <code>/opt/knowledgediver</code>（<code>deploy/knowledgediver.service:7</code>）。两种路径都能跑，关键在于 <code>WorkingDirectory</code>、<code>ExecStart</code> 里的解释器路径、<code>PLAYWRIGHT_BROWSERS_PATH</code> 三者必须指向同一个目录，否则会出现”服务起来了但浏览器找不到”这种半故障。</p>
+<p>部署脚本假设应用目录是仓库根目录（<code>deploy/deploy.sh</code> 取脚本所在目录的上一级），而仓库自带的 service 文件写死为 <code>/opt/knowledgediver</code>（见 <code>deploy/knowledgediver.service</code>）。两种路径都能跑，关键在于 <code>WorkingDirectory</code>、<code>ExecStart</code> 里的解释器路径、<code>PLAYWRIGHT_BROWSERS_PATH</code> 三者必须指向同一个目录，否则会出现”服务起来了但浏览器找不到”这种半故障。</p>
 
 
 
@@ -98,12 +125,26 @@
 
 
 
-<table><thead><tr><th>目录或文件</th><th>作用</th><th>出处</th></tr></thead><tbody><tr><td><code>.venv/</code></td><td>Python 虚拟环境，uvicorn 与后端依赖都在里面</td><td><code>deploy/deploy.sh:25-29</code></td></tr><tr><td><code>frontend/dist/</code></td><td>前端构建产物，nginx 的 root</td><td><code>deploy/nginx.conf:10</code></td></tr><tr><td><code>.playwright/</code></td><td>项目内的浏览器，抓取功能依赖它</td><td><code>server_start.sh:19</code></td></tr><tr><td><code>models/</code></td><td>嵌入模型目录，可预先上传</td><td><code>deploy/deploy.sh:155-156</code></td></tr><tr><td><code>data/</code></td><td>运行期数据，升级时不应被覆盖</td><td>素材目录 <code>/mnt/d/KnowledgeDiver/data/</code></td></tr></tbody></table>
+<table><thead><tr><th>目录或文件</th><th>作用</th><th>出处</th></tr></thead><tbody><tr><td><code>.venv/</code></td><td>Python 虚拟环境，uvicorn 与后端依赖都在里面</td><td><code>deploy/deploy.sh</code> 创建虚拟环境并装依赖</td></tr><tr><td><code>frontend/dist/</code></td><td>前端构建产物，nginx 的 root</td><td><code>deploy/nginx.conf</code> 里 root 指向的目录</td></tr><tr><td><code>.playwright/</code></td><td>项目内的浏览器，抓取功能依赖它</td><td><code>server_start.sh</code> 设置浏览器目录</td></tr><tr><td><code>models/</code></td><td>嵌入模型目录，可预先上传</td><td><code>deploy/deploy.sh</code> 提示预先放置模型</td></tr><tr><td><code>data/</code></td><td>运行期数据，升级时不应被覆盖</td><td>素材目录 <code>/mnt/d/KnowledgeDiver/data/</code></td></tr></tbody></table>
 <h2 id="首次启动会下载什么">首次启动会下载什么</h2>
-<p>后端第一次起来时会拉取嵌入模型（<code>deploy/deploy.sh:154</code> 提示约 95MB），走的是 <code>HF_ENDPOINT=https://hf-mirror.com</code> 这个镜像（<code>deploy/deploy.sh:127</code>）。抓取功能还需要 Playwright 的浏览器，脚本把它装进项目内的 <code>.playwright</code>（<code>deploy/deploy.sh:128</code>），并额外校验 systemd 的 Environment 里有没有这一项（<code>server_start.sh:139-145</code>）。</p>
+<p>后端第一次起来时会拉取嵌入模型，<code>deploy/deploy.sh</code> 在此处提示约 95MB，走的是 <code>HF_ENDPOINT=https://hf-mirror.com</code> 这个镜像。抓取功能还需要 Playwright 的浏览器，同一个脚本把它装进项目内的 <code>.playwright</code>，<code>server_start.sh</code> 则额外校验 systemd 的 Environment 里有没有这一项。</p>
 <p>这两件事解释了为什么”服务 active 但功能报错”很常见：进程起来了不代表模型与浏览器就位。判断方法是直接看日志里有没有下载进度或浏览器路径，而不是只看 <code>systemctl status</code> 的颜色。</p>
 <h2 id="同一份代码的两种运行方式">同一份代码的两种运行方式</h2>
-<p>本机跑 <code>start.sh</code> 与线上跑 systemd，用的是同一份代码，环境却不同。<code>start.sh</code> 会在缺 <code>.venv</code> 时自动创建，会顺手修正 <code>ALL_PROXY</code> 里的协议前缀，还会把浏览器目录 export 到当前 shell（<code>start.sh:10-28</code>）；systemd 不会做这些，它只认 unit 里的三行 <code>Environment</code>。所以”本机能跑、线上报错”的差异往往不在代码，而在这些启动差异上。</p>
+<p>本机跑 <code>start.sh</code> 与线上跑 systemd，用的是同一份代码，环境却不同。<code>start.sh</code> 会在缺 <code>.venv</code> 时自动创建，会顺手修正 <code>ALL_PROXY</code> 里的协议前缀，还会把浏览器目录 export 到当前 shell；systemd 不会做这些，它只认 unit 里的三行 <code>Environment</code>。所以”本机能跑、线上报错”的差异往往不在代码，而在这些启动差异上。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># KnowledgeDiver/start.sh 节选</span></span>
+<span class="line"><span style="color:#24292E">VENV_DIR</span><span style="color:#D73A49">=</span><span style="color:#032F62">"${</span><span style="color:#24292E">VENV_DIR</span><span style="color:#D73A49">:-</span><span style="color:#24292E">$SCRIPT_DIR</span><span style="color:#D73A49">/</span><span style="color:#032F62">.</span><span style="color:#24292E">venv</span><span style="color:#032F62">}"</span><span style="color:#6A737D">  # 默认项目内的 .venv，也可用环境变量指向别处</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> [ </span><span style="color:#D73A49">!</span><span style="color:#D73A49"> -d</span><span style="color:#032F62"> "${</span><span style="color:#24292E">VENV_DIR</span><span style="color:#032F62">}"</span><span style="color:#24292E"> ]; </span><span style="color:#D73A49">then</span></span>
+<span class="line"><span style="color:#6F42C1">  python3</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> venv</span><span style="color:#032F62"> "${</span><span style="color:#24292E">VENV_DIR</span><span style="color:#032F62">}"</span><span style="color:#6A737D">     # venv：把项目依赖与系统 Python 隔离开的目录，缺了就建</span></span>
+<span class="line"><span style="color:#D73A49">fi</span></span>
+<span class="line"><span style="color:#005CC5">source</span><span style="color:#032F62"> "${</span><span style="color:#24292E">VENV_DIR</span><span style="color:#032F62">}/bin/activate"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> [ </span><span style="color:#D73A49">-n</span><span style="color:#032F62"> "</span><span style="color:#24292E">$ALL_PROXY</span><span style="color:#032F62">"</span><span style="color:#24292E"> ]; </span><span style="color:#D73A49">then</span></span>
+<span class="line"><span style="color:#24292E">  ALL_PROXY</span><span style="color:#D73A49">=</span><span style="color:#032F62">"${</span><span style="color:#24292E">ALL_PROXY</span><span style="color:#D73A49">/</span><span style="color:#24292E">socks</span><span style="color:#D73A49">:</span><span style="color:#005CC5">\/\/</span><span style="color:#D73A49">/</span><span style="color:#24292E">socks5</span><span style="color:#D73A49">:</span><span style="color:#005CC5">\/\/</span><span style="color:#032F62">}"</span><span style="color:#6A737D">   # 把 socks:// 改写成 socks5://</span></span>
+<span class="line"><span style="color:#D73A49">  export</span><span style="color:#24292E"> ALL_PROXY</span></span>
+<span class="line"><span style="color:#D73A49">fi</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#D73A49">export</span><span style="color:#24292E"> PLAYWRIGHT_BROWSERS_PATH</span><span style="color:#D73A49">=</span><span style="color:#032F62">"${</span><span style="color:#24292E">SCRIPT_DIR</span><span style="color:#032F62">}/.playwright"</span><span style="color:#6A737D">  # 只作用于当前 shell 及其子进程</span></span></code></pre>
+<p><code>export</code> 与 <code>source</code> 都只影响「当前这个 shell 以及它启动的子进程」。systemd 不是从这个 shell 里启动服务的，所以这里 export 的浏览器目录它一个字都看不到——这正是同一份代码在本机能跑、在服务里却找不到浏览器的原因。</p>
 
 
 
@@ -194,7 +235,7 @@
 
 
 
-<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为前端是常驻进程</td><td>去重启 <code>knowledgediver-frontend</code> 却发现页面没变化</td><td>对外页面由 nginx 读 <code>dist</code></td></tr><tr><td>2</td><td>认为后端也监听公网</td><td>用公网 IP 加 8000 去试，结果超时</td><td><code>ExecStart</code> 里是 <code>127.0.0.1</code></td></tr><tr><td>3</td><td>把 413 归因到后端</td><td>后端日志里找不到这次请求</td><td>体积上限由 nginx 的 <code>client_max_body_size</code> 决定</td></tr><tr><td>4</td><td>只放行 22 端口</td><td>ssh 正常、网页打不开</td><td>安全组是云平台侧配置，不在仓库里</td></tr><tr><td>5</td><td>域名解析未生效就申请证书</td><td>certbot 报失败但脚本继续执行</td><td><code>deploy/deploy.sh:110</code> 吞掉错误继续</td></tr><tr><td>6</td><td>换目录部署却不改 service</td><td>服务起来但找不到浏览器或模块</td><td>三处路径必须指向同一目录</td></tr></tbody></table>
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为前端是常驻进程</td><td>去重启 <code>knowledgediver-frontend</code> 却发现页面没变化</td><td>对外页面由 nginx 读 <code>dist</code></td></tr><tr><td>2</td><td>认为后端也监听公网</td><td>用公网 IP 加 8000 去试，结果超时</td><td><code>ExecStart</code> 里是 <code>127.0.0.1</code></td></tr><tr><td>3</td><td>把 413 归因到后端</td><td>后端日志里找不到这次请求</td><td>体积上限由 nginx 的 <code>client_max_body_size</code> 决定</td></tr><tr><td>4</td><td>只放行 22 端口</td><td>ssh 正常、网页打不开</td><td>安全组是云平台侧配置，不在仓库里</td></tr><tr><td>5</td><td>域名解析未生效就申请证书</td><td>certbot 报失败但脚本继续执行</td><td><code>deploy/deploy.sh</code> 里证书申请的错误被 <code>||</code> 吞掉继续</td></tr><tr><td>6</td><td>换目录部署却不改 service</td><td>服务起来但找不到浏览器或模块</td><td>三处路径必须指向同一目录</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>
@@ -291,10 +332,27 @@
 
 
 <table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>/mnt/d/KnowledgeDiver/deploy/deploy.sh</code></td><td>一键部署六步、默认域名、nginx 配置生成与 systemd 写入</td></tr><tr><td><code>/mnt/d/KnowledgeDiver/deploy/nginx.conf</code></td><td>静态目录、<code>/api/</code> 代理与超时配置</td></tr><tr><td><code>/mnt/d/KnowledgeDiver/deploy/knowledgediver.service</code></td><td>后端 unit 的目录、环境变量与启动命令</td></tr><tr><td><code>/mnt/d/KnowledgeDiver/deploy/knowledgediver-frontend.service</code></td><td>前端预览 unit 及 5173 端口</td></tr><tr><td><code>/mnt/d/KnowledgeDiver/server_start.sh</code></td><td>更新脚本：依赖、浏览器校验、重启顺序</td></tr><tr><td><code>docs/32-nginx 配置/03-SSE与流式代理/</code></td><td>代理缓冲与长连接的展开讲解</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-systemd托管后端"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-systemd托管后端</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/33-部署与 CI/01-腾讯云与systemd/02-systemd托管后端.md</span></div><div class="dfile__body"><h1 id="systemd-如何托管后端">systemd 如何托管后端</h1>
-<p>ssh 登上云主机，敲 <code>systemctl status knowledgediver</code>，屏幕上会给出一个 Main PID、一行 <code>active (running)</code> 和最近几条日志。这几项都由 systemd 根据 <code>deploy/knowledgediver.service</code> 这份十几行的配置文件托管出来，后端自己并不打印它们。读懂这十几行，等于读懂了后端进程的目录、环境、启动命令与死亡后的行为。</p>
+<p>ssh 登上云主机，敲 <code>systemctl status knowledgediver</code>，屏幕上会给出一个 Main PID、一行 <code>active (running)</code> 和最近几条日志。这几项都由 systemd 根据 <code>deploy/knowledgediver.service</code> 这份十几行的配置文件托管出来，后端自己并不打印它们。没有 systemd，后端就只是一个挂在 ssh 会话上的前台进程：终端一关就退出，崩溃了也不会被拉起，更谈不上开机自启。和 <code>nohup</code>、<code>screen</code> 这类「把进程挂到后台」的做法相比，systemd 的差别在于它是声明式的：unit 描述的是期望状态（该跑什么、崩了怎么办），机器重启后它按这份描述重放；后台工具只保住当前这个进程，机器一关就没了。代价是要学 unit 的写法，收益是托管行为集中在一份可版本化的文件里。读懂这十几行，等于读懂了后端进程的目录、环境、启动命令与死亡后的行为。</p>
 <p>unit 文件的三段结构对上 <code>ExecStart</code> 里的每个参数之后，仓库里两份长得不一样的 service 文件、日志与重启的实际命令，以及几个容易看错的地方都能串起来。</p>
 <h2 id="一份-unit-文件被-systemd-读成什么">一份 unit 文件被 systemd 读成什么</h2>
 <p>unit 文件分成 <code>[Unit]</code>、<code>[Service]</code>、<code>[Install]</code> 三段。第一段描述”它是什么、什么时候可以启动”；第二段描述”怎么启动、失败怎么办”；第三段描述”开机时属于哪个 target”。</p>
+<p>systemd 是 Linux 上的服务管理器，也是系统启动后由内核拉起的第一个进程；「拉起某个常驻程序、崩了按策略重拉、开机自启、把它的输出收进日志」这些活都归它管。描述「跑哪个程序、怎么跑」的配置文件叫 unit，服务类的扩展名是 <code>.service</code>。<code>deploy/knowledgediver.service</code> 全文只有十几行：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="ini"><code><span class="line"><span style="color:#6F42C1">[Unit]</span></span>
+<span class="line"><span style="color:#D73A49">Description</span><span style="color:#24292E">=KnowledgeDiver Backend</span></span>
+<span class="line"><span style="color:#D73A49">After</span><span style="color:#24292E">=network.target</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1">[Service]</span></span>
+<span class="line"><span style="color:#D73A49">Type</span><span style="color:#24292E">=simple</span></span>
+<span class="line"><span style="color:#D73A49">WorkingDirectory</span><span style="color:#24292E">=/opt/knowledgediver</span></span>
+<span class="line"><span style="color:#D73A49">Environment</span><span style="color:#24292E">=</span><span style="color:#032F62">"PYTHONPATH=/opt/knowledgediver"</span></span>
+<span class="line"><span style="color:#D73A49">Environment</span><span style="color:#24292E">=</span><span style="color:#032F62">"HF_ENDPOINT=https://hf-mirror.com"</span></span>
+<span class="line"><span style="color:#D73A49">ExecStart</span><span style="color:#24292E">=/opt/knowledgediver/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000</span></span>
+<span class="line"><span style="color:#D73A49">Restart</span><span style="color:#24292E">=always</span></span>
+<span class="line"><span style="color:#D73A49">RestartSec</span><span style="color:#24292E">=5</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1">[Install]</span></span>
+<span class="line"><span style="color:#D73A49">WantedBy</span><span style="color:#24292E">=multi-user.target</span></span></code></pre>
+<p>三段各管一件事：<code>[Unit]</code> 说它是什么、依赖谁；<code>[Service]</code> 是主体，说怎么启动、失败怎么办；<code>[Install]</code> 说 <code>systemctl enable</code> 时它挂到哪个启动目标上。</p>
 
 
 
@@ -365,8 +423,20 @@
   APP->>APP: 监听 127.0.0.1:8000
   SVC-->>BOOT: 状态变为 active (running)</pre></div>
 <h2 id="逐行读-execstart-里的每个参数">逐行读 ExecStart 里的每个参数</h2>
-<p>脚本生成的启动命令是 <code>ExecStart=$APP_DIR/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000</code>（<code>deploy/deploy.sh:129</code>）。其中 <code>$APP_DIR/.venv/bin/uvicorn</code> 用的是虚拟环境里的解释器入口，而不是系统 <code>uvicorn</code>，这样后端依赖与系统 Python 隔离；<code>backend.main:app</code> 指向应用对象；后两个参数决定只监听本机 8000。</p>
-<p>环境变量有三行（<code>deploy/deploy.sh:126-128</code>）：<code>PYTHONPATH</code> 让 <code>backend</code> 包可以被找到；<code>HF_ENDPOINT</code> 指向国内镜像，模型下载走它；<code>PLAYWRIGHT_BROWSERS_PATH</code> 指向项目内的浏览器目录。三行缺一行都会以某种功能失败的形式暴露出来，而不是启动失败。</p>
+<p>脚本生成的启动命令是 <code>ExecStart=$APP_DIR/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000</code>。其中 <code>$APP_DIR/.venv/bin/uvicorn</code> 用的是虚拟环境里的解释器入口，而不是系统 <code>uvicorn</code>，这样后端依赖与系统 Python 隔离；<code>backend.main:app</code> 指向应用对象；后两个参数决定只监听本机 8000。</p>
+<p>环境变量有三行，都由 <code>deploy/deploy.sh</code> 写进 unit：<code>PYTHONPATH</code> 让 <code>backend</code> 包可以被找到；<code>HF_ENDPOINT</code> 指向国内镜像，模型下载走它；<code>PLAYWRIGHT_BROWSERS_PATH</code> 指向项目内的浏览器目录。三行缺一行都会以某种功能失败的形式暴露出来，而不是启动失败。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># deploy/deploy.sh 第 6 步：把 unit 写到 /etc/systemd/system/（节选）</span></span>
+<span class="line"><span style="color:#6F42C1">cat</span><span style="color:#D73A49"> ></span><span style="color:#032F62"> /etc/systemd/system/knowledgediver.service</span><span style="color:#D73A49"> &#x3C;&#x3C;</span><span style="color:#032F62"> EOF</span></span>
+<span class="line"><span style="color:#032F62">[Service]</span></span>
+<span class="line"><span style="color:#032F62">WorkingDirectory=</span><span style="color:#24292E">$APP_DIR</span></span>
+<span class="line"><span style="color:#032F62">Environment="PYTHONPATH=</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">"</span></span>
+<span class="line"><span style="color:#032F62">Environment="HF_ENDPOINT=https://hf-mirror.com"</span></span>
+<span class="line"><span style="color:#032F62">Environment="PLAYWRIGHT_BROWSERS_PATH=</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/.playwright"</span></span>
+<span class="line"><span style="color:#032F62">ExecStart=</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000</span></span>
+<span class="line"><span style="color:#032F62">Restart=always</span></span>
+<span class="line"><span style="color:#032F62">RestartSec=5</span></span>
+<span class="line"><span style="color:#032F62">EOF</span></span></code></pre>
+<p>这里的 <code>$APP_DIR</code> 会在写入前被替换成脚本所在仓库的真实路径，所以换目录部署不用改脚本；留档版里写死的 <code>/opt/knowledgediver</code> 是那种情况的示例。三行环境变量各自解决一个问题：<code>PYTHONPATH</code> 是 Python 的模块搜索路径，不设它时从 <code>/etc/systemd/system</code> 启动的进程找不到项目的 <code>backend</code> 包（<code>backend.main:app</code> 直接 import 失败）；<code>HF_ENDPOINT</code> 是 HuggingFace 的下载入口，指向 <code>hf-mirror.com</code> 是为了国内拉模型不走直连；<code>PLAYWRIGHT_BROWSERS_PATH</code> 告诉 Playwright 去项目内的 <code>.playwright</code> 找浏览器。</p>
 <h2 id="两份-service-文件的差异">两份 service 文件的差异</h2>
 <p>仓库里同时存在两份 unit：<code>deploy/knowledgediver.service</code> 是手写留档版，<code>deploy/deploy.sh</code> 里用 <code>cat > /etc/systemd/system/knowledgediver.service</code> 生成的是实际安装版。两者只有三处不同：</p>
 
@@ -394,8 +464,8 @@
 
 
 
-<table><thead><tr><th>项</th><th>留档版</th><th>脚本生成版</th></tr></thead><tbody><tr><td>目录</td><td><code>/opt/knowledgediver</code>（<code>deploy/knowledgediver.service:7-10</code>）</td><td><code>$APP_DIR</code>，即仓库根（<code>deploy/deploy.sh:125-129</code>）</td></tr><tr><td>浏览器路径</td><td>没有这一行</td><td>有 <code>PLAYWRIGHT_BROWSERS_PATH</code>（<code>deploy/deploy.sh:128</code>）</td></tr><tr><td>其余键</td><td>与生成版一致</td><td>与留档版一致</td></tr></tbody></table>
-<p>差异里最有后果的是浏览器路径。<code>server_start.sh:139-145</code> 专门检查了这一行：脚本里的 <code>export</code> 不会传进 systemd 服务，如果 unit 里没有 <code>PLAYWRIGHT_BROWSERS_PATH</code>，后端运行时找不到项目内的浏览器。留档版照抄安装会踩到这个点。</p>
+<table><thead><tr><th>项</th><th>留档版</th><th>脚本生成版</th></tr></thead><tbody><tr><td>目录</td><td><code>/opt/knowledgediver</code>（写死在 <code>deploy/knowledgediver.service</code>）</td><td><code>$APP_DIR</code>，即仓库根（由 <code>deploy/deploy.sh</code> 生成）</td></tr><tr><td>浏览器路径</td><td>没有这一行</td><td>有 <code>PLAYWRIGHT_BROWSERS_PATH</code>，由 <code>deploy/deploy.sh</code> 生成</td></tr><tr><td>其余键</td><td>与生成版一致</td><td>与留档版一致</td></tr></tbody></table>
+<p>差异里最有后果的是浏览器路径。<code>server_start.sh</code> 里有一处专门检查了这一行：脚本里的 <code>export</code> 不会传进 systemd 服务，如果 unit 里没有 <code>PLAYWRIGHT_BROWSERS_PATH</code>，后端运行时找不到项目内的浏览器。留档版照抄安装会踩到这个点。</p>
 <h2 id="进程死掉之后会发生什么">进程死掉之后会发生什么</h2>
 <p><code>Restart=always</code> 与 <code>RestartSec=5</code> 决定了自愈行为：无论退出码是什么，systemd 都等 5 秒再拉起一次。写代码时如果启动即崩，<code>systemctl status</code> 会看到 PID 不断更换、日志里重复同一段报错，这种”每 5 秒一条”的节奏本身就是线索。</p>
 <p>需要注意的是，反复重启不会无限试下去之外的额外保护：没有 <code>StartLimitIntervalSec</code> 的限制时，崩溃循环会持续。排查这类问题的顺序是先把 <code>Restart</code> 临时停掉，手动执行 <code>ExecStart</code> 的那条命令看报错，定位完再恢复。</p>
@@ -408,7 +478,22 @@
 <h2 id="以前台身份运行意味着什么">以前台身份运行意味着什么</h2>
 <p>两份 unit 都没有写 <code>User=</code>。system 级 unit 默认以 root 运行，这也是 <code>deploy.sh</code> 要求 <code>sudo</code> 的原因之一。以 root 运行的文件读写权限最宽松，但任何由接口触发的写操作也带着 root 的权限，部署脚本本身又要求用 root 执行，两者叠加之后权限问题的表现会变少、风险会变高。要收窄权限，需要补 <code>User=</code>、<code>Group=</code>，并把应用目录的属主改成对应的用户。</p>
 <h2 id="前端-service-与-nginx-的关系">前端 service 与 nginx 的关系</h2>
-<p><code>deploy/knowledgediver-frontend.service</code> 用 <code>npm run preview -- --host 127.0.0.1 --port 5173</code>（<code>deploy/knowledgediver-frontend.service:8</code>）把构建产物再起一个预览服务。nginx 的配置里没有任何一行指向 5173，对外页面始终由 <code>dist</code> 目录直接提供。<code>server_start.sh:166-178</code> 的处理顺序也印证了这一点：它优先 <code>systemctl restart knowledgediver-frontend</code>，服务没装时退化成 <code>nohup npm run preview</code>。两条路都不会影响对外访问。</p>
+<p><code>deploy/knowledgediver-frontend.service</code> 用 <code>npm run preview -- --host 127.0.0.1 --port 5173</code> 把构建产物再起一个预览服务。nginx 的配置里没有任何一行指向 5173，对外页面始终由 <code>dist</code> 目录直接提供。<code>server_start.sh</code> 里对前端的处理顺序也印证了这一点：它优先 <code>systemctl restart knowledgediver-frontend</code>，服务没装时退化成 <code>nohup npm run preview</code>。两条路都不会影响对外访问。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="ini"><code><span class="line"><span style="color:#6A737D"># deploy/knowledgediver-frontend.service（全文）</span></span>
+<span class="line"><span style="color:#6F42C1">[Unit]</span></span>
+<span class="line"><span style="color:#D73A49">Description</span><span style="color:#24292E">=KnowledgeDiver Frontend</span></span>
+<span class="line"><span style="color:#D73A49">After</span><span style="color:#24292E">=network.target</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1">[Service]</span></span>
+<span class="line"><span style="color:#D73A49">Type</span><span style="color:#24292E">=simple</span></span>
+<span class="line"><span style="color:#D73A49">WorkingDirectory</span><span style="color:#24292E">=/opt/knowledgediver/frontend</span></span>
+<span class="line"><span style="color:#D73A49">ExecStart</span><span style="color:#24292E">=/usr/bin/npm run preview -- --host 127.0.0.1 --port 5173</span></span>
+<span class="line"><span style="color:#D73A49">Restart</span><span style="color:#24292E">=always</span></span>
+<span class="line"><span style="color:#D73A49">RestartSec</span><span style="color:#24292E">=5</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6F42C1">[Install]</span></span>
+<span class="line"><span style="color:#D73A49">WantedBy</span><span style="color:#24292E">=multi-user.target</span></span></code></pre>
+<p>它比后端 unit 还简单：就是一个常驻的 <code>npm run preview</code>，即 Vite 的静态预览服务器。它监听 5173 而不是 80/443，外面也没有任何转发指向它，所以重启它页面不会变化；留着它的意义只是本机也能用 systemd 的方式预览前端。</p>
 <h2 id="重启与看日志的命令">重启与看日志的命令</h2>
 
 
@@ -444,7 +529,8 @@
 
 
 <table><thead><tr><th>目的</th><th>命令</th></tr></thead><tbody><tr><td>看状态与最近日志</td><td><code>systemctl status knowledgediver</code></td></tr><tr><td>实时跟日志</td><td><code>journalctl -u knowledgediver -f</code></td></tr><tr><td>只重启后端</td><td><code>systemctl restart knowledgediver</code></td></tr><tr><td>改过 unit 之后</td><td><code>systemctl daemon-reload</code> 再 restart</td></tr><tr><td>开机自启</td><td><code>systemctl enable knowledgediver</code></td></tr><tr><td>临时停掉自愈</td><td>改 <code>Restart=no</code> 后 <code>daemon-reload</code></td></tr></tbody></table>
-<p>日志没有写到文件，而是进了 journal。<code>systemctl status</code> 只显示最后几行，追一次完整启动过程要用 <code>journalctl -u knowledgediver --since "10 min ago"</code>。</p>
+<p>日志没有写到文件，而是进了 journal。<code>systemctl status</code> 只显示最后几行，追一次完整启动过程要用 <code>journalctl -u knowledgediver --since "10 min ago"</code>。命令里的 <code>-u</code> 表示只看这个 unit 的日志，<code>-f</code> 表示持续跟随新输出，作用相当于日志版的 <code>tail -f</code>。</p>
+<p>改完 unit 之后容易漏掉 <code>daemon-reload</code>：systemd 启动时把 unit 文件读进内存，之后一直使用内存里的那一份；磁盘上的文件改了却不 reload，<code>restart</code> 用的仍是旧配置。</p>
 <h2 id="常见判断偏差">常见判断偏差</h2>
 
 
@@ -631,8 +717,16 @@
 
 
 
-<table><thead><tr><th>步骤</th><th>动作</th><th>位置</th></tr></thead><tbody><tr><td>1</td><td>装 nginx、certbot 与 Python 工具</td><td><code>deploy/deploy.sh:18-21</code></td></tr><tr><td>2</td><td>建虚拟环境并安装依赖</td><td><code>deploy/deploy.sh:23-29</code></td></tr><tr><td>3</td><td>进入 <code>frontend</code> 构建</td><td><code>deploy/deploy.sh:31-35</code></td></tr><tr><td>4</td><td>生成并启用 nginx 配置</td><td><code>deploy/deploy.sh:37-103</code></td></tr><tr><td>5</td><td>申请或复用 SSL 证书</td><td><code>deploy/deploy.sh:105-113</code></td></tr><tr><td>6</td><td>写入 unit 并启动服务</td><td><code>deploy/deploy.sh:115-138</code></td></tr></tbody></table>
-<p>脚本开头有 <code>set -e</code>（<code>deploy/deploy.sh:6</code>），任何一条命令返回非零都会中断后续步骤。这解释了为什么”卡在第三步”之后 nginx 与 systemd 都没配：不是没写，是根本没执行到。</p>
+<table><thead><tr><th>步骤</th><th>动作</th><th>出处</th></tr></thead><tbody><tr><td>1</td><td>装 nginx、certbot 与 Python 工具</td><td><code>deploy/deploy.sh</code> 的系统依赖安装段</td></tr><tr><td>2</td><td>建虚拟环境并安装依赖</td><td><code>deploy/deploy.sh</code> 的 venv 与 pip 依赖段</td></tr><tr><td>3</td><td>进入 <code>frontend</code> 构建</td><td><code>deploy/deploy.sh</code> 的前端构建段</td></tr><tr><td>4</td><td>生成并启用 nginx 配置</td><td><code>deploy/deploy.sh</code> 的 nginx 配置生成段</td></tr><tr><td>5</td><td>申请或复用 SSL 证书</td><td><code>deploy/deploy.sh</code> 的证书申请段</td></tr><tr><td>6</td><td>写入 unit 并启动服务</td><td><code>deploy/deploy.sh</code> 的 unit 写入与启动段</td></tr></tbody></table>
+<p>脚本开头有 <code>set -e</code>，任何一条命令返回非零都会中断后续步骤。这解释了为什么”卡在第三步”之后 nginx 与 systemd 都没配：不是没写，是根本没执行到。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D">#!/bin/bash</span></span>
+<span class="line"><span style="color:#6A737D">#  用法: sudo bash deploy/deploy.sh [域名]</span></span>
+<span class="line"><span style="color:#005CC5">set</span><span style="color:#005CC5"> -e</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#24292E">DOMAIN</span><span style="color:#D73A49">=</span><span style="color:#032F62">"</span><span style="color:#005CC5">${1</span><span style="color:#D73A49">:-</span><span style="color:#24292E">knowledgediver</span><span style="color:#032F62">.</span><span style="color:#24292E">cloud</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#6A737D">                        # 第一个参数当域名，没传就用默认值</span></span>
+<span class="line"><span style="color:#24292E">SCRIPT_DIR</span><span style="color:#D73A49">=</span><span style="color:#032F62">"$(</span><span style="color:#005CC5">cd</span><span style="color:#032F62"> "$(</span><span style="color:#6F42C1">dirname</span><span style="color:#032F62"> "${</span><span style="color:#24292E">BASH_SOURCE</span><span style="color:#032F62">[0]}")" &#x26;&#x26; </span><span style="color:#005CC5">pwd</span><span style="color:#032F62">)"</span><span style="color:#6A737D">  # 脚本自己所在的目录</span></span>
+<span class="line"><span style="color:#24292E">APP_DIR</span><span style="color:#D73A49">=</span><span style="color:#032F62">"$(</span><span style="color:#005CC5">cd</span><span style="color:#032F62"> "</span><span style="color:#24292E">$SCRIPT_DIR</span><span style="color:#032F62">/.." &#x26;&#x26; </span><span style="color:#005CC5">pwd</span><span style="color:#032F62">)"</span><span style="color:#6A737D">                    # 再上一层，就是仓库根</span></span></code></pre>
+<p>bash 默认不会因为某条命令失败就停下，<code>set -e</code> 就是「遇错即停」开关，加在最前面才有「第一步失败、后面都不执行」的效果。<code>${1:-默认值}</code> 表示取第一个位置参数、为空时用默认值；<code>BASH_SOURCE[0]</code> 是脚本自身的路径，配合 <code>dirname</code> 与 <code>pwd</code> 换成绝对目录，所以脚本从哪个目录被调用都能定位到仓库根，部署路径不写死。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
   S["sudo bash deploy/deploy.sh [域名]"] --> A["1 系统依赖"]
   A --> B["2 venv 与 pip 依赖"]
@@ -642,7 +736,7 @@
   E --> F["6 写 unit daemon-reload enable --now"]
   F --> G["访问 https://域名"]</pre></div>
 <h2 id="每一步的幂等边界">每一步的幂等边界</h2>
-<p>幂等的部分可以放心重跑，不幂等的部分重跑会覆盖现场配置：</p>
+<p>幂等（idempotent）指同一操作执行一次与执行多次的结果相同。部署脚本追求幂等，是因为现场总会重跑：加一个步骤、修一次错、换一台机器，都希望直接再执行一遍，而不是先人工判断「哪些已经做过」。天然幂等的操作可以放心重跑；做不到幂等的操作，要么加存在性判断跳过，要么明确接受「重跑会覆盖现场」。这份脚本的六步各落在哪一边，逐条看：</p>
 
 
 
@@ -676,14 +770,49 @@
 
 
 
-<table><thead><tr><th>步骤</th><th>重复执行的结果</th></tr></thead><tbody><tr><td>1</td><td><code>apt-get install</code> 本身幂等</td></tr><tr><td>2</td><td>已有 <code>.venv</code> 时跳过创建（<code>deploy/deploy.sh:25-27</code>），依赖重装</td></tr><tr><td>3</td><td>每次都会重新构建，产物被覆盖</td></tr><tr><td>4</td><td>nginx 配置每次整体重写（<code>cat ></code>），手工改动会丢</td></tr><tr><td>5</td><td>证书存在则跳过（<code>deploy/deploy.sh:107-113</code>）</td></tr><tr><td>6</td><td>unit 每次重写，<code>enable --now</code> 幂等</td></tr></tbody></table>
+<table><thead><tr><th>步骤</th><th>重复执行的结果</th></tr></thead><tbody><tr><td>1</td><td><code>apt-get install</code> 本身幂等</td></tr><tr><td>2</td><td>已有 <code>.venv</code> 时跳过创建，依赖重装</td></tr><tr><td>3</td><td>每次都会重新构建，产物被覆盖</td></tr><tr><td>4</td><td>nginx 配置每次整体重写（<code>cat ></code>），手工改动会丢</td></tr><tr><td>5</td><td>证书存在则跳过</td></tr><tr><td>6</td><td>unit 每次重写，<code>enable --now</code> 幂等</td></tr></tbody></table>
 <p>第四步是唯一会静默覆盖人工修改的地方。如果线上曾经手工调整过 <code>/etc/nginx/sites-available/knowledgediver</code>，重跑首装脚本会把这些改动抹掉，所以后续更新应当走 <code>server_start.sh</code>。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># deploy/deploy.sh 第 2 步</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> [ </span><span style="color:#D73A49">!</span><span style="color:#D73A49"> -d</span><span style="color:#032F62"> "</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/.venv"</span><span style="color:#24292E"> ]; </span><span style="color:#D73A49">then</span></span>
+<span class="line"><span style="color:#6F42C1">    python3</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> venv</span><span style="color:#032F62"> "</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/.venv"</span><span style="color:#6A737D">        # 只有第一次才创建</span></span>
+<span class="line"><span style="color:#D73A49">fi</span></span>
+<span class="line"><span style="color:#6F42C1">"</span><span style="color:#24292E">$APP_DIR</span><span style="color:#6F42C1">/.venv/bin/pip"</span><span style="color:#032F62"> install</span><span style="color:#005CC5"> --upgrade</span><span style="color:#032F62"> pip</span><span style="color:#005CC5"> -q</span></span>
+<span class="line"><span style="color:#6F42C1">"</span><span style="color:#24292E">$APP_DIR</span><span style="color:#6F42C1">/.venv/bin/pip"</span><span style="color:#032F62"> install</span><span style="color:#005CC5"> -r</span><span style="color:#032F62"> "</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/requirements.txt"</span></span></code></pre>
+<p>venv 是 Python 的虚拟环境：一个独立目录，里面放这个项目自己的 Python 与依赖，跟系统 Python 互不干扰；<code>python3 -m venv</code> 生成它，之后所有 pip 都走 <code>.venv/bin/pip</code>，装什么都不会污染系统。<code>-r requirements.txt</code> 表示按清单文件列出的包安装。这段的幂等性就来自那个 <code>if</code>：目录存在就跳过创建，但 <code>pip install</code> 每次仍会执行并重新校验依赖——重跑不会出错，只是会慢。</p>
 <h2 id="证书那一分支为什么经常被跳过">证书那一分支为什么经常被跳过</h2>
-<p>申请证书的条件是 <code>/etc/letsencrypt/live/$DOMAIN/fullchain.pem</code> 不存在（<code>deploy/deploy.sh:107</code>）。域名解析未生效或 80 端口未放行时，<code>certbot</code> 会失败，而脚本对这条例外用 <code>|| echo "  SSL 申请跳过"</code> 吞掉了非零返回（<code>deploy/deploy.sh:110</code>），流程继续往下走。结果是服务能起来、<code>https</code> 打不开、<code>http</code> 能打开。</p>
+<p>申请证书的条件是 <code>/etc/letsencrypt/live/$DOMAIN/fullchain.pem</code> 不存在。域名解析未生效或 80 端口未放行时，<code>certbot</code> 会失败，而脚本对这条例外用 <code>|| echo "  SSL 申请跳过"</code> 吞掉了非零返回，流程继续往下走。结果是服务能起来、<code>https</code> 打不开、<code>http</code> 能打开。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># deploy/deploy.sh 第 5 步</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> [ </span><span style="color:#D73A49">!</span><span style="color:#D73A49"> -f</span><span style="color:#032F62"> "/etc/letsencrypt/live/</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">/fullchain.pem"</span><span style="color:#24292E"> ]; </span><span style="color:#D73A49">then</span></span>
+<span class="line"><span style="color:#6F42C1">    certbot</span><span style="color:#005CC5"> --nginx</span><span style="color:#005CC5"> -d</span><span style="color:#032F62"> "</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">"</span><span style="color:#005CC5"> -d</span><span style="color:#032F62"> "www.</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">        --non-interactive</span><span style="color:#005CC5"> --agree-tos</span><span style="color:#005CC5"> --email</span><span style="color:#032F62"> "admin@</span><span style="color:#24292E">$DOMAIN</span><span style="color:#032F62">"</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">        --redirect</span><span style="color:#D73A49"> 2></span><span style="color:#032F62">/dev/null</span><span style="color:#D73A49"> ||</span><span style="color:#005CC5"> echo</span><span style="color:#032F62"> "  SSL 申请跳过（可能域名未解析）"</span></span>
+<span class="line"><span style="color:#D73A49">else</span></span>
+<span class="line"><span style="color:#005CC5">    echo</span><span style="color:#032F62"> "  SSL 证书已存在，跳过"</span></span>
+<span class="line"><span style="color:#D73A49">fi</span></span></code></pre>
+<p><code>A || B</code> 是 shell 的短路写法：A 成功就结束，A 返回非零才执行 B。因为后面的 <code>echo</code> 一定成功，整条语句的退出码是 0，<code>set -e</code> 便不会中断脚本——证书失败被「合法地」咽了下去。至于 certbot 本身：<code>--nginx</code> 让它顺带改写 nginx 配置，<code>-d</code> 声明证书覆盖哪些域名，<code>--non-interactive --agree-tos</code> 省掉交互，<code>--redirect</code> 自动补一条 http 跳 https 的规则。失败为什么一点痕迹都不留，也能从这里看出来：<code>2>/dev/null</code> 把 certbot 的报错丢掉了，只剩一句「跳过」。</p>
 <p>判断方法很直接：看 <code>/etc/letsencrypt/live/</code> 下有没有对应目录，以及浏览器访问时用的是不是 443。修复顺序是先确认安全组放行 80，再确认解析指向本机，最后单独执行一次 <code>certbot --nginx -d 域名</code>。</p>
 <h2 id="更新为什么换一个脚本">更新为什么换一个脚本</h2>
-<p><code>server_start.sh</code> 把更新拆成五段：安装后端依赖、安装并校验 Playwright、重启后端、构建前端、重启前端与 reload nginx（<code>server_start.sh:11-187</code>）。与首装相比，它不碰系统包、不重写 nginx 配置、不申请证书，因此适合日常发布。</p>
-<p>其中有两处细节需要记下来。第一处是依赖分两次安装（<code>server_start.sh:15-16</code>），先用 <code>--no-deps</code> 装一遍再用完整模式装一遍，目的是绕开依赖解析超时。第二处是浏览器校验（<code>server_start.sh:118-137</code>）：先确认 <code>crawl4ai</code> 与 <code>playwright</code> 能导入，再实际启动一次 Chromium，任何一步失败都会让脚本以非零退出，避免带着坏环境重启服务。</p>
+<p><code>server_start.sh</code> 把更新拆成五段：安装后端依赖、安装并校验 Playwright、重启后端、构建前端、重启前端与 reload nginx。与首装相比，它不碰系统包、不重写 nginx 配置、不申请证书，因此适合日常发布。</p>
+<p>其中有两处细节需要记下来。第一处是依赖分两次安装，先用 <code>--no-deps</code> 装一遍再用完整模式装一遍，目的是绕开依赖解析超时。第二处是脚本里的浏览器校验段：先确认 <code>crawl4ai</code> 与 <code>playwright</code> 能导入，再实际启动一次 Chromium，任何一步失败都会让脚本以非零退出，避免带着坏环境重启服务。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># server_start.sh：依赖分两次安装</span></span>
+<span class="line"><span style="color:#6F42C1">"</span><span style="color:#24292E">$APP_DIR</span><span style="color:#6F42C1">/.venv/bin/pip"</span><span style="color:#032F62"> install</span><span style="color:#005CC5"> -r</span><span style="color:#032F62"> "</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/requirements.txt"</span><span style="color:#005CC5"> --no-deps</span><span style="color:#D73A49"> 2></span><span style="color:#032F62">/dev/null</span><span style="color:#D73A49"> ||</span><span style="color:#005CC5"> true</span></span>
+<span class="line"><span style="color:#6F42C1">"</span><span style="color:#24292E">$APP_DIR</span><span style="color:#6F42C1">/.venv/bin/pip"</span><span style="color:#032F62"> install</span><span style="color:#005CC5"> -r</span><span style="color:#032F62"> "</span><span style="color:#24292E">$APP_DIR</span><span style="color:#032F62">/requirements.txt"</span></span></code></pre>
+<p><code>--no-deps</code> 只装清单里点名的包、不递归解析它们的依赖，第一遍因此很快；第二遍完整安装负责补齐传递依赖，此时要解析的东西已经少很多，于是绕开了 <code>sentence-transformers</code> 那种一动就超时的依赖树。中间的 <code>|| true</code> 是第一遍失败时的保险丝：不让它打断脚本，留第二遍兜底。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># server_start.sh：Playwright 环境校验（节选）</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#6F42C1"> "</span><span style="color:#24292E">$APP_DIR</span><span style="color:#6F42C1">/.venv/bin/python"</span><span style="color:#032F62"> -</span><span style="color:#D73A49"> &#x3C;&#x3C;</span><span style="color:#032F62"> 'PYEOF'</span><span style="color:#6F42C1"> 2</span><span style="color:#24292E">>&#x26;</span><span style="color:#6F42C1">1</span></span>
+<span class="line"><span style="color:#032F62">    import crawl4ai</span></span>
+<span class="line"><span style="color:#032F62">    from playwright.sync_api import sync_playwright</span></span>
+<span class="line"><span style="color:#032F62">    p = sync_playwright().start()</span></span>
+<span class="line"><span style="color:#032F62">    b = p.chromium.launch(headless=True)</span></span>
+<span class="line"><span style="color:#032F62">    b.close()</span></span>
+<span class="line"><span style="color:#032F62">    p.stop()</span></span>
+<span class="line"><span style="color:#032F62">PYEOF</span></span>
+<span class="line"><span style="color:#D73A49">then</span></span>
+<span class="line"><span style="color:#005CC5">    echo</span><span style="color:#032F62"> "  Playwright 环境正常"</span></span>
+<span class="line"><span style="color:#D73A49">else</span></span>
+<span class="line"><span style="color:#005CC5">    echo</span><span style="color:#032F62"> "  ⚠️ Playwright 环境异常——请检查系统依赖（libnss3/libatk1.0/libgbm 等）后重跑本脚本"</span></span>
+<span class="line"><span style="color:#D73A49">fi</span></span></code></pre>
+<p>这里用了 here-doc 的另一种形态：<code>python - &#x3C;&#x3C; 'PYEOF'</code> 让解释器直接从标准输入读代码，不必先落一个临时 <code>.py</code> 文件。校验的关键是不止 import，还真 <code>launch()</code> 了一次浏览器——Python 包装能导入，不代表系统库和浏览器二进制都齐了，只有真启动才暴露；<code>headless=True</code> 是无界面模式，服务器没有显示器也能跑。这一步失败会让脚本以非零退出，挡在重启服务之前。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
   P["同步代码到服务器"] --> A["pip 安装依赖&#x3C;br/>分两次安装"]
   A --> B["Playwright 浏览器&#x3C;br/>安装并启动校验"]
@@ -692,7 +821,8 @@
   D --> E["重启前端分支&#x3C;br/>systemd 或 nohup"]
   E --> F["systemctl reload nginx"]</pre></div>
 <h2 id="停止服务该用哪一个脚本">停止服务该用哪一个脚本</h2>
-<p>仓库里有两个停止脚本，作用范围不同。<code>server_stop.sh</code> 依次停后端、前端、nginx（<code>server_stop.sh:9-34</code>）；<code>stop.sh</code> 只停后端（<code>stop.sh:7-13</code>）。要在维护窗口里彻底停对外服务，用前者；只重启后端做一次验证，用后者或者直接 <code>systemctl stop knowledgediver</code>。</p>
+<p>仓库里有两个停止脚本，作用范围不同。<code>server_stop.sh</code> 依次停后端、前端、nginx；<code>stop.sh</code> 只停后端。要在维护窗口里彻底停对外服务，用前者；只重启后端做一次验证，用后者或者直接 <code>systemctl stop knowledgediver</code>。</p>
+<p>两个脚本停之前都用 <code>systemctl is-active --quiet knowledgediver</code> 判断服务在不在跑：<code>--quiet</code> 让它不打印状态文本，只用退出码表示结果，这个退出码正好交给 <code>if</code> 使用，于是「没在跑就提示一句」不必去解析命令输出。</p>
 <p>另外 <code>start.sh</code> 与 <code>server_start.sh</code> 不是一回事：前者偏向本地开发（自动建 venv、处理代理变量、检查依赖是否已装），后者才是服务器上的更新入口。</p>
 <h2 id="失败时回到哪一步">失败时回到哪一步</h2>
 
@@ -784,7 +914,7 @@
 
 
 
-<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>每次更新都重跑首装脚本</td><td>手工改过的 nginx 配置被覆盖</td><td>第四步用 <code>cat ></code> 整体重写</td></tr><tr><td>2</td><td>看到”部署完成”就认为证书已就绪</td><td>https 仍不可用</td><td>证书失败被 `</td></tr><tr><td>3</td><td>认为脚本会检查域名解析</td><td>失败提示只有一句”跳过”</td><td>脚本不含 DNS 校验逻辑</td></tr><tr><td>4</td><td>更新时跳过依赖安装</td><td>新代码报模块缺失</td><td>依赖与代码是两件事</td></tr><tr><td>5</td><td>用 <code>stop.sh</code> 期待停掉 nginx</td><td>网页仍可访问</td><td>该脚本只停后端</td></tr><tr><td>6</td><td>浏览器校验失败仍继续走</td><td>服务重启后抓取才暴露问题</td><td>校验段以非零退出终止脚本</td></tr></tbody></table>
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>每次更新都重跑首装脚本</td><td>手工改过的 nginx 配置被覆盖</td><td>第四步用 <code>cat ></code> 整体重写</td></tr><tr><td>2</td><td>看到”部署完成”就认为证书已就绪</td><td>https 仍不可用</td><td>证书失败被 <code>||</code> 吞掉</td></tr><tr><td>3</td><td>认为脚本会检查域名解析</td><td>失败提示只有一句”跳过”</td><td>脚本不含 DNS 校验逻辑</td></tr><tr><td>4</td><td>更新时跳过依赖安装</td><td>新代码报模块缺失</td><td>依赖与代码是两件事</td></tr><tr><td>5</td><td>用 <code>stop.sh</code> 期待停掉 nginx</td><td>网页仍可访问</td><td>该脚本只停后端</td></tr><tr><td>6</td><td>浏览器校验失败仍继续走</td><td>服务重启后抓取才暴露问题</td><td>校验段以非零退出终止脚本</td></tr></tbody></table>
 <h2 id="小结">小结</h2>
 <h3 id="核心概念">核心概念</h3>
 <ul>

@@ -2,19 +2,19 @@
 <p>「站起来了吗」这件事在不同场合有两种问法：机器人当前是不是竖直，以及它能不能在一段时间里保持竖直。第一种问法靠一个由根四元数算出的标量就够了，第二种问法还要加上时间条件。第一种问法是所有其他判据的基座，先把它讲透。</p>
 <p>这个标量在本项目里叫 <code>up_z</code>。它来自根四元数，取值范围从 -1 到 1，与躯干倾角的余弦对应。数值上取哪个阈值，直接决定评估出来的成功率是七成还是三成，所以它属于必须先统一口径再谈结果的那一类量。</p>
 <h2 id="从根四元数到竖直投影">从根四元数到竖直投影</h2>
-<p><code>qpos</code> 的前七个分量是自由关节的位置与姿态，其中 <code>qpos[3:7]</code> 是根四元数 <code>(w, x, y, z)</code>——四个数一起描述机身朝向，前三个数是位置，后四个数是姿态，这里只看姿态那部分。本项目用下面这一行算出竖直投影（<code>mjx-go1-getup/sim/eval_getup.py:174</code>）：</p>
+<p><code>qpos</code> 的前七个分量是自由关节的位置与姿态，其中 <code>qpos[3:7]</code> 是根四元数 <code>(w, x, y, z)</code>——四个数一起描述机身朝向，前三个数是位置，后四个数是姿态，这里只看姿态那部分。本项目用下面这一行算出竖直投影（<code>mjx-go1-getup/sim/eval_getup.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">up </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> 2.0</span><span style="color:#D73A49"> *</span><span style="color:#24292E"> (q[:, </span><span style="color:#005CC5">4</span><span style="color:#24292E">] </span><span style="color:#D73A49">**</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> q[:, </span><span style="color:#005CC5">5</span><span style="color:#24292E">] </span><span style="color:#D73A49">**</span><span style="color:#005CC5"> 2</span><span style="color:#24292E">)</span></span></code></pre>
-<p>同一个表达式在查看器里写作 <code>upz_now = 1 - 2*(q[4]**2 + q[5]**2)</code>，注释把它说明为「根四元数到躯干 up 轴在世界 z 的分量」，并指出它等于倾角的余弦：1 是竖直、0 是侧躺 90 度、-1 是倒扣（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:6296-6297</code>）。</p>
-<p>这个量与旋转矩阵的一项相同。评估脚本里 <code>rpy_deg</code> 展开的旋转矩阵第一行第一列是 <code>1 - 2*(y*y + z*z)</code>（<code>eval_getup.py:33-39</code>），而 <code>up</code> 用的是 <code>q[4]</code>、<code>q[5]</code> 两个分量，代入的是同一项。</p>
+<p>同一个表达式在查看器里写作 <code>upz_now = 1 - 2*(q[4]**2 + q[5]**2)</code>，注释把它说明为「根四元数到躯干 up 轴在世界 z 的分量」，并指出它等于倾角的余弦：1 是竖直、0 是侧躺 90 度、-1 是倒扣（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>）。</p>
+<p>这个量与旋转矩阵的一项相同。评估脚本里 <code>rpy_deg</code> 展开的旋转矩阵第一行第一列是 <code>1 - 2*(y*y + z*z)</code>（<code>eval_getup.py</code>），而 <code>up</code> 用的是 <code>q[4]</code>、<code>q[5]</code> 两个分量，代入的是同一项。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["qpos[3:7] = (w, x, y, z)"] --> B["up_z = 1 - 2*(q[4]^2 + q[5]^2)"]
     B --> C["数值范围 [-1, 1]"]
     C --> D["= cos(躯干倾角)"]
     D --> E{"与阈值比较"}
     E --> F["判为站立或判为倒地"]</pre></div>
-<p>需要注意分量命名在不同文件里不一致：<code>当前状态.md</code> 把公式写成 <code>1 - 2*(qy² + qz²)</code>（<code>当前状态.md:57</code>），而代码按下标取 <code>q[4]</code>、<code>q[5]</code>。引用这个公式时要先确认索引基准是「四元数分量名」还是「<code>qpos</code> 下标」，否则会代入错分量。</p>
+<p>需要注意分量命名在不同文件里不一致：<code>当前状态.md</code> 把公式写成 <code>1 - 2*(qy² + qz²)</code>（<code>当前状态.md</code>），而代码按下标取 <code>q[4]</code>、<code>q[5]</code>。引用这个公式时要先确认索引基准是「四元数分量名」还是「<code>qpos</code> 下标」，否则会代入错分量。</p>
 <h2 id="倾角换算与阈值选择">倾角换算与阈值选择</h2>
-<p>把 <code>up_z</code> 换算成倾角就是取反余弦。项目里常用的几档如下（<code>当前状态.md:59-66</code>）：</p>
+<p>把 <code>up_z</code> 换算成倾角就是取反余弦。项目里常用的几档如下（<code>当前状态.md</code>）：</p>
 
 
 
@@ -58,7 +58,7 @@
 <table><thead><tr><th>up_z</th><th>倾角</th><th>含义</th></tr></thead><tbody><tr><td>1.00</td><td>0°</td><td>完全竖直</td></tr><tr><td>0.99</td><td>8.1°</td><td>旧硬编码判据</td></tr><tr><td>0.95</td><td>18.2°</td><td>当前默认口径（查看器与评估脚本都用它）</td></tr><tr><td>0.93</td><td>21.6°</td><td>更宽的一档</td></tr><tr><td>0.45</td><td>63°</td><td>旧摔倒阈值，太松</td></tr><tr><td>0.00</td><td>90°</td><td>侧躺</td></tr></tbody></table>
 <p>换算关系是单调的，因此阈值的高低等价于倾角容差的宽窄。选阈值要回答的问题就是：允许多大的姿态偏差还算「站起来了」。</p>
 <h2 id="旧阈值-099-为什么让成功率失真">旧阈值 0.99 为什么让成功率失真</h2>
-<p><code>0.99</code> 对应 8.1 度，而本项目实测学习型策略稳定站立时大约有 13 度倾角（<code>eval_getup.py:59-62</code>）。评估脚本的 help 里把后果写得很直接：这个阈值决定了成功率差一个数量级。</p>
+<p><code>0.99</code> 对应 8.1 度，而本项目实测学习型策略稳定站立时大约有 13 度倾角（<code>eval_getup.py</code>）。评估脚本的 help 里把后果写得很直接：这个阈值决定了成功率差一个数量级。</p>
 
 
 
@@ -80,8 +80,8 @@
 
 
 <table><thead><tr><th>阈值</th><th>倾角容差</th><th>与实测姿态的关系</th></tr></thead><tbody><tr><td>0.99</td><td>8.1°</td><td>比实测倾角更严，成功率被压低</td></tr><tr><td>0.95</td><td>18.2°</td><td>覆盖实测倾角，作为默认口径</td></tr></tbody></table>
-<p>另一组数据说明策略本身并没有「站不起来」的问题：在 128 个真摔倒样本里，高度带内最好的 <code>up_z</code> 均值 0.974、中位数 0.999（<code>实验记录_Go1复现.md:6482</code>）。也就是说姿态早已达标，被卡住的是时间条件而不是倾角。</p>
-<p>早期版本用的是另一套写法：站立判据为 <code>z > 0.25</code> 且 <code>up_z > 0.9</code>（<code>实验记录_Go1复现.md:1078-1079</code>）。从 0.9 到 0.95 的变化说明口径在收敛，而收敛的依据是实测倾角分布，不是拍脑袋。</p>
+<p>另一组数据说明策略本身并没有「站不起来」的问题：在 128 个真摔倒样本里，高度带内最好的 <code>up_z</code> 均值 0.974、中位数 0.999（<code>实验记录_Go1复现.md</code>）。也就是说姿态早已达标，被卡住的是时间条件而不是倾角。</p>
+<p>早期版本用的是另一套写法：站立判据为 <code>z > 0.25</code> 且 <code>up_z > 0.9</code>（<code>实验记录_Go1复现.md</code>）。从 0.9 到 0.95 的变化说明口径在收敛，而收敛的依据是实测倾角分布，不是拍脑袋。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["阈值 0.99（8.1°）"] --> B["比实测 13° 更严"]
     B --> C["成功率被大幅压低"]
@@ -89,7 +89,7 @@
     E --> F["成功率反映真实能力"]
     G["阈值 0.45（63°）"] --> H["过于宽松，踉跄也算站住"]</pre></div>
 <h2 id="严格档与实用档的分工">严格档与实用档的分工</h2>
-<p>评估脚本并不只报一个数字，而是同时给两档倾角闸门（<code>eval_getup.py:189-190</code>）：</p>
+<p>评估脚本并不只报一个数字，而是同时给两档倾角闸门（<code>eval_getup.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">strict </span><span style="color:#D73A49">=</span><span style="color:#24292E"> stable </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E"> (tilt </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 2.0</span><span style="color:#24292E">)        </span><span style="color:#6A737D"># 严格: 末态倾角小于 2 度</span></span>
 <span class="line"><span style="color:#24292E">practical </span><span style="color:#D73A49">=</span><span style="color:#24292E"> stable </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E"> (tilt </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 20.0</span><span style="color:#24292E">)    </span><span style="color:#6A737D"># 实用: 末态倾角小于 20 度</span></span></code></pre>
 
@@ -113,9 +113,9 @@
 
 
 <table><thead><tr><th>档位</th><th>判据</th><th>用途</th></tr></thead><tbody><tr><td>严格</td><td>站住且末态倾角小于 2°</td><td>看姿态质量上限</td></tr><tr><td>实用</td><td>站住且末态倾角小于 20°</td><td>看能否交还给走路策略</td></tr></tbody></table>
-<p>这里 <code>stable</code> 是时间条件（连续站住若干步），<code>tilt</code> 由 <code>rpy_deg</code> 从末态四元数算出（<code>eval_getup.py:30-39</code>、<code>:185-187</code>）。两档分开报告的价值在于：如果严格档很低而实用档很高，瓶颈就在姿态这一侧，而非起身能力，优化方向完全不同。</p>
+<p>这里 <code>stable</code> 是时间条件（连续站住若干步），<code>tilt</code> 由 <code>rpy_deg</code> 从末态四元数算出（<code>eval_getup.py</code>）。两档分开报告的价值在于：如果严格档很低而实用档很高，瓶颈就在姿态这一侧，而非起身能力，优化方向完全不同。</p>
 <h2 id="训练侧倾角约束与评估阈值">训练侧倾角约束与评估阈值</h2>
-<p>训练时躯干倾角约束是 ±17.5 度（<code>mjx-go1-getup/docs/viewer-guide.md:299</code>），与默认评估阈值 18.2 度基本对齐。口径对齐的意义是：训练奖励里约束的姿态范围与评估认可的范围应当一致，否则会出现「训练时被奖励的姿态，评估时不认」的错位。</p>
+<p>训练时躯干倾角约束是 ±17.5 度（<code>mjx-go1-getup/docs/viewer-guide.md</code>），与默认评估阈值 18.2 度基本对齐。口径对齐的意义是：训练奖励里约束的姿态范围与评估认可的范围应当一致，否则会出现「训练时被奖励的姿态，评估时不认」的错位。</p>
 
 
 
@@ -139,12 +139,12 @@
 
 <table><thead><tr><th>环节</th><th>倾角范围</th></tr></thead><tbody><tr><td>训练姿态约束</td><td>±17.5°</td></tr><tr><td>评估默认阈值 0.95</td><td>18.2°</td></tr><tr><td>旧评估阈值 0.99</td><td>8.1°</td></tr></tbody></table>
 <h2 id="按初始姿态分桶">按初始姿态分桶</h2>
-<p>只报一个总成功率会掩盖「哪一类躺法不会」。评估脚本按初始 <code>up_z</code> 分四个桶（<code>eval_getup.py:153-160</code>）：</p>
+<p>只报一个总成功率会掩盖「哪一类躺法不会」。评估脚本按初始 <code>up_z</code> 分四个桶（<code>eval_getup.py</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#032F62">"仰卧 (up_z&#x3C;-0.5)"</span><span style="color:#24292E">: up0 </span><span style="color:#D73A49">&#x3C;</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">0.5</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#032F62">"侧躺 (|up_z|&#x3C;=0.5)"</span><span style="color:#24292E">: np.abs(up0) </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 0.5</span><span style="color:#24292E">,</span></span>
 <span class="line"><span style="color:#032F62">"俯卧 (0.5&#x3C;up_z&#x3C;=0.9)"</span><span style="color:#24292E">: (up0 </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0.5</span><span style="color:#24292E">) </span><span style="color:#D73A49">&#x26;</span><span style="color:#24292E"> (up0 </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 0.9</span><span style="color:#24292E">),</span></span>
 <span class="line"><span style="color:#032F62">"站立出生 (up_z>0.9)"</span><span style="color:#24292E">: up0 </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0.9</span><span style="color:#24292E">,</span></span></code></pre>
-<p><code>站立出生</code> 必须单列一桶：站着开局本来就满足判据，如果把它归进俯卧桶，成功率会被虚高，姿态桶也串了（<code>eval_getup.py:153-154</code>）。评估默认只用真摔倒样本，也是同一个理由（<code>实验记录_Go1复现.md:5216</code>）。</p>
+<p><code>站立出生</code> 必须单列一桶：站着开局本来就满足判据，如果把它归进俯卧桶，成功率会被虚高，姿态桶也串了（<code>eval_getup.py</code>）。评估默认只用真摔倒样本，也是同一个理由（<code>实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -308,12 +308,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>当前状态.md</code></td><td><code>up_z</code> 定义、倾角换算表与阈值含义（<code>:55-69</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>表达式的注释、实测 <code>up_z</code> 与早期判据（<code>:1078-1079</code>、<code>:6296-6297</code>、<code>:6481-6482</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td><code>up_z</code> 计算、两档倾角闸门、分桶与末态统计（<code>:30-39</code>、<code>:59-65</code>、<code>:153-160</code>、<code>:174</code>、<code>:185-194</code>、<code>:222-236</code>）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>训练侧终止倾角 ±17.5° 与对应开关（<code>:299</code>、<code>:305</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>当前状态.md</code></td><td><code>up_z</code> 定义、倾角换算表与阈值含义（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>表达式的注释、实测 <code>up_z</code> 与早期判据（）</td></tr><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td><code>up_z</code> 计算、两档倾角闸门、分桶与末态统计（）</td></tr><tr><td><code>mjx-go1-getup/docs/viewer-guide.md</code></td><td>训练侧终止倾角 ±17.5° 与对应开关（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-2" data-file="02-跌倒判据与去抖"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-跌倒判据与去抖</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/16-强化学习评测与调试/01-判据口径/02-跌倒判据与去抖.md</span></div><div class="dfile__body"><h1 id="跌倒判据与去抖">跌倒判据与去抖</h1>
 <p>「摔了吗」看似可以直接看高度，但在起伏地形上，站着的位置本身就可能比别处的地面低或高，用世界高度绝对值判断会把正常行走误判成跌倒。同样的道理也适用于姿态：走路时的一次深度踉跄能在一两帧里满足倾斜条件，但它并不是摔倒。</p>
 <p>处理办法有两处：高度用相对它正下方地面的高度，姿态加上连续帧计数去抖。这两条合起来构成查看器的摔倒判据，也是离线评估冻结摔倒姿态时用的同一套条件。</p>
 <h2 id="世界高度为什么不能用">世界高度为什么不能用</h2>
-<p>地形是一张高度场，不同水平位置的地面高度不同。躯干的世界 <code>z</code> 只说明它在世界坐标里的高度，不说明它离脚下的地面有多远，因此单独看 <code>z</code> 会把上下坡与跌倒混在一起。项目在较早的一轮里就把终止判据改成相对地形（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md:2201</code>），查看器现在沿用的也是这套写法。</p>
+<p>地形是一张高度场，不同水平位置的地面高度不同。躯干的世界 <code>z</code> 只说明它在世界坐标里的高度，不说明它离脚下的地面有多远，因此单独看 <code>z</code> 会把上下坡与跌倒混在一起。项目在较早的一轮里就把终止判据改成相对地形（<code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code>），查看器现在沿用的也是这套写法。</p>
 
 
 
@@ -336,10 +336,10 @@
 
 <table><thead><tr><th>判据形式</th><th>在上坡处</th><th>在下坡处</th></tr></thead><tbody><tr><td>世界高度阈值</td><td>上坡时容易被判为站立</td><td>下坡时容易被判为跌倒</td></tr><tr><td>相对地面高度</td><td>与坡度无关</td><td>与坡度无关</td></tr></tbody></table>
 <h2 id="相对地面高度的算法">相对地面高度的算法</h2>
-<p>相对高度是躯干 <code>z</code> 减去它正下方地面的高度（<code>实验记录_Go1复现.md:6298</code>、<code>当前状态.md:75</code>）：</p>
+<p>相对高度是躯干 <code>z</code> 减去它正下方地面的高度（<code>实验记录_Go1复现.md</code>、<code>当前状态.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">z_rel_now </span><span style="color:#D73A49">=</span><span style="color:#24292E"> q[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">-</span><span style="color:#24292E"> terrain_height(q[:</span><span style="color:#005CC5">2</span><span style="color:#24292E">])   </span><span style="color:#6A737D"># 躯干离它正下方地面的高度</span></span></code></pre>
 <p><code>terrain_height</code> 由环境提供，输入是水平坐标，输出该处地面高度。查看器每帧对根位置调用一次，因此在起伏地形上也能得到一致的判据。</p>
-<p>站着与躺下时的参考值给了这个量的量级（<code>当前状态.md:85</code>）：</p>
+<p>站着与躺下时的参考值给了这个量的量级（<code>当前状态.md</code>）：</p>
 
 
 
@@ -370,7 +370,7 @@
     D --> E
     E --> F["与 fall_z 比较"]</pre></div>
 <h2 id="两个条件的或关系">两个条件的或关系</h2>
-<p>摔倒判据同时看姿态与高度，任意一个满足就算跌倒（<code>实验记录_Go1复现.md:6296-6299</code>、<code>当前状态.md:74-76</code>）：</p>
+<p>摔倒判据同时看姿态与高度，任意一个满足就算跌倒（<code>实验记录_Go1复现.md</code>、<code>当前状态.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">upz_now   </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49">*</span><span style="color:#24292E">(q[</span><span style="color:#005CC5">4</span><span style="color:#24292E">]</span><span style="color:#D73A49">**</span><span style="color:#005CC5">2</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> q[</span><span style="color:#005CC5">5</span><span style="color:#24292E">]</span><span style="color:#D73A49">**</span><span style="color:#005CC5">2</span><span style="color:#24292E">)              </span><span style="color:#6A737D"># 竖直投影 = cos(倾角)</span></span>
 <span class="line"><span style="color:#24292E">z_rel_now </span><span style="color:#D73A49">=</span><span style="color:#24292E"> q[</span><span style="color:#005CC5">2</span><span style="color:#24292E">] </span><span style="color:#D73A49">-</span><span style="color:#24292E"> terrain_height(q[:</span><span style="color:#005CC5">2</span><span style="color:#24292E">])          </span><span style="color:#6A737D"># 相对地面高度</span></span>
 <span class="line"><span style="color:#24292E">fallen </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (z_rel_now </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> fall_z) </span><span style="color:#D73A49">or</span><span style="color:#24292E"> (upz_now </span><span style="color:#D73A49">&#x3C;</span><span style="color:#24292E"> fall_uz)</span></span></code></pre>
@@ -410,7 +410,7 @@
     E -->|"否"| G
     G -->|"都不满足"| H["fallen = False"]</pre></div>
 <h2 id="连续帧计数作为去抖">连续帧计数作为去抖</h2>
-<p>单帧条件会被瞬间姿态波动触发，因此查看器要求条件连续满足若干帧才算「真摔倒」（<code>当前状态.md:77-79</code>、<code>实验记录_Go1复现.md:6300-6301</code>）：</p>
+<p>单帧条件会被瞬间姿态波动触发，因此查看器要求条件连续满足若干帧才算「真摔倒」（<code>当前状态.md</code>、<code>实验记录_Go1复现.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">fall_count </span><span style="color:#D73A49">=</span><span style="color:#24292E"> fall_count </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> fallen </span><span style="color:#D73A49">else</span><span style="color:#005CC5"> 0</span><span style="color:#6A737D">   # 中间有一帧不满足就清零</span></span>
 <span class="line"><span style="color:#24292E">armed </span><span style="color:#D73A49">=</span><span style="color:#24292E"> fall_count </span><span style="color:#D73A49">>=</span><span style="color:#24292E"> fall_debounce            </span><span style="color:#6A737D"># 连续满足才"武装"</span></span></code></pre>
 
@@ -434,7 +434,7 @@
 
 
 <table><thead><tr><th>情形</th><th>条件是否持续满足</th><th>计数结果</th></tr></thead><tbody><tr><td>走路中的深度踉跄</td><td>只满足一两帧</td><td>计数清零，不触发</td></tr><tr><td>真摔倒</td><td>之后一直满足</td><td>计数累积到阈值，触发</td></tr></tbody></table>
-<p>这条去抖针对的是一个具体的用户反馈：机器人明明还能走路，查看器却触发了起身。原因是旧值太松——姿态阈值 0.45（63 度）配合 8 帧去抖，踉跄就能满足（<code>当前状态.md:90-91</code>、<code>实验记录_Go1复现.md:6312-6314</code>）。</p>
+<p>这条去抖针对的是一个具体的用户反馈：机器人明明还能走路，查看器却触发了起身。原因是旧值太松——姿态阈值 0.45（63 度）配合 8 帧去抖，踉跄就能满足（<code>当前状态.md</code>、<code>实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
     [*] --> 正常行走
     正常行走 --> 踉跄: 单帧满足条件
@@ -444,7 +444,7 @@
     起身中 --> 冷却: 交还或超时
     冷却 --> 正常行走: 50 帧后</pre></div>
 <h2 id="参数取值与旧值对照">参数取值与旧值对照</h2>
-<p>当前默认值与它们替代的旧值如下（<code>当前状态.md:82-88</code>、<code>实验记录_Go1复现.md:6305-6310</code>）：</p>
+<p>当前默认值与它们替代的旧值如下（<code>当前状态.md</code>、<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -487,11 +487,11 @@
 
 
 <table><thead><tr><th>参数</th><th>默认</th><th>旧值</th><th>变化理由</th></tr></thead><tbody><tr><td><code>--fall_uz</code></td><td>0.30（72.5°）</td><td>0.45（63°）</td><td>旧值太松会误触发</td></tr><tr><td><code>--fall_z</code></td><td>0.16 m</td><td>同</td><td>介于站直 0.277 与躺地 0.13 之间</td></tr><tr><td><code>--fall_debounce</code></td><td>18 帧 = 0.36 s</td><td>8 帧 = 0.16 s</td><td>延长去抖窗口</td></tr><tr><td><code>--getup_cooldown</code></td><td>50 帧 = 1.0 s</td><td>25 帧</td><td>交还后给走路策略恢复时间</td></tr><tr><td><code>--oob_reset_xy</code></td><td>5.8 m</td><td>无</td><td>出界不再试图起身</td></tr></tbody></table>
-<p>一帧等于控制步长 <code>ctrl_dt = 0.02 s</code>，所以帧数与秒数可以互相换算（<code>当前状态.md:86</code>）。去抖窗口从 0.16 s 延长到 0.36 s 是这次口径调整里最直接的一处。</p>
+<p>一帧等于控制步长 <code>ctrl_dt = 0.02 s</code>，所以帧数与秒数可以互相换算（<code>当前状态.md</code>）。去抖窗口从 0.16 s 延长到 0.36 s 是这次口径调整里最直接的一处。</p>
 <h2 id="出界重置">出界重置</h2>
-<p>地形高度场只有有限范围，界外没有地面。本项目地形用 <code>hfield size="6 6 0.3 0.096"</code>，水平半边长 6.0 m，而随机出生范围是 ±5.0 m，离边缘最近只有 1 m（<code>实验记录_Go1复现.md:6459-6460</code>）。</p>
-<p>走出边缘之后的实测表现是自由落体：每帧速度增加 0.196（等于 9.81 乘 0.02），几十秒后相对高度到 -2558 m；一批 128 个环境里曾有 124 个是这样掉出去的，只有 4 个确实在界内摔倒（<code>实验记录_Go1复现.md:6461-6463</code>）。</p>
-<p>查看器里这会造成一串误动作：掉出边缘、摔倒判据满足、在半空中触发起身、策略挥腿、超时重置（<code>实验记录_Go1复现.md:6465-6467</code>）。修法是新增 <code>--oob_reset_xy</code>，水平距离超过它就直接重置，不试图起身；默认 5.8 m 与训练环境的 <code>out_of_bounds_xy</code> 一致（<code>实验记录_Go1复现.md:6469-6470</code>、<code>当前状态.md:88</code>）。</p>
+<p>地形高度场只有有限范围，界外没有地面。本项目地形用 <code>hfield size="6 6 0.3 0.096"</code>，水平半边长 6.0 m，而随机出生范围是 ±5.0 m，离边缘最近只有 1 m（<code>实验记录_Go1复现.md</code>）。</p>
+<p>走出边缘之后的实测表现是自由落体：每帧速度增加 0.196（等于 9.81 乘 0.02），几十秒后相对高度到 -2558 m；一批 128 个环境里曾有 124 个是这样掉出去的，只有 4 个确实在界内摔倒（<code>实验记录_Go1复现.md</code>）。</p>
+<p>查看器里这会造成一串误动作：掉出边缘、摔倒判据满足、在半空中触发起身、策略挥腿、超时重置（<code>实验记录_Go1复现.md</code>）。修法是新增 <code>--oob_reset_xy</code>，水平距离超过它就直接重置，不试图起身；默认 5.8 m 与训练环境的 <code>out_of_bounds_xy</code> 一致（<code>实验记录_Go1复现.md</code>、<code>当前状态.md</code>）。</p>
 
 
 
@@ -519,7 +519,7 @@
 
 <table><thead><tr><th>参数</th><th>值</th><th>作用</th></tr></thead><tbody><tr><td>地形半边长</td><td>6.0 m</td><td>有地面的范围</td></tr><tr><td>随机出生范围</td><td>±5.0 m</td><td>离边缘最近 1 m</td></tr><tr><td><code>--oob_reset_xy</code></td><td>5.8 m</td><td>超过即重置</td></tr></tbody></table>
 <h2 id="交还冷却">交还冷却</h2>
-<p>起身结束之后要有一段时间不再触发起身，否则走路策略刚接手、身体还在晃时会被立刻判为摔倒并重新起身（<code>当前状态.md:87</code>）。默认冷却 50 帧，即 1.0 s。</p>
+<p>起身结束之后要有一段时间不再触发起身，否则走路策略刚接手、身体还在晃时会被立刻判为摔倒并重新起身（<code>当前状态.md</code>）。默认冷却 50 帧，即 1.0 s。</p>
 
 
 
@@ -665,12 +665,12 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>当前状态.md</code></td><td>摔倒判据代码、参数表与去抖理由（<code>:71-91</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>判据注释与参数、相对地形改动、出界灾难源（<code>:2201</code>、<code>:6295-6314</code>、<code>:6457-6470</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>当前状态.md</code></td><td>摔倒判据代码、参数表与去抖理由（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>判据注释与参数、相对地形改动、出界灾难源（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-3" data-file="03-起身成功判据与容错计数"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-起身成功判据与容错计数</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/16-强化学习评测与调试/01-判据口径/03-起身成功判据与容错计数.md</span></div><div class="dfile__body"><h1 id="起身成功判据与容错计数">起身成功判据与容错计数</h1>
 <p>起身任务的「成功」由两件事共同决定：姿态合格，并且这个合格姿态维持了一小段时间。把持续时间作为判据的一部分，就必然要回答一个工程问题：这段时间里允许不允许有中断。允许与不允许，本项目的实测成功率相差约四个百分点，而失败样本的形态几乎全是「站进去了但中间掉出一两帧」。</p>
 <p>成功判据有三个组成部分、高度带有两处来源、计数有两种方式，它们的差别直接体现在实测数字上；「曾经站住」之所以不足以作为交还条件，要看末态统计才说得清。</p>
 <h2 id="三个条件组成的成功判据">三个条件组成的成功判据</h2>
-<p>查看器的起身成功判据由姿态、高度与持续时间三部分组成（<code>当前状态.md:95</code>、<code>实验记录_Go1复现.md:6455</code>）：</p>
+<p>查看器的起身成功判据由姿态、高度与持续时间三部分组成（<code>当前状态.md</code>、<code>实验记录_Go1复现.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">ok </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (upz </span><span style="color:#D73A49">></span><span style="color:#24292E"> getup_up_th) </span><span style="color:#D73A49">and</span><span style="color:#24292E"> (zlo </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#24292E"> zr </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#24292E"> zhi)</span></span>
 <span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> ok: getup_hold_cnt </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1</span></span>
 <span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:  getup_hold_cnt </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(getup_hold_cnt </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">)</span></span>
@@ -709,10 +709,10 @@
     D --> E
     E -->|"是"| F["判定成功，交还走路策略"]
     E -->|"否"| A</pre></div>
-<p>离线评估用的是同一套条件，只是把持续时间表述为「保持 0.5 s」这类等价说法；评估脚本的注释明确要求判定按查看器实际使用的那套来，训练日志里的 <code>eval_reward</code> 只当参考（<code>mjx-go1-getup/sim/eval_getup.py:2-5</code>）。</p>
+<p>离线评估用的是同一套条件，只是把持续时间表述为「保持 0.5 s」这类等价说法；评估脚本的注释明确要求判定按查看器实际使用的那套来，训练日志里的 <code>eval_reward</code> 只当参考（<code>mjx-go1-getup/sim/eval_getup.py</code>）。</p>
 <h2 id="高度带的来源">高度带的来源</h2>
-<p>高度带的下界与上界对应「站直」附近的一个区间：站直时相对地面高度约 0.277 m（<code>当前状态.md:85</code>）。查看器与离线探针用 <code>[0.20, 0.34]</code>（<code>当前状态.md:95</code>、<code>实验记录_Go1复现.md:6455</code>）。</p>
-<p>离线评估脚本的默认判定带略窄：<code>--z_lo 0.24</code>、<code>--z_hi 0.32</code>（<code>eval_getup.py:63-65</code>）。同一份脚本在打印末态分布时又用 <code>[0.20, 0.34]</code> 统计「落在带内的比例」，并把同一区间用于「接近站立」这一档（<code>eval_getup.py:230-234</code>）。</p>
+<p>高度带的下界与上界对应「站直」附近的一个区间：站直时相对地面高度约 0.277 m（<code>当前状态.md</code>）。查看器与离线探针用 <code>[0.20, 0.34]</code>（<code>当前状态.md</code>、<code>实验记录_Go1复现.md</code>）。</p>
+<p>离线评估脚本的默认判定带略窄：<code>--z_lo 0.24</code>、<code>--z_hi 0.32</code>（<code>eval_getup.py</code>）。同一份脚本在打印末态分布时又用 <code>[0.20, 0.34]</code> 统计「落在带内的比例」，并把同一区间用于「接近站立」这一档（<code>eval_getup.py</code>）。</p>
 
 
 
@@ -752,7 +752,7 @@
 <span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:  hold </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span><span style="color:#6A737D">      # 严格: 一帧不满足就归零</span></span></code></pre>
 <p>这种写法对姿态抖动的容忍度为零。它在逻辑上干净：只有稳定保持 0.5 s 才算成功。代价是当策略的站立姿态在阈值附近抖动时，计数会被反复打断，成功率低估真实能力。</p>
 <h2 id="容错计数满足加一不满足减一">容错计数：满足加一、不满足减一</h2>
-<p>容错口径把清零改成减一，并保持不低于零（<code>当前状态.md:97-100</code>）：</p>
+<p>容错口径把清零改成减一，并保持不低于零（<code>当前状态.md</code>）：</p>
 <pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> ok: getup_hold_cnt </span><span style="color:#D73A49">+=</span><span style="color:#005CC5"> 1</span></span>
 <span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:  getup_hold_cnt </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(getup_hold_cnt </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">, </span><span style="color:#005CC5">0</span><span style="color:#24292E">)   </span><span style="color:#6A737D"># 容错, 不归零</span></span></code></pre>
 
@@ -785,7 +785,7 @@
     递减 --> 计数中: 再次满足
     递减 --> 递减: 连续不满足，降到零为止</pre></div>
 <h2 id="实测773-到-812">实测：77.3% 到 81.2%</h2>
-<p>两种计数在同一批 128 个界内真摔倒样本上的对比如下（<code>实验记录_Go1复现.md:6474-6482</code>、<code>当前状态.md:102-104</code>）：</p>
+<p>两种计数在同一批 128 个界内真摔倒样本上的对比如下（<code>实验记录_Go1复现.md</code>、<code>当前状态.md</code>）：</p>
 
 
 
@@ -807,10 +807,10 @@
 
 
 <table><thead><tr><th>指标</th><th>严格</th><th>容错</th></tr></thead><tbody><tr><td>成功数</td><td>99 / 128 = 77.3%</td><td>104 / 128 = 81.2%</td></tr><tr><td>到站时间</td><td>5.71 s</td><td>4.89 s</td></tr></tbody></table>
-<p>同一批样本上，高度带内最好的 <code>up_z</code> 均值 0.974、中位数 0.999，总最好 <code>up_z</code> 均值 0.992、中位数 1.000（<code>实验记录_Go1复现.md:6481-6482</code>）。姿态数据说明策略有能力站起来，差别出在保持过程与计数口径上。</p>
+<p>同一批样本上，高度带内最好的 <code>up_z</code> 均值 0.974、中位数 0.999，总最好 <code>up_z</code> 均值 0.992、中位数 1.000（<code>实验记录_Go1复现.md</code>）。姿态数据说明策略有能力站起来，差别出在保持过程与计数口径上。</p>
 <p>到站时间同时缩短，原因是容错计数让那些「站进去又掉出一两帧」的样本更早累积到阈值。这一项与成功率一起报，才能说明改动不是单纯放宽判据。</p>
 <h2 id="失败形态分解">失败形态分解</h2>
-<p>严格口径下的 29 个失败样本可以分成三类（<code>实验记录_Go1复现.md:6484-6490</code>）：</p>
+<p>严格口径下的 29 个失败样本可以分成三类（<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -837,7 +837,7 @@
 
 
 <table><thead><tr><th>形态</th><th>个数</th><th>含义</th></tr></thead><tbody><tr><td>A 从来没直起来</td><td>1</td><td>总最好 <code>up_z</code> 小于 0.95，没有起来</td></tr><tr><td>B 直起来了但高度不在带内</td><td>2</td><td>姿态可以，高度不合格</td></tr><tr><td>C 满足过判据但没连续 25 帧</td><td>26</td><td>站进去了，中间掉出一两帧就归零</td></tr></tbody></table>
-<p>形态 C 占了绝大多数，而它正是用户反馈里那句「看着站起来了却提示没成功」的来源（<code>当前状态.md:103-104</code>）。这说明当时的主要瓶颈在判据的时间条件，不在策略能力。</p>
+<p>形态 C 占了绝大多数，而它正是用户反馈里那句「看着站起来了却提示没成功」的来源（<code>当前状态.md</code>）。这说明当时的主要瓶颈在判据的时间条件，不在策略能力。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     F["29 个失败样本"] --> A["A 起不来：1"]
     F --> B["B 高度不合格：2"]
@@ -846,8 +846,8 @@
     A --> E["属于策略能力，需训练侧解决"]
     B --> E</pre></div>
 <h2 id="曾站住不等于末态站着">曾站住不等于末态站着</h2>
-<p>判据通过一次并不等于可以交还。评估脚本对此有一条明确的说明：站住之后又倒下时，调度器会在那 0.5 s 窗口里把控制权交还给走路策略，然后指望走路策略去救，这正是要避免的情况（<code>eval_getup.py:191-193</code>）。</p>
-<p>因此评估额外统计「末态仍满足站住判据」的比例，并同时给出末态倾角小于 20 度的版本（<code>eval_getup.py:193-207</code>）。</p>
+<p>判据通过一次并不等于可以交还。评估脚本对此有一条明确的说明：站住之后又倒下时，调度器会在那 0.5 s 窗口里把控制权交还给走路策略，然后指望走路策略去救，这正是要避免的情况（<code>eval_getup.py</code>）。</p>
+<p>因此评估额外统计「末态仍满足站住判据」的比例，并同时给出末态倾角小于 20 度的版本（<code>eval_getup.py</code>）。</p>
 
 
 
@@ -870,7 +870,7 @@
 
 <table><thead><tr><th>指标</th><th>含义</th><th>用途</th></tr></thead><tbody><tr><td>至少站住过一次</td><td>判据曾被满足</td><td>看能力上限</td></tr><tr><td>末态仍满足判据</td><td>结束时还站着</td><td>看能否安全交还</td></tr></tbody></table>
 <h2 id="站住之后怎么交还">站住之后怎么交还</h2>
-<p>交还方式本身也是判据的一部分：交还瞬间的动作质量决定交还后会不会立刻摔倒。实测 227 个起身终态、500 帧的对照结果如下（<code>当前状态.md:108-118</code>）：</p>
+<p>交还方式本身也是判据的一部分：交还瞬间的动作质量决定交还后会不会立刻摔倒。实测 227 个起身终态、500 帧的对照结果如下（<code>当前状态.md</code>）：</p>
 
 
 
@@ -907,7 +907,7 @@
 
 
 <table><thead><tr><th>方案</th><th>摔倒比例</th><th>末态站住比例</th></tr></thead><tbody><tr><td>不混合（当前默认）</td><td>7.9%</td><td>85.9%</td></tr><tr><td>走路策略原生基线（对照）</td><td>8.4%</td><td>92.1%</td></tr><tr><td>混合系数 10</td><td>38.3%</td><td>59.5%</td></tr><tr><td>混合系数 30</td><td>73.6%</td><td>35.2%</td></tr><tr><td>一直保持起身末目标不交还</td><td>90.7%</td><td>0.0%</td></tr></tbody></table>
-<p>原因是起身「站住」那一帧的动作顶在裁剪上：动作绝对值中位数等于裁剪上限 8.0，目标偏离关节实际位置 2.7 rad，从这种发力状态开始混合会把人推倒（<code>当前状态.md:119-120</code>）。相关修复在同一轮记录里列出（<code>实验记录_Go1复现.md:6498-6503</code>）。</p>
+<p>原因是起身「站住」那一帧的动作顶在裁剪上：动作绝对值中位数等于裁剪上限 8.0，目标偏离关节实际位置 2.7 rad，从这种发力状态开始混合会把人推倒（<code>当前状态.md</code>）。相关修复在同一轮记录里列出（<code>实验记录_Go1复现.md</code>）。</p>
 <h2 id="易错点">易错点</h2>
 
 
@@ -1036,13 +1036,13 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>当前状态.md</code></td><td>成功判据与容错计数、失败形态、交还对照表（<code>:93-120</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>判据代码、128 样本实测、失败形态与修复汇总（<code>:6455</code>、<code>:6474-6503</code>）</td></tr><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td>保持步数、高度带默认值、末态统计与交还理由（<code>:2-5</code>、<code>:54-56</code>、<code>:63-65</code>、<code>:187-207</code>、<code>:230-234</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>当前状态.md</code></td><td>成功判据与容错计数、失败形态、交还对照表（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>判据代码、128 样本实测、失败形态与修复汇总（）</td></tr><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td>保持步数、高度带默认值、末态统计与交还理由（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><section class="dfile" id="file-4" data-file="04-评估口径的统一与可比性"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-评估口径的统一与可比性</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/16-强化学习评测与调试/01-判据口径/04-评估口径的统一与可比性.md</span></div><div class="dfile__body"><h1 id="评估口径的统一与可比性">评估口径的统一与可比性</h1>
 <p>同一份策略在不同脚本里评估出不同的数字，多数情况下脚本都没有错，问题出在两套口径衡量的对象不同：出生姿态不同、指令分布不同、动作范围不同、结算频率不同。这些差异会让「谁更强」的结论完全反过来，所以比较之前必须先确认两边在同一个口径上。</p>
 <p>口径里需要固定的有几项，每一项不一致都会造成方向不同的偏差；把这些固定下来之后，才有资格与公开工作的成功判据对照，也才谈得上奖励与判据的对齐。</p>
 <h2 id="训练奖励不是判据">训练奖励不是判据</h2>
-<p>训练日志里的 <code>eval_reward</code>（固定评估回合里拿到的奖励总和）只适合当参考。评估脚本在文件开头就写明：判定必须按查看器实际使用的那一套来做（<code>mjx-go1-getup/sim/eval_getup.py:2-5</code>）。原因是奖励是多项平滑惩罚与奖励之和，它可以被策略「刷高」而不同时满足任务判据。</p>
-<p>项目里出现过这种极端情况：某次训练回合一拿 468 分（站立任务上限 529），成功率却是 0%（<code>getup_sota.md:14</code>）。奖励与判据之间没有强绑定关系时，优化奖励并不等价于完成任务。</p>
+<p>训练日志里的 <code>eval_reward</code>（固定评估回合里拿到的奖励总和）只适合当参考。评估脚本在文件开头就写明：判定必须按查看器实际使用的那一套来做（<code>mjx-go1-getup/sim/eval_getup.py</code>）。原因是奖励是多项平滑惩罚与奖励之和，它可以被策略「刷高」而不同时满足任务判据。</p>
+<p>项目里出现过这种极端情况：某次训练回合一拿 468 分（站立任务上限 529），成功率却是 0%（<code>getup_sota.md</code>）。奖励与判据之间没有强绑定关系时，优化奖励并不等价于完成任务。</p>
 
 
 
@@ -1069,7 +1069,7 @@
 
 
 <table><thead><tr><th>指标</th><th>反映什么</th><th>能否替代判据</th></tr></thead><tbody><tr><td><code>eval_reward</code></td><td>各项奖励加权之和</td><td>不能</td></tr><tr><td>成功率</td><td>任务判据被满足的比例</td><td>是判据本身</td></tr><tr><td>到站时间</td><td>满足判据所需时间</td><td>判据的辅助指标</td></tr></tbody></table>
-<p>奖励口径本身也会随奖励项变化而漂移：内置评估的 <code>eval_reward</code> 从 771 到 763 再到 917、<code>ep_len</code> 从 609 到 534 再到 599（<code>实验记录_Go1复现.md:2660</code>），这些数字跨版本不可直接对照，因为奖励里加入了新的项（<code>实验记录_Go1复现.md:4599</code>）。</p>
+<p>奖励口径本身也会随奖励项变化而漂移：内置评估的 <code>eval_reward</code> 从 771 到 763 再到 917、<code>ep_len</code> 从 609 到 534 再到 599（<code>实验记录_Go1复现.md</code>），这些数字跨版本不可直接对照，因为奖励里加入了新的项（<code>实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
     A["训练奖励较高"] --> B{"任务判据是否同时满足"}
     B -->|"否"| C["策略在刷奖励，不是完成任务"]
@@ -1077,7 +1077,7 @@
     E["奖励项变化"] --> F["eval_reward 不可跨版本对照"]
     G["改用成功率与到站时间"] --> H["跨版本可比"]</pre></div>
 <h2 id="出生分布决定可比性">出生分布决定可比性</h2>
-<p>同一策略在不同出生分布上的成功率可以差到十几个百分点。本项目两套出生分布的对照如下（<code>实验记录_Go1复现.md:6492-6494</code>）：</p>
+<p>同一策略在不同出生分布上的成功率可以差到十几个百分点。本项目两套出生分布的对照如下（<code>实验记录_Go1复现.md</code>）：</p>
 
 
 
@@ -1099,8 +1099,8 @@
 
 
 <table><thead><tr><th>出生分布</th><th>成功率</th><th>说明</th></tr></thead><tbody><tr><td>训练分布（<code>--stage spawn</code>）</td><td>88.7%</td><td>地面加 0.35 m 自由落体、随机关节与朝向</td></tr><tr><td>走路真摔倒（<code>--stage realfall</code>）</td><td>77.3%</td><td>从走路策略真的摔了的姿态开始</td></tr></tbody></table>
-<p>两者相差 11 个百分点，属于训练与推理的分布差，但不是数量级的差异（<code>实验记录_Go1复现.md:6492-6494</code>）。结论是：报告成功率时必须写明出生分布，否则两个数字没有可比性。</p>
-<p>评估脚本为此提供了专门的开关：<code>--difficulty</code> 控制关节随机度，<code>--orient_rand</code> 控制朝向随机度，<code>--drop_height</code> 覆盖掉落高度，并注明「真实摔倒」档给 0.15，因为走路中摔倒不是 0.5 m 自由落体（<code>eval_getup.py:74-79</code>）。</p>
+<p>两者相差 11 个百分点，属于训练与推理的分布差，但不是数量级的差异（<code>实验记录_Go1复现.md</code>）。结论是：报告成功率时必须写明出生分布，否则两个数字没有可比性。</p>
+<p>评估脚本为此提供了专门的开关：<code>--difficulty</code> 控制关节随机度，<code>--orient_rand</code> 控制朝向随机度，<code>--drop_height</code> 覆盖掉落高度，并注明「真实摔倒」档给 0.15，因为走路中摔倒不是 0.5 m 自由落体（<code>eval_getup.py</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["训练出生分布"] --> B["88.7%（spawn）"]
     C["真摔倒出生分布"] --> D["77.3%（realfall）"]
@@ -1108,8 +1108,8 @@
     D --> E
     E --> F["报告必须标注分布档位"]</pre></div>
 <h2 id="动作范围与难度参数必须一致">动作范围与难度参数必须一致</h2>
-<p>动作裁剪范围不一致会让评估失去意义。评估脚本的 help 里写得很直接：<code>--getup2_action_clip</code> 默认 3.0，但本项目实测 Go1 需要 8.0（大腿行程 5.2 rad）；不一致会把策略动作夹掉，成功率假零（<code>eval_getup.py:67-70</code>）。</p>
-<p>同样的问题也出现在难度参数上：评估课程中间档时必须与训练时一致，否则会拿全随机摔倒去考一个只练过简单起手的策略，成功率虚低（<code>eval_getup.py:74-76</code>）。</p>
+<p>动作裁剪范围不一致会让评估失去意义。评估脚本的 help 里写得很直接：<code>--getup2_action_clip</code> 默认 3.0，但本项目实测 Go1 需要 8.0（大腿行程 5.2 rad）；不一致会把策略动作夹掉，成功率假零（<code>eval_getup.py</code>）。</p>
+<p>同样的问题也出现在难度参数上：评估课程中间档时必须与训练时一致，否则会拿全随机摔倒去考一个只练过简单起手的策略，成功率虚低（<code>eval_getup.py</code>）。</p>
 
 
 
@@ -1142,8 +1142,8 @@
 
 <table><thead><tr><th>参数</th><th>不一致的后果</th><th>检查方式</th></tr></thead><tbody><tr><td>动作裁剪范围</td><td>动作被夹掉，成功率假零</td><td>对照训练配置的裁剪值</td></tr><tr><td>出生难度</td><td>成功率虚低或虚高</td><td>对照训练课程档位</td></tr><tr><td>掉落高度</td><td>出生分布不同，不可比</td><td>对照训练时的掉落设置</td></tr><tr><td>朝向随机度</td><td>姿态桶分布偏移</td><td>对照训练时的随机度</td></tr></tbody></table>
 <h2 id="站立出生要不要纳入">站立出生要不要纳入</h2>
-<p>这是一个看起来无害、实际会污染结论的选择。站立出生的样本在开局就满足站住判据，如果把它和摔倒样本混在一起统计，成功率会虚高，姿态桶也会串掉（<code>eval_getup.py:82-85</code>、<code>:153-154</code>）。</p>
-<p>评估脚本的处理是默认不纳入，需要时才用 <code>--include_standing</code> 打开（<code>eval_getup.py:82-85</code>）。项目后来把评估出生分布默认改成只用真摔倒（<code>实验记录_Go1复现.md:5216</code>）。</p>
+<p>这是一个看起来无害、实际会污染结论的选择。站立出生的样本在开局就满足站住判据，如果把它和摔倒样本混在一起统计，成功率会虚高，姿态桶也会串掉（<code>eval_getup.py</code>）。</p>
+<p>评估脚本的处理是默认不纳入，需要时才用 <code>--include_standing</code> 打开（<code>eval_getup.py</code>）。项目后来把评估出生分布默认改成只用真摔倒（<code>实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -1171,8 +1171,20 @@
     C --> D["成功率虚高，姿态桶串了"]
     B -->|"排除"| E["只统计真摔倒样本"]
     E --> F["成功率反映起身能力"]</pre></div>
+<p>一次评估的固定流程可以用几行伪代码概括：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 示意：可比的评估流程</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> i </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">N_ENVS</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    s </span><span style="color:#D73A49">=</span><span style="color:#24292E"> env.reset(</span><span style="color:#005CC5">BASE_SEED</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> i)            </span><span style="color:#6A737D"># 出生分布固定</span></span>
+<span class="line"><span style="color:#24292E">    hold </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> t </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">MAX_STEPS</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">        s </span><span style="color:#D73A49">=</span><span style="color:#24292E"> env.step(s, policy(s.obs))</span></span>
+<span class="line"><span style="color:#24292E">        hold </span><span style="color:#D73A49">=</span><span style="color:#24292E"> hold </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> stand(s) </span><span style="color:#D73A49">else</span><span style="color:#005CC5"> 0</span><span style="color:#6A737D">  # 连续计数；容错版是失败时减一</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> hold </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> HOLD_STEPS</span><span style="color:#24292E">: </span><span style="color:#D73A49">break</span></span>
+<span class="line"><span style="color:#24292E">    results.append((hold </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> HOLD_STEPS</span><span style="color:#24292E">, t))</span></span>
+<span class="line"><span style="color:#24292E">report(success_rate, median_time, p10, p90) </span><span style="color:#6A737D"># 概率与时间分布一起报</span></span></code></pre>
+<p>协议里有三个常量：出生分布、步数上限、连续保持门槛。任意一个变了，成功率就不再可比；所以跨实验对照时应当把它们写进结论，而不是只报一个百分比。</p>
 <h2 id="样本量步数与结算频率">样本量、步数与结算频率</h2>
-<p>评估脚本的默认设置是 256 个环境、300 步、固定种子 0（<code>eval_getup.py:50-52</code>）。项目实际用过的几组配置如下：</p>
+<p>评估脚本的默认设置是 256 个环境、300 步、固定种子 0（<code>eval_getup.py</code>）。项目实际用过的几组配置如下：</p>
 
 
 
@@ -1208,11 +1220,11 @@
 
 
 
-<table><thead><tr><th>用途</th><th>环境数</th><th>步数</th><th>出处</th></tr></thead><tbody><tr><td>评估脚本默认</td><td>256</td><td>300</td><td><code>eval_getup.py:50-52</code></td></tr><tr><td>多 checkpoint 对比</td><td>128</td><td>300</td><td><code>实验记录_Go1复现.md:5323</code></td></tr><tr><td>真摔倒起身探针</td><td>128</td><td>1500（起身 600）</td><td><code>当前状态.md:45</code></td></tr><tr><td>稳态步态口径</td><td>128</td><td>每轮 200，共 8 轮</td><td><code>实验记录_Go1复现.md:2812-2814</code></td></tr></tbody></table>
-<p>结算频率也影响结果。评估脚本每 5 步结算一次判据，理由写得很实在：每步都调用一次数据同步会拖慢评估（<code>eval_getup.py:57-58</code>）。这意味着「连续 25 步」在实现上按每次检查推进 5 步来累积（<code>eval_getup.py:171-180</code>），检查间隔与持续时间的组合决定了实际的时间分辨率。</p>
-<p>稳态口径还有一个细节：每轮丢弃前 30 步瞬态，8 轮共约 15.8 万帧（<code>实验记录_Go1复现.md:2812-2814</code>）。丢弃瞬态是为了让统计落在稳定行走段上，而不是起步阶段。</p>
+<table><thead><tr><th>用途</th><th>环境数</th><th>步数</th><th>出处</th></tr></thead><tbody><tr><td>评估脚本默认</td><td>256</td><td>300</td><td><code>eval_getup.py</code></td></tr><tr><td>多 checkpoint 对比</td><td>128</td><td>300</td><td><code>实验记录_Go1复现.md</code></td></tr><tr><td>真摔倒起身探针</td><td>128</td><td>1500（起身 600）</td><td><code>当前状态.md</code></td></tr><tr><td>稳态步态口径</td><td>128</td><td>每轮 200，共 8 轮</td><td><code>实验记录_Go1复现.md</code></td></tr></tbody></table>
+<p>结算频率也影响结果。评估脚本每 5 步结算一次判据，理由写得很实在：每步都调用一次数据同步会拖慢评估（<code>eval_getup.py</code>）。这意味着「连续 25 步」在实现上按每次检查推进 5 步来累积（<code>eval_getup.py</code>），检查间隔与持续时间的组合决定了实际的时间分辨率。</p>
+<p>稳态口径还有一个细节：每轮丢弃前 30 步瞬态，8 轮共约 15.8 万帧（<code>实验记录_Go1复现.md</code>）。丢弃瞬态是为了让统计落在稳定行走段上，而不是起步阶段。</p>
 <h2 id="分桶与末态分布怎么看">分桶与末态分布怎么看</h2>
-<p>单个成功率说明不了问题出在哪。评估脚本的输出里，下面几项要一起看（<code>eval_getup.py:196-236</code>）：</p>
+<p>单个成功率说明不了问题出在哪。评估脚本的输出里，下面几项要一起看（<code>eval_getup.py</code>）：</p>
 
 
 
@@ -1247,7 +1259,7 @@
 
 
 <table><thead><tr><th>输出项</th><th>回答的问题</th></tr></thead><tbody><tr><td>严格与实用两档成功率</td><td>是站不直还是起不来</td></tr><tr><td>至少站住过一次</td><td>策略能力上限</td></tr><tr><td>末态仍满足判据</td><td>能否安全交还</td></tr><tr><td>分初始姿态桶</td><td>哪一类躺法不会</td></tr><tr><td>末态 <code>up_z</code> 与相对高度分布</td><td>差多远、往哪个方向差</td></tr><tr><td>出界与陷落终止数</td><td>统计是否被污染</td></tr></tbody></table>
-<p>出界与陷落样本不进入末态统计（<code>eval_getup.py:217-219</code>），这一步很关键：在真摔倒探针里，如果越界重生没做好，一批 128 个环境里曾出现 124 个掉出地形，统计会完全失真（<code>实验记录_Go1复现.md:6461-6463</code>）。</p>
+<p>出界与陷落样本不进入末态统计（<code>eval_getup.py</code>），这一步很关键：在真摔倒探针里，如果越界重生没做好，一批 128 个环境里曾出现 124 个掉出地形，统计会完全失真（<code>实验记录_Go1复现.md</code>）。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["原始一批环境"] --> B["剔除出界与陷落"]
     B --> C["末态分布统计"]
@@ -1255,7 +1267,7 @@
     C --> E["差多远"]
     D --> F["哪类不会"]</pre></div>
 <h2 id="同一策略在两套口径下的差异">同一策略在两套口径下的差异</h2>
-<p>项目里反复遇到同一个策略在两套脚本下数字不同，原因都是口径。步态脚本与固定种子评估脚本被明确标注为「两套口径不可混比」（<code>实验记录_Go1复现.md:3528-3529</code>）。</p>
+<p>项目里反复遇到同一个策略在两套脚本下数字不同，原因都是口径。步态脚本与固定种子评估脚本被明确标注为「两套口径不可混比」（<code>实验记录_Go1复现.md</code>）。</p>
 
 
 
@@ -1280,7 +1292,7 @@
 
 
 <table><thead><tr><th>指标</th><th>评估口径</th><th>步态口径</th><th>差异来源</th></tr></thead><tbody><tr><td>前进速度</td><td>0.187</td><td>0.370</td><td>评估含随机出生与全部指令档，含零速指令</td></tr><tr><td>存活率</td><td>77%</td><td>78% 到 84%</td><td>同档，差异来自样本与指令分布</td></tr></tbody></table>
-<p>前进速度差近一半的原因写得很清楚：评估口径包含随机出生与全部指令档（速度指令从 0 到 0.5），零速样本会把均值拉低（<code>实验记录_Go1复现.md:3556-3566</code>、<code>:3936-3938</code>）。另一处口径问题更隐蔽：某步态诊断脚本不重置环境，摔倒之后状态一直「死」着，统计的是残骸而不是步态（<code>实验记录_Go1复现.md:2940</code>）。</p>
+<p>前进速度差近一半的原因写得很清楚：评估口径包含随机出生与全部指令档（速度指令从 0 到 0.5），零速样本会把均值拉低（<code>实验记录_Go1复现.md</code>）。另一处口径问题更隐蔽：某步态诊断脚本不重置环境，摔倒之后状态一直「死」着，统计的是残骸而不是步态（<code>实验记录_Go1复现.md</code>）。</p>
 <h2 id="跨工作的判据对照">跨工作的判据对照</h2>
 <p>公开工作的成功判据并不统一，报告的数字因此不能直接比较。下表整理自本仓库的调研笔记（<code>getup_others.md</code>、<code>getup_sota.md</code>）：</p>
 
@@ -1319,10 +1331,10 @@
 
 
 <table><thead><tr><th>工作</th><th>出生分布</th><th>终止或成功判据</th><th>报告内容</th></tr></thead><tbody><tr><td>AFR</td><td>随机仰卧</td><td>350 步上限，或稳定站立 100 连续步</td><td>每地形 50 次试验，成功率与恢复时间</td></tr><tr><td>Learning to Get Up</td><td>1.5 m 掉落加随机姿态</td><td>固定 80 控制步，首阶段无早停</td><td>运动多样性与质量，非单一成功率</td></tr><tr><td>HoST</td><td>随机姿态加地形课程</td><td>四组奖励加多 critic，含站立后的后任务奖励</td><td>成功率与训练稳定性</td></tr><tr><td>本项目</td><td>走路真摔倒</td><td><code>up_z > 0.95</code> 且相对高度在带内，连续 25 帧（0.5 s）</td><td>128 样本下 77.3%（严格）/ 81.2%（容错）</td></tr></tbody></table>
-<p>从这张表能看出两件事：一是「连续站立多少步」是常见的成功条件，本项目用 0.5 s 是同类思路里偏短的一档；二是多数工作会同时报成功率与时间，本项目也遵循这一点（<code>当前状态.md:17</code>）。官方 playground 的 Go1Getup 从未公布成功率，它的默认配置本身很难，不能当作对照基准（<code>getup_sota.md:12</code>）。</p>
+<p>从这张表能看出两件事：一是「连续站立多少步」是常见的成功条件，本项目用 0.5 s 是同类思路里偏短的一档；二是多数工作会同时报成功率与时间，本项目也遵循这一点（<code>当前状态.md</code>）。官方 playground 的 Go1Getup 从未公布成功率，它的默认配置本身很难，不能当作对照基准（<code>getup_sota.md</code>）。</p>
 <h2 id="奖励与判据对齐">奖励与判据对齐</h2>
-<p>调研笔记把「奖励与判据对齐」列为这个任务里最关键的一条（<code>getup_sota.md:14</code>）。做法上是把成功条件直接写进终止或奖励：AFR 把稳定站立 100 连续步作为成功终止条件；HoST 用一组专门描述「站起来之后应当保持站立」的后任务奖励（<code>getup_sota.md:75-76</code>）。</p>
-<p>本项目的问题是对齐不足：奖励由 9 项平滑项之和加一个很窄的评估判据组成，策略可以在站不起来的情况下拿到 468（站立任务上限 529），成功率却是 0%（<code>getup_sota.md:14</code>）。这类错位的表现就是训练曲线很好、任务指标不动。</p>
+<p>调研笔记把「奖励与判据对齐」列为这个任务里最关键的一条（<code>getup_sota.md</code>）。做法上是把成功条件直接写进终止或奖励：AFR 把稳定站立 100 连续步作为成功终止条件；HoST 用一组专门描述「站起来之后应当保持站立」的后任务奖励（<code>getup_sota.md</code>）。</p>
+<p>本项目的问题是对齐不足：奖励由 9 项平滑项之和加一个很窄的评估判据组成，策略可以在站不起来的情况下拿到 468（站立任务上限 529），成功率却是 0%（<code>getup_sota.md</code>）。这类错位的表现就是训练曲线很好、任务指标不动。</p>
 <div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
     A["任务判据"] --> B["写成终止或成功条件"]
     B --> C["奖励里给出对应信号"]
@@ -1460,5 +1472,5 @@
 
 
 
-<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td>评估开关、默认样本量、结算频率、分桶与末态统计（<code>:2-5</code>、<code>:50-58</code>、<code>:67-85</code>、<code>:153-160</code>、<code>:196-236</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>两套口径差异、样本量与稳态口径、出生分布对照（<code>:2660</code>、<code>:2812-2814</code>、<code>:2940</code>、<code>:3528-3566</code>、<code>:3936-3938</code>、<code>:4599</code>、<code>:5323</code>、<code>:6461-6463</code>、<code>:6492-6494</code>）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/notes/getup_sota.md</code></td><td>公开工作判据对照与奖励-判据对齐（<code>:12-14</code>、<code>:53-59</code>、<code>:75-76</code>）</td></tr><tr><td><code>当前状态.md</code></td><td>样本数、探针命令与成功率口径（<code>:17</code>、<code>:45</code>）</td></tr></tbody></table>
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>mjx-go1-getup/sim/eval_getup.py</code></td><td>评估开关、默认样本量、结算频率、分桶与末态统计（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/实验记录_Go1复现.md</code></td><td>两套口径差异、样本量与稳态口径、出生分布对照（）</td></tr><tr><td><code>RLcontroller_go1_moreinformation/notes/getup_sota.md</code></td><td>公开工作判据对照与奖励-判据对齐（）</td></tr><tr><td><code>当前状态.md</code></td><td>样本数、探针命令与成功率口径（）</td></tr></tbody></table>
 <p>（引用的文件以 /home/tc63/mujoco 为根。）</p></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/15-%E4%BB%BF%E7%9C%9F%E6%9F%A5%E7%9C%8B%E5%99%A8%E4%B8%8E%E6%80%A7%E8%83%BD/03-%E9%80%90%E5%B8%A7%E8%80%97%E6%97%B6%E6%8B%86%E8%A7%A3%E4%B8%8E%E4%BC%98%E5%8C%96/"><span class="k">← 上一篇</span><span class="t">逐帧耗时拆解与优化</span><span class="d">仿真查看器与性能 · 4 个文件</span></a><a class="next" href="/tc63/docs/16-%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E8%AF%84%E6%B5%8B%E4%B8%8E%E8%B0%83%E8%AF%95/02-%E8%AF%8A%E6%96%AD%E6%8E%A2%E9%92%88/"><span class="k">下一篇 →</span><span class="t">诊断探针</span><span class="d">强化学习评测与调试 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 564 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
