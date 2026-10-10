@@ -2,14 +2,14 @@
 title: 子路径下的三条 location
 summary: /tc63 前缀下三条 location 的分工与选择理由、精确匹配处理入口、^~ 跳过正则的作用、_astro 独立前缀与长缓存头、自定义 404 的接入，以及与域名根配置共存的插入方式。
 tags: [nginx, location, 静态托管, 缓存, 404]
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 # 子路径下的三条 location
 
 个人主页的 nginx 配置只有三条 location，全部挂在 `/tc63` 前缀上。它们分别负责入口补斜杠、静态资源长缓存与页面内容，覆盖了站点运行需要的全部请求类型。
 
-三段配置各有其选择理由，重点在两处容易被当成「写法习惯」的地方：`^~` 修饰符的作用范围，以及 `_astro` 为什么要单独占一条前缀。配置原文来自服务器启用脚本插入的内容（`personal-homepage-research/15-deploy-tc63.md:63-77`）。
+三段配置各有其选择理由，重点在两处容易被当成「写法习惯」的地方：`^~` 修饰符的作用范围，以及 `_astro` 为什么要单独占一条前缀。配置原文来自服务器启用脚本插入的内容（`personal-homepage-research/15-deploy-tc63.md`）。
 
 ## 三条 location 各自的职责
 
@@ -45,7 +45,7 @@ flowchart TD
 
 ## 精确匹配只处理入口
 
-`location = /tc63` 用等号限定为完整匹配，只有 URI 恰好是 `/tc63` 时才命中。它的作用是把不带尾斜杠的入口收敛到带斜杠的形式，返回 301 而不是直接返回页面内容。带查询串的 `/tc63?x=1` 同样命中这一条，因为匹配不看查询串。
+`location = /tc63` 用等号限定为完整匹配，只有 URI 恰好是 `/tc63` 时才命中。它的作用是把不带尾斜杠的入口收敛到带斜杠的形式，返回 301 而不是直接返回页面内容。301 是永久重定向，浏览器会把它记下来，下次直接请求新地址，少一次往返。带查询串的 `/tc63?x=1` 同样命中这一条，因为匹配不看查询串。
 
 用精确匹配而不是普通前缀，是为了不影响 `/tc63/` 下的其他路径。普通前缀 `location /tc63` 会让所有 `/tc63...` 开头的请求都进入这条规则，包括资源与子页面，那样就得在块里再写一层判断。等号写法只覆盖一个 URI，职责最小。
 
@@ -62,7 +62,7 @@ flowchart TD
     RE -->|"否"| USEP["采用前缀那条"]
 ```
 
-加这个修饰符的用意是防御：站点配置之外的配置里可能存在正则 location（例如拦截隐藏文件的规则），带 `^~` 的前缀能保证站点自己的规则优先。本仓库里的样例配置没有正则 location（KD 仓库 `deploy/nginx.conf:4-26`），服务器上完整生效的配置未在本机核对。
+加这个修饰符的用意是防御：站点配置之外的配置里可能存在正则 location（例如拦截隐藏文件的规则），带 `^~` 的前缀能保证站点自己的规则优先。本仓库里的样例配置没有正则 location（KD 仓库 `deploy/nginx.conf`），服务器上完整生效的配置未在本机核对。
 
 两条前缀中，`/tc63/_astro/` 比 `/tc63/` 长，按最长优先命中资源那条，与书写顺序无关。把资源规则写在前面只是让阅读顺序与匹配结果一致。
 
@@ -86,7 +86,7 @@ add_header Cache-Control "public, max-age=2592000, immutable";
 
 ## 与域名根配置共存的插入方式
 
-启用脚本的做法是在每个已有 server 块的 `location /api/` 之前插入这三条，没有新建 server 块（`personal-homepage-research/15-deploy-tc63.md:63`）。域名根的 `location /` 与 `/api/` 保持原样，因此 KnowledgeDiver 不受影响。
+启用脚本的做法是在每个已有 server 块的 `location /api/` 之前插入这三条，没有新建 server 块（`personal-homepage-research/15-deploy-tc63.md`）。域名根的 `location /` 与 `/api/` 保持原样，因此 KnowledgeDiver 不受影响。
 
 | 已有配置 | 插入后的关系 |
 | --- | --- |
@@ -94,7 +94,9 @@ add_header Cache-Control "public, max-age=2592000, immutable";
 | `location /api/`（后端代理） | 保留，插入位置在其之前，但前缀不同，互不遮挡 |
 | 80 与 443 两个 server 块 | 各自插入一份，HTTPS 与 HTTP 行为一致 |
 
-插入位置在 `/api/` 之前，是因为脚本按这个锚点做插入（`personal-homepage-research/15-deploy-tc63.md:63`）。两条前缀没有重叠，先后顺序不影响匹配结果。
+插入位置在 `/api/` 之前，是因为脚本按这个锚点做插入（`personal-homepage-research/15-deploy-tc63.md`）。两条前缀没有重叠，先后顺序不影响匹配结果。
+
+启用脚本选 `awk` 而不是 python 或 sed 拼接，是因为那台服务器上 `/usr/bin/python3` 是断链、`curl` 与 `wget` 都没装，可用的只剩 `awk / sed / perl / nc / busybox`。脚本本体不在本仓库，其逐行实现未核实；仓库里只留了它插入的三条 location 原文。
 
 ## 验证三条规则是否都在生效
 
@@ -158,8 +160,8 @@ add_header Cache-Control "public, max-age=2592000, immutable";
 
 | 路径 | 用途 |
 | --- | --- |
-| `personal-homepage-research/15-deploy-tc63.md` | 三条 location 原文与插入方式（`:63-77`、`:155-161`） |
+| `personal-homepage-research/15-deploy-tc63.md` | 三条 location 原文与插入方式 |
 | `dist/_astro/`、`dist/404.html` | 带哈希的资源文件名与 404 页（构建产物） |
-| `docs/32-nginx 配置/01-反向代理/01-反向代理与location匹配.md` | location 选择顺序与修饰符表（`:37-56`） |
-| KD 仓库 `deploy/nginx.conf` | 域名根的静态规则对照（`:9-12`） |
+| `docs/32-nginx 配置/01-反向代理/01-反向代理与location匹配.md` | location 选择顺序与修饰符表 |
+| KD 仓库 `deploy/nginx.conf` | 域名根的静态规则对照 |
 | `/etc/nginx/sites-available/knowledgediver` | 线上生效配置（服务器文件，未在本机核对） |

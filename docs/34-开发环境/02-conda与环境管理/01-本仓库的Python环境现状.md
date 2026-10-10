@@ -7,21 +7,47 @@ updated: 2026-10-07
 
 # 本仓库的 Python 环境现状
 
-打开 KnowledgeDiver 目录会看到一个 `.venv` 目录和一个 `requirements.txt`，Python 侧的依赖管理就靠这两样。这与常见的「先装 Anaconda、再建环境」的路子不同：仓库里没有 `environment.yml`，机器上也没有 conda 的安装痕迹。
+Python 的第三方包默认装进系统解释器，多个项目共用一份时会互相顶版本；虚拟环境（venv）给单个项目单独放一份包目录，项目之间互不干扰。打开 KnowledgeDiver 目录会看到一个 `.venv` 目录和一个 `requirements.txt`，Python 侧的依赖管理就靠这两样。这与常见的「先装 Anaconda、再建环境」的路子不同：仓库里没有 `environment.yml`，机器上也没有 conda 的安装痕迹。
 
-判断依据分两层：仓库内的环境目录与清单文件，以及本机解释器安装位置的检查结果。
+要判断一个项目用的是哪套 Python 依赖管理，看三处即可：仓库里有没有环境目录（`.venv`、`venv`）与依赖清单（`requirements.txt`、`pyproject.toml`），机器上有没有 conda 的安装痕迹，以及启动脚本激活的是哪一种。这个顺序对任何仓库都适用，下面用 KnowledgeDiver 当例子。
 
 ## 1. 依赖清单长什么样
 
-`requirements.txt` 共 33 行，分成两组：第 1 行是 `# Runtime` 注释，第 2 行到第 27 行是运行期依赖；第 29 行是 `# Dev / Test` 注释，后面是测试与覆盖率工具（`/mnt/d/KnowledgeDiver/requirements.txt:1`、`:29`）。
+`requirements.txt` 共 33 行，分成两组：第 1 行是 `# Runtime` 注释，第 2 行到第 27 行是运行期依赖；第 29 行是 `# Dev / Test` 注释，后面是测试与覆盖率工具（`/mnt/d/KnowledgeDiver/requirements.txt`）。
 
-依赖的写法有两种。多数包用 `==` 钉死到具体版本，例如 `fastapi==0.135.3`、`uvicorn==0.44.0`、`sentence-transformers==3.4.1`（`/mnt/d/KnowledgeDiver/requirements.txt:2`、`:3`、`:25`）；少数包只写下限或区间，例如 `trafilatura>=2.0.0`、`crawl4ai>=0.8.0`、`pdfplumber>=0.11,<0.12`（`:17`、`:18`、`:19`）。
+```text
+# Runtime
+fastapi==0.135.3
+uvicorn==0.44.0
+...
+trafilatura>=2.0.0            # 正文提取（混搭架构一级）
+...
+# Dev / Test
+pytest==9.0.3
+```
+
+依赖的写法有两种。多数包用 `==` 钉死到具体版本，例如 `fastapi==0.135.3`、`uvicorn==0.44.0`、`sentence-transformers==3.4.1`（`/mnt/d/KnowledgeDiver/requirements.txt`）；少数包只写下限或区间，例如 `trafilatura>=2.0.0`、`crawl4ai>=0.8.0`、`pdfplumber>=0.11,<0.12`。
 
 两种写法的分工在文件里能看出来：库的接口稳定、对版本敏感的钉死；自带二进制或需要跟随上游修复的留区间。
 
 ## 2. .venv 是怎么来的
 
 `/mnt/d/KnowledgeDiver/.venv/pyvenv.cfg` 记录了创建方式：`home = C:\Srtp`、`version = 3.13.0`、`executable = C:\Srtp\python.exe`，创建命令是 `C:\Srtp\python.exe -m venv D:\KnowledgeDiver\.venv`。
+
+```text
+home = C:\Srtp
+include-system-site-packages = false
+version = 3.13.0
+executable = C:\Srtp\python.exe
+command = C:\Srtp\python.exe -m venv D:\KnowledgeDiver\.venv
+```
+
+`home` 指向创建时用的解释器目录，环境之后就从那里找解释器；`include-system-site-packages = false` 表示不继承系统解释器里已装的包。环境目录本身也只有 Windows 那套子目录：
+
+```bash
+$ ls /mnt/d/KnowledgeDiver/.venv
+Include  Lib  Scripts  pyvenv.cfg  share
+```
 
 也就是说，这个虚拟环境是在 Windows 侧创建的，解释器来自 `C:\Srtp`，环境目录落在 D 盘的仓库里（WSL 里对应 `/mnt/d/KnowledgeDiver/.venv`）。目录布局因此是 Windows 的：有 `Scripts`、`Lib`、`Include`，没有 `bin`。
 
@@ -36,11 +62,11 @@ updated: 2026-10-07
 
 表里有一项容易被跳过：是否继承系统包。它为假，意味着用系统解释器装过的包在这个环境里导入不到；遇到"明明装过却报找不到"时先核对这一项。
 
-## 3. conda 在本机的位置
+## 3. 怎么判断项目用不用 conda
 
-现场检查的结果是：机器上没有 `miniconda3`、`anaconda3` 或 `/opt/conda`，用户目录下没有 `.condarc`；仓库里也没有 `environment.yml` 或 `conda-lock` 之类的文件。
+判断是否走 conda，看四处：`conda` 可执行文件与安装前缀（`miniconda3`、`anaconda3`、`/opt/conda`）、用户目录下的 `.condarc`、仓库里的 `environment.yml` 或 `conda-lock`、以及激活命令是 `conda activate` 还是 `source .venv/bin/activate`。四处指向同一套体系：conda 连解释器版本与非 Python 二进制一起管，venv 只管 Python 包；混用时包来源不易分辨，排查版本冲突会变难。这台机器与 KnowledgeDiver 仓库都没有 conda 痕迹，走的是 venv 加 `requirements.txt` 一条路。
 
-需要 conda 的场景（例如用 conda 装 CUDA 运行时）按通用做法处理，02-venv的创建与两个平台的分工、03-依赖锁定与环境自检 与 04-conda对照与多环境并行 里分别标注了相关部分。
+什么情况下才值得引入 conda：依赖里含 CUDA、cuDNN 这类需要与解释器版本绑定的非 Python 二进制，而系统包管理器装不到合适的版本。只装纯 Python 包时 venv 足够，多引入一套管理器只会让「哪套环境生效」变模糊。后续几页涉及 conda 的部分按通用做法标注。
 
 ## 4. 两套布局的差异会带来什么
 
@@ -68,7 +94,19 @@ flowchart LR
 
 ## 5. 启动脚本的两套分支
 
-仓库提供了两套启动脚本：`start.sh` 面向类 Unix 环境，`start.bat` 面向 Windows。前者会检查 `.venv` 是否存在，不存在就用 `python3 -m venv` 新建，然后执行 `source .venv/bin/activate`（`/mnt/d/KnowledgeDiver/start.sh:8` 至 `:16`）。
+跨平台项目通常各写一份启动脚本，因为激活方式是平台相关的。Linux 与 macOS 用 `bin` 目录下的 `activate`，Windows 用 `Scripts` 目录下的 `activate.bat` 或 `Activate.ps1`：
+
+```bash
+# Linux / macOS 布局
+source .venv/bin/activate
+```
+
+```bat
+:: Windows 布局
+.venv\Scripts\activate.bat
+```
+
+KnowledgeDiver 提供了两套脚本：`start.sh` 面向类 Unix 环境，`start.bat` 面向 Windows。前者会检查 `.venv` 是否存在，不存在就用 `python3 -m venv` 新建，然后执行 `source .venv/bin/activate`。
 
 这里有一个可以现场验证的不一致：现有 `.venv` 是 Windows 布局，没有 `bin/activate`，而 `start.sh` 按 Linux 布局激活。也就是说，直接用 `start.sh` 在当前环境上会走到激活失败的分支，除非把环境重建为 Linux 布局。
 
@@ -85,7 +123,7 @@ flowchart TD
   I --> F
 ```
 
-Node 侧的依赖由锁文件保证可复现，Python 侧目前只有 `requirements.txt`。两边的复现手段不同，这也是为什么「换机器重现项目」这件事要分别检查。
+Node 侧的依赖由锁文件（lockfile，即 `frontend/package-lock.json` 这类文件）保证可复现：它记下每个包连同间接依赖的精确版本与下载地址，`npm ci` 照它原样还原。Python 侧目前只有 `requirements.txt`，它只写直接依赖，两边的复现手段因此不同，这也是为什么「换机器重现项目」这件事要分别检查。
 
 ## 6. 前端与 Python 的分界
 

@@ -7,17 +7,25 @@ updated: 2026-10-07
 
 # 发行版启动与 systemd
 
-装好 WSL 之后的第一个实际问题通常是「服务起不来」：脚本里写了 `systemctl enable`，执行完却提示找不到 systemd 或者命令不存在。原因是 WSL 的发行版默认用一个 init 进程直接拉起登录 shell，systemd 并没有作为 1 号进程运行。这个问题靠发行版内的配置文件解决。
+WSL 的全称是 Windows Subsystem for Linux，它让 Windows 机器上跑起一个完整的 Linux 发行版，本仓库的前端与文档工具链都跑在里面。它的发行版默认用一个 init 进程直接拉起登录 shell，systemd 并没有作为 1 号进程运行，于是装好之后的第一个实际问题通常是「服务起不来」：脚本里写了 `systemctl enable`，执行完却提示找不到 systemd 或者命令不存在。这个问题靠发行版内的配置文件解决。
 
 这台机器上的配置只有四行（`/etc/wsl.conf`），分成两段：`[boot]` 段里写 `systemd=true`，`[user]` 段里写 `default=tc63`。两项各自解决一个问题，也各有自己的生效条件与验证办法。
+
+```ini
+[boot]
+systemd=true
+
+[user]
+default=tc63
+```
 
 判断自己是否遇到这个问题，最省事的办法是直接执行 `systemctl` 看返回：报「命令不存在」或「systemd 未启动」就是没启用。
 
 ## 1. 为什么要打开 systemd
 
-WSL 的早期做法是让发行版自己启动一个 init，随后直接进入用户 shell。这种模式下 `systemctl` 不可用，依赖 systemd 的软件（Docker、snap、部分数据库服务）都装不起来或者起不来。
+systemd 是大多数 Linux 发行版用来启动并看管后台服务的 1 号进程，`systemctl` 是它的命令行入口。WSL 的早期做法是让发行版自己启动一个 init，随后直接进入用户 shell，systemd 不在启动链里。这种模式下 `systemctl` 不可用，依赖 systemd 的软件（Docker、snap、部分数据库服务）都装不起来或者起不来。
 
-把 `systemd=true` 写进 `[boot]` 段之后（`/etc/wsl.conf:2`），发行版启动时实际拉起的 1 号进程就是 systemd，`systemctl` 与 `journalctl` 随之可用。代价是启动稍慢，内存占用略增，对本地开发来说可以接受。
+把 `systemd=true` 写进 `[boot]` 段之后（`/etc/wsl.conf`），发行版启动时实际拉起的 1 号进程就是 systemd，`systemctl` 与 `journalctl` 随之可用。代价是启动稍慢，内存占用略增，对本地开发来说可以接受。
 
 这两个字段虽然在同一份文件里，解决的问题完全不同：一个管 init 进程，一个管登录身份。排查时可以分开看，互不干扰。
 
@@ -25,7 +33,7 @@ WSL 的早期做法是让发行版自己启动一个 init，随后直接进入�
 
 WSL 默认以安装时创建的用户登录，但如果发行版是通过导入镜像或复制的方式得到的，默认用户可能变成 root。以 root 登录会让后续所有文件都带上 root 属主，在 `/mnt/` 下尤其容易留下权限问题。
 
-配置里把 `default=tc63` 固定下来（`/etc/wsl.conf:5`），每次启动都进入这个用户。这一项与 systemd 无关，属于顺手把环境固定住。
+配置里把 `default=tc63` 固定下来（`/etc/wsl.conf` 的 `[user]` 段），每次启动都进入这个用户。这一项与 systemd 无关，属于顺手把环境固定住。
 
 重启的成本很低：发行版内没有常驻任务时，几秒钟就能回来。改配置前把正在进行的工作保存好即可。
 

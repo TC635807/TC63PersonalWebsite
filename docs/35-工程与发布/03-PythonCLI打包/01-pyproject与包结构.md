@@ -7,15 +7,35 @@ updated: 2026-10-07
 
 # pyproject 与包结构
 
-装上 better-crawler 之后，可以在终端里敲一条 `better-crawler-mcp` 启动服务。这条命令由安装时的打包工具生成，仓库里并没有同名脚本文件；它指向包内的一个函数，函数再启动 MCP 服务。想让这条命令出现，需要的只有一份 `pyproject.toml` 里的三行配置：构建后端、项目元数据、以及入口点声明。
+`pyproject.toml` 是 Python 项目通用的声明文件，构建后端、依赖与入口命令都写在里面，取代了早期的 `setup.py`。没有它，项目只能以源码目录的形式手工运行，装不进环境，也不会生成可执行命令。本项目用它声明打包方式与命令入口。装上 better-crawler 之后，可以在终端里敲一条 `better-crawler-mcp` 启动服务。这条命令由安装时的打包工具生成，仓库里并没有同名脚本文件；它指向包内的一个函数，函数再启动 MCP 服务。想让这条命令出现，需要的只有一份 `pyproject.toml` 里的三行配置：构建后端、项目元数据、以及入口点声明。
 
 三行配置决定命令能否生成，目录布局决定 wheel 里有什么，版本号决定两处是否一致；下面把 `pyproject.toml` 与 `src/better_crawler/` 逐段对上。
 
 ## 构建后端与项目元数据
 
-`pyproject.toml` 的开头三行声明构建系统：后端是 hatchling（`pyproject.toml:1-3`）。这一段决定用什么工具把源码打成发行包，与运行时依赖无关。
+`pyproject.toml` 的开头三行声明构建系统：后端是 hatchling（`pyproject.toml`）。这一段决定用什么工具把源码打成发行包，与运行时依赖无关。
 
-`[project]` 段给出元数据：包名 `better-crawler-4-agent`、版本 `0.2.0`、说明、README 文件、Python 版本下限 3.10、许可证 MIT（`pyproject.toml:5-11`）。这些字段里有两个会直接影响使用者：包名决定 `pip install` 时敲什么，Python 下限决定在旧解释器上安装会不会被直接拒绝。
+`[project]` 段给出元数据：包名 `better-crawler-4-agent`、版本 `0.2.0`、说明、README 文件、Python 版本下限 3.10、许可证 MIT（`pyproject.toml`）。这些字段里有两个会直接影响使用者：包名决定 `pip install` 时敲什么，Python 下限决定在旧解释器上安装会不会被直接拒绝。
+
+整份声明不长，构建系统、元数据与打包范围分别长这样：
+
+```toml
+# pyproject.toml（节选）
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "better-crawler-4-agent"
+version = "0.2.0"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/better_crawler"]
+```
+
+`[build-system]` 回答「用哪套工具把源码变成发行包」，`build-backend` 就是那套工具的入口；`[project]` 是包的身份信息；`[tool.hatch.build.targets.wheel]` 划出哪些目录进包。发行包通常有两种形态：wheel（`.whl`，安装时直接解压到位）与 sdist（`.tar.gz` 源码包，安装时才现场构建），日常 `pip install` 走的都是 wheel 这条路。
 
 | 字段 | 值 | 影响 |
 | --- | --- | --- |
@@ -27,7 +47,16 @@ updated: 2026-10-07
 
 ## 入口点如何变成一条命令
 
-`[project.scripts]` 段写了一行映射：`better-crawler-mcp = "better_crawler.mcp_server:main"`（`pyproject.toml:23-24`）。等号左边是安装后生成的可执行文件名，右边是"模块路径:函数名"。安装时打包工具会生成一个小启动器，导入该模块并调用该函数。
+`[project.scripts]` 段写了一行映射：`better-crawler-mcp = "better_crawler.mcp_server:main"`（`pyproject.toml`）。等号左边是安装后生成的可执行文件名，右边是"模块路径:函数名"。安装时打包工具会生成一个小启动器，导入该模块并调用该函数。
+
+这一行在文件里是独立的段：
+
+```toml
+[project.scripts]
+better-crawler-mcp = "better_crawler.mcp_server:main"
+```
+
+等号左边是安装后生成的可执行文件名，右边是「模块路径:函数名」——冒号前是模块，冒号后是模块里的函数。这种声明叫入口点（entry point），安装时打包工具会按平台把它写成一个小启动脚本，因此仓库里找不到同名文件。
 
 这条映射解决了一个常见需求：使用者不需要知道包内的目录结构，也不需要写 `python -m` 的长命令，只要记住一个稳定的命令名。代价是命令名与函数名一旦发布就不宜再改，改名会破坏已经写进配置文件的调用方。
 
@@ -44,27 +73,58 @@ flowchart LR
 
 源码放在 `src/better_crawler/` 而不是仓库根目录，这是所谓的 src 布局。它的好处是导入路径必须经过安装才会出现，能提前暴露"忘了把新模块写进打包范围"这类问题：在仓库根目录直接运行解释器时，`import better_crawler` 不会意外成功。
 
-打包范围由 `[tool.hatch.build.targets.wheel]` 指定为 `src/better_crawler`（`pyproject.toml:26-27`）。这条声明的含义是：wheel 里只包含这个目录。仓库里的 `scripts/`、`tests/`、`skills/` 与 `dsh-plugin/` 都不会进入 wheel，它们属于开发与集成材料。
+打包范围由 `[tool.hatch.build.targets.wheel]` 指定为 `src/better_crawler`（`pyproject.toml`）。这条声明的含义是：wheel 里只包含这个目录。仓库里的 `scripts/`、`tests/`、`skills/` 与 `dsh-plugin/` 都不会进入 wheel，它们属于开发与集成材料。
 
 ## 包内导出了什么
 
-`src/better_crawler/__init__.py` 把包的能力集中导出：`BrowserEngine`、`PageFetch`、`Fetcher`、`FetchResult`、`Extracted`、`extract_static`、`looks_unrendered`、`validate_url`、`UnsafeURLError` 与 `describe_status`（`src/better_crawler/__init__.py:6-20`）。集中导出的收益是使用方只依赖一个入口模块，内部文件如何拆分可以调整。
+`src/better_crawler/__init__.py` 把包的能力集中导出：`BrowserEngine`、`PageFetch`、`Fetcher`、`FetchResult`、`Extracted`、`extract_static`、`looks_unrendered`、`validate_url`、`UnsafeURLError` 与 `describe_status`（`src/better_crawler/__init__.py`）。集中导出的收益是使用方只依赖一个入口模块，内部文件如何拆分可以调整。
 
-同一个文件里还有版本号：`__version__ = "0.2.0"`（`src/better_crawler/__init__.py:12`）。它与 `pyproject.toml` 里的 `version` 是两处独立的值，发布时需要同时改。两处不同步的表现是 `pip show` 与运行时自报的版本不一致。
+```python
+# src/better_crawler/__init__.py（节选）
+from .browser import BrowserEngine, PageFetch
+from .errors import describe_status
+from .extract import Extracted, extract_static, looks_unrendered
+from .fetcher import Fetcher, FetchResult
+from .safety import UnsafeURLError, validate_url
+
+__version__ = "0.2.0"
+```
+
+包内部仍然分成 `browser`、`extract`、`fetcher`、`safety` 等文件，只是对外统一从这一处转发；使用方只认这个入口，内部文件改名或拆分都不影响调用方。
+
+同一个文件里还有版本号：`__version__ = "0.2.0"`（`src/better_crawler/__init__.py`）。它与 `pyproject.toml` 里的 `version` 是两处独立的值，发布时需要同时改。两处不同步的表现是 `pip show` 与运行时自报的版本不一致。
 
 | 位置 | 内容 | 用途 |
 | --- | --- | --- |
-| `pyproject.toml:7` | `version = "0.2.0"` | 发行版本号 |
-| `src/better_crawler/__init__.py:12` | `__version__ = "0.2.0"` | 运行时自报版本 |
-| `src/better_crawler/mcp_server.py:38` | 传入 `__version__` | MCP 服务对外声明的版本 |
+| `pyproject.toml` | `version = "0.2.0"` | 发行版本号 |
+| `src/better_crawler/__init__.py` | `__version__ = "0.2.0"` | 运行时自报版本 |
+| `src/better_crawler/mcp_server.py` | 传入 `__version__` | MCP 服务对外声明的版本 |
 
 ## 服务入口自己做了哪些准备
 
-`mcp_server.py` 在导入包之前先做了一段引导：把 `src` 目录插入 `sys.path`，条件是该目录存在且尚未在搜索路径里（`src/better_crawler/mcp_server.py:17-20`）。这段代码服务的是"没有安装到 site-packages、直接以脚本方式运行"的场景，插件与本地调试都会遇到。
+`mcp_server.py` 在导入包之前先做了一段引导：把 `src` 目录插入 `sys.path`，条件是该目录存在且尚未在搜索路径里（`src/better_crawler/mcp_server.py`）。这段代码服务的是"没有安装到 site-packages、直接以脚本方式运行"的场景，插件与本地调试都会遇到。
 
-接下来是日志配置（`src/better_crawler/mcp_server.py:26-31`）：日志输出走 stderr，级别可由环境变量控制。这条约束来自 stdio 传输本身：stdout 只能承载 MCP 协议帧，任何日志混进 stdout 都会破坏协议解析，表现为客户端连上就报解析错误。
+接下来是日志配置（`src/better_crawler/mcp_server.py`）：日志输出走 stderr，级别可由环境变量控制。这条约束来自 stdio 传输本身：stdout 只能承载 MCP 协议帧，任何日志混进 stdout 都会破坏协议解析，表现为客户端连上就报解析错误。
 
-服务对象在 `src/better_crawler/mcp_server.py:36-40` 构造，名字与版本都写在这里，工具名由框架拼上命名空间前缀。
+这两段在源码里是这样：
+
+```python
+# src/better_crawler/mcp_server.py（节选）
+# 允许直接以脚本方式运行（没有安装到 site-packages 的场景）
+_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src")
+if os.path.isdir(_SRC) and _SRC not in sys.path:
+    sys.path.insert(0, os.path.abspath(_SRC))
+
+logging.basicConfig(
+    level=os.getenv("BETTER_CRAWLER_LOG_LEVEL", "INFO").upper(),
+    stream=sys.stderr,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+```
+
+`sys.path` 是解释器查找模块的目录清单，往它开头插入 `src`，等于让这次运行临时「看见」还没有安装的包，代价是这段引导必须排在导入包之前。stdio 指进程之间用标准输入输出管道对话，客户端与这个服务之间传的是协议帧，日志只能走 stderr 这条独立通道。
+
+服务对象在 `src/better_crawler/mcp_server.py` 里构造，名字与版本都写在这里，工具名由框架拼上命名空间前缀。
 
 ```mermaid
 flowchart TD
@@ -79,7 +139,7 @@ flowchart TD
 
 ## 为什么版本号不写在单一位置
 
-把版本只放在 `pyproject.toml` 里、运行时从安装元数据读取，是可以做到单源的，代价是需要额外的读取逻辑，并且在"未安装、直接跑 src"的场景下读不到元数据。本项目选择两处各写一份，换取的是任何运行方式下都能拿到版本号。
+版本号有两种维护方式。单一来源（只写一处，运行时从安装元数据读取）不会不同步，代价是需要额外的读取逻辑，而且在「未安装、直接跑源码」的场景下读不到元数据。两处各写一份则任何运行方式都能拿到版本号，代价是发布时容易漏改——本项目选的是后者，并用测试兜住同步。
 
 这个选择的检查方式很直接：改版本时搜索两次字符串，确认两处一致。更稳妥的做法是加一条自检或测试，比较两处的值。
 
@@ -117,7 +177,7 @@ flowchart TD
 
 ### 设计权衡
 
-| 权衡点 | 本工程的选择 | 收益与代价 |
+| 权衡点 | 常见选择 | 收益与代价 |
 | --- | --- | --- |
 | 目录布局 | src 布局 | 导入语义干净；代价是需要安装或引导才能运行 |
 | 版本管理 | 两处各写一份 | 任何运行方式都能读版本；代价是要记得同步 |

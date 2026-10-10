@@ -10,7 +10,7 @@ updated: 2026-10-07
 > 源码对象：`BMI088/Src/BMI088.cpp` 的通信工具函数与 DMA 段、`BSP/Src/bsp_dwt.cpp`、`Core/Src/spi.c` 的 DMA 流配置。
 > 片选全部由 GPIO 软件翻转，SPI 外设的 NSS 是软件模式。
 
-IMU 读取的通信层要处理三件事：片选什么时候把哪一块传感芯片挂上总线，翻转之后芯片需要多久完成内部动作，以及多字节数据用阻塞还是 DMA 搬运。本工程单字节读写走阻塞路径，多字节读走 DMA 路径并在失败时回退到阻塞路径。
+IMU 读取的通信层要处理三件事：片选什么时候把哪一块传感芯片挂上总线，翻转之后芯片需要多久完成内部动作，以及多字节数据用阻塞还是 DMA 搬运。DMA 指直接存储器访问：外设与内存之间成块搬运数据，CPU 不必逐字节参与，只在启动和结束时处理标志。本工程单字节读写走阻塞路径，多字节读走 DMA 路径并在失败时回退到阻塞路径。
 
 两条路径并存带来一处容易被忽略的差别：加速度计的读操作在地址与数据之间需要一个哑字节，而两条路径各有自己的地址发送，同一次读里可能出现多次地址字节。这一处是否需要修正，标为待实测。
 
@@ -32,7 +32,7 @@ IMU 读取的通信层要处理三件事：片选什么时候把哪一块传感�
 片选低电平表示选中。每次操作由同一个函数成对完成拉低、收发、拉高三步。片选函数本身只翻转引脚：
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:180-194 */
+/* BMI088/Src/BMI088.cpp */
 void BMI088::csAccelLow() {
     HAL_GPIO_WritePin(cs_accel_port_, cs_accel_pin_, GPIO_PIN_RESET);
 }
@@ -48,27 +48,38 @@ void BMI088::csAccelHigh() {
 
 ## 两个等待常量的用途
 
-工程里定义了两个等待常量（`BMI088/BMI088config.h:205-207`）：
+工程里定义了两个等待常量（`BMI088/BMI088config.h`）：
 
 | 常量 | 值 | 用途 |
 | --- | --- | --- |
 | `BMI088_COM_WAIT_SENSOR_TIME` | 150 微秒 | 每次寄存器读写前后等待内部生效 |
 | `BMI088_LONG_DELAY_TIME` | 80 毫秒 | 软复位后等待器件重启 |
 
-两者都用 DWT 实现。`BSP/Src/bsp_dwt.cpp:24-30` 用 CPU 周期数换算微秒：
+两者都用 DWT 实现。DWT 是 Cortex-M 内核自带的周期计数器，可以直接读出 CPU 时钟周期数，因此不需要占用一个定时器就能做微秒级延时。`BSP/Src/bsp_dwt.cpp` 用 CPU 周期数换算微秒：
 
 $$N_{\text{cycles}} = \frac{f_{\text{HCLK}}}{10^{6}} \times t_{\mu s}$$
 
-168 MHz 时每微秒 168 个周期，150 微秒对应 25200 个周期。毫秒延时用微秒延时循环实现（`BSP/Src/bsp_dwt.cpp:32-36`）。
+168 MHz 时每微秒 168 个周期，150 微秒对应 25200 个周期。毫秒延时用微秒延时循环实现（`BSP/Src/bsp_dwt.cpp`）。
 
-150 微秒的等待只出现在初始化路径：每次读芯片 ID 与每次配置寄存器读写之间（`BMI088/Src/BMI088.cpp:47-59`、`:70-72`）。正常读数据路径里没有这个等待，只靠 SPI 的传输间隔。
+简化后的实现只用一条周期计数差值：
+
+```c
+/* 简化：BSP/Src/bsp_dwt.cpp 的微秒延时思路 */
+void DWT_Delay_us(uint32_t us) {
+    uint32_t start = DWT->CYCCNT;
+    uint32_t ticks = us * (SystemCoreClock / 1000000U);  /* 168 MHz 时为 168 周期/微秒 */
+    while ((DWT->CYCCNT - start) < ticks) { }
+}
+```
+
+150 微秒的等待只出现在初始化路径：每次读芯片 ID 与每次配置寄存器读写之间（`BMI088/Src/BMI088.cpp`）。正常读数据路径里没有这个等待，只靠 SPI 的传输间隔。
 
 ## 单字节阻塞与多字节 DMA 的分工
 
 单字节读写用一个固定长度 1 的收发：
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:260-265 */
+/* BMI088/Src/BMI088.cpp */
 inline uint8_t BMI088::BMI088_readandwrite_byte(uint8_t txdata)
 {
     uint8_t rx_data;
@@ -81,10 +92,23 @@ inline uint8_t BMI088::BMI088_readandwrite_byte(uint8_t txdata)
 
 多字节读分两条实现：
 
-- 阻塞版 `BMI088_read_multiple_reg()`（`:268-277`）：发一次地址，然后循环收发 `len` 次。
-- DMA 版 `BMI088_read_multiple_reg_dma()`（`:279-315`）：发一次地址，填充哑字节缓冲，启动 `HAL_SPI_TransmitReceive_DMA`，轮询完成标志。
+- 阻塞版 `BMI088_read_multiple_reg()`：发一次地址，然后循环收发 `len` 次。
+- DMA 版 `BMI088_read_multiple_reg_dma()`：发一次地址，填充哑字节缓冲，启动 `HAL_SPI_TransmitReceive_DMA`，轮询完成标志。
 
-加速度计的多字节读在调用 DMA 版之前额外发了一次地址（`:217`），陀螺仪没有这一行（`:248-250`）。DMA 版内部也会发地址（`:288`），因此加速度计路径上会出现两个地址字节，陀螺仪路径只有一个。是否因此造成读回数据错位，需要逻辑分析仪核对 MOSI 与 MISO 波形，标注为待实测。
+加速度计的多字节读在调用 DMA 版之前额外发了一次地址，陀螺仪没有这一行。DMA 版内部也会发地址，因此加速度计路径上会出现两个地址字节，陀螺仪路径只有一个。是否因此造成读回数据错位，需要逻辑分析仪核对 MOSI 与 MISO 波形，标注为待实测。
+
+阻塞版的循环是最直接的写法：
+
+```cpp
+/* 简化：阻塞版多字节读，逐字节收发 */
+HAL_StatusTypeDef BMI088::BMI088_read_multiple_reg(uint8_t reg, uint8_t *buf, uint8_t len) {
+    BMI088_readandwrite_byte(reg | 0x80);          /* 先发地址 */
+    for (uint8_t i = 0; i < len; ++i) {
+        buf[i] = BMI088_readandwrite_byte(0x55);   /* 全双工下主机必须提供数据 */
+    }
+    return HAL_OK;
+}
+```
 
 ```mermaid
 flowchart TD
@@ -110,12 +134,12 @@ flowchart TD
 DMA 传输完成后，HAL 在中断上下文里调用回调。驱动用两个文件级标志记录结果：
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:15-17 */
+/* BMI088/Src/BMI088.cpp */
 static volatile uint8_t bmi088_spi_dma_done = 0;
 static volatile uint8_t bmi088_spi_dma_error = 0;
 static uint8_t bmi088_dma_tx_buf[BMI088_DMA_MAX_LEN];
 
-/* BMI088/Src/BMI088.cpp:356-369（节选） */
+/* BMI088/Src/BMI088.cpp（节选） */
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) {
     if (hspi == &hspi1) { bmi088_spi_dma_done = 1; }
 }
@@ -147,19 +171,19 @@ sequenceDiagram
 
 | 项目 | 取值 | 源码位置 |
 | --- | --- | --- |
-| 加速度计片选 | PA4 | `BMI088/Src/BMI088.cpp:343-344` |
-| 陀螺仪片选 | PB0 | `:343-345` |
-| 片选初始电平 | 高 | `Core/Src/gpio.c:63`、`:66` |
-| SPI1 DMA 接收 | DMA2_Stream2，Channel3 | `Core/Src/spi.c:99-108` |
-| SPI1 DMA 发送 | DMA2_Stream3，Channel3 | `Core/Src/spi.c:117-126` |
-| DMA 发送缓冲上限 | 32 字节 | `BMI088/Src/BMI088.cpp:11-13` |
+| 加速度计片选 | PA4 | `BMI088/Src/BMI088.cpp` |
+| 陀螺仪片选 | PB0 | `BMI088/Src/BMI088.cpp` |
+| 片选初始电平 | 高 | `Core/Src/gpio.c` |
+| SPI1 DMA 接收 | DMA2_Stream2，Channel3 | `Core/Src/spi.c` |
+| SPI1 DMA 发送 | DMA2_Stream3，Channel3 | `Core/Src/spi.c` |
+| DMA 发送缓冲上限 | 32 字节 | `BMI088/Src/BMI088.cpp` |
 
-DMA 流在 `HAL_SPI_MspInit` 里初始化（`Core/Src/spi.c:64-137`），两条流都是单次模式、字节宽度、内存地址自增、外设地址固定。SPI1_RX 优先级最高，SPI1_TX 为高。
+DMA 流在 `HAL_SPI_MspInit` 里初始化（`Core/Src/spi.c`），两条流都是单次模式、字节宽度、内存地址自增、外设地址固定。SPI1_RX 优先级最高，SPI1_TX 为高。
 
 ## DMA 读函数逐行
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:279-315（节选） */
+/* BMI088/Src/BMI088.cpp（节选） */
 HAL_StatusTypeDef BMI088::BMI088_read_multiple_reg_dma(uint8_t reg, uint8_t *buf, uint8_t len)
 {
     if (!buf || len == 0 || len > BMI088_DMA_MAX_LEN) return HAL_ERROR;
@@ -195,18 +219,18 @@ HAL_StatusTypeDef BMI088::BMI088_read_multiple_reg_dma(uint8_t reg, uint8_t *buf
 `accelReadMulti` 与 `gyroReadMulti` 在 DMA 返回非 `HAL_OK` 时调用阻塞版重读一次：
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:218-224（加速度计） */
+/* BMI088/Src/BMI088.cpp（加速度计） */
 HAL_StatusTypeDef st = BMI088_read_multiple_reg_dma(reg, data, (uint8_t)len);
 if (st != HAL_OK) {
     BMI088_read_multiple_reg(reg, data, len);
 }
 ```
 
-回退路径保证单次通信失败不至于让本次读取整体失败。代价是加速度计回退时，连同 `:217` 与 DMA 版 `:288` 的两次地址，阻塞版 `:270` 还会再发一次，同一次读里出现三次地址字节。这一点的实际影响同样列为待实测。
+回退路径保证单次通信失败不至于让本次读取整体失败。代价是加速度计回退时，`accelReadMulti()` 自己发的一次地址、DMA 版内部发的一次地址与阻塞版再发的一次地址叠在一起，同一次读里出现三次地址字节。这一点的实际影响同样列为待实测。
 
 ## 与 1 毫秒任务周期的关系
 
-`ImuTask` 主循环周期 1 毫秒，循环末尾用 `DWT_Delay_ms(1)` 忙等（`Task/Src/ImuTask.cpp:111`）。每次三轴读取包含加速度计 6 字节、陀螺仪 8 字节、温度 2 字节共三次多字节传输。以 1.3125 MHz 计，纯传输时间约
+`ImuTask` 主循环周期 1 毫秒，循环末尾用 `DWT_Delay_ms(1)` 忙等（`Task/Src/ImuTask.cpp`）。每次三轴读取包含加速度计 6 字节、陀螺仪 8 字节、温度 2 字节共三次多字节传输。以 1.3125 MHz 计，纯传输时间约
 
 $$(6 + 8 + 2) \times \frac{8}{1.3125\ \text{MHz}} \approx 97.5\ \mu\text{s}$$
 
@@ -216,7 +240,7 @@ $$(6 + 8 + 2) \times \frac{8}{1.3125\ \text{MHz}} \approx 97.5\ \mu\text{s}$$
 
 ### 在 DMA 完成前拉高片选
 
-片选必须在 DMA 传输结束后才释放。若在启动 DMA 之后立即拉高片选，芯片会在传输中途被取消，读回的数据不完整。本工程把拉高放在 DMA 函数返回之后（`:225`、`:256`），DMA 函数内部会等待完成标志，顺序正确。
+片选必须在 DMA 传输结束后才释放。若在启动 DMA 之后立即拉高片选，芯片会在传输中途被取消，读回的数据不完整。本工程把拉高放在 DMA 函数返回之后，DMA 函数内部会等待完成标志，顺序正确。
 
 ### 缓冲长度超过上限
 
@@ -236,11 +260,11 @@ DMA 发送缓冲固定 32 字节。`convertData` 之前的多字节读最长 8 �
 
 ### 地址重复发送
 
-加速度计路径在 `:217` 与 DMA 版 `:288` 各发一次地址，回退时阻塞版 `:270` 再发一次。是否需要其中一次作为加速度计要求的哑字节，按手册与实测波形确认。这一项的后果是数据可能整体偏移一个寄存器。
+加速度计路径在 `accelReadMulti()` 与 DMA 版内部各发一次地址，回退时阻塞版再发一次。是否需要其中一次作为加速度计要求的哑字节，按手册与实测波形确认。这一项的后果是数据可能整体偏移一个寄存器。
 
 ### 初始化等待不足
 
-软复位后只等一次 80 毫秒（`:53`、`:94`）。若实际器件重启时间更长，随后的配置写入会失败，且因为 `init()` 丢失错误码而静默。定位方式是在 `accelInit()` 与 `gyroInit()` 内观察回读值。
+软复位后只等一次 80 毫秒。若实际器件重启时间更长，随后的配置写入会失败，且因为 `init()` 丢失错误码而静默。定位方式是在 `accelInit()` 与 `gyroInit()` 内观察回读值。
 
 ## 小结
 
@@ -281,10 +305,10 @@ DMA 发送缓冲固定 32 字节。`convertData` 之前的多字节读最长 8 �
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 片选函数（:180-194）、单字节收发（:260-265）、阻塞多字节（:268-277）、DMA 多字节（:279-315）、标志与回调（:15-17、:356-369）、多字节入口（:215-226、:247-257） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/BMI088config.h` | 两个等待常量（:205-207）、DMA 长度上限宏引用 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp` | 微秒与毫秒延时实现（:24-36） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 参数（:42-53）、DMA 流配置（:64-137） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c` | 片选初始电平与模式（:63、:66、:94-106） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 读取调用与 1 毫秒循环（:40-43、:111） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/spi.c` | 底盘板 DMA 流配置一致（:99-132） |
+| `BMI088/Src/BMI088.cpp` | 片选函数、单字节收发、阻塞多字节、DMA 多字节、标志与回调、多字节入口 |
+| `BMI088/BMI088config.h` | 两个等待常量、DMA 长度上限宏引用 |
+| `BSP/Src/bsp_dwt.cpp` | 微秒与毫秒延时实现 |
+| `Core/Src/spi.c` | SPI1 参数、DMA 流配置 |
+| `Core/Src/gpio.c` | 片选初始电平与模式 |
+| `Task/Src/ImuTask.cpp` | 读取调用与 1 毫秒循环 |
+| `底盘板 Core/Src/spi.c` | 底盘板 DMA 流配置一致 |

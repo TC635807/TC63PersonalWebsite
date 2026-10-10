@@ -2,7 +2,7 @@
 title: proxy_pass 与上游转发
 summary: proxy_pass 的 URI 替换规则、上游地址的两种表达方式、协议版本与 Upgrade 的关系、连接复用的前提，以及单实例 uvicorn 的监听范围与路径对齐。
 tags: [nginx, proxy_pass, 上游, uvicorn, systemd]
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 # proxy_pass 与上游转发
@@ -18,7 +18,7 @@ updated: 2026-10-07
 | 直接地址 | `proxy_pass http://127.0.0.1:8000/api/;` | 单实例、地址固定 |
 | upstream 块 | 先定义 `upstream backend { server ...; }`，再 `proxy_pass http://backend;` | 多实例、需要负载均衡或连接池 |
 
-本工程用的是第一种，`deploy/nginx.conf:16` 与 `deploy/deploy.sh:53` 都是内联地址，没有 `upstream` 块。单实例部署下这层抽象没有收益，代价是无法配置到上游的持久连接。
+本工程用的是第一种，`deploy/nginx.conf` 与 `deploy/deploy.sh` 都是内联地址，没有 `upstream` 块。`upstream` 是 nginx 给「一组后端」起名字的语法块，只有先把地址收进它，才能在上面挂负载均衡与到上游的持久连接；单实例部署下这层抽象没有收益，代价就是没有持久连接可用。
 
 ```mermaid
 flowchart LR
@@ -29,17 +29,25 @@ flowchart LR
   S["systemd ExecStart"] -.->|"绑定回环地址"| U
 ```
 
-后端由 systemd 拉起，命令在 `deploy/knowledgediver.service:10`：
+后端由 systemd 拉起，命令在 `deploy/knowledgediver.service`：
 
 ```bash
 ExecStart=/opt/knowledgediver/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-`deploy/deploy.sh:129` 生成的单元内容相同，只是路径用 `$APP_DIR` 展开。`--host 127.0.0.1` 表示只监听回环接口，8000 端口不对外暴露，访问后端只能经 nginx。这是一项有意的边界，改动监听地址会绕过代理直接暴露应用。
+`deploy/deploy.sh` 生成的单元内容相同，只是路径用 `$APP_DIR` 展开。`--host 127.0.0.1` 表示只监听回环接口，8000 端口不对外暴露，访问后端只能经 nginx。这是一项有意的边界，改动监听地址会绕过代理直接暴露应用。
 
 ## proxy_pass 带不带 URI 决定替换方式
 
-规则是：带 URI 时，把 location 匹配到的那一段前缀替换为 `proxy_pass` 的 URI；不带 URI 时，原请求 URI 原样透传。以 `location /api/`、请求 `/api/foo` 为例：
+规则是：带 URI 时，把 location 匹配到的那一段前缀替换为 `proxy_pass` 的 URI；不带 URI 时，原请求 URI 原样透传。本工程的实际写法只有一行关键：
+
+```nginx
+# deploy/nginx.conf
+location /api/ {
+    proxy_pass http://127.0.0.1:8000/api/;
+```
+
+`location /api/` 匹配到的前缀是 `/api/`，`proxy_pass` 里的 URI 也是 `/api/`，两者等长，替换后路径不变。以 `location /api/`、请求 `/api/foo` 为例：
 
 | proxy_pass 写法 | 上游收到的 URI | 说明 |
 | --- | --- | --- |
@@ -50,13 +58,32 @@ ExecStart=/opt/knowledgediver/.venv/bin/uvicorn backend.main:app --host 127.0.0.
 
 替换是字符串级的前缀替换，不是路径段级的合并，所以最后一行才会把 `/api` 和 `foo` 粘成 `/apifoo`。这类错误不会报语法错，只会让后端返回 404。
 
-本工程的后端路由本身就带 `/api` 前缀（`backend/routes/pipeline.py:65`），因此 nginx 侧必须保留该前缀，`proxy_pass` 的 URI 写成 `/api/`。若写成不带 URI 的形式，结果相同；写成单个 `/` 则会把前缀剥掉，后端全部 404。
+本工程的后端路由本身就带 `/api` 前缀（`backend/routes/pipeline.py`），因此 nginx 侧必须保留该前缀，`proxy_pass` 的 URI 写成 `/api/`。若写成不带 URI 的形式，结果相同；写成单个 `/` 则会把前缀剥掉，后端全部 404。
 
-正则 `location` 中匹配段无法用前缀长度计算，官方建议 `proxy_pass` 不带 URI。本工程用的是普通前缀 `location`，替换规则按上表执行，替换只作用于路径部分，查询串由 nginx 自动附加，不需要写进 `proxy_pass` 的 URI。前端请求 `/api/tasks?session_id=xxx`（`frontend/src/api/task.ts:6`）时，上游收到的是同一条带查询串的路径。
+正则 `location` 中匹配段无法用前缀长度计算，官方建议 `proxy_pass` 不带 URI。本工程用的是普通前缀 `location`，替换规则按上表执行，替换只作用于路径部分，查询串由 nginx 自动附加，不需要写进 `proxy_pass` 的 URI。前端请求 `/api/tasks?session_id=xxx`（`frontend/src/api/task.ts`）时，上游收到的是同一条带查询串的路径。
 
 ## 前缀保留带来的路径一致性
 
-前端请求 `/api/agent/chat`（`frontend/src/api/agent.ts:52`），经 `location /api/` 与 `proxy_pass .../api/` 后，上游收到的仍是 `/api/agent/chat`。FastAPI 侧的路由按完整路径注册，例如 `backend/routes/auth.py:58` 的 `/api/auth/register`、`backend/routes/classification.py:17` 的前缀 `/api/classification`。三段路径首尾一致，替换规则在这里表现为恒等。
+前端请求 `/api/agent/chat`，经 `location /api/` 与 `proxy_pass .../api/` 后，上游收到的仍是 `/api/agent/chat`。FastAPI 侧的路由用两种写法注册，最终路径都以 `/api` 开头：
+
+```python
+# backend/routes/auth.py：完整路径直接写在装饰器里
+router = APIRouter()
+
+@router.post("/api/auth/register", response_model=Token)
+```
+
+```python
+# backend/routes/classification.py：模块级 prefix 加装饰器相对路径
+router = APIRouter(prefix="/api/classification", tags=["classification"])
+```
+
+```ts
+// frontend/src/api/agent.ts：前端写的是同一条绝对路径
+const resp = await fetch('/api/agent/chat', { ... });
+```
+
+`APIRouter` 是 FastAPI 里把一组接口聚成一个模块、再整体挂到应用上的对象；装饰器里的路径会与模块的 `prefix` 拼成最终路径。两种写法都必须自带 `/api`，否则 nginx 的前缀替换就从恒等变成剥离，后端全部 404。三段路径首尾一致，替换规则在这里表现为恒等。
 
 恒等替换的好处是排查时不用心算前缀，nginx 与后端看到同一条路径。代价是接口路径的前缀成了两侧的契约：后端改前缀必须同时改 `proxy_pass` 的 URI，否则替换从恒等变成剥离或拼接，症状从 404 到路径粘连都可能出现。
 
@@ -66,9 +93,16 @@ ExecStart=/opt/knowledgediver/.venv/bin/uvicorn backend.main:app --host 127.0.0.
 
 ## 协议版本与 Upgrade
 
-`proxy_http_version 1.1;`（`deploy/nginx.conf:17`）把 nginx 发给上游的协议从默认的 HTTP/1.0 提到 1.1。HTTP/1.0 默认关闭连接，1.1 允许连接复用，也是 WebSocket 升级所需的前提。
+`proxy_http_version 1.1;` 把 nginx 发给上游的协议从默认的 HTTP/1.0 提到 1.1。HTTP/1.0 默认一个请求一条连接，1.1 默认保持连接可复用，也是 WebSocket 升级所需的前提。同块的三行配套出现：
 
-同块的 `proxy_set_header Connection 'upgrade';`（`:19`）配合 `Upgrade` 头，使带升级意图的请求能透传到上游。请求头的完整处理放在下一页。
+```nginx
+# deploy/nginx.conf
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection 'upgrade';
+```
+
+`Upgrade` 是 HTTP 的协议切换机制：客户端在请求头里声明想从 HTTP 换成 WebSocket 一类的协议，服务端同意后回 101，同一条 TCP 连接改跑新协议。代理在中间会终止并重建逐跳头，不做这两行透传，升级请求就会被当成普通 HTTP 请求处理，握手失败。请求头的完整处理放在下一页。
 
 若不写这两行 `proxy_set_header`，nginx 的默认值会把 `Host` 改成上游地址、把 `Connection` 改成 `close`。配置显式覆盖了这两个默认值，改动前需要知道它们并非空操作。
 
@@ -92,7 +126,7 @@ sequenceDiagram
   N->>U: 重新建连
 ```
 
-要打开复用，需要把上游提到 `upstream` 块并加 `keepalive`，同时把 `Connection` 头置空。本工程未使用，属于通用做法，未在本工程验证。
+要打开复用，需要把上游提到 `upstream` 块并加 `keepalive`，同时把 `Connection` 头置空。`keepalive` 声明的是每个 worker 对上游保留多少条空闲连接不关；没有它，即便协议是 HTTP/1.1，nginx 也默认发 `Connection: close`，每条请求仍要重新建连。本工程未使用，属于通用做法，未在本工程验证。
 
 回环连接的成本只有一次本地握手，几微秒量级，本工程的请求量下没有必要为此引入 `upstream` 块与新的配置面。若后端将来拆成多个实例或需要跨机部署，连接复用的收益才会显现。
 
@@ -102,19 +136,19 @@ sequenceDiagram
 
 地址与端口在两个地方出现：nginx 的 `proxy_pass` 与 systemd 单元的 `ExecStart`。改了 uvicorn 的端口而没改 nginx，症状是 502；改了 nginx 而没改单元，症状同样是 502，区别只在上游是否在监听以及 error 日志里记录的连接结果。
 
-| 文件 | 行 | 内容 |
-| --- | --- | --- |
-| `deploy/nginx.conf` | `:15` | `location /api/` |
-| `deploy/nginx.conf` | `:16` | `proxy_pass http://127.0.0.1:8000/api/;` |
-| `deploy/nginx.conf` | `:17` | `proxy_http_version 1.1;` |
-| `deploy/deploy.sh` | `:52-62` | HTTP 块内同一组指令 |
-| `deploy/deploy.sh` | `:85-95` | HTTPS 块内同一组指令 |
+| 文件 | 内容 |
+| --- | --- |
+| `deploy/nginx.conf` | `location /api/` |
+| `deploy/nginx.conf` | `proxy_pass http://127.0.0.1:8000/api/;` |
+| `deploy/nginx.conf` | `proxy_http_version 1.1;` |
+| `deploy/deploy.sh` | HTTP 块内同一组指令 |
+| `deploy/deploy.sh` | HTTPS 块内同一组指令 |
 
-三段配置内容一致，改动 `:16` 的路径或端口需要同步另外两处。部署脚本生成的站点文件是 `/etc/nginx/sites-available/knowledgediver`，样例文件 `deploy/nginx.conf` 只用于阅读。
+三段配置内容一致，改动 `proxy_pass` 的路径或端口需要同步另外两处。部署脚本生成的站点文件是 `/etc/nginx/sites-available/knowledgediver`，样例文件 `deploy/nginx.conf` 只用于阅读。
 
 核对运行态里实际生效的地址，用 `nginx -T` 打印展开后的完整配置，再在输出里搜 `proxy_pass`。样例文件与站点文件同时存在时，这一步能确认加载的是哪一份。
 
-上游端口是否在监听，用 `ss -ltnp | grep 8000` 看。输出里同时给出进程名，能排除端口被别的进程占用的情况。
+上游端口是否在监听，用 `ss -ltnp | grep 8000` 看。`ss` 是查套接字状态的命令：`-l` 只列监听中的、`-t` 限 TCP、`-n` 直接显示端口号不做反查、`-p` 带上占用它的进程。输出里同时给出进程名，能排除端口被别的进程占用的情况。
 
 地址改动的验证只需要两条请求：一条经 nginx，一条直连改后的端口。两条都通说明两处配置一致；直连通而经 nginx 502 说明 nginx 仍指向旧端口。
 
@@ -142,13 +176,13 @@ sequenceDiagram
 
 | # | 误用 | 现象 | 位置 |
 | --- | --- | --- | --- |
-| 1 | `proxy_pass` 带 URI 与不带 URI 混用 | 前缀被剥掉或重复，后端 404 | `deploy/nginx.conf:16` |
-| 2 | 漏写结尾斜杠 | `/api` 段与后续路径粘连成一条新路径 | `deploy/nginx.conf:16` |
-| 3 | 以为 `proxy_http_version 1.1` 等于长连接 | 每个请求仍新建 TCP 连接 | `deploy/nginx.conf:17` |
-| 4 | 上游改成 `localhost` | 解析到 `::1`，与 IPv4 监听不匹配，502 | `deploy/knowledgediver.service:10` |
-| 5 | 改了 uvicorn 端口而未改 nginx | 502 Bad Gateway | `deploy/nginx.conf:16` |
-| 6 | 把 uvicorn 监听改成 0.0.0.0 | 8000 端口可从外部直连，绕过 nginx | `deploy/knowledgediver.service:10` |
-| 7 | 只改一处代理块 | HTTP 与 HTTPS 行为不一致 | `deploy/deploy.sh:52-62`、`:85-95` |
+| 1 | `proxy_pass` 带 URI 与不带 URI 混用 | 前缀被剥掉或重复，后端 404 | `deploy/nginx.conf` |
+| 2 | 漏写结尾斜杠 | `/api` 段与后续路径粘连成一条新路径 | `deploy/nginx.conf` |
+| 3 | 以为 `proxy_http_version 1.1` 等于长连接 | 每个请求仍新建 TCP 连接 | `deploy/nginx.conf` |
+| 4 | 上游改成 `localhost` | 解析到 `::1`，与 IPv4 监听不匹配，502 | `deploy/knowledgediver.service` |
+| 5 | 改了 uvicorn 端口而未改 nginx | 502 Bad Gateway | `deploy/nginx.conf` |
+| 6 | 把 uvicorn 监听改成 0.0.0.0 | 8000 端口可从外部直连，绕过 nginx | `deploy/knowledgediver.service` |
+| 7 | 只改一处代理块 | HTTP 与 HTTPS 行为不一致 | `deploy/deploy.sh` |
 
 第 2 行的症状有一个快速判据：直连上游访问同一条路径能通，经 nginx 不通，且 error 日志里没有连接错误，说明路径在代理层被改写。把 `proxy_pass` 的 URI 与 `location` 前缀并排抄下来对比，比读 nginx 文档更快。
 
@@ -165,7 +199,7 @@ sequenceDiagram
 
 ### 设计权衡
 
-| 权衡点 | 本工程选择 | 收益与代价 |
+| 权衡点 | 选择 | 收益与代价 |
 | --- | --- | --- |
 | 内联地址还是 upstream 块 | 内联 | 配置短；代价是无法配置 keepalive 与负载均衡 |
 | 是否剥掉 `/api` 前缀 | 保留 | nginx 与后端路径一一对应；代价是后端路由必须自带前缀 |
@@ -190,11 +224,11 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `deploy/nginx.conf` | `location /api/` 与 `proxy_pass`（`:15-25`） |
-| `deploy/deploy.sh` | 生成两段代理块与 systemd 单元（`:52-62`、`:85-95`、`:129`） |
-| `deploy/knowledgediver.service` | 上游绑定回环地址（`:10`） |
-| `backend/main.py` | 应用与路由注册（`:47`、`:130-144`） |
-| `backend/routes/auth.py`、`backend/routes/classification.py` | 后端完整 `/api` 路径（`:58`、`:17`） |
-| `frontend/src/api/agent.ts` | 前端请求路径（`:52`） |
+| `deploy/nginx.conf` | `location /api/` 与 `proxy_pass` |
+| `deploy/deploy.sh` | 生成两段代理块与 systemd 单元 |
+| `deploy/knowledgediver.service` | 上游绑定回环地址 |
+| `backend/main.py` | 应用与路由注册 |
+| `backend/routes/auth.py`、`backend/routes/classification.py` | 后端完整 `/api` 路径 |
+| `frontend/src/api/agent.ts` | 前端请求路径 |
 | 仓库根 `~/KnowledgeDiver` | 正文路径相对该根 |
 

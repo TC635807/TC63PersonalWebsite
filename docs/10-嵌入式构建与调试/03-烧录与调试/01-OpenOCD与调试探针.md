@@ -28,7 +28,7 @@ updated: 2026-10-07
 | --- | --- | --- |
 | 信号线 | SWCLK、SWDIO，另加 GND | TCK、TMS、TDI、TDO |
 | 引脚占用 | PA13、PA14 | PA13 至 PA15、PB3、PB4 |
-| 本工程状态 | 已配置（`2026sentriomeni.ioc:259-262`） | 未配置 |
+| 本工程状态 | 已配置（`2026sentriomeni.ioc`） | 未配置 |
 | 典型用途 | 单芯片下载与调试 | 多器件菊花链、边界扫描 |
 
 F407 上两种接口共用 PA13 到 PA15 与 PB3、PB4 这组引脚，同一时刻只能选一种。本工程只配了 SWD，因为目标是单芯片、不需要菊花链，而 JTAG 多占的三根线在板级布局里没有余量。
@@ -122,7 +122,7 @@ stateDiagram-v2
 
 ## 8. 两板的 SWD 引脚与时钟前提
 
-两板都是 STM32F407IGH6（`2026sentriomeni.ioc:159`，`Mcu.UserName` 在 `:216`），SWD 引脚已由 CubeMX 固定为 PA13/PA14（`:259-262`），没有 JTAG 走线。系统时钟是 12 MHz 外部晶振经 PLL 倍频到 168 MHz（`2026sentriomeni.ioc:374-375,383-390`；`Core/Src/main.c:165-172`）。
+两板都是 STM32F407IGH6（`2026sentriomeni.ioc`，`Mcu.UserName` 在 ），SWD 引脚已由 CubeMX 固定为 PA13/PA14，没有 JTAG 走线。系统时钟是 12 MHz 外部晶振经 PLL 倍频到 168 MHz（`2026sentriomeni.ioc,383-390`；`Core/Src/main.c`）。
 
 一个最小的 ST-Link 命令行写法如下，未在本工程实测：
 
@@ -181,7 +181,7 @@ openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
 
 1. 写出 SWD 与 JTAG 各自占用的引脚，并说明本工程为什么只配 SWD。
 2. 说明 OpenOCD 三个默认监听端口各自的用途与客户端类型。
-3. 从 `.ioc` 找出 SWD 引脚与外设时钟的配置位置与行号。
+3. 从 `.ioc` 找出 SWD 引脚与外设时钟的配置位置。
 
 ### 挑战题
 
@@ -193,8 +193,8 @@ openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc` | SWD 引脚、MCU 型号与时钟配置（:159、:216、:259-262、:374-390） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 时钟配置与 PLL 参数（:165-172） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc` | SWD 引脚、MCU 型号与时钟配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 时钟配置与 PLL 参数 |
 | `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/2026sentriomeni.ioc` | 底盘板同名配置源 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake` | 交叉工具链与调试信息选项 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf` | 调试构建产物 |

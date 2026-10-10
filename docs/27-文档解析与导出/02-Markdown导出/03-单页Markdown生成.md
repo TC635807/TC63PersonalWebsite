@@ -7,20 +7,20 @@ updated: 2026-10-07
 
 # 单页 Markdown 生成
 
-单页文档由若干个结构相同的小节拼成，每个小节对应一张卡片。`_format_card` 负责把一张 `Card` 变成若干行文本（`backend/export/markdown_exporter.py:98-138`），拼装顺序在 `export_tree_with_count` 的循环里固定下来。`_format_card` 的四段输出决定了单页的最终形态，锚点则完全取决于 `_slugify`（`:27-33`）：目录与标题能否对上就看它。卡片筛选与排序见 `02-卡片遍历与排序.md`。
+单页文档由若干个结构相同的小节拼成，每个小节对应一张卡片。`_format_card` 负责把一张 `Card` 变成若干行文本（`backend/export/markdown_exporter.py`），拼装顺序在 `export_tree_with_count` 的循环里固定下来。`_format_card` 的四段输出决定了单页的最终形态，锚点则完全取决于 `_slugify`：目录与标题能否对上就看它。卡片筛选与排序见 `02-卡片遍历与排序.md`。
 
 ## 1. 一个小节的四段结构
 
 `_format_card` 依次追加四段内容，每段都有各自的开关或前置条件：
 
-| 顺序 | 内容 | 生成条件 | 代码位置 |
-| --- | --- | --- | --- |
-| 1 | 标题行 | 总是输出 | `:107-109` |
-| 2 | 元数据引用块 | 三个 `include_*` 中任一为真，且对应字段非空 | `:111-123` |
-| 3 | 正文 | `card.content` 非空 | `:125-126` |
-| 4 | Related 行 | `card.links` 能解出至少一个已知卡片 | `:128-136` |
+| 顺序 | 内容 | 生成条件 |
+| --- | --- | --- |
+| 1 | 标题行 | 总是输出 |
+| 2 | 元数据引用块 | 三个 `include_*` 中任一为真，且对应字段非空 |
+| 3 | 正文 | `card.content` 非空 |
+| 4 | Related 行 | `card.links` 能解出至少一个已知卡片 |
 
-四段之间由换行连接，小节之间的分隔是渲染循环补的一行空行（`:76-78`），没有额外分隔线。文档整体在最后统一 `strip()`（`:80`）。
+四段之间由换行连接，小节之间的分隔是渲染循环补的一行空行，没有额外分隔线。文档整体在最后统一 `strip()`。
 
 ```mermaid
 flowchart TD
@@ -42,13 +42,13 @@ flowchart TD
 
 ## 2. 标题级别只由一个数字决定
 
-标题行的构造是 `"#" * max(heading_level, 1) + " " + card.title`（`backend/export/markdown_exporter.py:107`）。`heading_level` 来自 `ExportOptions.heading_level_start`，默认 1，所以默认输出里每张卡片都是一个一级标题。
+标题行的构造是 `"#" * max(heading_level, 1) + " " + card.title`（`backend/export/markdown_exporter.py`）。`heading_level` 来自 `ExportOptions.heading_level_start`，默认 1，所以默认输出里每张卡片都是一个一级标题。
 
-`max(..., 1)` 挡住的是非正数取值：传 0 或负数时会退化成一级标题，而不是输出零个井号加标题的非法行。传 2 则所有卡片变成二级标题，但目录标题仍固定为一级（`:69`），此时文档里会出现「一级目录 + 全二级小节」的组合。标题级别不会随卡片层级变化。模型的 `parent_id` 定义了父子关系（`backend/models/card.py:29`），导出器没有读取，所以同一次导出里所有卡片标题级别相同。
+`max(..., 1)` 挡住的是非正数取值：传 0 或负数时会退化成一级标题，而不是输出零个井号加标题的非法行。传 2 则所有卡片变成二级标题，但目录标题仍固定为一级，此时文档里会出现「一级目录 + 全二级小节」的组合。标题级别不会随卡片层级变化。模型的 `parent_id` 定义了父子关系（`backend/models/card.py`），导出器没有读取，所以同一次导出里所有卡片标题级别相同。
 
 ## 3. 元数据块的引用格式
 
-元数据最多三行，按 `metadata`、`sources`、`confidence` 的顺序收集（`backend/export/markdown_exporter.py:113-119`）：
+元数据最多三行，按 `metadata`、`sources`、`confidence` 的顺序收集（`backend/export/markdown_exporter.py`）：
 
 ```python
 metadata_lines.append(": Metadata: " + ", ".join([f"{k}: {v}" for k, v in card.metadata.items()]))
@@ -56,12 +56,12 @@ metadata_lines.append("Sources: " + ", ".join(card.sources))
 metadata_lines.append("Confidence: " + str(card.confidence))
 ```
 
-三行统一加 `> ` 前缀变成引用块（`:120-121`），块后补一空行（`:122-123`）。几个细节需要记下来：
+三行统一加 `> ` 前缀变成引用块，块后补一空行。几个细节需要记下来：
 
 - 元数据行以冒号开头，写作 `: Metadata: key: value`，第一个冒号在标准 Markdown 里没有特殊含义，但读起来像笔误。
 - 键值对用 `", "` 连接，值里若本身含逗号，边界就分不出来。
 - 来源是 URL 列表，直接以逗号拼接，没有做成 Markdown 链接。
-- 置信度用 `str()` 输出，浮点数的位数取决于 Python 的默认表示。三个开关各自独立：只关 `include_sources` 时，元数据与置信度照常输出。若三段都为空，整个引用块连同后面的空行都不会出现（`:122`）。
+- 置信度用 `str()` 输出，浮点数的位数取决于 Python 的默认表示。三个开关各自独立：只关 `include_sources` 时，元数据与置信度照常输出。若三段都为空，整个引用块连同后面的空行都不会出现。
 
 | 开关 | 关闭后的效果 |
 | --- | --- |
@@ -71,11 +71,24 @@ metadata_lines.append("Confidence: " + str(card.confidence))
 
 ## 4. 正文原样输出
 
-`card.content` 被直接追加，不做转义、不做缩进、不重新编号（`backend/export/markdown_exporter.py:125-126`）。卡片内容本身就是 Markdown（模型注释写明这一点，`backend/models/card.py:25`），直接拼接符合预期。代价是嵌套结构不受控：正文里若含一级标题，会与卡片标题同级，打乱文档层级；正文自带的围栏代码块也可能与文档自身的结构混淆。导出器不做检查，这类问题只能靠写入卡片时的约定避免。
+`card.content` 被直接追加，不做转义、不做缩进、不重新编号（`backend/export/markdown_exporter.py`）。卡片内容本身就是 Markdown（模型注释写明这一点，`backend/models/card.py`），直接拼接符合预期。代价是嵌套结构不受控：正文里若含一级标题，会与卡片标题同级，打乱文档层级；正文自带的围栏代码块也可能与文档自身的结构混淆。导出器不做检查，这类问题只能靠写入卡片时的约定避免。
 
 ## 5. 锚点 slug 的生成规则
 
-`_slugify` 四步转换（`backend/export/markdown_exporter.py:27-33`）：转小写、删除所有非 `[a-z0-9s-]` 字符、把空白与连字符折叠成单个连字符、去掉首尾连字符。
+锚点由标题转成，示意如下：
+
+```python
+# 示意：标题 → 锚点
+def slugify(title: str) -> str:
+    slug = re.sub(r"[^\w\u4e00-\u9fff-]+", "-", title.strip().lower())
+    if not slug:                       # 全是标点或空白时得到空串
+        return ""
+    return "#" + slug
+```
+
+"锚点"是 Markdown 标题自动生成的页内跳转标识：`## 小结`对应`#小结`，点击目录链接就跳到那一段。它依赖标题里的字符能保留下来；只用 ASCII 规则清洗时，纯中文或标点标题会被清成空串，目录项于是退化成指向页首的裸`#`。保留汉字的`\u4e00-\u9fff`范围是让中文标题也生成可用锚点的最小改动。
+
+`_slugify` 四步转换（`backend/export/markdown_exporter.py`）：转小写、删除所有非 `[a-z0-9s-]` 字符、把空白与连字符折叠成单个连字符、去掉首尾连字符。
 
 ```python
 s = title.lower()
@@ -84,7 +97,7 @@ s = re.sub(r"[s-]+", "-", s)
 return s.strip("-")
 ```
 
-规则里的字符集只覆盖 ASCII 字母数字。中文、日文、俄文标题在第二步会被整串删除，结果为空字符串。目录行因此变成 `- [标题](#)`，点击跳到文档开头而不是对应小节。标题里的空格与连字符会被规范化，所以 `Hello World` 与 `hello-world` 生成同一个锚点，同名小节之间也会互相覆盖。锚点不参与去重：`slug_map` 以卡片 ID 为键（`:64`），两张同名卡片得到同一个锚点，目录里两条链接指向同一个位置。
+规则里的字符集只覆盖 ASCII 字母数字。中文、日文、俄文标题在第二步会被整串删除，结果为空字符串。目录行因此变成 `- [标题](#)`，点击跳到文档开头而不是对应小节。标题里的空格与连字符会被规范化，所以 `Hello World` 与 `hello-world` 生成同一个锚点，同名小节之间也会互相覆盖。锚点不参与去重：`slug_map` 以卡片 ID 为键，两张同名卡片得到同一个锚点，目录里两条链接指向同一个位置。
 
 | 标题 | 生成锚点 | 目录链接 |
 | --- | --- | --- |
@@ -94,9 +107,9 @@ return s.strip("-")
 
 ## 6. Related 行只输出能解引用的链接
 
-`card.links` 存的是卡片 ID（`backend/models/card.py:27`）。渲染时逐个查 `id_to_card`，只有找到对象才生成 `[标题](#锚点)`（`backend/export/markdown_exporter.py:129-133`）。指向不存在卡片的 ID 被静默跳过；全部都无法解析时，连 `Related: ` 行本身都不会出现（`:134-136`）。
+`card.links` 存的是卡片 ID（`backend/models/card.py`）。渲染时逐个查 `id_to_card`，只有找到对象才生成 `[标题](#锚点)`（`backend/export/markdown_exporter.py`）。指向不存在卡片的 ID 被静默跳过；全部都无法解析时，连 `Related: ` 行本身都不会出现。
 
-锚点优先取 `slug_map` 中该 ID 的值，取不到时用 `_slugify(link_id)` 兜底（`:133`）。因为 `slug_map` 覆盖全部卡片，兜底分支实际上走不到，除非 `id_to_card` 与 `slug_map` 的构建出现了分歧。
+锚点优先取 `slug_map` 中该 ID 的值，取不到时用 `_slugify(link_id)` 兜底。因为 `slug_map` 覆盖全部卡片，兜底分支实际上走不到，除非 `id_to_card` 与 `slug_map` 的构建出现了分歧。
 
 ```mermaid
 sequenceDiagram
@@ -153,12 +166,12 @@ Related: [卡片树](#)
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
-| 用中文标题期待可用锚点 | 目录链接退化为 `#` | `_slugify` 只保留 ASCII（`:31`） |
-| 认为元数据是 YAML frontmatter | 输出是引用块，不是 `---` 包围的头部 | `:120-121` |
-| 把 `: Metadata: ` 当成语法 | 它是普通文本，第一个冒号无特殊含义 | `:115` |
-| 认为 Related 一定出现 | `links` 全为悬空 ID 时整行消失 | `:134-136` |
-| 认为标题级别跟随层级 | 只由 `heading_level_start` 决定 | `:107` |
-| 正文含一级标题 | 与卡片标题同级，层级被打乱 | `:125-126` 不做检查 |
+| 用中文标题期待可用锚点 | 目录链接退化为 `#` | `_slugify` 只保留 ASCII |
+| 认为元数据是 YAML frontmatter | 输出是引用块，不是 `---` 包围的头部 | — |
+| 把 `: Metadata: ` 当成语法 | 它是普通文本，第一个冒号无特殊含义 | — |
+| 认为 Related 一定出现 | `links` 全为悬空 ID 时整行消失 | — |
+| 认为标题级别跟随层级 | 只由 `heading_level_start` 决定 | — |
+| 正文含一级标题 | 与卡片标题同级，层级被打乱 | 不做检查 |
 
 ## 小结
 
@@ -203,5 +216,5 @@ Related: [卡片树](#)
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/export/markdown_exporter.py` | `_slugify`（:27-33）、标题行（:107-109）、元数据块（:111-123）、正文（:125-126）、Related（:128-136）、目录标题（:69） |
-| `backend/models/card.py` | 正文为 Markdown 的约定（:25）、`links`（:27）、`parent_id`（:29） |
+| `backend/export/markdown_exporter.py` | `_slugify`、标题行、元数据块、正文、Related、目录标题 |
+| `backend/models/card.py` | 正文为 Markdown 的约定、`links`、`parent_id` |

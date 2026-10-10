@@ -17,10 +17,10 @@ CubeMX 的 CMake 转换器以 `.ioc` 为输入，一次生成整套可编译工�
 
 | 类别 | 范围 | 重生成行为 | 依据 |
 | --- | --- | --- | --- |
-| 纯生成 | `Core/Inc`、`Drivers/`、`Middlewares/`、`USB_DEVICE/` | 整体覆盖 | `cmake/stm32cubemx/CMakeLists.txt:28-100` |
+| 纯生成 | `Core/Inc`、`Drivers/`、`Middlewares/`、`USB_DEVICE/` | 整体覆盖 | `cmake/stm32cubemx/CMakeLists.txt` |
 | 带保留区 | `Core/Src/*.c`、`Core/Inc/*.h` | 覆盖，USER CODE 段保留 | `.ioc` 的 KeepUserCode |
-| 只生成一次 | 顶层 `CMakeLists.txt` | 不覆盖 | `CMakeLists.txt:3-7` |
-| 手工维护 | `BSP/`、`Task/`、`Algorithm/`、`Communication/`、`PID/`、`Chassis/`、`Debug_vars/`、`Message_Bus/`、`referee/`、`BMI088/` | 生成器不感知 | `CMakeLists.txt:34-92` |
+| 只生成一次 | 顶层 `CMakeLists.txt` | 不覆盖 | `CMakeLists.txt` |
+| 手工维护 | `BSP/`、`Task/`、`Algorithm/`、`Communication/`、`PID/`、`Chassis/`、`Debug_vars/`、`Message_Bus/`、`referee/`、`BMI088/` | 生成器不感知 | `CMakeLists.txt` |
 
 区分的判据只有一条：文件是否出现在 `.ioc` 的工程配置与转换器输出清单里。自建目录不在清单内，所以 CubeMX 重生成既不覆盖也不登记，必须手工写进顶层 `CMakeLists.txt`。
 
@@ -34,13 +34,13 @@ CubeMX 的 CMake 转换器以 `.ioc` 为输入，一次生成整套可编译工�
 
 | 键 | 值 | 位置 |
 | --- | --- | --- |
-| ProjectManager.TargetToolchain | CMake | 底盘 `.ioc:358`、云台 `.ioc:355` |
-| ProjectManager.KeepUserCode | true | 底盘 `.ioc:346`、云台 `.ioc:343` |
-| ProjectManager.CoupleFile | true | 底盘 `.ioc:336`、云台 `.ioc:333` |
-| ProjectManager.DeletePrevious | true | 底盘 `.ioc:339`、云台 `.ioc:336` |
-| ProjectManager.DeviceId | STM32F407IGHx | 底盘 `.ioc:340`、云台 `.ioc:337` |
+| ProjectManager.TargetToolchain | CMake | 底盘 `.ioc`、云台 `.ioc` |
+| ProjectManager.KeepUserCode | true | 底盘 `.ioc`、云台 `.ioc` |
+| ProjectManager.CoupleFile | true | 底盘 `.ioc`、云台 `.ioc` |
+| ProjectManager.DeletePrevious | true | 底盘 `.ioc`、云台 `.ioc` |
+| ProjectManager.DeviceId | STM32F407IGHx | 底盘 `.ioc`、云台 `.ioc` |
 
-`KeepUserCode=true` 决定 USER CODE 段的保留，`DeletePrevious=true` 决定不再使用的旧生成文件会被删除。`.mxproject` 记录上一次的生成清单：`[PreviousUsedCMakes]` 在 `:4`，`[PreviousGenFiles]` 从 `:9` 开始列出源文件与头文件。
+`KeepUserCode=true` 决定 USER CODE 段的保留，`DeletePrevious=true` 决定不再使用的旧生成文件会被删除。`.mxproject` 记录上一次的生成清单：`[PreviousUsedCMakes]` 在 ，`[PreviousGenFiles]` 从  开始列出源文件与头文件。
 
 `.ioc` 与 `.mxproject` 的分工是输入与记录：前者是配置意图，后者是上次生成的实际结果。删除过时文件依赖后者的准确性，如果手工改动过生成目录导致清单与实际不符，重生成可能删错或漏删。
 
@@ -100,18 +100,18 @@ sequenceDiagram
 
 | 项 | 位置 | 内容 |
 | --- | --- | --- |
-| MCU 与封装 | `.ioc:159`、`.ioc:179` | STM32F407IGH6、UFBGA176 |
-| FreeRTOS 堆编号 | `.ioc:92` | HEAP_NUMBER=4 |
-| FreeRTOS 堆大小 | `.ioc:128` | configTOTAL_HEAP_SIZE=40960 |
-| 应用源清单 | `cmake/stm32cubemx/CMakeLists.txt:28-49` | USB、Core 与启动文件共 20 项 |
-| 系统与 HAL 源 | `cmake/stm32cubemx/CMakeLists.txt:52-78` | 共 25 项 |
-| 中间件源 | `cmake/stm32cubemx/CMakeLists.txt:83-100` | USB CDC 与 FreeRTOS |
-| 聚合接口库 | `cmake/stm32cubemx/CMakeLists.txt:113-115` | `stm32cubemx` INTERFACE 目标 |
-| 顶层源清单 | `CMakeLists.txt:34-92` | `add_executable` 列全部手工源文件 |
-| 顶层 include | `CMakeLists.txt:120-142` | 手工 include 目录 |
-| 子工程接入 | `CMakeLists.txt:95` | `add_subdirectory(cmake/stm32cubemx)` |
+| MCU 与封装 | `.ioc`、`.ioc` | STM32F407IGH6、UFBGA176 |
+| FreeRTOS 堆编号 | `.ioc` | HEAP_NUMBER=4 |
+| FreeRTOS 堆大小 | `.ioc` | configTOTAL_HEAP_SIZE=40960 |
+| 应用源清单 | `cmake/stm32cubemx/CMakeLists.txt` | USB、Core 与启动文件共 20 项 |
+| 系统与 HAL 源 | `cmake/stm32cubemx/CMakeLists.txt` | 共 25 项 |
+| 中间件源 | `cmake/stm32cubemx/CMakeLists.txt` | USB CDC 与 FreeRTOS |
+| 聚合接口库 | `cmake/stm32cubemx/CMakeLists.txt` | `stm32cubemx` INTERFACE 目标 |
+| 顶层源清单 | `CMakeLists.txt` | `add_executable` 列全部手工源文件 |
+| 顶层 include | `CMakeLists.txt` | 手工 include 目录 |
+| 子工程接入 | `CMakeLists.txt` | `add_subdirectory(cmake/stm32cubemx)` |
 
-两板的子工程清单逐行相同，差异只在自建源文件上：底盘 `CMakeLists.txt:79-82` 登记 `TestTask` 与 `ChassisTask`，云台 `CMakeLists.txt:60-61` 登记 `GimbalTask`，并在 `:88-97` 登记 USB 与裁判协议。手工清单是两板工程的主要分叉点。
+两板的子工程清单逐行相同，差异只在自建源文件上：底盘 `CMakeLists.txt` 登记 `TestTask` 与 `ChassisTask`，云台 `CMakeLists.txt` 登记 `GimbalTask`，并在  登记 USB 与裁判协议。手工清单是两板工程的主要分叉点。
 
 子工程清单相同这一点要单独记下：它意味着两板的 HAL、USB 与 FreeRTOS 源文件集合一致，重生成后的差异也只会来自各自 `.ioc` 的外设配置。核对两板差异时，先排除相同的部分，再只看顶层手工清单。
 
@@ -123,12 +123,12 @@ sequenceDiagram
 
 | 保留区 | 位置 | 内容 |
 | --- | --- | --- |
-| Includes | `Core/Src/main.c:33-39` | 引入 `bsp_dwt.h`、`bsp_can.h`、`dbus.h` |
-| 0 | 底盘 `main.c:70-82`；云台 `main.c:70-78` | DBUS 与裁判回调函数 |
-| 2 | 底盘 `main.c:124-133`；云台 `main.c:120-127` | `BSP_CAN_Init`、`BSP_DWT_Init`、串口登记 |
-| WHILE | 底盘 `main.c:144-151`；云台 `main.c:138-142` | 空循环主体 |
+| Includes | `Core/Src/main.c` | 引入 `bsp_dwt.h`、`bsp_can.h`、`dbus.h` |
+| 0 | 底盘 `main.c`；云台 `main.c` | DBUS 与裁判回调函数 |
+| 2 | 底盘 `main.c`；云台 `main.c` | `BSP_CAN_Init`、`BSP_DWT_Init`、串口登记 |
+| WHILE | 底盘 `main.c`；云台 `main.c` | 空循环主体 |
 
-`Core/Src/freertos.c` 的保留区承担任务入口登记，位置在两板之间相差 1 行以内：`FunctionPrototypes` 在底盘 `:59-65`、`RTOS_MUTEX` 在底盘 `:98-105`，云台对应 `:58-64` 与 `:99-105`。这些声明把 `Task/Inc` 下的任务入口接到 CubeMX 生成的调度框架里。USER CODE 之外的内容，例如 `osThreadDef(defaultTask, ...)`，由 `.ioc` 的 `FREERTOS.Tasks01` 决定。
+`Core/Src/freertos.c` 的保留区承担任务入口登记，位置在两板之间相差 1 行以内：`FunctionPrototypes` 在底盘 、`RTOS_MUTEX` 在底盘 ，云台对应  与 。这些声明把 `Task/Inc` 下的任务入口接到 CubeMX 生成的调度框架里。USER CODE 之外的内容，例如 `osThreadDef(defaultTask, ...)`，由 `.ioc` 的 `FREERTOS.Tasks01` 决定。
 
 保留区的内容分布说明生成物与手工代码是交织的：同一个文件里既有转换器写的初始化代码，也有用户写的回调与登记语句。读这类文件时要按标记分段，不能按函数名猜测归属。
 
@@ -141,9 +141,9 @@ sequenceDiagram
 | # | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- | --- |
 | 1 | 把手工代码写在 USER CODE 之外 | 下次重生成被覆盖 | `Core/Src/*.c` 标记外 |
-| 2 | 新增自建源文件不登记 | 链接期未定义引用 | `CMakeLists.txt:34-92` |
+| 2 | 新增自建源文件不登记 | 链接期未定义引用 | `CMakeLists.txt` |
 | 3 | 修改 `cmake/stm32cubemx/CMakeLists.txt` | 重生成被覆盖 | 子工程无 USER CODE 段 |
-| 4 | 认为顶层 CMakeLists.txt 会自动更新 | 新目录始终不编译 | `CMakeLists.txt:3-7` |
+| 4 | 认为顶层 CMakeLists.txt 会自动更新 | 新目录始终不编译 | `CMakeLists.txt` |
 | 5 | 手工文件放进 `Core/` | 与生成物同名时被覆盖 | `Core` 目录边界 |
 | 6 | 两板 `.ioc` 与 `.ld` 同名 | 改错板后现象无法区分 | `2026sentriomeni.ioc`、`STM32F407XX_FLASH.ld` |
 

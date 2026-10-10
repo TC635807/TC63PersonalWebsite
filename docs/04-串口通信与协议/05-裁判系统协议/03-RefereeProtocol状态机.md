@@ -7,7 +7,7 @@ updated: 2026-10-07
 
 # RefereeProtocol 状态机
 
-> 实现在 `Communication/Inc/referee_protocol.h:25-37` 的 `State` 枚举与 `Communication/Src/referee_protocol.cpp:26-134` 的 `input` 函数，两块板逐字节相同。帧字段布局见 `01-裁判系统链路与帧格式`，校验通过后的字段映射见 `04-RefereeDecode字段映射`。
+> 实现在 `Communication/Inc/referee_protocol.h` 的 `State` 枚举与 `Communication/Src/referee_protocol.cpp` 的 `input` 函数，两块板逐字节相同。帧字段布局见 `01-裁判系统链路与帧格式`，校验通过后的字段映射见 `04-RefereeDecode字段映射`。
 
 串口给出的是无边界的字节流，接收方必须自己找出帧的起点与终点。裁判系统帧的起点固定为 `0xA5`，长度由帧内 `len` 字段给出，于是解帧可以写成一台有限状态机：每来一个字节，按当前状态决定写到哪里、下一个状态是什么。
 
@@ -26,7 +26,7 @@ updated: 2026-10-07
 | `WAIT_CRC16_L` | 帧尾 CRC16 低字节 | 7+n |
 | `WAIT_CRC16_H` | 帧尾 CRC16 高字节 | 8+n |
 
-状态在头文件里以 `enum State` 定义，初值 `WAIT_SOF`（`Communication/Inc/referee_protocol.h:39`）。对象只有三块持久状态：`buffer_[256]`、`index_`、`data_len_` 与 `cmd_id_`（`referee_protocol.h:41-45`）。
+状态在头文件里以 `enum State` 定义，初值 `WAIT_SOF`（`Communication/Inc/referee_protocol.h`）。对象只有三块持久状态：`buffer_[256]`、`index_`、`data_len_` 与 `cmd_id_`（`referee_protocol.h`）。
 
 > 源码索引
 
@@ -39,7 +39,7 @@ updated: 2026-10-07
 
 ## 状态机全景
 
-`reset()` 把所有状态清回起点，是两条失败路径的公共终点（`Communication/Src/referee_protocol.cpp:18-24`）。
+`reset` 把所有状态清回起点，是两条失败路径的公共终点（`Communication/Src/referee_protocol.cpp`）。
 
 ```mermaid
 stateDiagram-v2
@@ -64,16 +64,16 @@ stateDiagram-v2
 
 | 状态 | 收到字节后的动作 | 去向 | 源码 |
 | --- | --- | --- | --- |
-| `WAIT_SOF` | 字节等于 `0xA5` 时写入 `buffer_[0]`，`index_` 置 1；否则丢字节并留在本态 | `WAIT_LEN_L` | `referee_protocol.cpp:30-37` |
-| `WAIT_LEN_L` | `buffer_[index_++]`，`data_len_ = byte` | `WAIT_LEN_H` | `:39-43` |
-| `WAIT_LEN_H` | `data_len_ |= byte << 8`，合成 16 位长度 | 超过 200 回 `WAIT_SOF`，否则 `WAIT_SEQ` | `:45-57` |
-| `WAIT_SEQ` | 存 `seq`，不校验 | `WAIT_CRC8` | `:59-62` |
-| `WAIT_CRC8` | 存字节后算 `crc8_calc(buffer_, 4, 0xFF)` 并与该字节比较 | 相等进 `WAIT_CMDID_L`，否则 `WAIT_SOF` | `:64-78` |
-| `WAIT_CMDID_L` | `cmd_id_ = byte` | `WAIT_CMDID_H` | `:80-84` |
-| `WAIT_CMDID_H` | `cmd_id_ |= byte << 8` | 长度为 0 进 `WAIT_CRC16_L`，否则 `WAIT_DATA` | `:86-94` |
-| `WAIT_DATA` | 逐字节存数据段，每字节后检查 `index_ >= 7 + data_len_` | 达成进 `WAIT_CRC16_L` | `:96-103` |
-| `WAIT_CRC16_L` | 存 CRC16 低字节 | `WAIT_CRC16_H` | `:105-108` |
-| `WAIT_CRC16_H` | 存高字节，拼出 `recv_crc16`，算 `crc16_calc(buffer_, index_-2, 0xFFFF)` | 无条件回 `WAIT_SOF` | `:110-132` |
+| `WAIT_SOF` | 字节等于 `0xA5` 时写入 `buffer_[0]`，`index_` 置 1；否则丢字节并留在本态 | `WAIT_LEN_L` | `referee_protocol.cpp` |
+| `WAIT_LEN_L` | `buffer_[index_++]`，`data_len_ = byte` | `WAIT_LEN_H` | `referee_protocol.cpp` |
+| `WAIT_LEN_H` | `data_len_ \|= byte << 8`，合成 16 位长度 | 超过 200 回 `WAIT_SOF`，否则 `WAIT_SEQ` | `referee_protocol.cpp` |
+| `WAIT_SEQ` | 存 `seq`，不校验 | `WAIT_CRC8` | `referee_protocol.cpp` |
+| `WAIT_CRC8` | 存字节后算 `crc8_calc(buffer_, 4, 0xFF)` 并与该字节比较 | 相等进 `WAIT_CMDID_L`，否则 `WAIT_SOF` | `referee_protocol.cpp` |
+| `WAIT_CMDID_L` | `cmd_id_ = byte` | `WAIT_CMDID_H` | `referee_protocol.cpp` |
+| `WAIT_CMDID_H` | `cmd_id_ \|= byte << 8` | 长度为 0 进 `WAIT_CRC16_L`，否则 `WAIT_DATA` | `referee_protocol.cpp` |
+| `WAIT_DATA` | 逐字节存数据段，每字节后检查 `index_ >= 7 + data_len_` | 达成进 `WAIT_CRC16_L` | `referee_protocol.cpp` |
+| `WAIT_CRC16_L` | 存 CRC16 低字节 | `WAIT_CRC16_H` | `referee_protocol.cpp` |
+| `WAIT_CRC16_H` | 存高字节，拼出 `recv_crc16`，算 `crc16_calc(buffer_, index_-2, 0xFFFF)` | 无条件回 `WAIT_SOF` | `referee_protocol.cpp` |
 
 两个字段的读取顺序需要留意。`data_len_` 是先取低字节再或上高字节左移 8 位，`cmd_id_` 同样，都是小端。`seq` 被写入缓冲但既不比较也不参与任何判断。
 
@@ -86,17 +86,17 @@ stateDiagram-v2
 ```cpp
 if(data_len_ > 200)  // 安全保护
 {
-    reset();
+    reset;
 }
 ```
 
-该判断在 `Communication/Src/referee_protocol.cpp:49-52`。触发时整帧丢弃，且当前这个高字节不会被重新当作 SOF 使用。200 是官方单帧数据段的上限，代码把它同时当作缓冲越界保护。
+该判断在 `Communication/Src/referee_protocol.cpp`。触发时整帧丢弃，且当前这个高字节不会被重新当作 SOF 使用。200 是官方单帧数据段的上限，代码把它同时当作缓冲越界保护。
 
 把上限写成 200 而不是按缓冲容量 256 反推，是因为越界保护要留出帧头与 CRC16 的余量：一帧最多 `9+200` 字节，仍小于 256。若上限按 256 来写，最大写入下标会越过缓冲边界。
 
 ## CRC8 与 CRC16 的覆盖范围
 
-`crc8_calc` 的三个参数是数据指针、长度、初值，调用处传入 `buffer_`、4、`0xFF`（`referee_protocol.cpp:68`）。4 字节正好是 SOF、len 低、len 高、seq，此时 `index_` 为 5，`buffer_[4]` 存的就是待比较的 CRC8 本身。把 `cmd_id` 也纳入帧头校验会算错，帧头校验的范围由协议规定为前 4 字节。
+`crc8_calc` 的三个参数是数据指针、长度、初值，调用处传入 `buffer_`、4、`0xFF`（`referee_protocol.cpp`）。4 字节正好是 SOF、len 低、len 高、seq，此时 `index_` 为 5，`buffer_[4]` 存的就是待比较的 CRC8 本身。把 `cmd_id` 也纳入帧头校验会算错，帧头校验的范围由协议规定为前 4 字节。
 
 `WAIT_CRC16_H` 先拼接收值，再算校验值：
 
@@ -109,7 +109,7 @@ uint16_t calc_crc16 =
     crc16_calc(buffer_, index_-2, 0xFFFF);
 ```
 
-接收值低字节在前、高字节在后，为小端。计算长度是 `index_-2`：此时 `index_` 等于 `9+n`，减 2 得 `7+n`，覆盖 SOF 到最后 1 字节数据，不含两字节 CRC16。初值 `0xFFFF`。两值相等才调用回调，随后无论结果都执行 `reset()`（`referee_protocol.cpp:121-130`）。
+接收值低字节在前、高字节在后，为小端。计算长度是 `index_-2`：此时 `index_` 等于 `9+n`，减 2 得 `7+n`，覆盖 SOF 到最后 1 字节数据，不含两字节 CRC16。初值 `0xFFFF`。两值相等才调用回调，随后无论结果都执行 `reset`（`referee_protocol.cpp`）。
 
 | 校验 | 覆盖字节 | 长度参数 | 初值 |
 | --- | --- | --- | --- |
@@ -118,9 +118,9 @@ uint16_t calc_crc16 =
 
 ## 零长数据段与结束判断
 
-`WAIT_CMDID_H` 里 `data_len_ == 0` 时直接跳到 CRC16 低字节（`referee_protocol.cpp:90-93`），不进入 `WAIT_DATA`。零长帧整帧 9 字节，CRC16 覆盖前 7 字节。
+`WAIT_CMDID_H` 里 `data_len_ == 0` 时直接跳到 CRC16 低字节（`referee_protocol.cpp`），不进入 `WAIT_DATA`。零长帧整帧 9 字节，CRC16 覆盖前 7 字节。
 
-`WAIT_DATA` 每收一字节把 `index_` 加一，再判断是否达到 `7 + data_len_`（`referee_protocol.cpp:99`）。用累加下标而不是另设计数器，好处是与 CRC16 的 `index_` 语义一致，代价是下标与「已收数据字节数」需要换算。
+`WAIT_DATA` 每收一字节把 `index_` 加一，再判断是否达到 `7 + data_len_`（`referee_protocol.cpp`）。用累加下标而不是另设计数器，好处是与 CRC16 的 `index_` 语义一致，代价是下标与「已收数据字节数」需要换算。
 
 ## buffer_ 的边界核算
 
@@ -142,7 +142,7 @@ flowchart TD
     CHK -->|"WAIT_SOF"| S1["字节等于 0xA5？<br/>否则丢弃"]
     S1 -->|"是"| W["写 buffer_[index_++]"]
     CHK -->|"WAIT_LEN_H"| S2["合成 data_len_"]
-    S2 -->|"超过 200"| RST["reset()"]
+    S2 -->|"超过 200"| RST["reset"]
     S2 -->|"不超过"| W
     CHK -->|"WAIT_CRC8"| S3["算 CRC8 并比较"]
     S3 -->|"失败"| RST
@@ -164,7 +164,7 @@ flowchart TD
 1. 一帧被截断时，状态停在中间位置，后续字节继续按该状态解释，直到某个判断失败或长度走完才复位；
 2. 复位时当前字节被消费掉，不会重新按 SOF 判断。
 
-以 `WAIT_CRC8` 失败为例，若这帧的 CRC8 位置恰好来了一个新帧的 `0xA5`，比较失败后 `reset()` 把该字节丢弃，新帧的第一个字节损失，必须等下一个 `0xA5` 才能重新同步。这是固定起始字节协议在错误帧之后的常见代价。
+以 `WAIT_CRC8` 失败为例，若这帧的 CRC8 位置恰好来了一个新帧的 `0xA5`，比较失败后 `reset` 把该字节丢弃，新帧的第一个字节损失，必须等下一个 `0xA5` 才能重新同步。这是固定起始字节协议在错误帧之后的常见代价。
 
 ```mermaid
 sequenceDiagram
@@ -194,26 +194,26 @@ sequenceDiagram
     else CRC16 不等
         Note over SM: 丢弃本帧
     end
-    Note over SM: reset() 回到 WAIT_SOF
+    Note over SM: reset 回到 WAIT_SOF
 ```
 
 ## 回调注册与运行上下文
 
-`RefereeProtocol` 不持有回调以外的依赖。构造时把回调存进 `frame_cb_`，`RefereeDecode` 在构造里注册成员函数转发（`Communication/Src/referee_decode.cpp:13-20`）。`WAIT_CRC16_H` 调用回调前判空（`referee_protocol.cpp:123`），所以 `refereeproto(nullptr)` 状态下即使有数据也只丢弃不崩。
+`RefereeProtocol` 不持有回调以外的依赖。构造时把回调存进 `frame_cb_`，`RefereeDecode` 在构造里注册成员函数转发（`Communication/Src/referee_decode.cpp`）。`WAIT_CRC16_H` 调用回调前判空（`referee_protocol.cpp`），所以 `refereeproto(nullptr)` 状态下即使有数据也只丢弃不崩。
 
-解析全程在中断上下文执行：`RefereeCallback` 由 `RefereeUartCallback` 在 `USART6_IRQHandler` 里调用，逐字节 `input`（`Communication/Src/referee_decode.cpp:158-165`）。一帧 209 字节的最坏情况下，中断里要跑 209 次状态机，外加一次 CRC16 表查，属于可接受的短临界区。`UsartDma` 用 `callback_busy_` 防止空闲回调重入（`Communication/Src/usart_dma.cpp:61-64`），但该标志不覆盖协议状态机本身。
+解析全程在中断上下文执行：`RefereeCallback` 由 `RefereeUartCallback` 在 `USART6_IRQHandler` 里调用，逐字节 `input`（`Communication/Src/referee_decode.cpp`）。一帧 209 字节的最坏情况下，中断里要跑 209 次状态机，外加一次 CRC16 表查，属于可接受的短临界区。`UsartDma` 用 `callback_busy_` 防止空闲回调重入（`Communication/Src/usart_dma.cpp`），但该标志不覆盖协议状态机本身。
 
 ## 状态机层面的易错点
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
 | 认为空闲会产生复位 | 截断帧之后的状态一直保留 | 状态机没有超时逻辑，`reset` 只由校验与长度触发 |
-| 复位后期望当前字节被重解释 | 丢失一个可能的 `0xA5` | `referee_protocol.cpp:71`、`:51` 直接 `reset()` |
-| 用 `data_len_` 当整帧长度 | `WAIT_DATA` 的结束条件算错 | 结束条件是 `7 + data_len_`（`:99`） |
+| 复位后期望当前字节被重解释 | 丢失一个可能的 `0xA5` | `referee_protocol.cpp`、 直接 `reset` |
+| 用 `data_len_` 当整帧长度 | `WAIT_DATA` 的结束条件算错 | 结束条件是 `7 + data_len_` |
 | 把 `index_` 当数据字节数 | 少算 7 字节帧头 | `index_` 含帧头与 `cmd_id` |
-| 认为 CRC8 用了整个缓冲 | 校验范围随 `index_` 变化 | 固定传 4（`:68`） |
-| 认为 CRC16 覆盖全帧 | 把两字节 CRC16 也纳入计算 | 长度取 `index_-2`（`:119`） |
-| 放宽 200 上限不改缓冲 | 写入越过 `buffer_[256]` | 无运行时下标检查，仅靠 `:49` 的上限 |
+| 认为 CRC8 用了整个缓冲 | 校验范围随 `index_` 变化 | 固定传 4 |
+| 认为 CRC16 覆盖全帧 | 把两字节 CRC16 也纳入计算 | 长度取 `index_-2` |
+| 放宽 200 上限不改缓冲 | 写入越过 `buffer_[256]` | 无运行时下标检查，仅靠  的上限 |
 
 ## 小结
 
@@ -258,7 +258,7 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Communication/Inc/referee_protocol.h` | `State` 十态（:25-37）、初值（:39）、`buffer_[256]`（:41） |
-| `2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp` | `input` 状态机（:26-134）、`reset`（:18-24）、len 保护（:49-52）、CRC8（:68）、数据段结束（:99）、CRC16（:110-130） |
-| `2026OmniSentryGimbal/Communication/Src/referee_decode.cpp` | 回调注册（:13-20）、`RefereeCallback`（:158-165） |
-| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 空闲回调重入标志（:61-64） |
+| `2026OmniSentryGimbal/Communication/Inc/referee_protocol.h` | `State` 十态、初值、`buffer_[256]` |
+| `2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp` | `input` 状态机、`reset`、len 保护、CRC8、数据段结束、CRC16 |
+| `2026OmniSentryGimbal/Communication/Src/referee_decode.cpp` | 回调注册、`RefereeCallback` |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 空闲回调重入标志 |

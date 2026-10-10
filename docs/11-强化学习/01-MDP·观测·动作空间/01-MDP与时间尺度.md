@@ -7,15 +7,15 @@ updated: 2026-10-07
 
 # MDP 建模与时间尺度
 
-mjx-go1-getup 里走路与起身两个任务共用一套 Go1 模型与同一份物理参数，只把状态分布、奖励配方和终止判据分开。
+mjx-go1-getup 里走路与起身两个任务共用一套 Go1 模型与同一份物理参数，只把状态分布、奖励配方和终止判据分开。这里的 MJX 是 MuJoCo 在 JAX 上的实现，物理可以整批并行、也能编进 JIT 静态图，这是"几千个环境同时训练"能跑起来的前提。
 
 把它们放到同一个离散时间 MDP 的框架里看，最容易忽略的是时间尺度这一层：策略每 0.02 s 决策一次，物理每 0.002 s 积分一次，两者相差十倍。一段 15 s 的 episode，网络只看到 750 个决策点，物理却推进了 7500 步。
 
-> 涉及对象是 mjx-go1-getup 里两个任务的 MDP 骨架：走路 `envs/go1_walk.py`、起身 v2 `envs/go1_getup_v2.py`。时间尺度取值在 `envs/go1_walk.py:63-67`，参考仓库的对应实现在 quadruped-rl-locomotion-main 的 `go1_mujoco_env.py:32-53`。
+> 涉及对象是 mjx-go1-getup 里两个任务的 MDP 骨架：走路 `envs/go1_walk.py`、起身 v2 `envs/go1_getup_v2.py`。时间尺度取值在 `envs/go1_walk.py`，参考仓库的对应实现在 quadruped-rl-locomotion-main 的 `go1_mujoco_env.py`。
 
 ## 1. 两个任务共享的五元组
 
-MDP 用 $(\mathcal{S},\mathcal{A},P,R,\gamma)$ 描述一个决策问题：状态集合、动作集合、状态转移、奖励函数、折扣因子。本工程两个任务的模型与转移完全相同，差异集中在 $\mathcal{S}$ 的构造和 $R$ 的配比上：
+MDP 用 $(\mathcal{S},\mathcal{A},P,R,\gamma)$ 描述一个决策问题：状态集合、动作集合、状态转移、奖励函数、折扣因子。"离散时间"指决策按固定间隔发生——本工程每 0.02 s 一次；"状态"是策略每一步实际拿到的输入（也就是观测），"折扣因子" $\gamma$ 决定未来奖励折算到当前时刻的权重。本工程两个任务的模型与转移完全相同，差异集中在 $\mathcal{S}$ 的构造和 $R$ 的配比上：
 
 | 维度 | 走路 Go1Walk | 起身 v2 Go1GetupV2 | 参考仓库 Go1MujocoEnv |
 | --- | --- | --- | --- |
@@ -41,7 +41,26 @@ $$s_0 \sim \rho_0,\quad a_t \sim \pi_\theta(\cdot \mid s_t),\quad (s_{t+1}, r_t)
 
 $$n_{\text{sub}} = \mathrm{round}\!\left(\frac{ctrl\_dt}{sim\_dt}\right) = \mathrm{round}\!\left(\frac{0.02}{0.002}\right) = 10$$
 
-这个值不在环境代码里，由 MuJoCo Playground 的基类按属性算出来（`mujoco_playground/_src/mjx_env.py:272-274`）：`n_substeps` 返回 `int(round(self.dt / self.sim_dt))`。环境要做的只是把这两个属性填对。物理积分调用 `mjx_env.step(model, data, ctrl, n_substeps)`，子步之间执行器目标保持不变（`envs/go1_walk.py:931-933`）。
+这个值不在环境代码里，而是由 MuJoCo Playground 基类的属性现算：
+
+```python
+@property
+def dt(self) -> float:
+    """Control timestep for the environment."""
+    return self._ctrl_dt
+
+@property
+def sim_dt(self) -> float:
+    """Simulation timestep for the environment."""
+    return self._sim_dt
+
+@property
+def n_substeps(self) -> int:
+    """Number of sim steps per control step."""
+    return int(round(self.dt / self.sim_dt))
+```
+
+基类把两个时间常量暴露成只读属性，子步数由它们推导——环境只需要把 `ctrl_dt` 与 `sim_dt` 填对，不必自己维护 `n_substeps`，写错也不会报错、只会静默改变语义。物理积分调用 `mjx_env.step(model, data, ctrl, n_substeps)`，子步之间执行器目标保持不变（`envs/go1_walk.py`）。
 
 于是走路一段完整 episode 的物理调用次数是：
 
@@ -85,18 +104,18 @@ flowchart LR
 
 ## 3. episode 的三个边界值是谁定的
 
-轨迹长度 $T$ 由 `episode_length` 给出。走路取 750 步（`envs/go1_walk.py:67`），对应参考仓库的 15 s 上限；起身 v2 取 400 步（`envs/go1_getup_v2.py:78`），即 8 s。
+轨迹长度 $T$ 由 `episode_length` 给出。走路取 750 步（`envs/go1_walk.py`），对应参考仓库的 15 s 上限；起身 v2 取 400 步（`envs/go1_getup_v2.py`），即 8 s。
 
-终止与截断在代码里处理方式不同。走路只用 `done` 表示终止（`envs/go1_walk.py:1019`），达到 `episode_length` 的截断由训练侧的 brax wrapper 负责；参考仓库把 `terminated` 与 `truncated` 分开返回（`go1_mujoco_env.py:152-153`），后者由 15 s 的时间上限算出。两种口径在训练循环里最终都表现为一条轨迹结束，但日志里的含义不同。
+终止与截断在代码里处理方式不同。走路只用 `done` 表示终止（`envs/go1_walk.py`），达到 `episode_length` 的截断由训练侧的 brax wrapper 负责；参考仓库把 `terminated` 与 `truncated` 分开返回（`go1_mujoco_env.py`），后者由 15 s 的时间上限算出。两种口径在训练循环里最终都表现为一条轨迹结束，但日志里的含义不同。
 
-reset 结束前把 `data.time` 显式置 0（`envs/go1_walk.py:847`、`envs/go1_getup_v2.py:213`）。起身 v2 用 `data.time <= 0` 判断本 episode 的第一步，用来复位历史缓冲与低通滤波（`envs/go1_getup_v2.py:239`）。这一条依赖 `data.time` 能被重置，也是自动重置包装器唯一没有帮它做的事。
+reset 结束前把 `data.time` 显式置 0（`envs/go1_walk.py`、`envs/go1_getup_v2.py`）。起身 v2 用 `data.time <= 0` 判断本 episode 的第一步，用来复位历史缓冲与低通滤波（`envs/go1_getup_v2.py`）。这一条依赖 `data.time` 能被重置，也是自动重置包装器唯一没有帮它做的事。
 
-训练规模不在环境里，而在训练脚本的命令行默认值：走路 `--num_envs 8192`、`--episode_length 750`（`train/train_go1.py:105-106`）；起身 `--num_envs 768`、`--episode_length 300`（`train/train_getup.py:116-118`）。起身脚本的 300 只是默认值，`envs/go1_getup_v2.py:78` 会把 config 覆盖成 400，运行时以 config 为准，两者不一致属于代码现状。
+训练规模不在环境里，而在训练脚本的命令行默认值：走路 `--num_envs 8192`、`--episode_length 750`（`train/train_go1.py`）；起身 `--num_envs 768`、`--episode_length 300`（`train/train_getup.py`）。起身脚本的 300 只是默认值，`envs/go1_getup_v2.py` 会把 config 覆盖成 400，运行时以 config 为准，两者不一致属于代码现状。
 
 训练启动时会打印实际生效的 dt 与频率，这一段可以直接核对上面的推导：
 
 ```python
-# train/train_getup.py:272-275
+# train/train_getup.py
 print(f"env: {type(env).__name__}  action_size={env.action_size}  "
       f"obs={n_state}/{n_priv}  dt={env.dt}s "
       f"({1/env.dt:.0f}Hz)  episode={args.episode_length} 步 "
@@ -105,7 +124,7 @@ print(f"env: {type(env).__name__}  action_size={env.action_size}  "
 
 ## 4. 奖励累加口径：走路不乘 dt
 
-奖励的累积有两种写法。参考仓库与走路任务用 SB3 语义，每步奖励不乘 $dt$，直接相加后夹到 $[0,10000]$（`envs/go1_walk.py:1027-1030`）；brax 默认按 $r_t \cdot dt$ 累加，本工程显式避开这个默认，以保持与参考仓库的 episode 总量可比。
+奖励的累积有两种写法。参考仓库与走路任务用 SB3 语义，每步奖励不乘 $dt$，直接相加后夹到 $[0,10000]$（`envs/go1_walk.py`）；brax 默认按 $r_t \cdot dt$ 累加（相当于"每秒奖励"），本工程显式避开这个默认，以保持与参考仓库的 episode 总量可比。
 
 这个选择影响的是量纲。若每步奖励乘 0.02，750 步的 episode 总量会被压到原来的五十分之一，权重表里那些 $10^{-4}$ 量级的成本项与 $2.0$ 量级的正项之间的相对比例虽不变，但与参考仓库日志里打印的数值就对不上了。调超参时若误以为已经乘过 dt，会把学习率按错误的量级设大一两个数量级。
 
@@ -114,27 +133,27 @@ print(f"env: {type(env).__name__}  action_size={env.action_size}  "
 走路环境的时间常量集中在 `default_config()`：
 
 ```python
-# envs/go1_walk.py:65-67
+# envs/go1_walk.py
 ctrl_dt=0.02,          # 50Hz 控制 = 参考仓库 frame_skip=10 × 0.002
 sim_dt=0.002,          # 参考仓库 XML timestep=0.002
 episode_length=750,    # 15s (参考 _max_episode_time_sec=15.0)
 ```
 
-`sim_dt` 在构造时写进模型的 `opt.timestep`（`envs/go1_walk.py:421`），`mjx.put_model` 之后再交给 warp 后端。`ctrl_dt` 只用于基类属性 `dt`，环境自己的奖励、相位推进都以 `self.dt` 取用（例如 `envs/go1_walk.py:962,991`）。
+`sim_dt` 在构造时写进模型的 `opt.timestep`（`envs/go1_walk.py`），`mjx.put_model` 之后再交给 warp 后端。`ctrl_dt` 只用于基类属性 `dt`，环境自己的奖励、相位推进都以 `self.dt` 取用（例如 `envs/go1_walk.py`）。
 
 参考仓库用 gymnasium 的 `frame_skip` 表达同一件事，两个数互为倒数关系：
 
 ```python
-# go1_mujoco_env.py:37
+# go1_mujoco_env.py
 frame_skip=10,  # dt(=0.002) * 10 = 0.02 seconds -> 50hz action rate
 ```
 
-它的 episode 上限与走路一致：`_max_episode_time_sec = 15.0`（`go1_mujoco_env.py:53`），`truncated = self._step >= (self._max_episode_time_sec / self.dt)`（`go1_mujoco_env.py:153`）。注意这里除的是 `self.dt`，也就是控制周期 0.02，算出 750 步。
+它的 episode 上限与走路一致：`_max_episode_time_sec = 15.0`（`go1_mujoco_env.py`），`truncated = self._step >= (self._max_episode_time_sec / self.dt)`（`go1_mujoco_env.py`）。注意这里除的是 `self.dt`，也就是控制周期 0.02，算出 750 步。
 
 起身 v2 直接复用走路的 config 再改四处：
 
 ```python
-# envs/go1_getup_v2.py:64-78
+# envs/go1_getup_v2.py
 cfg = walk_default_config()
 cfg.terrain = True
 cfg.height_scan.enable = True
@@ -148,17 +167,17 @@ cfg.episode_length = 400
 
 | 现象 | 根因 | 对应位置 |
 | --- | --- | --- |
-| 把 0.002 当控制周期，算出的步数放大 10 倍 | 混淆 `dt` 与 `sim_dt` | `envs/go1_walk.py:65-66` |
-| 以为奖励乘了 dt，超参按错误量级设置 | 走路奖励不乘 dt，与 brax 默认语义相反 | `envs/go1_walk.py:1027-1030` |
-| 起身奖励注释与实现不符 | 注释写乘 `step_dt`，共享 `step` 里没有这一步 | `envs/go1_getup_v2.py:105` 对 `envs/go1_walk.py:1024-1026` |
-| episode 长度两处不一致 | 脚本默认 300 与 config 400 不同，以 config 为准 | `train/train_getup.py:116` 对 `envs/go1_getup_v2.py:78` |
-| 起身早期策略无梯度 | 若沿用走路的奖励下界 0，负总分被夹平 | `envs/go1_getup_v2.py:71` |
+| 把 0.002 当控制周期，算出的步数放大 10 倍 | 混淆 `dt` 与 `sim_dt` | `envs/go1_walk.py` |
+| 以为奖励乘了 dt，超参按错误量级设置 | 走路奖励不乘 dt，与 brax 默认语义相反 | `envs/go1_walk.py` |
+| 起身奖励注释与实现不符 | 注释写乘 `step_dt`，共享 `step` 里没有这一步 | `envs/go1_getup_v2.py` 对 `envs/go1_walk.py` |
+| episode 长度两处不一致 | 脚本默认 300 与 config 400 不同，以 config 为准 | `train/train_getup.py` 对 `envs/go1_getup_v2.py` |
+| 起身早期策略无梯度 | 若沿用走路的奖励下界 0，负总分被夹平 | `envs/go1_getup_v2.py` |
 
 ## 7. 小结
 
 ### 核心概念
 
-- 两个任务共用 0.02 s 控制周期与 0.002 s 物理步长，子步数为 10，由基类按 `ctrl_dt/sim_dt` 计算（`mjx_env.py:272-274`）。
+- 两个任务共用 0.02 s 控制周期与 0.002 s 物理步长，子步数为 10，由基类按 `ctrl_dt/sim_dt` 计算（`mjx_env.py`）。
 - 走路 episode 750 步（15 s），起身 v2 400 步（8 s），都由 `episode_length` 控制，训练脚本的默认值可能被 config 覆盖。
 - 走路奖励每步不乘 dt，直接求和后夹到 [0,10000]，与参考仓库的 SB3 口径一致。
 - 参考仓库用 `frame_skip=10` 表达控制频率，语义与本工程的 `n_substeps` 相同，两者互为倒数。

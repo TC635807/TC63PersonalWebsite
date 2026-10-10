@@ -9,11 +9,11 @@ updated: 2026-10-07
 
 零偏估计只有在载体确实静止时才有意义：静止时陀螺的真实角速度为 0，读数就等于零偏加测量噪声，这时才存在一个可以拿来当观测量的参考值。FusionAHRS 把这个前提做成一个门控函数 detectStatic，用与运算同时约束陀螺模长与重力模长；门打开后，GyroBiasEKF 才对 Z 轴状态做一次标量卡尔曼更新，门关着时只做预测。
 
-`Algorithm/Src/FusionAHRS.cpp:14-41` 里的 Q、R 决定稳态增益与收敛时间，由此带出自锁、初值影响与单轴假设三处后果。需要回答的是：0.02 rad/s 与 0.2 m/s² 两个阈值各自挡什么；为什么第一拍几乎不滤波；偏置模长大于阈值时估计为什么停在零。
+`Algorithm/Src/FusionAHRS.cpp` 里的 Q、R 决定稳态增益与收敛时间，由此带出自锁、初值影响与单轴假设三处后果。需要回答的是：0.02 rad/s 与 0.2 m/s² 两个阈值各自挡什么；为什么第一拍几乎不滤波；偏置模长大于阈值时估计为什么停在零。
 
 ## 静止判据的两个与条件
 
-`detectStatic` 的判据只有四行（`FusionAHRS.cpp:63-71`），先算两个模长，再用与运算连接两个比较：
+`detectStatic` 的判据只有四行（`FusionAHRS.cpp`），先算两个模长，再用与运算连接两个比较：
 
 ```cpp
 float gyroNorm = std::sqrt(gx*gx + gy*gy + gz*gz);
@@ -31,7 +31,7 @@ $$\bigl|\,\|a\| - 9.81\,\bigr| < 0.2\ \text{m/s}^2$$
 
 第一条限制三轴角速度的合模长。0.02 rad/s 换成常用单位是 0.02 × 180/π = 1.146 deg/s，所以判据允许的静止窗口只有每秒 1 度出头。第二条限制加速度模长与 9.81 的偏差，0.2/9.81 = 0.0204，即 2% 的重力。两个条件都只取模长，与载体姿态无关，倾斜静止同样会被判为静止；判据没有用到方向信息，因此也分不出水平方向的缓慢转动与小偏置，两种情形在陀螺读数上表现一致。
 
-阈值常量是三个 `#define` 宏（`FusionAHRS.cpp:14-16`），没有单位后缀，单位由驱动换算的结果决定。`GRAVITY` 取 9.81，而驱动里的加速度灵敏度按 9.8 归一化（`BMI088/BMI088config.h:227`），两者差 0.01 m/s²，相对 0.2 m/s² 的阈值可以忽略。
+阈值常量是三个 `#define` 宏（`FusionAHRS.cpp`），没有单位后缀，单位由驱动换算的结果决定。`GRAVITY` 取 9.81，而驱动里的加速度灵敏度按 9.8 归一化（`BMI088/BMI088config.h`），两者差 0.01 m/s²，相对 0.2 m/s² 的阈值可以忽略。
 
 ```mermaid
 flowchart TD
@@ -51,7 +51,7 @@ flowchart TD
 
 ## 标量卡尔曼的预测与更新
 
-状态取随机游走模型，静止时真实角速度为零，观测方程直接写成状态加噪声：
+状态取随机游走模型（假设状态每拍只叠加一点随机扰动，没有确定的变化方向），静止时真实角速度为零，观测方程直接写成状态加噪声：
 
 $$x_{k+1} = x_k + w_k,\qquad w_k \sim N(0, Q)$$
 
@@ -69,7 +69,7 @@ $$x_k = x_{k-1} + K_k\,(z_k - x_{k-1})$$
 
 $$P_k = (1 - K_k)\,P^{-}_k$$
 
-对应实现只有八行（`FusionAHRS.cpp:30-41`）：
+对应实现只有八行（`FusionAHRS.cpp`）：
 
 ```cpp
 void GyroBiasEKF::update(float gyroZ, bool isStatic)
@@ -90,7 +90,7 @@ void GyroBiasEKF::update(float gyroZ, bool isStatic)
 
 ## Q 与 R 决定的稳态增益
 
-静止连续更新时 `P` 迭代收敛到不动点。把更新式写成一拍映射：先加预测噪声，再乘 `(1-K)`，于是
+静止连续更新时 `P` 迭代收敛到不动点（反复代入后不再变化的值）。把更新式写成一拍映射：先加预测噪声，再乘 `(1-K)`，于是
 
 $$P^{*} = \frac{R\,(P^{*} + Q)}{P^{*} + Q + R}$$
 
@@ -173,7 +173,7 @@ $$\theta \approx \frac{2b}{2K_p} = \frac{b}{K_p}$$
 
 ## 阈值与 EKF 在源码里的位置
 
-三个常量定义在 `FusionAHRS.cpp:14-16`，均为 `#define` 宏：
+三个常量定义在 `FusionAHRS.cpp`，均为 `#define` 宏：
 
 ```cpp
 #define GRAVITY 9.81f
@@ -181,7 +181,7 @@ $$\theta \approx \frac{2b}{2K_p} = \frac{b}{K_p}$$
 #define ACC_STATIC_THRESH  0.2f
 ```
 
-EKF 构造在 `:22-28`，状态与噪声参数都在这里赋初值：
+EKF 构造里状态与噪声参数都赋初值：
 
 ```cpp
 GyroBiasEKF::GyroBiasEKF()
@@ -193,37 +193,46 @@ GyroBiasEKF::GyroBiasEKF()
 }
 ```
 
-调用顺序在 `FusionAHRS::update` 的 `:73-86`：先 `detectStatic`，再把原始 `gz` 交给 `biasEKF_.update`，然后 `gz -= biasEKF_.getBias()`，最后进 Mahony。去偏发生在 Mahony 之前，而检测与估计读的都是原始值。
+调用顺序在 `FusionAHRS::update`：先 `detectStatic`，再把原始 `gz` 交给 `biasEKF_.update`，然后 `gz -= biasEKF_.getBias()`，最后进 Mahony。去偏发生在 Mahony 之前，而检测与估计读的都是原始值。
 
-| 行为 | 行号 | 说明 |
-| --- | --- | --- |
-| 计算模长 | `FusionAHRS.cpp:66-67` | 陀螺与加速度各一次 `std::sqrt` |
-| 双条件返回 | `:69-70` | 与运算，任一不满足即为运动 |
-| 预测 | `:33` | 每拍无条件 `P_ += Q_` |
-| 更新门控 | `:35` | `if(isStatic)` |
-| 增益 | `:37` | $K = P/(P+R)$ |
-| 状态更新 | `:38` | 残差取 `gyroZ - x_` |
-| 协方差更新 | `:39` | $P = (1-K)P$ |
+| 行为 | 说明 |
+| --- | --- |
+| 计算模长 | 陀螺与加速度各一次 `std::sqrt` |
+| 双条件返回 | 与运算，任一不满足即为运动 |
+| 预测 | 每拍无条件 `P_ += Q_` |
+| 更新门控 | `if(isStatic)` |
+| 增益 | $K = P/(P+R)$ |
+| 状态更新 | 残差取 `gyroZ - x_` |
+| 协方差更新 | $P = (1-K)P$ |
 
-运行侧每毫秒调用一次 `ahrs.update`（`Task/Src/ImuTask.cpp:49-56`），采样率按 1000 Hz 构造（`ImuTask.cpp:19`）。`Q` 按拍施加，实际循环周期大于 1 ms 时每秒注入的过程噪声低于 $10^{-3}$，收敛时间常数相应变长。这一耦合在第四篇的参数整定里会再算一次。
+运行侧每毫秒调用一次 `ahrs.update`（`Task/Src/ImuTask.cpp`），采样率按 1000 Hz 构造（`ImuTask.cpp`）。`Q` 按拍施加，实际循环周期大于 1 ms 时每秒注入的过程噪声低于 $10^{-3}$，收敛时间常数相应变长。这一耦合在第四篇的参数整定里会再算一次。
 
 ## 容易被误读的门控与量纲
 
 | 容易读错的地方 | 现象 | 对应位置 |
 | --- | --- | --- |
-| 认为 `Q`、`R` 决定绝对收敛速度 | `Q` 按拍施加，改采样率后行为变化 | `FusionAHRS.cpp:26-27`、`ImuTask.cpp:19` |
-| 认为零偏估计始终在跑 | 运动时 `x_` 不变，只有 `P_` 增长 | `FusionAHRS.cpp:35` |
-| 偏置大于陀螺阈值时的门控自锁 | 陀螺模长恒超 0.02 rad/s，永不判静止，永学不到偏置 | `FusionAHRS.cpp:15`、`:33-40`、`:79` |
-| 用去偏后的角速度做静止检测 | 代码用的是原始 `gz`，偏置参与模长 | `FusionAHRS.cpp:76`、`:79` |
-| 把 `ACC_STATIC_THRESH` 当方向误差 | 判据只比较模长，倾斜静止也判静止 | `FusionAHRS.cpp:67`、`:70` |
-| 初值 `P_ = 0.1` 被忽略 | 首个静止样本几乎直接决定 `x_` | `FusionAHRS.cpp:25`、`:37-38` |
-| 认为 X/Y 偏置也被补偿 | X/Y 无状态，只体现为静态倾斜误差 | `FusionAHRS.h:20`、`FusionAHRS.cpp:79-85` |
+| 认为 `Q`、`R` 决定绝对收敛速度 | `Q` 按拍施加，改采样率后行为变化 | `FusionAHRS.cpp`、`ImuTask.cpp` |
+| 认为零偏估计始终在跑 | 运动时 `x_` 不变，只有 `P_` 增长 | `FusionAHRS.cpp` |
+| 偏置大于陀螺阈值时的门控自锁 | 陀螺模长恒超 0.02 rad/s，永不判静止，永学不到偏置 | `FusionAHRS.cpp` |
+| 用去偏后的角速度做静止检测 | 代码用的是原始 `gz`，偏置参与模长 | `FusionAHRS.cpp` |
+| 把 `ACC_STATIC_THRESH` 当方向误差 | 判据只比较模长，倾斜静止也判静止 | `FusionAHRS.cpp` |
+| 初值 `P_ = 0.1` 被忽略 | 首个静止样本几乎直接决定 `x_` | `FusionAHRS.cpp` |
+| 认为 X/Y 偏置也被补偿 | X/Y 无状态，只体现为静态倾斜误差 | `FusionAHRS.h`、`FusionAHRS.cpp` |
 
-门控自锁是表格里唯一需要写出链条的一条。判据读的是原始 `gz`（`:66`、`:79`），初值 `x_` 为零（`:24`），更新受 `isStatic` 门控；当偏置本身超过 `GYRO_STATIC_THRESH` 时，门不会再打开。链条写成
+门控自锁是表格里唯一需要写出链条的一条。判据读的是原始 `gz`，初值 `x_` 为零，更新受 `isStatic` 门控；当偏置本身超过 `GYRO_STATIC_THRESH` 时，门不会再打开。链条写成
 
 $$|b| \ge 0.02\ \text{rad/s} \;\Rightarrow\; \|\omega\| \ge 0.02 \;\Rightarrow\; isStatic = \text{false} \;\Rightarrow\; \hat x \equiv 0$$
 
 可估计区间因此不对称：偏置在门限以下才有机会被估计，越接近门限静止占空比越低、收敛越慢，超过门限则完全不收敛。器件零偏的实际分布属待实测。
+
+自锁的成因写成代码只有三行：
+
+```c
+/* 示意：门控自锁 */
+isStatic = (gyroNorm < 0.02f) && (fabsf(accNorm - 9.81f) < 0.2f);
+if (isStatic) { x_ += K * (gyroZ - x_); }   /* 偏置只在门内收敛 */
+/* 若真实偏置 |b| >= 0.02 rad/s，gyroNorm 恒超阈值，门永不打开，x_ 停在 0 */
+```
 
 ## 小结
 
@@ -250,7 +259,7 @@ $$|b| \ge 0.02\ \text{rad/s} \;\Rightarrow\; \|\omega\| \ge 0.02 \;\Rightarrow\;
 
 ### 基础题
 
-1. 用 `FusionAHRS.cpp:63-71` 的判据，判断“静止但倾斜 30°”“水平方向缓慢匀速转动 0.01 rad/s”“自由落体”三种工况是否被判为静止，并说明依据。
+1. 用 `FusionAHRS.cpp` 的判据，判断“静止但倾斜 30°”“水平方向缓慢匀速转动 0.01 rad/s”“自由落体”三种工况是否被判为静止，并说明依据。
 2. 若把 $Q$ 改为 $10^{-4}$、$R$ 保持 $10^{-4}$，重新计算 $P^{*}$、$K^{*}$ 与 1 kHz 下的时间常数。
 3. 解释为什么静止检测用原始 `gz` 而非去偏后的值，并写出由此产生的门控自锁条件。
 4. 在 $P_0 = 0.1$ 下计算第一拍与第二拍的增益，说明为什么第一拍几乎不滤波。
@@ -264,8 +273,8 @@ $$|b| \ge 0.02\ \text{rad/s} \;\Rightarrow\; \|\omega\| \ge 0.02 \;\Rightarrow\;
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Algorithm/Inc/FusionAHRS.h` | `GyroBiasEKF` 成员声明 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 阈值、检测、EKF 实现 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 调用周期与采样率实参 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 陀螺与加速度量纲换算来源 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/BMI088config.h` | `BMI088_ACCEL_3G_SEN` 的 9.8 归一化说明 |
+| `Algorithm/Inc/FusionAHRS.h` | `GyroBiasEKF` 成员声明 |
+| `Algorithm/Src/FusionAHRS.cpp` | 阈值、检测、EKF 实现 |
+| `Task/Src/ImuTask.cpp` | 调用周期与采样率实参 |
+| `BMI088/Src/BMI088.cpp` | 陀螺与加速度量纲换算来源 |
+| `BMI088/BMI088config.h` | `BMI088_ACCEL_3G_SEN` 的 9.8 归一化说明 |

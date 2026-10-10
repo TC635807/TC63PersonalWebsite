@@ -29,13 +29,13 @@ flowchart TD
 
 ## 路径上每一级目录都要有 x
 
-Linux 打开 `/home/tc63/www/tc63/index.html` 时，内核沿路径逐级检查：每一级目录都需要对目标进程有执行位 `x`，最后一级文件需要读位 `r`。任何一级缺 `x`，后续路径都不可达，返回的是权限错误而不是「文件不存在」。
+Linux 打开 `/home/tc63/www/tc63/index.html` 时，内核沿路径逐级检查：每一级目录都需要对目标进程有执行位 `x`，最后一级文件需要读位 `r`。权限位按「属主 / 属组 / 其他用户」三组排列，`o` 指 other（其他用户），`+x` 是给它加上执行位；目录上的 `x` 表示「允许穿过、能按已知路径进入」，与文件上的「可执行」含义不同。任何一级缺 `x`，后续路径都不可达，返回的是权限错误而不是「文件不存在」。要一次看清整条路径每一级的权限，可以在服务器上跑 `namei -l /home/tc63/www/tc63/index.html`，它会逐级打印属主与权限位。
 
 | 路径组件 | 作用 | 对 www-data 的要求 | 现状 |
 | --- | --- | --- | --- |
 | `/` | 根 | `x` | 默认满足 |
 | `/home` | 目录 | `x` | 默认满足 |
-| `/home/tc63` | 家目录 | `x` | 默认不满足，需专门打开（`personal-homepage-research/15-deploy-tc63.md:91`） |
+| `/home/tc63` | 家目录 | `x` | 默认不满足，需用 `chmod o+x` 专门打开 |
 | `/home/tc63/www` | nginx 的 `root` | `x` | 由 `chmod -R o+rX` 覆盖 |
 | `/home/tc63/www/tc63` | 指向 `~/site/dist` 的软链 | 解析目标需要路径上的 `x` | 见下一节 |
 | `/home/tc63/site/dist` | 实际产物目录 | `x`（目录）与 `r`（文件） | 由更新脚本每次修复 |
@@ -45,7 +45,7 @@ Linux 打开 `/home/tc63/www/tc63/index.html` 时，内核沿路径逐级检查�
 
 ## 家目录穿透的两种做法
 
-服务器上采用的做法是给家目录补 `o+x`（`personal-homepage-research/15-deploy-tc63.md:91`）：
+服务器上采用的做法是给家目录补 `o+x`（`personal-homepage-research/15-deploy-tc63.md` 记录的权限命令）：
 
 ```bash
 chmod o+x /home/tc63
@@ -70,7 +70,7 @@ chmod -R o+rX /home/tc63/www
 
 ## 软链接把仓库产物接到站点根
 
-nginx 的配置是 `root /home/tc63/www`，而构建产物在 `/home/tc63/site/dist`。两者用一条软链接连接（`personal-homepage-research/15-deploy-tc63.md:129`、`README.md:163`）：
+nginx 的配置是 `root /home/tc63/www`，而构建产物在 `/home/tc63/site/dist`。两者用一条软链接连接（`personal-homepage-research/15-deploy-tc63.md`、`README.md` 里的站点接入说明）：
 
 ```bash
 rm -rf ~/www/tc63 && ln -s /home/tc63/site/dist ~/www/tc63
@@ -89,36 +89,36 @@ flowchart LR
 
 软链接本身不需要权限位，但解析目标路径时内核要检查链上每一级目录的 `x`。这里出现两个方向：经 `/home/tc63/www` 进入，以及解析后落在 `/home/tc63/site` 下。两侧都要可进入，只放开 `www` 而不放开 `site` 时，症状是 `/tc63/` 返回错误而文件名看起来完全正确。
 
-顺带说明 `root` 与 `alias` 的取舍：文件本来就放在 `/home/tc63/www/tc63/` 这一层，用 `root` 直接拼接最省事；`alias` 与 `try_files` 组合在路径拼接上容易出错，服务器上的配置也确认用了 `root`（`personal-homepage-research/15-deploy-tc63.md:79-80`）。
+顺带说明 `root` 与 `alias` 的取舍：文件本来就放在 `/home/tc63/www/tc63/` 这一层，用 `root` 直接拼接最省事；`alias` 与 `try_files` 组合在路径拼接上容易出错，服务器上的配置也确认用了 `root`（`personal-homepage-research/15-deploy-tc63.md` 的配置核对记录）。
 
 ## 更新脚本里的两行权限修复
 
-服务器侧每次拉取后都要修一次权限，理由是 `git pull` 新增的文件权限由服务器上的 umask 决定，目录上的 `o+x` 也不会因为文件内容没变而被保留。脚本放在仓库外面，避免被 `git pull` 的目录语义影响（`personal-homepage-research/15-deploy-tc63.md:123-130`）：
+服务器侧每次拉取后都要修一次权限，理由是 `git pull` 新增的文件权限由服务器上的 umask 决定，目录上的 `o+x` 也不会因为文件内容没变而被保留。`umask` 是新建文件时的默认权限掩码，由进程环境决定，所以服务器上拉下来的新文件不一定自带 `o+r`，每次更新后都要重跑一遍权限命令。脚本放在仓库外面，避免被 `git pull` 的目录语义影响（`personal-homepage-research/15-deploy-tc63.md` 的更新脚本记录）：
 
 ```bash
 git pull --ff-only origin main
 chmod o+x "$HOME" "$(dirname "$0")"; chmod -R o+rX dist
 ```
 
-第一行拉取产物，第二行补齐两处：家目录与脚本所在目录（也就是 `~/site`）的 `o+x`，以及 `dist` 整树的可读位。`README.md:159` 把这步记作 `~/update-tc63.sh`，内容是 `cd ~/site && git pull && 修权限`。
+第一行拉取产物，第二行补齐两处：家目录与脚本所在目录（也就是 `~/site`）的 `o+x`，以及 `dist` 整树的可读位。`README.md` 把这步记作 `~/update-tc63.sh`，内容是 `cd ~/site && git pull && 修权限`。
 
-本地侧的 `deploy.sh` 不参与权限：它只做构建、提交与推送，不连服务器（`deploy.sh:9-13`）。两侧解耦之后，本地机器不需要服务器凭据，服务器拉的是公开仓库，用匿名 HTTPS 即可（`personal-homepage-research/15-deploy-tc63.md:110-113`）。
+本地侧的 `deploy.sh` 不参与权限：它只做构建、提交与推送，不连服务器（`deploy.sh` 的分工说明）。两侧解耦之后，本地机器不需要服务器凭据，服务器拉的是公开仓库，用匿名 HTTPS 即可（`personal-homepage-research/15-deploy-tc63.md` 的拉取方式说明）。
 
 ## 账号边界与最小权限
 
-服务器上可登录的账号是 `tc63`（uid 1005），sudo 组里原本只有 `ubuntu`（`personal-homepage-research/15-deploy-tc63.md:16`）。启用 nginx 的 location 需要写 `/etc/nginx` 并 reload，属于 root 操作，所以那一步是在临时给 `tc63` 开 sudo 后执行的（`personal-homepage-research/15-deploy-tc63.md:163-167`）。
+最小权限的原则是按操作需要临时提权，而不是给日常账号常驻 root 能力。启用 nginx 的 location 需要写 `/etc/nginx` 并 reload，属于 root 操作；本工程的做法是临时给日常账号 `tc63` 开 sudo 完成这一步，用完即收（`personal-homepage-research/15-deploy-tc63.md` 的账号记录）。
 
-文档里给出的后续处理是收回 sudo 并改用 SSH key 登录（`personal-homepage-research/15-deploy-tc63.md:167`、`:171`）。现状记录中，本地到服务器的免密登录公钥已经被删除，`authorized_keys` 是空文件（`personal-homepage-research/15-deploy-tc63.md:111-113`）。
+后续处理方向也是通用的两条：收回临时 sudo，改用 SSH key 登录并轮换密码。凭据应该只在需要时存在，而不是长期留在服务器上——本工程本地到服务器的免密登录公钥已经删除，`authorized_keys` 为空文件（同文档的账号现状记录）。
 
 | 项 | 现状 | 方向 |
 | --- | --- | --- |
-| 登录方式 | 密码登录 | 改用 SSH key，轮换密码（`personal-homepage-research/15-deploy-tc63.md:171`） |
-| 提权 | 曾临时给 `tc63` 开 sudo | 用完收回（`:167`） |
+| 登录方式 | 密码登录 | 改用 SSH key，轮换密码 |
+| 提权 | 曾临时给 `tc63` 开 sudo | 用完收回 |
 | 站点文件 | `www-data` 靠 `o+rX` 读取 | 保持公网可见内容的只读放开 |
 | 证书私钥 | 600 root | 不因站点权限需求而改动 |
 | 仓库凭据 | 公开仓库，匿名拉取 | 不需要在服务器上放 token |
 
-这份清单里的四项是已经落地的事实，两项（SSH key、收回 sudo）是文档提出的改进方向，尚未在服务器上确认完成。
+这份清单要按「已落地 / 待落地」两类读：站点只读放开与私钥权限保护是已经落地的做法；SSH key 与收回 sudo 是待完成的方向。权限收紧是持续动作而不是一次性配置，收尾这一步漏掉，前面的临时提权就等于长期放开。
 
 ## 易错点
 
@@ -169,8 +169,8 @@ chmod o+x "$HOME" "$(dirname "$0")"; chmod -R o+rX dist
 
 | 路径 | 用途 |
 | --- | --- |
-| `personal-homepage-research/15-deploy-tc63.md` | 权限命令、软链接、更新脚本、账号与 sudo 现状（`:16`、`:91`、`:110-113`、`:123-130`、`:163-167`、`:171`） |
-| `README.md` | 服务器侧更新脚本与 nginx root（`:158-164`） |
-| `deploy.sh` | 本地只与 GitHub 交互的分工说明（`:9-13`） |
+| `personal-homepage-research/15-deploy-tc63.md` | 权限命令、软链接、更新脚本与账号现状 |
+| `README.md` | 服务器侧更新脚本与 nginx root |
+| `deploy.sh` | 本地只与 GitHub 交互的分工说明 |
 | `/home/tc63/www`、`/home/tc63/site/dist` | 站点根与产物目录（服务器路径，未在本机核对） |
 | `/etc/nginx/sites-available/knowledgediver` | `root /home/tc63/www` 的来源（服务器文件） |

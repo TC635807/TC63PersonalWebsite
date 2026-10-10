@@ -21,7 +21,7 @@ updated: 2026-10-07
 
 标注：brax 0.14.2 的内部实现没有在本机逐行打开，下文的损失与优化器形态按该版本的公开接口与依赖清单描述（未实测）。
 
-`train/train_go1.py:22-27` 引入 `jax`、brax 的 PPO 网络与 `train`；`train/train_getup.py:44-48` 相同，并且多引了 `ml_collections` 与 playground 的 `locomotion`。两个入口都不构造损失函数，只把环境与配置交给 `ppo.train`。
+`train/train_go1.py` 引入 `jax`、brax 的 PPO 网络与 `train`；`train/train_getup.py` 相同，并且多引了 `ml_collections` 与 playground 的 `locomotion`。两个入口都不构造损失函数，只把环境与配置交给 `ppo.train`。
 
 想在本地核对这一点，直接在仓库根跑 `grep -rn "jax.grad" .` 与 `grep -rn "value_and_grad" .`，两处都不会命中训练代码。这意味着任何涉及"损失怎么来的"的问题，改本仓库没有用，必须去看 brax 的实现或调 brax 的日志。
 
@@ -73,17 +73,17 @@ $$N_{\text{trans}} = batch\_size \times unroll\_length$$
 
 一个 rollout 的梯度更新次数是 `num_minibatches × num_updates_per_batch`。
 
-`train/train_go1.py:318-357` 的 `sb3_full` 分支把 brax 参数映射到 SB3 默认：768 环境 × unroll 32 = 24576 条 rollout，`batch_size=2`（2 序列 × 32 步 = 64 条转移），`num_minibatches=384`，`num_updates_per_batch=10`。注释 `train/train_go1.py:329-336` 明确记录了 `batch_size` 的语义是序列数而不是转移数，早期按转移数理解导致每样本更新密度低了 32 倍。
+`train/train_go1.py` 的 `sb3_full` 分支把 brax 参数映射到 SB3 默认：768 环境 × unroll 32 = 24576 条 rollout，`batch_size=2`（2 序列 × 32 步 = 64 条转移），`num_minibatches=384`，`num_updates_per_batch=10`。注释 `train/train_go1.py` 明确记录了 `batch_size` 的语义是序列数而不是转移数，早期按转移数理解导致每样本更新密度低了 32 倍。
 
 把这条差值算出来：若把 `batch_size=2` 当成"每批 2 条转移"，实际每批是 64 条转移，两者相差 `unroll_length` 倍。同样的 `num_minibatches` 下，真实更新次数是误读时的 1/32，样本效率差出一个数量级。
 
-`train/train_go1.py:383-392` 与 `train/train_getup.py:332-333` 都有整除断言：`num_envs` 必须能被 `num_minibatches` 整除，否则 brax 直接失败。走路入口默认 `num_envs=8192` 与 `num_minibatches=32` 满足（`train/train_go1.py:390-391`），若手改成 64 就会触发断言。
+`train/train_go1.py` 与 `train/train_getup.py` 都有整除断言：`num_envs` 必须能被 `num_minibatches` 整除，否则 brax 直接失败。走路入口默认 `num_envs=8192` 与 `num_minibatches=32` 满足（`train/train_go1.py`），若手改成 64 就会触发断言。
 
 时间维的展开同样由 brax 内部完成：rollout 与 epoch 循环都写成可编译的扫描，梯度在反向扫描里累计。训练的内存峰值因此由激活值与接触数组一起决定，unroll 长度直接相关（按架构推断，未逐行核对 brax 实现）。
 
 ## 5. 超参从训练脚本到 brax 的映射
 
-超参在 `train/train_go1.py:710-736` 组装成 `config_dict`，其中与梯度直接相关的字段：
+超参在 `train/train_go1.py` 组装成 `config_dict`，其中与梯度直接相关的字段：
 
 | 字段 | 走路默认（v9 档） | 起身默认 | 作用 |
 | --- | --- | --- | --- |
@@ -94,7 +94,7 @@ $$N_{\text{trans}} = batch\_size \times unroll\_length$$
 | `discounting` | 0.99 | 0.99 | $\gamma$ |
 | `num_updates_per_batch` | 10 | 10 | 每个 rollout 的 epoch 数 |
 
-`train/train_getup.py:342-367` 的 config 与 `train/train_go1.py:710-736` 同构。起身入口把 `reward_scaling` 固定为 1.0，并显式关闭观测归一化，这两项不直接进梯度，但会改变损失量级与梯度尺度。观测归一化打开时，观测被在线标准化，同一份奖励对应的梯度尺度会随之改变；关闭它是为了与走路任务的奖励口径可比。
+`train/train_getup.py` 的 config 与 `train/train_go1.py` 同构。起身入口把 `reward_scaling` 固定为 1.0，并显式关闭观测归一化，这两项不直接进梯度，但会改变损失量级与梯度尺度。观测归一化打开时，观测被在线标准化，同一份奖励对应的梯度尺度会随之改变；关闭它是为了与走路任务的奖励口径可比。
 
 `discounting=0.99` 配合 `ctrl_dt=0.02`，有效视野的半衰期约为 $\ln 0.5 / \ln 0.99 \approx 69$ 步，也就是 1.4 s。这个量与 `unroll_length=32` 相比短一些，说明单条序列内的回报折扣覆盖完整，跨序列的引导由价值网络承担。
 
@@ -120,19 +120,19 @@ sequenceDiagram
 
 ## 6. 检查点里没有优化器状态
 
-`train/train_getup.py:178-180` 与 `train/train_go1.py:96-97` 都写明：brax 检查点不含优化器状态与步数，续训时 Adam 动量从零重建、步数从 0 计数。这是续训必须降 `lr` 的直接原因（`train/train_go1.py:160-162`）。
+`train/train_getup.py` 与 `train/train_go1.py` 都写明：brax 检查点不含优化器状态与步数，续训时 Adam 动量从零重建、步数从 0 计数。这是续训必须降 `lr` 的直接原因（`train/train_go1.py`）。
 
-`train/train_getup.py:174-180` 还把两种起步方式分开：`--restore` 读检查点，`--init_pkl` 喂初始参数。前者恢复网络权重，后者提供监督学习得到的初始权重，两者的语义不同，混用会让"续训"变成"从旧参数冷启动"，而优化器状态在两种情况下都从零开始。
+`train/train_getup.py` 还把两种起步方式分开：`--restore` 读检查点，`--init_pkl` 喂初始参数。前者恢复网络权重，后者提供监督学习得到的初始权重，两者的语义不同，混用会让"续训"变成"从旧参数冷启动"，而优化器状态在两种情况下都从零开始。
 
 ## 7. 梯度为零的失败模式
 
-奖励里负项过大时总奖励会被裁剪到 0，梯度随之归零。`train/train_go1.py:673-674` 记录 `body_contact` 的上限就是为避免这一点；`train/train_go1.py:527-529` 记录 `base_height` 权重取 -2000 会把每步奖励打到 0，正是 v1 到 v7 的失败模式。
+奖励里负项过大时总奖励会被裁剪到 0，梯度随之归零。`train/train_go1.py` 记录 `body_contact` 的上限就是为避免这一点；`train/train_go1.py` 记录 `base_height` 权重取 -2000 会把每步奖励打到 0，正是 v1 到 v7 的失败模式。
 
-`envs/go1_walk.py:1376` 记录了另一次核查：沿楼梯上升时的“额外惩罚对高度”相关性只有 +0.13，没有系统方向，排除了某项惩罚定向压爬升的猜想。这条的意义在于：梯度不动的第一嫌疑是奖励被裁剪，但在改代码之前应当先用探针把相关性量出来。
+`envs/go1_walk.py` 记录了另一次核查：沿楼梯上升时的“额外惩罚对高度”相关性只有 +0.13，没有系统方向，排除了某项惩罚定向压爬升的猜想。这条的意义在于：梯度不动的第一嫌疑是奖励被裁剪，但在改代码之前应当先用探针把相关性量出来。
 
 ## 8. 权重加载与网络重建
 
-`sim/common.py:65-92` 从 pkl 或 orbax 目录读取参数，用第一层 `kernel` 的形状反推 obs 维度与网络层数，再重建网络并生成确定性推理函数。这解释了训练保存的 `params` 里有什么、没有什么：只有网络参数，没有优化器状态。
+`sim/common.py` 从 pkl 或 orbax 目录读取参数，用第一层 `kernel` 的形状反推 obs 维度与网络层数，再重建网络并生成确定性推理函数。这解释了训练保存的 `params` 里有什么、没有什么：只有网络参数，没有优化器状态。
 
 从 pkl 与从 orbax 目录读取是两条不同的代码路径，前者是 pickle 的参数字典，后者是 orbax 检查点目录；两条路都会走到同一个形状反推逻辑，得到的网络结构也应当一致。
 
@@ -142,12 +142,12 @@ sequenceDiagram
 
 | 现象 | 原因 | 对应位置 |
 | --- | --- | --- |
-| 续训立刻发散，需降 lr | 以为续训保留 Adam 动量 | `train/train_go1.py:96-97` |
-| 每样本更新密度低约 32 倍 | 把 batch_size 当转移数 | `train/train_go1.py:329-336` |
-| brax 整除断言失败 | num_envs 不能被 num_minibatches 整除 | `train/train_go1.py:390-391` |
-| 总奖励裁剪到 0，梯度归零 | 奖励负项过大 | `train/train_go1.py:673-674` |
-| 收敛好的策略被 Adam 步长推走 | 微调时沿用大 lr | `train/train_go1.py:160-162` |
-| 一个恢复检查点，一个喂初始参数 | 把 restore 与 init_pkl 混用 | `train/train_getup.py:174-180` |
+| 续训立刻发散，需降 lr | 以为续训保留 Adam 动量 | `train/train_go1.py` |
+| 每样本更新密度低约 32 倍 | 把 batch_size 当转移数 | `train/train_go1.py` |
+| brax 整除断言失败 | num_envs 不能被 num_minibatches 整除 | `train/train_go1.py` |
+| 总奖励裁剪到 0，梯度归零 | 奖励负项过大 | `train/train_go1.py` |
+| 收敛好的策略被 Adam 步长推走 | 微调时沿用大 lr | `train/train_go1.py` |
+| 一个恢复检查点，一个喂初始参数 | 把 restore 与 init_pkl 混用 | `train/train_getup.py` |
 | 找不到 jax.grad 调用点，需进 brax | 本仓库不写损失 | 全仓库 grep 结果 |
 
 ## 10. 小结

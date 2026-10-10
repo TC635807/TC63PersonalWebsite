@@ -17,7 +17,7 @@ updated: 2026-10-07
 
 ## 1. 40 KB 从哪来
 
-`Core/Inc/FreeRTOSConfig.h` 第 67 行：
+`Core/Inc/FreeRTOSConfig.h` 里这一项：
 
 ```c
 #define configTOTAL_HEAP_SIZE                    ((size_t)40960)
@@ -26,7 +26,7 @@ updated: 2026-10-07
 40960 = 40 × 1024，也就是 40 KB。它就是 heap_4 里这个数组的长度：
 
 ```c
-/* heap_4.c:59-65 */
+/* heap_4.c */
 #if( configAPPLICATION_ALLOCATED_HEAP == 1 )
 	extern uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
 #else
@@ -53,7 +53,7 @@ updated: 2026-10-07
 heap_4 把整块内存切成一段段"块"（block），每个块的开头都放一个 `BlockLink_t`：
 
 ```c
-/* heap_4.c:69-73 */
+/* heap_4.c */
 typedef struct A_BLOCK_LINK
 {
 	struct A_BLOCK_LINK *pxNextFreeBlock;	/* 下一个空闲块 */
@@ -64,11 +64,11 @@ typedef struct A_BLOCK_LINK
 在 32 位 Cortex-M 上，两个 4 字节成员 = 8 字节。再向上对齐到 `portBYTE_ALIGNMENT`：
 
 ```c
-/* heap_4.c:95 */
+/* heap_4.c */
 static const size_t xHeapStructSize = ( sizeof( BlockLink_t ) + ( portBYTE_ALIGNMENT - 1 ) ) & ~( portBYTE_ALIGNMENT_MASK );
 ```
 
-本工程的 `portBYTE_ALIGNMENT` 是 8（`portable/GCC/ARM_CM4F/portmacro.h:75`），而 8 本身已经对齐，所以：
+本工程的 `portBYTE_ALIGNMENT` 是 8（`portable/GCC/ARM_CM4F/portmacro.h`），而 8 本身已经对齐，所以：
 
 $$S_{\text{link}} = \text{sizeof}(\text{BlockLink\_t}) = 8 \ \text{bytes}$$
 
@@ -79,7 +79,7 @@ $$S_{\text{link}} = \text{sizeof}(\text{BlockLink\_t}) = 8 \ \text{bytes}$$
 heap_4 维护一条空闲块链表，关键特征是它按内存地址从小到大排序，不按大小排序：
 
 ```c
-/* heap_4.c:98 */
+/* heap_4.c */
 static BlockLink_t xStart, *pxEnd = NULL;
 ```
 
@@ -98,7 +98,7 @@ static BlockLink_t xStart, *pxEnd = NULL;
 heap_4 不给每个块额外加标志位，而是借用 `xBlockSize` 的最高位：
 
 ```c
-/* heap_4.c:107-111 */
+/* heap_4.c */
 static size_t xBlockAllocatedBit = 0;
 /* prvHeapInit 末尾： */
 xBlockAllocatedBit = ( ( size_t ) 1 ) << ( ( sizeof( size_t ) * heapBITS_PER_BYTE ) - 1 );
@@ -111,14 +111,14 @@ xBlockAllocatedBit = ( ( size_t ) 1 ) << ( ( sizeof( size_t ) * heapBITS_PER_BYT
 代价是块大小不能超过 $2^{31}$ 字节。对 40 KB 的堆来说这不构成问题，但这解释了为什么 `pvPortMalloc` 开头有这么一句：
 
 ```c
-/* heap_4.c:137 */
+/* heap_4.c */
 if( ( xWantedSize & xBlockAllocatedBit ) == 0 )   /* 申请的太大就直接放弃 */
 ```
 
 ### 2.4 最小块：16 字节
 
 ```c
-/* heap_4.c:53 */
+/* heap_4.c */
 #define heapMINIMUM_BLOCK_SIZE	( ( size_t ) ( xHeapStructSize << 1 ) )   /* = 8 << 1 = 16 */
 ```
 
@@ -152,7 +152,7 @@ flowchart TD
 ```
 
 ```c
-/* heap_4.c:165-186（节选，删掉了 coverage 标记） */
+/* heap_4.c（节选，删掉了 coverage 标记） */
 pxPreviousBlock = &xStart;
 pxBlock = xStart.pxNextFreeBlock;
 while( ( pxBlock->xBlockSize < xWantedSize ) && ( pxBlock->pxNextFreeBlock != NULL ) )
@@ -174,7 +174,7 @@ if( pxBlock != pxEnd )            /* 没扫到 pxEnd 说明找到了 */
 合并是 heap_4 的核心机制。看真实实现：
 
 ```c
-/* heap_4.c:398-425（节选） */
+/* heap_4.c（节选） */
 static void prvInsertBlockIntoFreeList( BlockLink_t *pxBlockToInsert )
 {
 	BlockLink_t *pxIterator;
@@ -251,7 +251,7 @@ flowchart TD
 配置里写 40960，并不等于实际能拿到 40960。`prvHeapInit()` 会砍掉三部分：
 
 ```c
-/* heap_4.c:333-372（节选） */
+/* heap_4.c（节选） */
 static void prvHeapInit( void )
 {
 	size_t uxAddress;
@@ -305,25 +305,25 @@ $$U = H - a_{\text{head}} - S_{\text{link}} - a_{\text{tail}} = 40960 - 4 - 8 - 
 | `sizeof(StackType_t)` | 4 | `portmacro.h`，Cortex-M 字长 |
 | `sizeof(TCB_t)` | 84 | 工具链探针实测（`StaticTask_t` 也是 84，map 里 `xIdleTaskTCBBuffer` 为 `0x54`） |
 | `sizeof(Queue_t)` | 72 | 工具链探针实测 |
-| `xHeapStructSize` | 8 | `heap_4.c:95` |
+| `xHeapStructSize` | 8 | `heap_4.c` |
 | 每个 TCB 的堆开销 | $84 + 8 = 92$ | TCB 单独一次 `pvPortMalloc( sizeof(TCB_t) )` |
 | 每个任务栈的堆开销 | $4 d + 8$ | `pvPortMalloc( d * sizeof(StackType_t) )`，$d$ 为栈深（words） |
 
-`TCB_t` 与栈是两次独立分配（`tasks.c:770-780`，因为 `portSTACK_GROWTH = -1` 走的是先栈后 TCB 的分支），所以每个任务要承担两次 8 字节块头开销。
+`TCB_t` 与栈是两次独立分配（`tasks.c`，因为 `portSTACK_GROWTH = -1` 走的是先栈后 TCB 的分支），所以每个任务要承担两次 8 字节块头开销。
 
 ### 5.2 预算表
 
-队列先创建（`freertos.c:114`），随后 `defaultTask`（`freertos.c:123-124`），再是 5 个应用任务（`freertos.c:129-133`）。
+队列先创建（`freertos.c`），随后 `defaultTask`（`freertos.c`），再是 5 个应用任务（`freertos.c`）。
 
 | # | 对象 | 创建位置 | 栈深 words | 栈字节 | 栈+块头 | TCB+块头 | 小计 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `usbRxQueue` | `freertos.c:114` | — | 128 | — | — | 208 |
-| 2 | `defaultTask` | `freertos.c:123` | 256 | 1024 | 1032 | 92 | 1124 |
-| 3 | `StartFireTask` | `FireTask.cpp:80` | 512 | 2048 | 2056 | 92 | 2148 |
-| 4 | `imuTask` | `ImuTask.cpp:123` | 1024 | 4096 | 4104 | 92 | 4196 |
-| 5 | `gimbalTask` | `GimbalTask.cpp:110` | 2048 | 8192 | 8200 | 92 | 8292 |
-| 6 | `StartControlCenterTask` | `ControlCenterTask.cpp:122` | 1024 | 4096 | 4104 | 92 | 4196 |
-| 7 | `StartUsbConnectTask` | `UsbConnectTask.cpp:177` | 2048 | 8192 | 8200 | 92 | 8292 |
+| 1 | `usbRxQueue` | `freertos.c` | — | 128 | — | — | 208 |
+| 2 | `defaultTask` | `freertos.c` | 256 | 1024 | 1032 | 92 | 1124 |
+| 3 | `StartFireTask` | `FireTask.cpp` | 512 | 2048 | 2056 | 92 | 2148 |
+| 4 | `imuTask` | `ImuTask.cpp` | 1024 | 4096 | 4104 | 92 | 4196 |
+| 5 | `gimbalTask` | `GimbalTask.cpp` | 2048 | 8192 | 8200 | 92 | 8292 |
+| 6 | `StartControlCenterTask` | `ControlCenterTask.cpp` | 1024 | 4096 | 4104 | 92 | 4196 |
+| 7 | `StartUsbConnectTask` | `UsbConnectTask.cpp` | 2048 | 8192 | 8200 | 92 | 8292 |
 | | 合计 | | 6912 | 27648 | 27696 | 552 | 28456 |
 
 其中队列的 208 字节是这样来的：队列体大小 = `sizeof(Queue_t)` + 消息存储 = $72 + (128 \times 1) = 200$，再加上 8 字节块头 = 208。
@@ -353,7 +353,7 @@ $$U - C = 40944 - 28456 = 12488 \ \text{bytes} \approx 12.19 \ \text{KiB}$$
 heap_4 提供两个查询函数，实现只有一行：
 
 ```c
-/* heap_4.c:315-323 */
+/* heap_4.c */
 size_t xPortGetFreeHeapSize( void )
 {
 	return xFreeBytesRemaining;          /* 当前还剩多少 */
@@ -408,7 +408,7 @@ void StartDefaultTask(void const * argument)
 
 ### 6.2 三个必须知道的前提
 
-1. 必须在第一次 `pvPortMalloc` 之后调用。因为 `prvHeapInit()` 是懒初始化的（`heap_4.c:124-127`），在那之前 `xFreeBytesRemaining` 还是 0。
+1. 必须在第一次 `pvPortMalloc` 之后调用。因为 `prvHeapInit()` 是懒初始化的（`heap_4.c`），在那之前 `xFreeBytesRemaining` 还是 0。
 2. 返回值单位是字节，不是字。`uxTaskGetStackHighWaterMark()` 的单位是字，两者别混（见 `04-栈溢出检测与断言`）。
 3. 不要用 `xPortGetFreeHeapSize` 做业务判断。它是瞬时值，会被无关的分配/释放带偏；要判断容量是否安全，看 `xPortGetMinimumEverFreeHeapSize`。
 

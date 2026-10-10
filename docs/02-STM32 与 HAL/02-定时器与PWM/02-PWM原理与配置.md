@@ -7,7 +7,7 @@ updated: 2026-10-07
 
 # PWM 原理与配置
 
-本工程只有一路 PWM：TIM10 的通道 1，从 PF6 输出，驱动 BMI088 的加热电阻（`Core/Src/tim.c:100-109`）。这一路信号的频率固定为 33.6 kHz，占空比由 1 kHz 的 IMU 任务按温度环输出更新（`BMI088/Src/ImuTempControl.cpp:15-23`）。
+本工程只有一路 PWM：TIM10 的通道 1，从 PF6 输出，驱动 BMI088 的加热电阻（`Core/Src/tim.c`）。这一路信号的频率固定为 33.6 kHz，占空比由 1 kHz 的 IMU 任务按温度环输出更新（`BMI088/Src/ImuTempControl.cpp`）。
 
 > 源码索引
 
@@ -29,7 +29,7 @@ updated: 2026-10-07
 | PWM1 | $CNT < CCR$ | 本工程 TIM10 通道 1 |
 | PWM2 | $CNT \ge CCR$ | 需要反相输出时 |
 
-引脚上的最终极性还受 `CCER.CCxP` 影响：`OCPolarity = HIGH` 时 PWM1 的高电平就是引脚的高电平，写 LOW 则整体反相。本工程是 `TIM_OCPOLARITY_HIGH`（`tim.c:58`）。
+引脚上的最终极性还受 `CCER.CCxP` 影响：`OCPolarity = HIGH` 时 PWM1 的高电平就是引脚的高电平，写 LOW 则整体反相。本工程是 `TIM_OCPOLARITY_HIGH`（`tim.c`）。
 
 ```mermaid
 flowchart TD
@@ -79,12 +79,12 @@ $$f_{PWM,center}=\frac{f_{CK\_PSC}}{(PSC+1)\cdot 2\cdot ARR}$$
 
 | 步骤 | 调用 | 做的事 |
 | --- | --- | --- |
-| 1 | `HAL_TIM_Base_Init(&htim10)`（`tim.c:48`） | 调用 `TIM_Base_SetConfig()` 写 PSC、ARR、计数方向与预装载开关 |
-| 2 | `HAL_TIM_PWM_Init(&htim10)`（`tim.c:52`） | 内部再次调用 `TIM_Base_SetConfig()`，并把四个通道状态置为 READY |
-| 3 | `HAL_TIM_PWM_ConfigChannel()`（`tim.c:60`） | 写 `CCMR1` 的 OC1M、OC1PE、OC1FE 与 `CCER` 的极性 |
-| 4 | `HAL_TIM_MspPostInit()`（`tim.c:67`） | 配置 PF6 为复用推挽输出，`GPIO_AF3_TIM10` |
+| 1 | `HAL_TIM_Base_Init(&htim10)`（`tim.c`） | 调用 `TIM_Base_SetConfig()` 写 PSC、ARR、计数方向与预装载开关 |
+| 2 | `HAL_TIM_PWM_Init(&htim10)`（`tim.c`） | 内部再次调用 `TIM_Base_SetConfig()`，并把四个通道状态置为 READY |
+| 3 | `HAL_TIM_PWM_ConfigChannel()`（`tim.c`） | 写 `CCMR1` 的 OC1M、OC1PE、OC1FE 与 `CCER` 的极性 |
+| 4 | `HAL_TIM_MspPostInit()`（`tim.c`） | 配置 PF6 为复用推挽输出，`GPIO_AF3_TIM10` |
 
-第 4 步放在最后，是因为引脚复用配置要等通道参数齐备后再改。`HAL_TIM_PWM_ConfigChannel()` 对通道 1 无条件置位 `CCMR1.OC1PE`（`stm32f4xx_hal_tim.c:4245`），这一点与 `.ioc` 里的 `TIM10.OC1Preload_PWM=ENABLE` 一致。
+第 4 步放在最后，是因为引脚复用配置要等通道参数齐备后再改。`HAL_TIM_PWM_ConfigChannel()` 对通道 1 无条件置位 `CCMR1.OC1PE`（`stm32f4xx_hal_tim.c`），这一点与 `.ioc` 里的 `TIM10.OC1Preload_PWM=ENABLE` 一致。
 
 让引脚出波形的是运行期的 `HAL_TIM_PWM_Start()`：
 
@@ -98,9 +98,9 @@ if (IS_TIM_BREAK_INSTANCE(htim->Instance) != RESET) {
 __HAL_TIM_ENABLE(htim);                                       /* CR1.CEN = 1 */
 ```
 
-这段对应 `stm32f4xx_hal_tim.c:1470-1491`。TIM10 不是带刹车输入的实例，所以 `MOE` 那一步被跳过。启动前 `TIM_CHANNEL_STATE_GET()` 必须是 READY，否则 `HAL_TIM_PWM_Start()` 直接返回 `HAL_ERROR`（同文件 1462-1468 行），重复启动同一个通道不会报错但也不会起作用。
+这段对应 `stm32f4xx_hal_tim.c`。TIM10 不是带刹车输入的实例，所以 `MOE` 那一步被跳过。启动前 `TIM_CHANNEL_STATE_GET()` 必须是 READY，否则 `HAL_TIM_PWM_Start()` 直接返回 `HAL_ERROR`（同文件 1462-1468 行），重复启动同一个通道不会报错但也不会起作用。
 
-本工程的启动点只有一个，在 IMU 任务的开头（`BMI088/Src/ImuTempControl.cpp:15`）：
+本工程的启动点只有一个，在 IMU 任务的开头（`BMI088/Src/ImuTempControl.cpp`）：
 
 ```cpp
 void ImuTempControl::init() {
@@ -110,7 +110,7 @@ void ImuTempControl::init() {
 }
 ```
 
-调用链是 `ImuTask::run()` → `ImuTempControl_Init()`（`Task/Src/ImuTask.cpp:36`），早于温控更新循环。
+调用链是 `ImuTask::run()` → `ImuTempControl_Init()`（`Task/Src/ImuTask.cpp`），早于温控更新循环。
 
 ```mermaid
 sequenceDiagram
@@ -133,7 +133,7 @@ sequenceDiagram
 
 ## 4. 比较值的写入
 
-CCR 的写入在 HAL 里是一个宏，直接写寄存器，没有函数调用开销（`Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:1394-1398`）：
+CCR 的写入在 HAL 里是一个宏，直接写寄存器，没有函数调用开销（`Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h`）：
 
 ```c
 #define __HAL_TIM_SET_COMPARE(__HANDLE__, __CHANNEL__, __COMPARE__) \
@@ -143,7 +143,7 @@ CCR 的写入在 HAL 里是一个宏，直接写寄存器，没有函数调用�
    ((__HANDLE__)->Instance->CCR4 = (__COMPARE__)))
 ```
 
-本工程的调用点（`BMI088/Src/ImuTempControl.cpp:18-24`）：
+本工程的调用点（`BMI088/Src/ImuTempControl.cpp`）：
 
 ```cpp
 void ImuTempControl::update(float targetTemp, float currentTemp, float dt) {
@@ -153,7 +153,7 @@ void ImuTempControl::update(float targetTemp, float currentTemp, float dt) {
 }
 ```
 
-`htim_->Init.Period` 是 4999，`duty` 是 `temp_pid_calculate()` 的返回值。该函数声明为 `int16_t`（`PID/Inc/temp_pid.h:29`），输出被限幅在 0 到 4500（`PID/Src/temp_pid.cpp:41` 的 `TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)`，其中第四个参数是输出限幅）。于是 `compare` 的取值范围是 0 或 4999 到 22 495 500 之间的值：
+`htim_->Init.Period` 是 4999，`duty` 是 `temp_pid_calculate()` 的返回值。该函数声明为 `int16_t`（`PID/Inc/temp_pid.h`），输出被限幅在 0 到 4500（`PID/Src/temp_pid.cpp` 的 `TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)`，其中第四个参数是输出限幅）。于是 `compare` 的取值范围是 0 或 4999 到 22 495 500 之间的值：
 
 | `duty` | `compare = 4999 × duty` | 相对 ARR = 4999 的占空比 |
 | --- | --- | --- |

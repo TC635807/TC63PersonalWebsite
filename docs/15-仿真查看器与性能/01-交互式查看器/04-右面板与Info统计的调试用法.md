@@ -13,7 +13,7 @@ updated: 2026-10-08
 
 ## Joint 滑条改的是 qpos
 
-模型里每个滑块或铰链关节对应一个滑条，拖动它就是直接设置该关节的 `qpos`（`MuJoCo查看器指南.md:177-180`）。滑条范围分三种情况：
+模型里每个滑块或铰链关节对应一个滑条，拖动它就是直接设置该关节的 `qpos`（`MuJoCo查看器指南.md`）。滑条范围分三种情况：
 
 | 关节类型 | 默认范围 | 说明 |
 | --- | --- | --- |
@@ -21,15 +21,15 @@ updated: 2026-10-08
 | 铰链 hinge | ±π | 同上 |
 | 自由 free / 球 ball | 无滑条 | 一个标量表达不了它的位置 |
 
-暂停时拖滑条用于摆姿势，播放时拖动会持续生效、松手后按物理规律回弹（`MuJoCo查看器指南.md:179`）。把某个分组在 `Group enable → Joint` 里关掉，对应滑条会消失（`MuJoCo查看器指南.md:180`）。
+暂停时拖滑条用于摆姿势，播放时拖动会持续生效、松手后按物理规律回弹（`MuJoCo查看器指南.md`）。把某个分组在 `Group enable → Joint` 里关掉，对应滑条会消失（`MuJoCo查看器指南.md`）。
 
-脚本里的等价写法是直接写地址：`data.qpos[adr] = ...`（`MuJoCo查看器指南.md:238`）。与 GUI 相同，这种写入不会经过执行器，也不受 `ctrlrange` 限制。
+脚本里的等价写法是直接写地址：`data.qpos[adr] = ...`（`MuJoCo查看器指南.md`）。与 GUI 相同，这种写入不会经过执行器，也不受 `ctrlrange` 限制。
 
 ## Control 滑条改的是 ctrl
 
-模型里每个执行器对应一个控制滑条，拖动即设置它的控制信号 `ctrl`，范围来自模型定义的 `ctrlrange`；模型里没有执行器时这一节为空（`MuJoCo查看器指南.md:182-186`）。
+模型里每个执行器对应一个控制滑条，拖动即设置它的控制信号 `ctrl`，范围来自模型定义的 `ctrlrange`；模型里没有执行器时这一节为空（`MuJoCo查看器指南.md`）。
 
-`Clear all` 一键把所有控制归零，适合在反复试验前回到中立状态（`MuJoCo查看器指南.md:184`）。最常用的组合是「暂停 → 拖控制滑条 → 空格播放」，观察执行器如何驱动机器人（`MuJoCo查看器指南.md:186`）。脚本里对应 `data.ctrl[i] = ...`（`MuJoCo查看器指南.md:237`）。
+`Clear all` 一键把所有控制归零，适合在反复试验前回到中立状态（`MuJoCo查看器指南.md`）。最常用的组合是「暂停 → 拖控制滑条 → 空格播放」，观察执行器如何驱动机器人（`MuJoCo查看器指南.md`）。脚本里对应 `data.ctrl[i] = ...`（`MuJoCo查看器指南.md`）。
 
 ```mermaid
 flowchart LR
@@ -41,13 +41,13 @@ flowchart LR
 
 ## Equality 的运行时开关
 
-模型 XML 里定义的每条 `<equality>`（如焊接、连接连体）在右面板占一行复选框，勾选状态决定这条约束在运行时是否生效（`MuJoCo查看器指南.md:188-189`）。解开某条焊接来看机器人自由状态，或者反过来临时加上约束看求解器压力，都靠这一节。
+模型 XML 里定义的每条 `<equality>`（如焊接、连接连体）在右面板占一行复选框，勾选状态决定这条约束在运行时是否生效（`MuJoCo查看器指南.md`）。解开某条焊接来看机器人自由状态，或者反过来临时加上约束看求解器压力，都靠这一节。
 
 这类开关改的是约束集合，会直接改变 `nefc`，因此 Info 的 `Size` 一行会立刻反映出来。它同样不写回 XML。
 
 ## Info 栏字段的读法
 
-按 `F2` 打开左下角统计栏，八个字段各自的含义如下（`MuJoCo查看器指南.md:193-206`）。
+按 `F2` 打开左下角统计栏，八个字段各自的含义如下（`MuJoCo查看器指南.md`）。
 
 | 字段 | 含义 | 主要用途 |
 | --- | --- | --- |
@@ -60,7 +60,7 @@ flowchart LR
 | `Energy` | 总能量（需在 Physics 里开启 Energy） | 能量守恒检查 |
 | `Islands` | 约束孤岛数 | 观察分岛求解 |
 
-判断卡顿来源的口诀很简单：`CPU` 一行是物理耗时，`FPS` 是渲染帧率（`MuJoCo查看器指南.md:206`）。两者会互相影响，但先看哪一个明显偏大，就能大致定位侧别。
+判断卡顿来源的口诀很简单：`CPU` 一行是物理耗时，`FPS` 是渲染帧率（`MuJoCo查看器指南.md`）。两者会互相影响，但先看哪一个明显偏大，就能大致定位侧别。
 
 ```mermaid
 flowchart TD
@@ -75,15 +75,15 @@ flowchart TD
 
 ## F3 性能分析器看什么
 
-`F3` 在右上角打开四张曲线：CPU 耗时、规模、求解收敛相关的 Counts 与 Convergence（`MuJoCo查看器指南.md:212`）。它们与 Info 的数字是同一批量的时间序列，用来观察趋势而不是瞬时值。
+`F3` 在右上角打开四张曲线：CPU 耗时、规模、求解收敛相关的 Counts 与 Convergence（`MuJoCo查看器指南.md`）。它们与 Info 的数字是同一批量的时间序列，用来观察趋势而不是瞬时值。
 
-例如接触抖动时，Counts 曲线会显示迭代次数是否持续贴在上限，Convergence 曲线则显示误差是否在期望范围内收敛（`MuJoCo查看器指南.md:206`、`:212`）。曲线比数字更容易看出「只是某几步超限」还是「一直没收敛」。
+例如接触抖动时，Counts 曲线会显示迭代次数是否持续贴在上限，Convergence 曲线则显示误差是否在期望范围内收敛（`MuJoCo查看器指南.md`）。曲线比数字更容易看出「只是某几步超限」还是「一直没收敛」。
 
 ## 用 launch_passive 写自己的查看器
 
-命令行 `mjv` 适合手工看模型；要一边跑策略一边看，就要在脚本里用 `mujoco.viewer.launch_passive`，它把窗口交给你的主循环驱动（`MuJoCo查看器指南.md:34`）。本机多个脚本都用这个模式，例如 `mjx-go1-getup/sim/view_go1.py:777` 与 `LQRbalance/lqr_balance.py:310`。
+命令行 `mjv` 适合手工看模型；要一边跑策略一边看，就要在脚本里用 `mujoco.viewer.launch_passive`，它把窗口交给你的主循环驱动（`MuJoCo查看器指南.md`）。本机多个脚本都用这个模式，例如 `mjx-go1-getup/sim/view_go1.py` 与 `LQRbalance/lqr_balance.py`。
 
-被动查看器的循环骨架是「推进物理 → 同步给渲染 → 按实时节奏睡眠」，`LQRbalance/lqr_balance.py:310-329` 是最完整的例子：
+被动查看器的循环骨架是「推进物理 → 同步给渲染 → 按实时节奏睡眠」，`LQRbalance/lqr_balance.py` 是最完整的例子：
 
 ```python
 with mujoco.viewer.launch_passive(m, d) as v:
@@ -97,7 +97,7 @@ with mujoco.viewer.launch_passive(m, d) as v:
         time.sleep(max(0, m.opt.timestep * 20 - (time.time() - step_start)))
 ```
 
-三个环节各有作用：一轮推进 20 步让物理时间前进一个固定量；`v.sync()` 把状态交给查看器的渲染线程；最后的睡眠按 `timestep × 20` 减去本轮已用时间，把实际节奏拉回实时（`LQRbalance/lqr_balance.py:326-329`）。睡眠用 `max(0, ...)` 保底，物理本身超时也不会叠加等待。
+三个环节各有作用：一轮推进 20 步让物理时间前进一个固定量；`v.sync()` 把状态交给查看器的渲染线程；最后的睡眠按 `timestep × 20` 减去本轮已用时间，把实际节奏拉回实时（`LQRbalance/lqr_balance.py`）。睡眠用 `max(0, ...)` 保底，物理本身超时也不会叠加等待。
 
 ```mermaid
 sequenceDiagram
@@ -112,20 +112,20 @@ sequenceDiagram
     Note over P: 循环直到 v.is_running() 为假
 ```
 
-循环之外的设置在窗口打开后执行一次即可，例如低画质档关闭场景级效果、俯瞰模式设置相机（`mjx-go1-getup/sim/view_go1.py:777-796`）。
+循环之外的设置在窗口打开后执行一次即可，例如低画质档关闭场景级效果、俯瞰模式设置相机（`mjx-go1-getup/sim/view_go1.py`）。
 
 ## 一个带扰动的查看器循环
 
-把前面几节拼起来就是一次完整的扰动测试：脚本线性化模型求出 LQR 增益，打开被动查看器，循环里跑状态机与控制器，同时允许人工拖拽或周期性自动推力施加扰动（`LQRbalance/run_lqr_view.py:19-37`、`lqr_balance.py:313-325`）。
+把前面几节拼起来就是一次完整的扰动测试：脚本线性化模型求出 LQR 增益，打开被动查看器，循环里跑状态机与控制器，同时允许人工拖拽或周期性自动推力施加扰动（`LQRbalance/run_lqr_view.py`、`lqr_balance.py`）。
 
 | 环节 | 位置 | 作用 |
 | --- | --- | --- |
-| 线性化与求增益 | `run_lqr_view.py:27-32` | 得到状态反馈矩阵 |
-| 打开查看器 | `lqr_balance.py:310` | 建立窗口与同步句柄 |
-| 外力写入 | `lqr_balance.py:319-325` | 自动推力与手动拖拽共用 `xfrc_applied` |
-| 推进与同步 | `lqr_balance.py:326-329` | 20 步物理加一次渲染同步 |
+| 线性化与求增益 | `run_lqr_view.py` | 得到状态反馈矩阵 |
+| 打开查看器 | `lqr_balance.py` | 建立窗口与同步句柄 |
+| 外力写入 | `lqr_balance.py` | 自动推力与手动拖拽共用 `xfrc_applied` |
+| 推进与同步 | `lqr_balance.py` | 20 步物理加一次渲染同步 |
 
-关于拖拽力度的调整与 `xfrc_applied` 被循环清零的问题，见 `02-鼠标键盘操作与交互施力`。本机脚本里还有一条与帧率相关的实测记录：窗口刚出现的前约 100 帧明显偏慢，之后稳定在 26 ms 一帧附近，帧计时里看不到渲染线程的开销（`mjx-go1-getup/sim/view_go1.py:755-761`）。这条记录的含义与逐帧耗时拆解有关，放到 `03-逐帧耗时拆解与优化` 里讨论。
+关于拖拽力度的调整与 `xfrc_applied` 被循环清零的问题，见 `02-鼠标键盘操作与交互施力`。本机脚本里还有一条与帧率相关的实测记录：窗口刚出现的前约 100 帧明显偏慢，之后稳定在 26 ms 一帧附近，帧计时里看不到渲染线程的开销（`mjx-go1-getup/sim/view_go1.py`）。这条记录的含义与逐帧耗时拆解有关，放到 `03-逐帧耗时拆解与优化` 里讨论。
 
 ## 易错点
 
@@ -176,9 +176,9 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `MuJoCo查看器指南.md` | 右面板三节、Info 字段、F3 与脚本等价写法（`:175-213`、`:233-243`） |
-| `LQRbalance/lqr_balance.py` | 被动查看器循环与扰动写入（`:298-329`） |
-| `LQRbalance/run_lqr_view.py` | 查看器入口与增益计算（`:19-37`） |
-| `mjx-go1-getup/sim/view_go1.py` | 画质档、俯瞰相机与帧率实测记录（`:755-796`） |
+| `MuJoCo查看器指南.md` | 右面板三节、Info 字段、F3 与脚本等价写法（） |
+| `LQRbalance/lqr_balance.py` | 被动查看器循环与扰动写入（） |
+| `LQRbalance/run_lqr_view.py` | 查看器入口与增益计算（） |
+| `mjx-go1-getup/sim/view_go1.py` | 画质档、俯瞰相机与帧率实测记录（） |
 
 （引用的文件以 /home/tc63/mujoco 为根。）

@@ -7,13 +7,13 @@ updated: 2026-10-08
 
 JAX 在初始化时会按比例一次性把显存预留下来，这笔预留对 XLA 自己够用，却会把同一张卡上另一个用户挤出去。MJX 的 warp 后端需要自己的一块显存池来放 CUDA graph，池子不够时不会优雅降级，而是在跑到中途抛一个分配失败。这个比例因此成了这套工程里最容易配错、症状又最不像配置问题的参数。
 
-8 GiB 的笔记本卡上，两笔账必须同时装下：XLA 的预留与 warp 的图池。默认预留在 8 GiB 卡上约占 6.1 GiB，剩下的空间不足以支撑反复重置的图池，训练会在 1.5M 步附近崩掉（`train/train_getup.py:38-41`）。
+8 GiB 的笔记本卡上，两笔账必须同时装下：XLA 的预留与 warp 的图池。默认预留在 8 GiB 卡上约占 6.1 GiB，剩下的空间不足以支撑反复重置的图池，训练会在 1.5M 步附近崩掉（`train/train_getup.py`）。
 
 这个比例只能有一个全局取值，因为显存是进程级资源：XLA 预留与 warp 图池用的是同一张卡，双方都无法在运行途中把自己的份额让出去。按脚本各设一个比例不会缓解争用，只会让“哪个脚本先启动”决定谁能跑。
 
 ## 1. 一次性预占的机制
 
-`XLA_PYTHON_CLIENT_MEM_FRACTION` 在 JAX 初始化时被读一次，XLA 随即按这个比例预留显存；导入 JAX 之后再设置无效（`docs/status.md:199`）。脚本里的统一写法是 `os.environ.setdefault` 放在文件顶部，JAX 导入之前，例如 `train/train_getup.py:38-42` 与 `sim/view_go1.py:56`。
+`XLA_PYTHON_CLIENT_MEM_FRACTION` 在 JAX 初始化时被读一次，XLA 随即按这个比例预留显存；导入 JAX 之后再设置无效（`docs/status.md`）。脚本里的统一写法是 `os.environ.setdefault` 放在文件顶部，JAX 导入之前，例如 `train/train_getup.py` 与 `sim/view_go1.py`。
 
 用 `setdefault` 而不是直接赋值，是为了不覆盖用户在命令行显式导出的值，方便临时做比例对照实验。
 
@@ -29,9 +29,9 @@ flowchart TD
 
 ## 2. 8 GiB 卡上的两笔账
 
-默认预留比例约 75%，在 8 GiB 卡上约 6.1 GiB 归 XLA，留给 warp 图池的只有约 2 GiB（`train/train_getup.py:39`）。起身训练里 `--num_resets_per_eval` 大于 0 时会反复调用重置，每次重置都可能触发新的图捕获，池子被逐步吃满，跑到 1.5M 步时出现 `Failed to allocate 83MB on device 'cuda:0'` 并直接退出（`:40-41`）。
+默认预留比例约 75%，在 8 GiB 卡上约 6.1 GiB 归 XLA，留给 warp 图池的只有约 2 GiB（`train/train_getup.py`）。起身训练里 `--num_resets_per_eval` 大于 0 时会反复调用重置，每次重置都可能触发新的图捕获，池子被逐步吃满，跑到 1.5M 步时出现 `Failed to allocate 83MB on device 'cuda:0'` 并直接退出。
 
-把比例降到 0.45 之后同一配置可以跑完，注释给出的说法是“给 XLA 留 60% 就没事了”（`:41-42`）。这句与代码里的 0.45 是同一件事的口语化表达，实际生效值是代码里的 0.45。
+把比例降到 0.45 之后同一配置可以跑完，注释给出的说法是“给 XLA 留 60% 就没事了”。这句与代码里的 0.45 是同一件事的口语化表达，实际生效值是代码里的 0.45。
 
 | 项 | 默认预留 | 改为 0.45 |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ flowchart TD
 
 ## 4. 各脚本的比例取值
 
-仓库内脚本的取值范围是 0.25 到 0.55：查看器与楼梯评估取 0.25，行走与起身评估、可站性探针取 0.30，姿态池与起身探针取 0.40，`nefc` 探针取 0.45，起身训练脚本取 0.45（`sim/view_go1.py:56`、`sim/eval_stairs.py:21`、`sim/eval_walk.py:27`、`sim/eval_getup.py:19`、`sim/probe_standability.py:17`、`sim/make_getup_posepool.py:24`、`sim/probe_getup_v2.py:7`、`sim/probe_nefc.py:17`、`sim/probe_handover.py:34`、`train/train_getup.py:42`）。
+仓库内脚本的取值范围是 0.25 到 0.55：查看器与楼梯评估取 0.25，行走与起身评估、可站性探针取 0.30，姿态池与起身探针取 0.40，`nefc` 探针取 0.45，起身训练脚本取 0.45（`sim/view_go1.py`、`sim/eval_stairs.py`、`sim/eval_walk.py`、`sim/eval_getup.py`、`sim/probe_standability.py`、`sim/make_getup_posepool.py`、`sim/probe_getup_v2.py`、`sim/probe_nefc.py`、`sim/probe_handover.py`、`train/train_getup.py`）。
 
 | 比例 | 使用方 | 说明 |
 | --- | --- | --- |
@@ -56,13 +56,13 @@ flowchart TD
 | 0.40 | 姿态池、起身探针 | 批量重置 |
 | 0.45 | 起身训练、`nefc` 探针 | 训练侧给图池留空间 |
 
-行走训练侧的口径存在一处不一致：查看器指南写“训练侧用 0.80”，而实验记录里的行走训练命令确实显式导出 0.80（`docs/viewer-guide.md:257`、`docs/experiment-log.md:358-367`）；但行走训练脚本本身没有设置这个变量，起身训练脚本设的是 0.45（`train/train_go1.py:307`、`train/train_getup.py:42`）。以脚本为准，行走训练在不显式导出的情况下走 JAX 默认比例。
+行走训练侧的口径存在一处不一致：查看器指南写“训练侧用 0.80”，而实验记录里的行走训练命令确实显式导出 0.80（`docs/viewer-guide.md`、`docs/experiment-log.md`）；但行走训练脚本本身没有设置这个变量，起身训练脚本设的是 0.45（`train/train_go1.py`、`train/train_getup.py`）。以脚本为准，行走训练在不显式导出的情况下走 JAX 默认比例。
 
 ## 5. 双进程争用与时钟塌陷
 
-两个进程同时预占时，显存被推到 7674 / 8192 MiB，GPU 的 SM 时钟从 1500 MHz 以上掉到 180 MHz，被挤死的那一个进程单步耗时暴涨到 306.9 ms，另一个仍有 32.4 ms（`docs/viewer-guide.md:241-245`）。把比例改成 0.25 之后，两个进程各 27.1 ms，帧率 36.9，与单进程的 15.7 ms / 63.7 fps 相比只是线性分摊（`:245-256`）。
+两个进程同时预占时，显存被推到 7674 / 8192 MiB，GPU 的 SM 时钟从 1500 MHz 以上掉到 180 MHz，被挤死的那一个进程单步耗时暴涨到 306.9 ms，另一个仍有 32.4 ms（`docs/viewer-guide.md`）。把比例改成 0.25 之后，两个进程各 27.1 ms，帧率 36.9，与单进程的 15.7 ms / 63.7 fps 相比只是线性分摊。
 
-关键现象是通常只有一个进程被饿死，另一个还能跑，所以症状表现为“这个查看器莫名只有 3fps”，容易被误判成代码问题（`:247-248`）。查看器脚本头部把这件事写成了注释，并标明与 CUDA graph、地形、策略都无关（`sim/watch_v20_fast.py:60-65`）。
+关键现象是通常只有一个进程被饿死，另一个还能跑，所以症状表现为“这个查看器莫名只有 3fps”，容易被误判成代码问题。查看器脚本头部把这件事写成了注释，并标明与 CUDA graph、地形、策略都无关（`sim/watch_v20_fast.py`）。
 
 ```mermaid
 sequenceDiagram
@@ -79,19 +79,19 @@ sequenceDiagram
 
 ## 6. 漏设为什么难发现
 
-查看器指南记录的回归案例给了三条原因：仓库 21 个仿真脚本里有 19 个都设了这个比例，只有 `view_go1.py` 与 `watch_v20_fast.py` 漏了，属于少数派漏项；文档里关于帧率的结论仍然正确，是“文档对、脚本错”；前两轮排查分别误判成 `graph_mode` 与“物理变慢”（`docs/viewer-guide.md:269-277`）。
+查看器指南记录的回归案例给了三条原因：仓库 21 个仿真脚本里有 19 个都设了这个比例，只有 `view_go1.py` 与 `watch_v20_fast.py` 漏了，属于少数派漏项；文档里关于帧率的结论仍然正确，是“文档对、脚本错”；前两轮排查分别误判成 `graph_mode` 与“物理变慢”（`docs/viewer-guide.md`）。
 
-定位靠两步：先在无窗口模式下跑一个复刻主循环的基准，单进程 15.7 ms 说明软件栈没问题；再用双进程并发 A/B 复现 306.9 ms，并用 0.25 反证回 27 ms（`:277-281`）。这两步把“进程内”因素先排除，再去找“进程外”的争用（`:283-284`）。
+定位靠两步：先在无窗口模式下跑一个复刻主循环的基准，单进程 15.7 ms 说明软件栈没问题；再用双进程并发 A/B 复现 306.9 ms，并用 0.25 反证回 27 ms。这两步把“进程内”因素先排除，再去找“进程外”的争用。
 
 ## 7. nvidia-smi 判据
 
-判别顺序是先看显存与进程，再看代码：`nvidia-smi --query-compute-apps=pid,used_memory --format=csv` 查每个进程的占用，`nvidia-smi --query-gpu=memory.used,pstate,clocks.sm --format=csv` 查总量与时钟（`docs/viewer-guide.md:259-264`）。`memory.used` 接近上限、`clocks.sm` 低于 200 MHz 是显存打满的指纹。
+判别顺序是先看显存与进程，再看代码：`nvidia-smi --query-compute-apps=pid,used_memory --format=csv` 查每个进程的占用，`nvidia-smi --query-gpu=memory.used,pstate,clocks.sm --format=csv` 查总量与时钟（`docs/viewer-guide.md`）。`memory.used` 接近上限、`clocks.sm` 低于 200 MHz 是显存打满的指纹。
 
-做 A/B 之前要先确认旧进程退干净，否则会把自己的对照实验变成三方争用（`:267`）。
+做 A/B 之前要先确认旧进程退干净，否则会把自己的对照实验变成三方争用。
 
 ## 8. 与一进程多环境的关系
 
-显存争用还有一条进程内版本：同一个进程里建两个环境会各自申请图池，同时命中地址缓存冲突的风险（`docs/status.md:195-196`）。查看器与对照实验的规则都是一个进程只建一个环境，两个环境用两个进程，`sim/probe_handover.py` 就是按这个前提写的（`sim/probe_handover.py:19`）。
+显存争用还有一条进程内版本：同一个进程里建两个环境会各自申请图池，同时命中地址缓存冲突的风险（`docs/status.md`）。查看器与对照实验的规则都是一个进程只建一个环境，两个环境用两个进程，`sim/probe_handover.py` 就是按这个前提写的（`sim/probe_handover.py`）。
 
 ## 9. 比例的确定方法
 
@@ -103,7 +103,7 @@ sequenceDiagram
 | 单评估进程 | 0.30 | 批量重置不崩 |
 | 查看器加另一进程 | 各 0.25 | 帧耗时接近单进程 |
 
-比例确定之后不要写在文档里就算完，它必须出现在脚本顶部。查看器指南把这一点列进了交付清单：交付前 grep 四个关键配置，`XLA_PYTHON_CLIENT_MEM_FRACTION` 是其中之一，原因是本项目两次回归都属于“文档写了、代码没有”（`docs/viewer-guide.md:448-449`）。
+比例确定之后不要写在文档里就算完，它必须出现在脚本顶部。查看器指南把这一点列进了交付清单：交付前 grep 四个关键配置，`XLA_PYTHON_CLIENT_MEM_FRACTION` 是其中之一，原因是本项目两次回归都属于“文档写了、代码没有”（`docs/viewer-guide.md`）。
 
 ## 10. 小结
 

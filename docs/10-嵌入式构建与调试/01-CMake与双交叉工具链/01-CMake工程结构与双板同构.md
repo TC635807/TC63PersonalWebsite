@@ -17,11 +17,11 @@ CMake 工程的最小闭环是：`project()` 声明语言与工程名，`add_exe
 
 | 目录 | 来源 | 登记位置 |
 | --- | --- | --- |
-| `Core/`、`Drivers/`、`Middlewares/`、`USB_DEVICE/` | CubeMX 生成 | `cmake/stm32cubemx/CMakeLists.txt:28-78` |
-| `BSP/`、`Task/`、`PID/`、`Algorithm/`、`Communication/`、`Message_Bus/`、`BMI088/`、`Chassis/`、`Debug_vars/` | 手工维护 | 顶层 `CMakeLists.txt:34-92` |
-| `referee/`（仅底盘板） | 手工维护 | 底盘 `CMakeLists.txt:90-91` |
+| `Core/`、`Drivers/`、`Middlewares/`、`USB_DEVICE/` | CubeMX 生成 | `cmake/stm32cubemx/CMakeLists.txt` |
+| `BSP/`、`Task/`、`PID/`、`Algorithm/`、`Communication/`、`Message_Bus/`、`BMI088/`、`Chassis/`、`Debug_vars/` | 手工维护 | 顶层 `CMakeLists.txt` |
+| `referee/`（仅底盘板） | 手工维护 | 底盘 `CMakeLists.txt` |
 
-这段在回答：顶层文件为什么可以手改，而子目录里的文件不行？顶层注释写明这份文件只在首次转换时生成一次（`CMakeLists.txt:3-7`），之后由使用者维护：
+这段在回答：顶层文件为什么可以手改，而子目录里的文件不行？顶层注释写明这份文件只在首次转换时生成一次（`CMakeLists.txt`），之后由使用者维护：
 
 ```cmake
 #
@@ -38,27 +38,27 @@ CMake 工程的最小闭环是：`project()` 声明语言与工程名，`add_exe
 
 ## 2. 目标图与命令顺序
 
-这几条命令的先后顺序为什么不能颠倒？配置阶段的顺序不能颠倒。`add_executable` 必须先于 `target_sources`、`target_include_directories`、`target_link_libraries`，否则目标还不存在，命令直接报错。文件里 `project()` 在 `:27`，目标在 `:34`，三条挂载命令分别在 `:103`、`:120`、`:153`。
+这几条命令的先后顺序为什么不能颠倒？配置阶段的顺序不能颠倒。`add_executable` 必须先于 `target_sources`、`target_include_directories`、`target_link_libraries`，否则目标还不存在，命令直接报错。文件里 `project()` 在 ，目标在 ，三条挂载命令分别在 、、。
 
 ```mermaid
 flowchart TD
-  A["project(sentriomeni2026) :27"] --> B["add_executable 目标 :34"]
-  B --> C["target_sources 追加源文件 :103"]
-  B --> D["target_include_directories 头文件路径 :120"]
-  B --> E["target_link_libraries 链接库 :153"]
-  A --> F["add_subdirectory(cmake/stm32cubemx) :95"]
-  F --> G["stm32cubemx INTERFACE 宏与头文件 :113"]
-  G --> H["STM32_Drivers OBJECT :118"]
-  G --> I["USB_Device_Library OBJECT :124"]
-  G --> J["FreeRTOS OBJECT :129"]
+  A["project(sentriomeni2026) "] --> B["add_executable 目标 "]
+  B --> C["target_sources 追加源文件 "]
+  B --> D["target_include_directories 头文件路径 "]
+  B --> E["target_link_libraries 链接库 "]
+  A --> F["add_subdirectory(cmake/stm32cubemx) "]
+  F --> G["stm32cubemx INTERFACE 宏与头文件 "]
+  G --> H["STM32_Drivers OBJECT "]
+  G --> I["USB_Device_Library OBJECT "]
+  G --> J["FreeRTOS OBJECT "]
   H --> E
   I --> E
   J --> E
 ```
 
-C 语言标准在 `:10-12` 定为 C11，并打开 GNU 扩展。构建类型默认 Debug 的写法是变量为空才赋值（`:15-18`），因此命令行传 `-DCMAKE_BUILD_TYPE=Release` 或预设注入 Release 时不会被覆盖。`:24` 打开 `CMAKE_EXPORT_COMPILE_COMMANDS`，生成 `compile_commands.json` 供 clangd 使用。
+C 语言标准在  定为 C11，并打开 GNU 扩展。构建类型默认 Debug 的写法是变量为空才赋值，因此命令行传 `-DCMAKE_BUILD_TYPE=Release` 或预设注入 Release 时不会被覆盖。 打开 `CMAKE_EXPORT_COMPILE_COMMANDS`，生成 `compile_commands.json` 供 clangd 使用。
 
-子工程里 `stm32cubemx` 是 INTERFACE 库，只导出 `MX_Include_Dirs` 与 `MX_Defines_Syms` 两组属性（`:113-115`）。三个 OBJECT 库各自 `target_link_libraries(... PUBLIC stm32cubemx)`（`:120`、`:126`、`:131`），继承同一套宏与包含路径。CubeMX 生成的应用源文件不建库，直接 `target_sources` 加到可执行目标（`:134`）。
+子工程里 `stm32cubemx` 是 INTERFACE 库，只导出 `MX_Include_Dirs` 与 `MX_Defines_Syms` 两组属性。三个 OBJECT 库各自 `target_link_libraries(... PUBLIC stm32cubemx)`（、、），继承同一套宏与包含路径。CubeMX 生成的应用源文件不建库，直接 `target_sources` 加到可执行目标。
 
 OBJECT 库与普通静态库的区别在于链接方式：OBJECT 库的目标文件直接进最终产物，不经过归档，因此它的编译选项与宏会原样作用到 HAL 与 FreeRTOS 源码。这也是把 CubeMX 侧拆成三个 OBJECT 库的原因。
 
@@ -89,7 +89,7 @@ sequenceDiagram
 
 ## 4. 源文件怎么登记
 
-源文件清单长什么样？底盘板的源文件清单跨 59 行（`:34-92`），云台板跨 67 行（`:34-100`）。清单同时列出 `.h` 与 `.cpp`，头文件只用于 IDE 索引，不参与编译。底盘板节选：
+源文件清单长什么样？底盘板的源文件清单跨 59 行，云台板跨 67 行。清单同时列出 `.h` 与 `.cpp`，头文件只用于 IDE 索引，不参与编译。底盘板节选：
 
 ```cmake
 add_executable(${CMAKE_PROJECT_NAME}
@@ -101,7 +101,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 )
 ```
 
-`:103-117` 的 `target_sources` 再次传入一批目录名，如 `PID/Src`、`Algorithm/Src`、`Task/Src`。CMake 的 `target_sources` 参数是源文件路径，目录不是合法源文件；该段是否被生成器忽略、还是与 `add_executable` 的清单重复，按代码推导属冗余写法，待实测确认。决定编译哪些 `.cpp` 的是 `add_executable` 的清单，漏登记会直接表现为未定义引用。
+ 的 `target_sources` 再次传入一批目录名，如 `PID/Src`、`Algorithm/Src`、`Task/Src`。CMake 的 `target_sources` 参数是源文件路径，目录不是合法源文件；该段是否被生成器忽略、还是与 `add_executable` 的清单重复，按代码推导属冗余写法，待实测确认。决定编译哪些 `.cpp` 的是 `add_executable` 的清单，漏登记会直接表现为未定义引用。
 
 两条命令的语义差别是决定性的：`add_executable` 定义目标时给出的清单构成目标的初始源文件集合，`target_sources` 是在目标存在后追加。追加目录名不会让 CMake 去扫描目录，也不存在隐式收集。
 
@@ -109,7 +109,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 
 ## 5. include 路径与宏来自哪里
 
-宏与包含路径从哪里来？包含路径分两块：顶层 `:120-142` 给出工程自建目录，子工程 `cmake/stm32cubemx/CMakeLists.txt:12-25` 给出 CubeMX 目录。底盘板的 `:138-139` 指向 `referee` 与 `referee/Inc`，云台板 `:129` 指向 `USB_DEVICE/App`。宏定义在顶层留空（`:145-147`），实际宏来自子工程：
+宏与包含路径从哪里来？包含路径分两块：顶层  给出工程自建目录，子工程 `cmake/stm32cubemx/CMakeLists.txt` 给出 CubeMX 目录。底盘板的  指向 `referee` 与 `referee/Inc`，云台板  指向 `USB_DEVICE/App`。宏定义在顶层留空，实际宏来自子工程：
 
 ```cmake
 set(MX_Defines_Syms
@@ -119,11 +119,11 @@ set(MX_Defines_Syms
 )
 ```
 
-`$<$<CONFIG:Debug>:DEBUG>` 是生成器表达式，只在 Debug 配置展开为 `DEBUG`。`:150` 的 `list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)` 删掉 C 隐式链接库里的 `ob`，避免 C++ 源文件把 `libob.a` 带进链接。最后 `:153-154` 只链接 `stm32cubemx` 一个库名，实际展开为三个 OBJECT 库及其继承属性。
+`$<$<CONFIG:Debug>:DEBUG>` 是生成器表达式，只在 Debug 配置展开为 `DEBUG`。 的 `list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)` 删掉 C 隐式链接库里的 `ob`，避免 C++ 源文件把 `libob.a` 带进链接。最后  只链接 `stm32cubemx` 一个库名，实际展开为三个 OBJECT 库及其继承属性。
 
 宏的可见范围由目标继承关系决定：`USE_HAL_DRIVER` 与 `STM32F407xx` 挂在 INTERFACE 目标上，三个 OBJECT 库和可执行目标都能看到。若某个手写源文件需要 HAL 头文件却报找不到，先查它所属的目标有没有继承这套属性。
 
-顶层留空的宏段（`:145-147`）不是遗漏，手写代码的宏由子工程统一提供。两板共用同一份子工程，因此两板的宏集合完全相同，差异只可能出现在源文件与 include 清单上。
+顶层留空的宏段不是遗漏，手写代码的宏由子工程统一提供。两板共用同一份子工程，因此两板的宏集合完全相同，差异只可能出现在源文件与 include 清单上。
 
 ## 6. 两板的差异清单
 
@@ -132,14 +132,14 @@ set(MX_Defines_Syms
 | 维度 | 底盘板 | 云台板 |
 | --- | --- | --- |
 | 顶层文件行数 | 157 | 163 |
-| 专属任务源 | `Task/Src/ChassisTask.cpp:82` | `Task/Src/GimbalTask.cpp:61`、`Task/Src/FireTask.cpp:84` |
-| USB 协议 | 无 `usb_decode.cpp` | `Communication/Src/usb_decode.cpp:88` |
-| 姿态算法 | 仅 `Algorithm/Src/MahonyAHRS.c:68` | 另有 `Algorithm/Src/FusionAHRS.cpp:92` |
-| 裁判系统 | 独立 `referee/Src/RefereeReading.cpp:14-18`，全文件 18 行，只有 `check_shoot_times_Speed` 有实现 | 复用 `Communication/Src/referee_protocol.cpp:94` |
-| include 差异 | 多 `referee`、`referee/Inc:138-139` | 多 `USB_DEVICE/App:129` |
-| build 预设 | `buildPresets.Debug-1` 指向不存在的 `Debug-1`（`CMakePresets.json:30-31`） | `buildPresets.Debug` 指向 `Debug`（`CMakePresets.json:30-31`） |
+| 专属任务源 | `Task/Src/ChassisTask.cpp` | `Task/Src/GimbalTask.cpp`、`Task/Src/FireTask.cpp` |
+| USB 协议 | 无 `usb_decode.cpp` | `Communication/Src/usb_decode.cpp` |
+| 姿态算法 | 仅 `Algorithm/Src/MahonyAHRS.c` | 另有 `Algorithm/Src/FusionAHRS.cpp` |
+| 裁判系统 | 独立 `referee/Src/RefereeReading.cpp`，全文件 18 行，只有 `check_shoot_times_Speed` 有实现 | 复用 `Communication/Src/referee_protocol.cpp` |
+| include 差异 | 多 `referee`、`referee/Inc` | 多 `USB_DEVICE/App` |
+| build 预设 | `buildPresets.Debug-1` 指向不存在的 `Debug-1`（`CMakePresets.json`） | `buildPresets.Debug` 指向 `Debug`（`CMakePresets.json`） |
 
-云台板顶层同样列出 `referee_protocol.cpp` 与 `referee_decode.cpp`（`:94-97`），但云台仓库没有 `referee/` 目录，这两个文件位于 `Communication/Src/`。两板的 `cmake/gcc-arm-none-eabi.cmake`、`cmake/starm-clang.cmake`、`cmake/stm32cubemx/CMakeLists.txt` 与 `STM32F407XX_FLASH.ld` 经逐字节比对完全相同，工程差异只在任务清单与 include 清单。
+云台板顶层同样列出 `referee_protocol.cpp` 与 `referee_decode.cpp`，但云台仓库没有 `referee/` 目录，这两个文件位于 `Communication/Src/`。两板的 `cmake/gcc-arm-none-eabi.cmake`、`cmake/starm-clang.cmake`、`cmake/stm32cubemx/CMakeLists.txt` 与 `STM32F407XX_FLASH.ld` 经逐字节比对完全相同，工程差异只在任务清单与 include 清单。
 
 预设的差异会直接表现为构建失败。底盘板的构建预设名是 `Debug-1`，而配置预设名是 `Debug`，`cmake --build --preset Debug-1` 找不到对应的配置预设；云台板两侧都叫 `Debug`，命令能正常执行。
 
@@ -151,11 +151,11 @@ set(MX_Defines_Syms
 
 | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- |
-| 新增 `.cpp` 只放进目录、没写进 `add_executable` | 链接期报未定义引用 | `CMakeLists.txt:34-92` |
-| 把 `target_sources` 当成自动收集目录 | 目录参数被忽略或报错，源文件未进构建 | `CMakeLists.txt:103-117` |
+| 新增 `.cpp` 只放进目录、没写进 `add_executable` | 链接期报未定义引用 | `CMakeLists.txt` |
+| 把 `target_sources` 当成自动收集目录 | 目录参数被忽略或报错，源文件未进构建 | `CMakeLists.txt` |
 | 两板 `.ioc`、`.ld`、`CMakeLists.txt` 同名 | 混淆构建目录与产物 | 两板根目录 |
-| 删除 `REMOVE_ITEM ... ob` | C++ 源文件链接时带入 `libob.a` | `CMakeLists.txt:150` |
-| 用 `Debug-1` 预设构建底盘板 | 找不到配置预设，构建失败 | `CMakePresets.json:30-31` |
+| 删除 `REMOVE_ITEM ... ob` | C++ 源文件链接时带入 `libob.a` | `CMakeLists.txt` |
+| 用 `Debug-1` 预设构建底盘板 | 找不到配置预设，构建失败 | `CMakePresets.json` |
 | 多个 `cmake-build-*` 目录并存 | 缓存里的工具链与当前 `PATH` 不匹配 | 两板根目录 |
 
 ## 8. 小结
@@ -183,12 +183,12 @@ set(MX_Defines_Syms
 ### 基础题
 
 1. 在底盘板 `CMakeLists.txt` 中找出 `add_executable` 清单与 `target_sources` 参数的重合项，列出后者里所有不是文件的参数。
-2. 对照两板顶层文件的 include 路径段，写出底盘板独有与云台板独有的目录，并给出行号。
-3. 打开 `cmake/stm32cubemx/CMakeLists.txt`，说明 `stm32cubemx` 目标的类型以及它导出的两类属性分别在哪一行。
+2. 对照两板顶层文件的 include 路径段，写出底盘板独有与云台板独有的目录，并指出它们所在的段。
+3. 打开 `cmake/stm32cubemx/CMakeLists.txt`，说明 `stm32cubemx` 目标的类型以及它导出的两类属性分别由哪条命令给出。
 
 ### 挑战题
 
-1. 新增 `Task/Src/DemoTask.cpp` 与对应头文件，写出需要改动的顶层文件行号；在不动 `add_executable` 清单的情况下验证是否出现未定义引用。
+1. 新增 `Task/Src/DemoTask.cpp` 与对应头文件，写出需要改动的顶层文件与位置；在不动 `add_executable` 清单的情况下验证是否出现未定义引用。
 2. 把云台板的 `CMakePresets.json` 改成底盘板的 `Debug-1` 写法，用 `cmake --preset Debug` 与 `cmake --build --preset Debug-1` 分别验证配置与构建阶段的报错差异。
 
 ## 附：本页引用的固件路径

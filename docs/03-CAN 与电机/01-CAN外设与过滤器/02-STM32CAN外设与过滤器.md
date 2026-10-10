@@ -14,15 +14,15 @@ updated: 2026-10-07
 
 ## 1. bxCAN 的硬件资源清单
 
-STM32F407 上的 CAN 由名为 bxCAN 的控制器实现，它比通用串行口多出一层标识符筛选。它的资源在 `stm32f407xx.h` 的 `CAN_TypeDef` 里可以看到（`Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h:249-273`）：
+STM32F407 上的 CAN 由名为 bxCAN 的控制器实现，它比通用串行口多出一层标识符筛选。它的资源在 `stm32f407xx.h` 的 `CAN_TypeDef` 里可以看到（`Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h`）：
 
 | 资源 | 数量 | 说明 | 出处 |
 | --- | --- | --- | --- |
-| CAN 控制器 | 2 | CAN1 与 CAN2，CAN1 是主，CAN2 是从 | `can.c:27-28` |
-| 过滤器组 Filter Bank | 28 | 两个控制器共享，编号 0 到 27 | `stm32f407xx.h:272` |
-| 每个过滤器组的寄存器 | FR1 / FR2 | 两个 32 位寄存器 | `stm32f407xx.h:240-243` |
-| 发送邮箱 Tx Mailbox | 每控制器 3 个 | 可排队 3 帧 | `stm32f407xx.h:260` |
-| 接收 FIFO | 每控制器 2 个 | FIFO0 与 FIFO1 | `stm32f407xx.h:261` |
+| CAN 控制器 | 2 | CAN1 与 CAN2，CAN1 是主，CAN2 是从 | `can.c` |
+| 过滤器组 Filter Bank | 28 | 两个控制器共享，编号 0 到 27 | `stm32f407xx.h` |
+| 每个过滤器组的寄存器 | FR1 / FR2 | 两个 32 位寄存器 | `stm32f407xx.h` |
+| 发送邮箱 Tx Mailbox | 每控制器 3 个 | 可排队 3 帧 | `stm32f407xx.h` |
+| 接收 FIFO | 每控制器 2 个 | FIFO0 与 FIFO1 | `stm32f407xx.h` |
 | 每个 FIFO 的深度 | 3 | 满 3 帧后按 RFLM 决定覆盖还是丢弃 | 参考手册 bxCAN 章节 |
 | 过滤器匹配号 FMI | 每帧 8 位 | 记录是哪一组过滤器放行的 | 接收邮箱的 RDTR 寄存器 |
 
@@ -69,7 +69,7 @@ flowchart TD
 | FA1R | 每组建 1 位 | 过滤器激活位 |
 | FMR | 全局 | FINIT 过滤器初始化模式位，CAN2SB 从机起始组号 |
 
-HAL 的 `HAL_CAN_ConfigFilter()` 把这几个寄存器写一遍，顺序是固定的（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c:840-963`）：
+HAL 的 `HAL_CAN_ConfigFilter()` 把这几个寄存器写一遍，顺序是固定的（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c`）：
 
 ```mermaid
 sequenceDiagram
@@ -141,7 +141,7 @@ $$(RIR \ \&\ FR2) = (FR1 \ \&\ FR2) \Rightarrow \text{命中}$$
 
 28 组的最大过滤能力是 $28 \times 4 = 112$ 个 16 位列表项。16 位尺度只能表达标准标识符与 IDE、RTR，不能表达扩展标识符。
 
-16 位模式下 HAL 原样写入半字，不做位移（`stm32f4xx_hal_can.c:927-935`）：
+16 位模式下 HAL 原样写入半字，不做位移（`stm32f4xx_hal_can.c`）：
 
 ```c
 can_ip->sFilterRegister[sFilterConfig->FilterBank].FR1 =
@@ -155,7 +155,7 @@ can_ip->sFilterRegister[sFilterConfig->FilterBank].FR1 =
 
 28 个过滤器组的物理寄存器只在 CAN1 的地址空间里。CAN2 使用哪些组由 FMR 的 CAN2SB 字段决定：编号小于 CAN2SB 的组归 CAN1，大于等于的归 CAN2。
 
-HAL 的处理方式是无论传入哪个句柄，一律写 CAN1（`stm32f4xx_hal_can.c:879-882`）：
+HAL 的处理方式是无论传入哪个句柄，一律写 CAN1（`stm32f4xx_hal_can.c`）：
 
 ```c
 #elif defined(CAN2)
@@ -167,7 +167,7 @@ HAL 的处理方式是无论传入哪个句柄，一律写 CAN1（`stm32f4xx_hal
 这一段里 hcan 只参与状态检查与错误码记录，不参与寄存器寻址。于是两个后果：
 
 1. 配置 CAN2 的过滤器时传 `&hcan1` 或 `&hcan2` 效果相同，代码里那句"必须用 hcan1 配置 CAN2 过滤器"描述的是习惯而非硬件限制；
-2. CAN2 的过滤器寄存器挂在 CAN1 上，所以必须使能 CAN1 的外设时钟。本工程的 `HAL_CAN_MspInit` 用一个引用计数保证这一点（`Core/Src/can.c:95-110`、`can.c:139-143`）：
+2. CAN2 的过滤器寄存器挂在 CAN1 上，所以必须使能 CAN1 的外设时钟。本工程的 `HAL_CAN_MspInit` 用一个引用计数保证这一点（`Core/Src/can.c`、`can.c`）：
 
 ```c
 static uint32_t HAL_RCC_CAN1_CLK_ENABLED=0;
@@ -178,7 +178,7 @@ if(HAL_RCC_CAN1_CLK_ENABLED==1){
 }
 ```
 
-计数器的作用是：CAN1 与 CAN2 的 MspInit 都会请求 CAN1 时钟，只有第一次置位；对应的 MspDeInit 里减到 0 时才关闭（`can.c:177-180`、`can.c:202-205`）。
+计数器的作用是：CAN1 与 CAN2 的 MspInit 都会请求 CAN1 时钟，只有第一次置位；对应的 MspDeInit 里减到 0 时才关闭（`can.c`、`can.c`）。
 
 ### 2.6 过滤器编组方案
 
@@ -200,12 +200,12 @@ if(HAL_RCC_CAN1_CLK_ENABLED==1){
 
 | 控制器 | 引脚 | 复用 | 出处 |
 | --- | --- | --- | --- |
-| CAN1 | PD0 接收，PD1 发送 | `GPIO_AF9_CAN1` | `Core/Src/can.c:112-122` |
-| CAN2 | PB5 接收，PB6 发送 | `GPIO_AF9_CAN2` | `Core/Src/can.c:145-155` |
+| CAN1 | PD0 接收，PD1 发送 | `GPIO_AF9_CAN1` | `Core/Src/can.c` |
+| CAN2 | PB5 接收，PB6 发送 | `GPIO_AF9_CAN2` | `Core/Src/can.c` |
 
 两个引脚都配成 `GPIO_MODE_AF_PP` 与 `GPIO_SPEED_FREQ_VERY_HIGH`。CAN 收发器外置，MCU 侧看到的是普通推挽输出。
 
-中断方面，四个接收中断全部使能，优先级都是 5（`can.c:125-128`、`can.c:158-161`）：
+中断方面，四个接收中断全部使能，优先级都是 5（`can.c`、`can.c`）：
 
 | 中断向量 | 优先级 | 说明 |
 | --- | --- | --- |
@@ -218,7 +218,7 @@ RX1 的向量被使能了但不会触发，因为过滤器只把报文投递到 
 
 ### 3.2 过滤器配置逐行
 
-云台板 `BSP/Src/bsp_can.cpp:62-86`，底盘板 `BSP/Src/bsp_can.cpp:56-79`，内容一致：
+云台板 `BSP/Src/bsp_can.cpp`，底盘板 `BSP/Src/bsp_can.cpp`，内容一致：
 
 ```c
 void bsp_can::BSP_CAN_FilterConfig()
@@ -289,14 +289,14 @@ void bsp_can::BSP_CAN_FilterConfig()
 
 | 易错点 | 原因 | 本项目的位置 |
 | --- | --- | --- |
-| 在 CAN 未初始化时配过滤器 | HAL 要求状态为 READY 或 LISTENING | `bsp_can.cpp:40` 先配过滤器，`bsp_can.cpp:43` 再 Start，顺序正确 |
-| 认为 CAN2 的过滤器要用 `&hcan2` 配置 | HAL 内部一律写 CAN1 | `bsp_can.cpp:85` 用的是 `&hcan1` |
+| 在 CAN 未初始化时配过滤器 | HAL 要求状态为 READY 或 LISTENING | `bsp_can.cpp` 先配过滤器，`bsp_can.cpp` 再 Start，顺序正确 |
+| 认为 CAN2 的过滤器要用 `&hcan2` 配置 | HAL 内部一律写 CAN1 | `bsp_can.cpp` 用的是 `&hcan1` |
 | 只开 CAN2 时钟不开 CAN1 | 过滤器寄存器在 CAN1 地址空间 | `can.c` 的引用计数覆盖了这种顺序 |
 | 16 位模式忘记左移 5 位 | HAL 原样写半字 | 本工程用 32 位模式，避开这一处 |
 | 把掩码当成标识符 | 掩码为 1 的位是必须匹配，不是必须不同 | 全接收配置里两者都是 0，容易忽略差别 |
 | 只配 CAN1 的过滤器就以为 CAN2 也能收 | FilterBank 必须落在 14 到 27 | 第 2.5 节的 CAN2SB 规则 |
 | 认为命中的过滤器组由编号决定优先级 | 硬件按或处理，FMI 只记录实际命中组 | 全接收时 FMI 恒为 0 或 14 |
-| 开了 RX1 中断却没配 FIFO1 的过滤器 | 中断使能了但永远不会 pending | `can.c:127`、`can.c:160` |
+| 开了 RX1 中断却没配 FIFO1 的过滤器 | 中断使能了但永远不会 pending | `can.c`、`can.c` |
 
 ## 5. 小结
 
@@ -341,10 +341,10 @@ void bsp_can::BSP_CAN_FilterConfig()
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/can.c` | GPIO 复用（:112-155）、CAN1 时钟引用计数（:95-110）、中断优先级（:125-128、:158-161） |
-| `2026OmniSentryGimbal/Core/Inc/can.h` | hcan1 与 hcan2 的声明（:35-37） |
-| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 过滤器配置（:62-86） |
-| `2026OmniSentryChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp` | 过滤器配置（:56-79） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c` | HAL_CAN_ConfigFilter 全文（:840-963）、16 位写入（:927-935）、主从主体选择（:879-882） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h` | CAN_FilterTypeDef 字段说明（:101-150） |
-| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | CAN_TypeDef（:249-273）、CAN_FMR 位定义（:2313-2318） |
+| `2026OmniSentryGimbal/Core/Src/can.c` | GPIO 复用、CAN1 时钟引用计数、中断优先级 |
+| `2026OmniSentryGimbal/Core/Inc/can.h` | hcan1 与 hcan2 的声明 |
+| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 过滤器配置 |
+| `2026OmniSentryChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp` | 过滤器配置 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c` | HAL_CAN_ConfigFilter 全文、16 位写入、主从主体选择 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_can.h` | CAN_FilterTypeDef 字段说明 |
+| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | CAN_TypeDef、CAN_FMR 位定义 |

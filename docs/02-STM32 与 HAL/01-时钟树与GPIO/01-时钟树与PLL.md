@@ -75,7 +75,7 @@ $$f_{USB} = \frac{f_{VCOout}}{PLLQ} = \frac{336\ \text{MHz}}{7} = 48\ \text{MHz}
 | VCO 输入 | 1 至 2 MHz | 2 MHz | 顶到上限，PLLM 不能再小 |
 | VCO 输出 | 100 至 432 MHz | 336 MHz | 位于区间中部 |
 | PLLM | 2 至 63 | 6 | 12 MHz 除以 6 得到 2 MHz |
-| PLLN | 64 至 432 | 168 | |
+| PLLN | 64 至 432 | 168 | `Core/Src/main.c` |
 | PLLP | 2、4、6、8 | 2 | 只有 2 能让 SYSCLK 达到上限 168 MHz |
 | PLLQ | 2 至 15 | 7 | 336 MHz 除以 7 恰好得到 48 MHz |
 | SYSCLK | 不超过 168 MHz | 168 MHz | 顶到上限 |
@@ -89,7 +89,7 @@ PLLM 在 12 MHz 输入下有两个常用取值：除以 6 得 2 MHz，除以 8 �
 
 ## 4. SystemClock_Config 逐段读
 
-`Core/Src/main.c:153-192` 的原文：
+`Core/Src/main.c` 的原文：
 
 ```c
 void SystemClock_Config(void)
@@ -129,21 +129,21 @@ void SystemClock_Config(void)
 
 四件事按顺序看。
 
-第一，电压等级与 PWR 时钟。168 MHz 属于 F407 的最高频段，必须先把内部稳压器切到 `PWR_REGULATOR_VOLTAGE_SCALE1`，而写这个字段前要先开 PWR 时钟（第 160 至 161 行）。缺这一步，`HAL_RCC_ClockConfig()` 在高主频下会返回 `HAL_ERROR`。
+第一，电压等级与 PWR 时钟。168 MHz 属于 F407 的最高频段，必须先把内部稳压器切到 `PWR_REGULATOR_VOLTAGE_SCALE1`，而写这个字段前要先开 PWR 时钟。缺这一步，`HAL_RCC_ClockConfig()` 在高主频下会返回 `HAL_ERROR`。
 
 第二，晶振源与 PLL 参数由 `HAL_RCC_OscConfig()` 一次写入。
 
-该函数先置位 `RCC->CR` 的 `HSEON` 并轮询 `HSERDY`（超时按 `HSE_STARTUP_TIMEOUT` 计，取 100 ms，`Core/Inc/stm32f4xx_hal_conf.h:103`），再写 `RCC->PLLCFGR` 的 `PLLM`、`PLLN`、`PLLP`、`PLLQ`、`PLLSRC` 字段，使能 PLL 后轮询 `PLLRDY`。任何一步超时或参数越界，函数返回非 `HAL_OK`，`Error_Handler()` 关中断并停在那里（`main.c:224-233`）。
+该函数先置位 `RCC->CR` 的 `HSEON` 并轮询 `HSERDY`（超时按 `HSE_STARTUP_TIMEOUT` 计，取 100 ms，`Core/Inc/stm32f4xx_hal_conf.h`），再写 `RCC->PLLCFGR` 的 `PLLM`、`PLLN`、`PLLP`、`PLLQ`、`PLLSRC` 字段，使能 PLL 后轮询 `PLLRDY`。任何一步超时或参数越界，函数返回非 `HAL_OK`，`Error_Handler()` 关中断并停在那里（`main.c`）。
 
 第三，系统时钟切换与 `SystemCoreClock` 更新由 `HAL_RCC_ClockConfig()` 完成。
 
-它按传入的 `FLatency` 写 `FLASH->ACR`（`main.c:188` 传 `FLASH_LATENCY_5`），设置 `CFGR` 的 `HPRE`、`PPRE1`、`PPRE2`，把 `SW` 切到 PLL 并轮询 `SWS` 确认，最后用寄存器值与 `HSE_VALUE` 重算全局变量 `SystemCoreClock`（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c:719`），并紧接着调用 `HAL_InitTick(uwTickPrio)`（同文件第 722 行）。
+它按传入的 `FLatency` 写 `FLASH->ACR`（`main.c` 传 `FLASH_LATENCY_5`），设置 `CFGR` 的 `HPRE`、`PPRE1`、`PPRE2`，把 `SW` 切到 PLL 并轮询 `SWS` 确认，最后用寄存器值与 `HSE_VALUE` 重算全局变量 `SystemCoreClock`（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c`），并紧接着调用 `HAL_InitTick(uwTickPrio)`。
 
 第四，`HAL_InitTick()` 在本工程里被调用两次。
 
-第一次在 `HAL_Init()` 内部（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c:176`），此时 `SystemCoreClock` 还是复位值 16 MHz，TIM2 预分频按这个频率计算；第二次由上面的 `HAL_RCC_ClockConfig()` 触发，才按真实的 42 MHz PCLK1 重算。
+第一次在 `HAL_Init()` 内部（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c`），此时 `SystemCoreClock` 还是复位值 16 MHz，TIM2 预分频按这个频率计算；第二次由上面的 `HAL_RCC_ClockConfig()` 触发，才按真实的 42 MHz PCLK1 重算。
 
-时间基的实现见 `Core/Src/stm32f4xx_hal_timebase_tim.c`：第 70 行用 `HAL_RCC_GetPCLK1Freq()` 反算预分频，第 81 行把 Period 固定为 999。
+时间基的实现见 `Core/Src/stm32f4xx_hal_timebase_tim.c`：它用 `HAL_RCC_GetPCLK1Freq()` 反算预分频，再把 Period 固定为 999。
 
 ## 5. 时钟切完才重算的时间基
 
@@ -181,7 +181,7 @@ sequenceDiagram
 
 两条 APB 的定时器时钟有个共同规律：当 APB 预分频不为 1 时，定时器时钟是该 APB 时钟的两倍。APB1 分频为 4，所以 TIM2 拿到 84 MHz；APB2 分频为 2，所以 TIM10 拿到 168 MHz。CAN 不享受这个加倍，它的位时钟就是 PCLK1 的 42 MHz。
 
-`HAL_Init()` 另外两件与时钟相关的事写在 `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c`：第 173 行把 NVIC 优先级分组设为 `NVIC_PRIORITYGROUP_4`，第 176 行以 `TICK_INT_PRIORITY`（`Core/Inc/stm32f4xx_hal_conf.h:151` 定义为 15）初始化时间基。
+`HAL_Init()` 另外两件与时钟相关的事写在 `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c`：一处把 NVIC 优先级分组设为 `NVIC_PRIORITYGROUP_4`，另一处以 `TICK_INT_PRIORITY`（`Core/Inc/stm32f4xx_hal_conf.h` 定义为 15）初始化时间基。
 
 ## 7. HSE_VALUE 与实物晶振不一致的连锁反应
 
@@ -197,12 +197,12 @@ $$f_{SYSCLK实际} = \frac{8\ \text{MHz}}{6} \times 168 \div 2 = 112\ \text{MHz}
 
 | # | 判断偏差 | 表现 | 依据 |
 | --- | --- | --- | --- |
-| 1 | 认为 `HSE_VALUE` 只影响注释 | 所有依赖频率的计算都按它取值 | `stm32f4xx_hal_rcc.c:719` |
+| 1 | 认为 `HSE_VALUE` 只影响注释 | 所有依赖频率的计算都按它取值 | `stm32f4xx_hal_rcc.c` |
 | 2 | 认为 VCO 输入可以取到 3 MHz | 上限为 2 MHz，PLLM=6 已是边界 | 参考手册的 PLL 约束 |
 | 3 | 认为 PLLP 可以取任意偶数 | 只有 2、4、6、8 | 同表 |
 | 4 | 只改 PLLN 不看 PLLQ | USB 时钟随之改变，枚举失败 | 两者共用 VCO 输出 |
-| 5 | 认为 Flash 等待周期可以留 0 | 取指错误，随机进 `HardFault_Handler()` | `main.c:188` |
-| 6 | 认为时间基预分频在切钟后仍是 16 MHz 的值 | `HAL_RCC_ClockConfig` 会重算一次 | `stm32f4xx_hal_rcc.c:722` |
+| 5 | 认为 Flash 等待周期可以留 0 | 取指错误，随机进 `HardFault_Handler()` | `main.c` |
+| 6 | 认为时间基预分频在切钟后仍是 16 MHz 的值 | `HAL_RCC_ClockConfig` 会重算一次 | `stm32f4xx_hal_rcc.c` |
 | 7 | 把 APB 定时器时钟当成 APB 时钟 | 预分频不为 1 时定时器时钟翻倍 | TIM2 为 84 MHz |
 | 8 | 在 CubeMX 生成区外改时钟代码 | 重新生成后被覆盖 | `USER CODE` 区之外不保留 |
 | 9 | 认为 CAN 位时钟是 84 MHz | CAN 不做定时器加倍，取 42 MHz | 见第 6 节派生表 |
@@ -215,7 +215,7 @@ $$f_{SYSCLK实际} = \frac{8\ \text{MHz}}{6} \times 168 \div 2 = 112\ \text{MHz}
 - 推导链：HSE 12 MHz 除以 PLLM 6 得 2 MHz，乘以 PLLN 168 得 336 MHz，除以 PLLP 2 得 SYSCLK 168 MHz；PLLQ 7 另得 48 MHz 供 USB。
 - 总线分频：AHB DIV1 得 168 MHz，APB1 DIV4 得 42 MHz，APB2 DIV2 得 84 MHz。
 - 168 MHz 需要 `PWR_REGULATOR_VOLTAGE_SCALE1` 与 `FLASH_LATENCY_5` 两个前提。
-- `SystemCoreClock` 由 `HAL_RCC_ClockConfig()` 在切换完成后按寄存器值与 `HSE_VALUE` 重算（`stm32f4xx_hal_rcc.c:719`）。
+- `SystemCoreClock` 由 `HAL_RCC_ClockConfig()` 在切换完成后按寄存器值与 `HSE_VALUE` 重算（`stm32f4xx_hal_rcc.c`）。
 - `HAL_InitTick()` 被调用两次：`HAL_Init()` 里按 16 MHz 算一次，切钟后按 42 MHz 重算一次。
 - HAL 的 1 ms 时间基用 TIM2 实现，计数时钟 84 MHz，预分频 83，Period 999。
 
@@ -242,7 +242,7 @@ $$f_{SYSCLK实际} = \frac{8\ \text{MHz}}{6} \times 168 \div 2 = 112\ \text{MHz}
 
 ### 挑战题
 
-5. 查阅 `system_stm32f4xx.c` 的 `SystemCoreClockUpdate()`（第 220 至 258 行），说明它与 `HAL_RCC_ClockConfig()` 内那次重算在输入来源上的差异。
+5. 查阅 `system_stm32f4xx.c` 的 `SystemCoreClockUpdate()`，说明它与 `HAL_RCC_ClockConfig()` 内那次重算在输入来源上的差异。
 6. 把 `FLASH_LATENCY_5` 误写成 `FLASH_LATENCY_0`，预测现象，并说明为什么在 `main()` 里加串口打印未必看得见。
 7. PLLQ 必须给出 48 MHz。给出 VCO 输出改为 384 MHz 时 `PLLN`、`PLLP`、`PLLQ` 的一组取值，并验证 SYSCLK 不超过 168 MHz。
 8. 说明为什么 `HAL_InitTick()` 第一次按 16 MHz 计算预分频不会导致 HAL 计时永久错误。
@@ -251,10 +251,10 @@ $$f_{SYSCLK实际} = \frac{8\ \text{MHz}}{6} \times 168 \div 2 = 112\ \text{MHz}
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | `SystemClock_Config()`（:153-192）、电压等级与 PWR 时钟（:160-161）、`FLASH_LATENCY_5`（:188）、`Error_Handler()`（:224-233） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `HSE_VALUE` 与 `HSE_STARTUP_TIMEOUT`（:103）、`TICK_INT_PRIORITY`（:151） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 预分频反算（:70）与 Period（:81） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/system_stm32f4xx.c` | `SystemCoreClockUpdate()`（:220-258） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c` | `SystemCoreClock` 重算（:719）与 `HAL_InitTick`（:722） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | 优先级分组（:173）与首次 `HAL_InitTick`（:176） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | `SystemClock_Config()`、电压等级与 PWR 时钟、`FLASH_LATENCY_5`、`Error_Handler()` |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `HSE_VALUE` 与 `HSE_STARTUP_TIMEOUT`、`TICK_INT_PRIORITY` |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 预分频反算与 Period |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/system_stm32f4xx.c` | `SystemCoreClockUpdate()` |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c` | `SystemCoreClock` 重算与 `HAL_InitTick` |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | 优先级分组与首次 `HAL_InitTick` |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc` | CubeMX 侧的时钟树参数 |

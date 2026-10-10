@@ -47,9 +47,9 @@ keys = jax.random.split(jax.random.PRNGKey(seed), N)
 st = reset(keys)
 ```
 
-若把同一个 key 传给 N 个环境，所有环境的出生姿态完全相同，批量探针就失去意义（`sim/eval_getup.py:143` 就是这一行的落点）。key 的形状 `(N,2)` 与单环境 `(2,)` 的关系正好对应 `in_axes=0` 的约定。
+若把同一个 key 传给 N 个环境，所有环境的出生姿态完全相同，批量探针就失去意义（`sim/eval_getup.py` 就是这一行的落点）。key 的形状 `(N,2)` 与单环境 `(2,)` 的关系正好对应 `in_axes=0` 的约定。
 
-策略推理的标准写法是 `jax.vmap(lambda o: policy(o, dummy)[0])`：`dummy` 是常量 key，作为闭包而不是批量参数（`sim/eval_getup.py:141`）。若直接写 `jax.vmap(policy)`，vmap 会试图对参数与 key 一起展开，形状对不上。
+策略推理的标准写法是 `jax.vmap(lambda o: policy(o, dummy)[0])`：`dummy` 是常量 key，作为闭包而不是批量参数（`sim/eval_getup.py`）。若直接写 `jax.vmap(policy)`，vmap 会试图对参数与 key 一起展开，形状对不上。
 
 `out_axes` 默认也是 0，批量函数的返回值第一维就是环境编号；本仓库没有改过 `out_axes`。
 
@@ -67,13 +67,13 @@ flowchart TD
 
 组合顺序上，本仓库统一用 `jax.jit(jax.vmap(f))`：先 vmap 出批量函数，再整体编译一次。反过来 `jax.vmap(jax.jit(f))` 是先编译单样本再沿批量轴复制，对同构计算也能跑，但本仓库没有这样写。
 
-批量大小 N 是编译期形状的一部分。改成另一个 N 会触发重新编译，这一点与第 1 篇的缓存键规则一致：形状参与缓存键。评估用 128 环境、训练用 768 环境，两者的策略前向各有一份编译产物（`train/train_getup.py:115` 的评估默认与训练默认不是同一个数）。
+批量大小 N 是编译期形状的一部分。改成另一个 N 会触发重新编译，这一点与第 1 篇的缓存键规则一致：形状参与缓存键。评估用 128 环境、训练用 768 环境，两者的策略前向各有一份编译产物（`train/train_getup.py` 的评估默认与训练默认不是同一个数）。
 
 缓存命中的前提是同一份批量函数对象。若在循环里每次重新构造 `jax.jit(jax.vmap(f))`，每次都是新的 jit 对象，缓存不会命中。批量脚本因此把编译好的函数提前放在循环外。
 
 ## 4. 评估脚本的统一骨架
 
-`sim/eval_getup.py:134-144` 是最完整的一处：
+`sim/eval_getup.py` 是最完整的一处：
 
 ```python
 reset = jax.jit(jax.vmap(env.reset))
@@ -83,9 +83,9 @@ st = reset(jax.random.split(jax.random.PRNGKey(args.seed), N))
 st = jax.block_until_ready(st)
 ```
 
-`sim/eval_getup.py:135-141` 的三行分别对应 reset、step 与策略前向；`sim/eval_getup.py:134` 是编译点。`sim/eval_walk.py:157-166`、`sim/eval_stairs.py:77-79` 是同一形状。
+`sim/eval_getup.py` 的三行分别对应 reset、step 与策略前向；`sim/eval_getup.py` 是编译点。`sim/eval_walk.py`、`sim/eval_stairs.py` 是同一形状。
 
-`sim/eval_stairs.py:93` 还额外把 `place` 编译成 `jax.jit(jax.vmap(place))`，用来把每个环境摆到台阶的指定朝向与位置；`place` 内部直接构造 `qpos` 并调用 `env._get_obs`，所以必须作为纯函数交给 vmap，环境对象本身不能当参数（`sim/eval_stairs.py:93`）。
+`sim/eval_stairs.py` 还额外把 `place` 编译成 `jax.jit(jax.vmap(place))`，用来把每个环境摆到台阶的指定朝向与位置；`place` 内部直接构造 `qpos` 并调用 `env._get_obs`，所以必须作为纯函数交给 vmap，环境对象本身不能当参数（`sim/eval_stairs.py`）。
 
 ```mermaid
 sequenceDiagram
@@ -102,15 +102,15 @@ sequenceDiagram
 
 ## 5. 探针脚本与姿态池
 
-`sim/probe_nefc.py:45-57` 先用 vmap 建 `N` 个环境，再用 `jax.jit(jax.vmap(lambda o: pol(o, dummy)[0]))` 给出策略动作；没给策略时用 `jax.random.normal(kk, (N, env.action_size))` 直接采样动作（`sim/probe_nefc.py:76-77`）。
+`sim/probe_nefc.py` 先用 vmap 建 `N` 个环境，再用 `jax.jit(jax.vmap(lambda o: pol(o, dummy)[0]))` 给出策略动作；没给策略时用 `jax.random.normal(kk, (N, env.action_size))` 直接采样动作（`sim/probe_nefc.py`）。
 
-`sim/probe_getup_v2.py:77-79`、`sim/probe_handover.py:126-130` 与 `sim/probe_handover.py:250-266`、`sim/probe_standability.py:92-94` 都是同类骨架。循环形状一致：批量 reset 拿初态，批量策略给动作，批量 step 推进，统计全部在 CPU 侧用 `np.asarray` 完成。
+`sim/probe_getup_v2.py`、`sim/probe_handover.py` 与 `sim/probe_handover.py`、`sim/probe_standability.py` 都是同类骨架。循环形状一致：批量 reset 拿初态，批量策略给动作，批量 step 推进，统计全部在 CPU 侧用 `np.asarray` 完成。
 
-`sim/probe_handover.py:505-514` 把多个辅助函数一起 vmap：`terrain_height`、`get_gyro`、`get_gravity` 各包一层，再与 reset/step 组合。辅助函数返回的数组形状不同，vmap 会按每个函数的返回结构分别展开，所以它们各自包一层而不是拼成一个函数。
+`sim/probe_handover.py` 把多个辅助函数一起 vmap：`terrain_height`、`get_gyro`、`get_gravity` 各包一层，再与 reset/step 组合。辅助函数返回的数组形状不同，vmap 会按每个函数的返回结构分别展开，所以它们各自包一层而不是拼成一个函数。
 
-`sim/make_getup_posepool.py:56-63` 只用 `jax.jit(jax.vmap(env.reset))`，按批次采样摔倒姿态并写进姿态池。姿态池采样不需要 step，是"只批量 reset"的典型用例。
+`sim/make_getup_posepool.py` 只用 `jax.jit(jax.vmap(env.reset))`，按批次采样摔倒姿态并写进姿态池。姿态池采样不需要 step，是"只批量 reset"的典型用例。
 
-批量规模的来源：`train/train_getup.py:115` 的评估环境数默认 128，`train/train_go1.py:753` 固定 128；探针用 `--envs` 覆盖，常见 256。训练 rollout 的 768 与 8192 由 brax 内部再包一层 vmap，骨架与探针一致。
+批量规模的来源：`train/train_getup.py` 的评估环境数默认 128，`train/train_go1.py` 固定 128；探针用 `--envs` 覆盖，常见 256。训练 rollout 的 768 与 8192 由 brax 内部再包一层 vmap，骨架与探针一致。
 
 ```mermaid
 flowchart LR
@@ -126,33 +126,33 @@ flowchart LR
 
 | 批量规模 | 用在哪 | 代价 |
 | --- | --- | --- |
-| 32 | `sim/eval_stairs.py:61` 台阶评估 | 显存小，统计噪声大 |
-| 256 | `sim/eval_getup.py:50` 起身评估与探针 | 统计较稳，单轮秒级 |
-| 512 | `sim/eval_walk.py:36` 走路评估 | 吞吐与显存折中 |
-| 768 | `sim/probe_nefc.py:31` NaN 探针 | 接触统计充分，显存占用大 |
-| 2048 | `sim/make_getup_posepool.py:36` 姿态池采样 | 一轮样本多，采样时间更长 |
+| 32 | `sim/eval_stairs.py` 台阶评估 | 显存小，统计噪声大 |
+| 256 | `sim/eval_getup.py` 起身评估与探针 | 统计较稳，单轮秒级 |
+| 512 | `sim/eval_walk.py` 走路评估 | 吞吐与显存折中 |
+| 768 | `sim/probe_nefc.py` NaN 探针 | 接触统计充分，显存占用大 |
+| 2048 | `sim/make_getup_posepool.py` 姿态池采样 | 一轮样本多，采样时间更长 |
 
 规模取值的依据是统计量需要多少样本，而不是显存剩多少。评估成功率时 128 到 256 够用，接触与约束统计（`nefc`、NaN 计数）需要更大的批量才能覆盖极端姿态，姿态池采样则偏向一次多采、少轮次。
 
 ## 7. 两处未包 jit 的例外
 
-`sim/probe_handover.py:703-712` 的 reset 与 step 用了未包 jit 的 `jax.vmap`，没有外层 jit。这在此处可用是因为该段只跑固定的少数几步。反例是主循环里按帧调用：`docs/status.md:202-203` 记录，eager 的 `jax.vmap(env.step)` 每帧都会重新追踪与编译，一个探针跑 500 s 都跑不完。
+`sim/probe_handover.py` 的 reset 与 step 用了未包 jit 的 `jax.vmap`，没有外层 jit。这在此处可用是因为该段只跑固定的少数几步。反例是主循环里按帧调用：`docs/status.md` 记录，eager 的 `jax.vmap(env.step)` 每帧都会重新追踪与编译，一个探针跑 500 s 都跑不完。
 
-`sim/eval_walk.py:165` 与 `sim/eval_walk.py:202` 对 `env.terrain_height` 也用了未包 jit 的 `jax.vmap`，因为它在评估里只调用几次、返回小数组，不构成每步开销。
+`sim/eval_walk.py` 与 `sim/eval_walk.py` 对 `env.terrain_height` 也用了未包 jit 的 `jax.vmap`，因为它在评估里只调用几次、返回小数组，不构成每步开销。
 
-`sim/getup_keyframe.py:124-125` 的注释写明 `init_fsm` 返回的状态机初态可被 `jax.vmap` 批量展开：状态机的每个字段都是 jax 数组，符合 vmap 对 pytree 的要求。这是"能不能批量"的判据：字段里只要有一个 Python 容器或不可遍历对象，vmap 就会在追踪时报错。
+`sim/getup_keyframe.py` 的注释写明 `init_fsm` 返回的状态机初态可被 `jax.vmap` 批量展开：状态机的每个字段都是 jax 数组，符合 vmap 对 pytree 的要求。这是"能不能批量"的判据：字段里只要有一个 Python 容器或不可遍历对象，vmap 就会在追踪时报错。
 
 ## 8. 批量相关的故障现象
 
 | 现象 | 原因 | 对应位置 |
 | --- | --- | --- |
-| 每帧重新追踪编译，探针跑不完 | 主循环里用未包 jit 的 vmap | `docs/status.md:202-203` |
-| N 个环境出生姿态完全相同 | key 没有 split | `sim/eval_getup.py:143` |
-| 追踪报错，环境不是数组 | 把环境对象当 vmap 参数 | `sim/eval_stairs.py:93` 用闭包 |
-| 形状不匹配或结果只对一个环境生效 | 某个叶子缺批量轴 | `sim/probe_handover.py:505-514` |
-| 传入 (N,...) 却按单样本解释 | 单环境函数与批量混用 | `sim/eval_getup.py:135-141` |
-| 首次调用重新编译 | 改 N 后不复用缓存 | `sim/eval_getup.py:134` |
-| 形状对不上，追踪失败 | 把常量 key 当 vmap 参数 | `sim/eval_getup.py:141` 用 lambda 包裹 |
+| 每帧重新追踪编译，探针跑不完 | 主循环里用未包 jit 的 vmap | `docs/status.md` |
+| N 个环境出生姿态完全相同 | key 没有 split | `sim/eval_getup.py` |
+| 追踪报错，环境不是数组 | 把环境对象当 vmap 参数 | `sim/eval_stairs.py` 用闭包 |
+| 形状不匹配或结果只对一个环境生效 | 某个叶子缺批量轴 | `sim/probe_handover.py` |
+| 传入 (N,...) 却按单样本解释 | 单环境函数与批量混用 | `sim/eval_getup.py` |
+| 首次调用重新编译 | 改 N 后不复用缓存 | `sim/eval_getup.py` |
+| 形状对不上，追踪失败 | 把常量 key 当 vmap 参数 | `sim/eval_getup.py` 用 lambda 包裹 |
 
 ## 9. 小结
 
@@ -184,7 +184,7 @@ flowchart LR
 
 挑战题
 
-4. `sim/probe_handover.py:703-712` 的 vmap 没有包 jit。写出这段代码可用的条件，以及把它挪进每帧主循环后会发生什么，并给出验证方式。
+4. `sim/probe_handover.py` 的 vmap 没有包 jit。写出这段代码可用的条件，以及把它挪进每帧主循环后会发生什么，并给出验证方式。
 5. 同一份环境的批量函数先后用 128 与 768 调用。说明编译缓存的行为、两次调用各自的产物，以及怎样复现"评估与训练各编译一份"这一现象。
 
 ## 附：本页引用的路径

@@ -37,7 +37,7 @@ flowchart TD
 
 ## 100 kbps 的 8E1 物理层
 
-接收机输出的是一路异步串行数据。云台板的 USART3 初始化如下（`Core/Src/usart.c:75-83`）：
+接收机输出的是一路异步串行数据。云台板的 USART3 初始化如下（`Core/Src/usart.c`）：
 
 ```c
 huart3.Instance = USART3;
@@ -50,7 +50,7 @@ huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
 huart3.Init.OverSampling = UART_OVERSAMPLING_16;
 ```
 
-底盘板的 `Core/Src/usart.c:75-83` 逐字相同。两板都只用这一路接收。
+底盘板的 `Core/Src/usart.c` 逐字相同。两板都只用这一路接收。
 
 | 参数 | 取值 | 线上一帧的形态 |
 | --- | --- | --- |
@@ -123,7 +123,7 @@ DBUS 没有帧头帧尾，第四条不适用。本工程采用第二条，代价
 
 ## 配置与解析入口
 
-解析入口在 `Communication/Src/dbus.cpp:11-34`，长度检查是第一道门：
+解析入口在 `Communication/Src/dbus.cpp`，长度检查是第一道门：
 
 ```c
 void dbus_decode(volatile uint8_t* buf, int len)
@@ -143,9 +143,9 @@ dbus.ch[3] = (((buf[4] >> 1) | (buf[5] << 7)) & 0x07FF) - 1024;
 dbus.ch[4] = ((buf[16] | (buf[17] << 8)) & 0x07FF) - 1024;
 ```
 
-五个通道都做同一件事：把散落在若干字节里的 11 位拼成一个整数，再减 1024 变成有符号值。字段结构体定义在 `Communication/Inc/dbus.h:11-26`，`ch` 是 `int16_t[5]`，中心值 1024 对应遥控器中位，解析后的范围是 -1024 到 1023。
+五个通道都做同一件事：把散落在若干字节里的 11 位拼成一个整数，再减 1024 变成有符号值。字段结构体定义在 `Communication/Inc/dbus.h`，`ch` 是 `int16_t[5]`，中心值 1024 对应遥控器中位，解析后的范围是 -1024 到 1023。
 
-注册与接线在 `Core/Src/main.c:72-76` 与 `Core/Src/main.c:125`：
+注册与接线在 `Core/Src/main.c` 与 `Core/Src/main.c`：
 
 ```c
 void MyUartCallbackFun(volatile uint8_t* buf, int len) {
@@ -155,18 +155,18 @@ void MyUartCallbackFun(volatile uint8_t* buf, int len) {
 Uart_Init(&huart3, MyUartCallbackFun); // huart3是连接遥控器的UART实例
 ```
 
-`main.c` 只传了一个回调。`DBUS_Decode` 是 `dbus.cpp:36-40` 里的 `extern "C"` 包装，转调 `dbus_decode`。这层包装让 C 写的 `main.c` 能调用 C++ 实现。
+`main.c` 只传了一个回调。`DBUS_Decode` 是 `dbus.cpp` 里的 `extern "C"` 包装，转调 `dbus_decode`。这层包装让 C 写的 `main.c` 能调用 C++ 实现。
 
 ## 读帧结构时容易弄错的地方
 
 | 易错点 | 现象 | 本项目对应位置 |
 | --- | --- | --- |
 | 认为存在帧头帧尾 | 在数据里找同步字 | DBUS 没有同步字，分帧只靠空闲中断 |
-| 用固定周期无脑读缓冲区 | 收到半帧也解析 | `dbus.cpp:13` 用长度 18 拦截 |
+| 用固定周期无脑读缓冲区 | 收到半帧也解析 | `dbus.cpp` 用长度 18 拦截 |
 | 忽略偶校验的级别 | 以为偶校验能保证整帧正确 | 偶校验只覆盖单字节奇数位错误 |
 | 把 8E1 理解成 8 位数据含校验 | 波特率或字长配错 | `WordLength` 与 `Parity` 是两个字段 |
 | 认为链路可双向通信 | 为遥控器写回包 | `huart3.Init.Mode` 只启用接收 |
-| 只在一处定义全局变量 | 头文件里直接定义对象 | `extern DBUS_t dbus` 在 `dbus.h:28`，实体在 `dbus.cpp:9` |
+| 只在一处定义全局变量 | 头文件里直接定义对象 | `extern DBUS_t dbus` 在 `dbus.h`，实体在 `dbus.cpp` |
 | 把 18 字节当成含校验的协议 | 找不到校验字段 | 长度本身就是全部整帧保护 |
 
 其中“认为链路可双向通信”会直接引出无效改动：给 `huart3` 加上发送方向后，PC10 会被驱动，而该引脚在硬件上并不接回接收机，改动只是增加了两个外设中断源，链路行为不变。
@@ -204,16 +204,16 @@ Uart_Init(&huart3, MyUartCallbackFun); // huart3是连接遥控器的UART实例
 
 5. 若把接收机换成 115200 8N1 的同类模块，`usart.c` 需要改哪几行？解析层是否需要跟着改？说明理由。
 6. 偶校验无法发现一个字节内两位同时翻转。构造一段 18 字节数据，使其在某个字节的两位翻转后仍能通过长度与偶校验，并说明这类错误对摇杆字段的影响。
-7. 当前分帧完全依赖空闲中断。若两帧之间没有空闲间隔，`rx_data_len_` 会取到什么值？结合 `Communication/Src/usart_dma.cpp:88` 给出会发生的解析结果。
+7. 当前分帧完全依赖空闲中断。若两帧之间没有空闲间隔，`rx_data_len_` 会取到什么值？结合 `Communication/Src/usart_dma.cpp` 给出会发生的解析结果。
 
 ### 附：本页引用的固件路径
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 初始化 100000 8E1 只收（`:75-83`）、MSP 与 DMA（`:158-199`） |
-| `2026OmniSentryChassis/Core/Src/usart.c` | 底盘板同样的 USART3 配置（`:75-83`） |
-| `2026OmniSentryGimbal/Communication/Inc/dbus.h` | `DBUS_t` 结构与全局声明（`:11-28`） |
-| `2026OmniSentryGimbal/Communication/Src/dbus.cpp` | 长度检查与五个通道解析（`:11-34`） |
-| `2026OmniSentryChassis/Communication/Src/dbus.cpp` | 底盘板同一份解析实现（`:11-34`） |
-| `2026OmniSentryGimbal/Core/Src/main.c` | 回调与 `Uart_Init` 接线（`:72-76`、`:125`） |
-| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 空闲回调与帧长计算（`:81-116`） |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 初始化 100000 8E1 只收、MSP 与 DMA |
+| `2026OmniSentryChassis/Core/Src/usart.c` | 底盘板同样的 USART3 配置 |
+| `2026OmniSentryGimbal/Communication/Inc/dbus.h` | `DBUS_t` 结构与全局声明 |
+| `2026OmniSentryGimbal/Communication/Src/dbus.cpp` | 长度检查与五个通道解析 |
+| `2026OmniSentryChassis/Communication/Src/dbus.cpp` | 底盘板同一份解析实现 |
+| `2026OmniSentryGimbal/Core/Src/main.c` | 回调与 `Uart_Init` 接线 |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 空闲回调与帧长计算 |

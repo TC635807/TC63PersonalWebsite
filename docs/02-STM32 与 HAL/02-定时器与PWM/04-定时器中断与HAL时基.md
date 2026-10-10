@@ -26,9 +26,9 @@ HAL 库的软件时基只有一个 32 位变量 `uwTick`，它由定时器的更
 | 名称 | 类型 | 含义 | 位置 |
 | --- | --- | --- | --- |
 | `uwTick` | `uint32_t` | 从启动累计的毫秒数 | `stm32f4xx_hal.c` |
-| `uwTickFreq` | 枚举 | 每次中断给 `uwTick` 加多少，默认 1 kHz 档 | `stm32f4xx_hal.c:96` |
+| `uwTickFreq` | 枚举 | 每次中断给 `uwTick` 加多少，默认 1 kHz 档 | `stm32f4xx_hal.c` |
 | `uwTickPrio` | `uint32_t` | 时基中断的优先级，供时钟重配时复用 | `stm32f4xx_hal.c` |
-| `HAL_InitTick()` | `__weak` 函数 | 配置时基中断，本工程被覆盖 | `stm32f4xx_hal_timebase_tim.c:41` |
+| `HAL_InitTick()` | `__weak` 函数 | 配置时基中断，本工程被覆盖 | `stm32f4xx_hal_timebase_tim.c` |
 
 三个对外接口都很短。`HAL_IncTick()` 只做加法，`HAL_GetTick()` 只读变量：
 
@@ -44,7 +44,7 @@ __weak uint32_t HAL_GetTick(void)
 }
 ```
 
-`HAL_Delay()` 是忙等，它反复读 `HAL_GetTick()` 直到差值达到目标，等待期间不让出 CPU（`stm32f4xx_hal.c:390-403`）：
+`HAL_Delay()` 是忙等，它反复读 `HAL_GetTick()` 直到差值达到目标，等待期间不让出 CPU（`stm32f4xx_hal.c`）：
 
 ```c
 __weak void HAL_Delay(uint32_t Delay)
@@ -58,7 +58,7 @@ __weak void HAL_Delay(uint32_t Delay)
 }
 ```
 
-HAL 库里默认的 `HAL_InitTick()` 用 SysTick 实现（`stm32f4xx_hal.c:253-274`），本工程用同名的非 weak 实现覆盖了它，所以默认版本不参与编译。
+HAL 库里默认的 `HAL_InitTick()` 用 SysTick 实现（`stm32f4xx_hal.c`），本工程用同名的非 weak 实现覆盖了它，所以默认版本不参与编译。
 
 ## 2. TIM2 更新中断的链路
 
@@ -67,9 +67,9 @@ HAL 库里默认的 `HAL_InitTick()` 用 SysTick 实现（`stm32f4xx_hal.c:253-2
 | 层 | 代码 | 位置 |
 | --- | --- | --- |
 | 硬件 | CNT 计到 ARR，置位 `SR.UIF`，`DIER.UIE` 已置位则发中断请求 | TIM2 寄存器 |
-| 向量 | `void TIM2_IRQHandler(void)` | `Core/Src/stm32f4xx_it.c:233-242` |
-| HAL | `HAL_TIM_IRQHandler(&htim2)` 判标志、清标志、回调 | `stm32f4xx_hal_tim.c:3954-3961` |
-| 应用 | `HAL_TIM_PeriodElapsedCallback()` 里按实例判断后调用 `HAL_IncTick()` | `Core/Src/main.c:206-218` |
+| 向量 | `void TIM2_IRQHandler(void)` | `Core/Src/stm32f4xx_it.c` |
+| HAL | `HAL_TIM_IRQHandler(&htim2)` 判标志、清标志、回调 | `stm32f4xx_hal_tim.c` |
+| 应用 | `HAL_TIM_PeriodElapsedCallback()` 里按实例判断后调用 `HAL_IncTick()` | `Core/Src/main.c` |
 
 应用层的回调是唯一与工程相关的一层：
 
@@ -106,7 +106,7 @@ sequenceDiagram
     T-->>APP: 返回，中断结束
 ```
 
-清标志的动作在 HAL 层（`stm32f4xx_hal_tim.c:3956` 的 `__HAL_TIM_CLEAR_FLAG(htim, TIM_FLAG_UPDATE)`），应用回调里不需要再清，重复清会掩盖漏中断的问题。
+清标志的动作在 HAL 层（`stm32f4xx_hal_tim.c` 的 `__HAL_TIM_CLEAR_FLAG(htim, TIM_FLAG_UPDATE)`），应用回调里不需要再清，重复清会掩盖漏中断的问题。
 
 ## 3. HAL_InitTick 的两次调用
 
@@ -114,8 +114,8 @@ sequenceDiagram
 
 | 次 | 触发点 | 当时的主频与总线 | 算出的 PSC | 说明 |
 | --- | --- | --- | --- | --- |
-| 第一次 | `HAL_Init()`（`stm32f4xx_hal.c:176`） | HSI 16 MHz，APB1 分频为 1 | $16/1-1=15$ | 与当时的时钟自洽 |
-| 第二次 | `HAL_RCC_ClockConfig()` 末尾（`stm32f4xx_hal_rcc.c:722`） | PLL 168 MHz，APB1 为 42 MHz | $84/1-1=83$ | 最终生效的配置 |
+| 第一次 | `HAL_Init()`（`stm32f4xx_hal.c`） | HSI 16 MHz，APB1 分频为 1 | $16/1-1=15$ | 与当时的时钟自洽 |
+| 第二次 | `HAL_RCC_ClockConfig()` 末尾（`stm32f4xx_hal_rcc.c`） | PLL 168 MHz，APB1 为 42 MHz | $84/1-1=83$ | 最终生效的配置 |
 
 第二次调用传进去的优先级是变量 `uwTickPrio`（第一次设置的 15），不是宏 `TICK_INT_PRIORITY`。两次配置之间 TIM2 一直在跑，重写 `PSC` 要等下一次 UEV 才生效，所以中间不会出现频率突跳的瞬间。
 
@@ -141,7 +141,7 @@ sequenceDiagram
 
 SysTick 属于 Cortex-M4 内核，HAL 与 FreeRTOS 都能用它，但两者需要的中断处理完全不同：HAL 要的是 `uwTick` 累加，FreeRTOS 要的是 `xTaskIncrementTick()` 加可能的上下文切换。同一个异常向量只能有一个处理函数。
 
-FreeRTOS 的移植层用宏把内核句柄映射到 CMSIS 标准名（`Core/Inc/FreeRTOSConfig.h:127-133`）：
+FreeRTOS 的移植层用宏把内核句柄映射到 CMSIS 标准名（`Core/Inc/FreeRTOSConfig.h`）：
 
 ```c
 #define vPortSVCHandler    SVC_Handler
@@ -164,13 +164,13 @@ FreeRTOS 的移植层用宏把内核句柄映射到 CMSIS 标准名（`Core/Inc/
 
 | 对象 | 优先级数值 | 依据 |
 | --- | --- | --- |
-| 外设中断（CAN、DMA、USART、USB、TIM1_UP_TIM10） | 5 | `can.c:125`、`dma.c:48`、`usart.c:198`、`tim.c:83` 等 |
-| TIM2 时基中断 | 15 | `stm32f4xx_hal_conf.h:151` 的 `TICK_INT_PRIORITY = 15` |
-| PendSV 与 SysTick | 15 | `stm32f4xx_hal_msp.c:75`、`port.c:361-363` |
+| 外设中断（CAN、DMA、USART、USB、TIM1_UP_TIM10） | 5 | `can.c`、`dma.c`、`usart.c`、`tim.c` 等 |
+| TIM2 时基中断 | 15 | `stm32f4xx_hal_conf.h` 的 `TICK_INT_PRIORITY = 15` |
+| PendSV 与 SysTick | 15 | `stm32f4xx_hal_msp.c`、`port.c` |
 
-优先级分组是 `NVIC_PRIORITYGROUP_4`（`stm32f4xx_hal.c:173`），4 位全给抢占优先级，没有子优先级，所以 5 与 15 之间不存在同级别比较的问题。
+优先级分组是 `NVIC_PRIORITYGROUP_4`（`stm32f4xx_hal.c`），4 位全给抢占优先级，没有子优先级，所以 5 与 15 之间不存在同级别比较的问题。
 
-FreeRTOS 的临界区把 `BASEPRI` 写成 `configMAX_SYSCALL_INTERRUPT_PRIORITY`，即 `5 << 4 = 0x50`（`FreeRTOSConfig.h:110、117`）。`BASEPRI` 屏蔽的是优先级数值大于等于 5 的中断，所以 5 到 15 全部被挡在外面，其中也包括优先级 15 的 TIM2 与 SysTick。
+FreeRTOS 的临界区把 `BASEPRI` 写成 `configMAX_SYSCALL_INTERRUPT_PRIORITY`，即 `5 << 4 = 0x50`（`FreeRTOSConfig.h、117`）。`BASEPRI` 屏蔽的是优先级数值大于等于 5 的中断，所以 5 到 15 全部被挡在外面，其中也包括优先级 15 的 TIM2 与 SysTick。
 
 ```mermaid
 flowchart TD
@@ -195,17 +195,17 @@ flowchart TD
 
 | 位置 | 用法 | 说明 |
 | --- | --- | --- |
-| `Task/Src/FireTask.cpp:86-186` | 记录 `motor_1_last_ok_time`、`angle_reach_start_time` 等变量，用差值判断超时 | 状态机的时间判据 |
-| `Task/Src/ControlCenterTask.cpp:90-97` | 自瞄模式计时 4000 ms，以及按 `HAL_GetTick()` 生成正弦测试目标 | 演示与调试逻辑 |
-| `Task/Src/UsbConnectTask.cpp:139` | 记录 `last_receive_time` | 判断视觉小电脑是否掉线 |
-| `BMI088/Src/BMI088.cpp:300-303` | 初始化里等待 SPI 数据的超时 | 调用时调度器尚未运行 |
+| `Task/Src/FireTask.cpp` | 记录 `motor_1_last_ok_time`、`angle_reach_start_time` 等变量，用差值判断超时 | 状态机的时间判据 |
+| `Task/Src/ControlCenterTask.cpp` | 自瞄模式计时 4000 ms，以及按 `HAL_GetTick()` 生成正弦测试目标 | 演示与调试逻辑 |
+| `Task/Src/UsbConnectTask.cpp` | 记录 `last_receive_time` | 判断视觉小电脑是否掉线 |
+| `BMI088/Src/BMI088.cpp` | 初始化里等待 SPI 数据的超时 | 调用时调度器尚未运行 |
 
 这些写法都安全，因为 `uwTick` 由优先级 15 的中断维护，读它不需要关中断，也不会与调度冲突。要避免的是在任务里用 `HAL_Delay()`：它是忙等，等待期间任务一直占着 CPU，且不会让出给同优先级任务。
 
 本工程实际的 `HAL_Delay()` 调用点只有两处，都不在任务的循环里：
 
-- `USB_DEVICE/Target/usbd_conf.c:646-649` 的 `USBD_LL_Delay()` 内部调用 `HAL_Delay()`，但这个函数目前没有任何调用点，`USB_DEVICE/Target/usbd_conf.h:106` 的 `USBD_Delay` 宏也没有被使用；
-- 底盘板 `Core/Src/main.c:127` 的 `HAL_Delay(50)`，位置在 `osKernelStart()` 之前，属于合法的忙等。
+- `USB_DEVICE/Target/usbd_conf.c` 的 `USBD_LL_Delay()` 内部调用 `HAL_Delay()`，但这个函数目前没有任何调用点，`USB_DEVICE/Target/usbd_conf.h` 的 `USBD_Delay` 宏也没有被使用；
+- 底盘板 `Core/Src/main.c` 的 `HAL_Delay(50)`，位置在 `osKernelStart()` 之前，属于合法的忙等。
 
 云台板 `Core/Src/main.c` 没有这一行，两个 `main.c` 在 USB 初始化与裁判系统上还有别的差异。
 
@@ -217,7 +217,7 @@ flowchart TD
 if ((HAL_GetTick() - start_time) > ANGLE_REACH_TIMEOUT)
 ```
 
-无符号减法在回绕处仍然正确。反过来写成 `HAL_GetTick() > start_time + TIMEOUT` 会在回绕附近出错，这一点在 `Task/Src/FireTask.cpp:148` 这类判据里已经被写成了差值形式。
+无符号减法在回绕处仍然正确。反过来写成 `HAL_GetTick() > start_time + TIMEOUT` 会在回绕附近出错，这一点在 `Task/Src/FireTask.cpp` 这类判据里已经被写成了差值形式。
 
 ## 8. 易错点
 

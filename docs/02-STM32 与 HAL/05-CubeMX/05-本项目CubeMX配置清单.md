@@ -9,6 +9,8 @@ updated: 2026-10-07
 
 两份配置文件的文件名相同，芯片型号相同，外设集合相同，差异集中在少量参数上。这一节把 `2026sentriomeni.ioc` 里的全部有效配置整理成表，便于和生成代码或实物接线对照。
 
+清单的价值不在罗列取值，而在建立「参数—派生关系—影响面」这条线：看到某个外设参数，能顺着总线时钟与分频链找到它的来源，也能判断改动它会影响哪些时间量。下表是这套关系在两块板上的结果，换项目时替换取值即可。
+
 > 源码索引（固件路径相对于各自仓库根目录）
 
 | 文件 | 作用 |
@@ -23,22 +25,22 @@ updated: 2026-10-07
 
 | 键 | 取值 | 位置 |
 | --- | --- | --- |
-| `Mcu.CPN` | `STM32F407IGH6` | `.ioc:159` |
-| `Mcu.Package` | `UFBGA176` | `.ioc:179` |
-| `Mcu.UserName` | `STM32F407IGHx` | `.ioc:216` |
-| `Mcu.PinsNb`、`Mcu.IPNb` | 33、16（底盘 34、16） | `.ioc:213`、`:177` |
-| `Mcu.ThirdPartyNb` | 0 | `.ioc:214` |
-| `MxCube.Version`、`MxDb.Version` | 6.16.1、DB.6.0.161 | `.ioc:217-218` |
-| `File.Version` | 6 | `.ioc:147` |
-| `ProjectManager.FirmwarePackage` | `STM32Cube FW_F4 V1.28.3` | `.ioc:338` |
-| `ProjectManager.TargetToolchain` | `CMake` | `.ioc:355` |
-| `ProjectManager.MainLocation` | `Core/Src` | `.ioc:346` |
-| `ProjectManager.StackSize`、`HeapSize` | `0x400`、`0x200` | `.ioc:354`、`:342` |
-| `board`、`rtos.0.ip` | `custom`、`FREERTOS` | `.ioc:460-461` |
+| `Mcu.CPN` | `STM32F407IGH6` | `.ioc` |
+| `Mcu.Package` | `UFBGA176` | `.ioc` |
+| `Mcu.UserName` | `STM32F407IGHx` | `.ioc` |
+| `Mcu.PinsNb`、`Mcu.IPNb` | 33、16（底盘 34、16） | `.ioc` |
+| `Mcu.ThirdPartyNb` | 0 | `.ioc` |
+| `MxCube.Version`、`MxDb.Version` | 6.16.1、DB.6.0.161 | `.ioc` |
+| `File.Version` | 6 | `.ioc` |
+| `ProjectManager.FirmwarePackage` | `STM32Cube FW_F4 V1.28.3` | `.ioc` |
+| `ProjectManager.TargetToolchain` | `CMake` | `.ioc` |
+| `ProjectManager.MainLocation` | `Core/Src` | `.ioc` |
+| `ProjectManager.StackSize`、`HeapSize` | `0x400`、`0x200` | `.ioc` |
+| `board`、`rtos.0.ip` | `custom`、`FREERTOS` | `.ioc` |
 
 ## 2. 启用的 IP
 
-`Mcu.IP0` 到 `Mcu.IP15`（`.ioc:161-176`）共 16 项，两块板完全一致：
+`Mcu.IP0` 到 `Mcu.IP15`（`.ioc`）共 16 项，两块板完全一致：
 
 | IP | 类别 | 关键参数 |
 | --- | --- | --- |
@@ -63,16 +65,16 @@ GPIO 不在 `Mcu.IPn` 列表里，只要有引脚被配置，就会生成 `Core/
 
 | 项 | 取值 | 位置 |
 | --- | --- | --- |
-| HSE | 12 MHz | `.ioc:375` |
-| `PLLM`、`PLLN`、`PLLQ` | 6、168、7 | `.ioc:383-385` |
-| PLLP | 2（生成代码为 `RCC_PLLP_DIV2`） | `Core/Src/main.c:172` |
-| SYSCLK、HCLK | 168 MHz | `.ioc:389`、`:374` |
-| APB1 分频与频率 | `RCC_HCLK_DIV4`、42 MHz | `.ioc:363-364` |
-| APB2 分频与频率 | `RCC_HCLK_DIV2`、84 MHz | `.ioc:366-367` |
-| APB1 定时器时钟 | 84 MHz | `.ioc:365` |
-| APB2 定时器时钟 | 168 MHz | `.ioc:368` |
-| 48 MHz 时钟（USB） | 48 MHz，由 `PLLQ=7` 得到 | `.ioc:361`、`:386` |
-| Flash 等待周期 | `FLASH_LATENCY_5` | `.ioc:372` |
+| HSE | 12 MHz | `.ioc` |
+| `PLLM`、`PLLN`、`PLLQ` | 6、168、7 | `.ioc` |
+| PLLP | 2（生成代码为 `RCC_PLLP_DIV2`） | `Core/Src/main.c` |
+| SYSCLK、HCLK | 168 MHz | `.ioc` |
+| APB1 分频与频率 | `RCC_HCLK_DIV4`、42 MHz | `.ioc` |
+| APB2 分频与频率 | `RCC_HCLK_DIV2`、84 MHz | `.ioc` |
+| APB1 定时器时钟 | 84 MHz | `.ioc` |
+| APB2 定时器时钟 | 168 MHz | `.ioc` |
+| 48 MHz 时钟（USB） | 48 MHz，由 `PLLQ=7` 得到 | `.ioc` |
+| Flash 等待周期 | `FLASH_LATENCY_5` | `.ioc` |
 
 派生关系是 $f_{SYSCLK} = \frac{12\ \text{MHz}}{6} \times 168 \div 2 = 168\ \text{MHz}$，APB1 定时器时钟为 $42 \times 2 = 84\ \text{MHz}$，APB2 定时器时钟为 $84 \times 2 = 168\ \text{MHz}$。CAN 挂在 APB1 上，用 42 MHz 计算位时间。
 
@@ -92,24 +94,24 @@ flowchart TD
 
 ## 4. 中断配置
 
-`NVIC` 段（`.ioc:219-248`）里与固件相关的是外设条目，数值段的第一项是抢占优先级：
+`NVIC` 段（`.ioc`）里与固件相关的是外设条目，数值段的第一项是抢占优先级：
 
 | 中断 | 优先级 | 位置 |
 | --- | --- | --- |
-| `CAN1_RX0`、`CAN1_RX1`、`CAN2_RX0`、`CAN2_RX1` | 5 | `.ioc:220-223` |
-| `DMA1_Stream1`、`DMA2_Stream1`、`DMA2_Stream2`、`DMA2_Stream3`、`DMA2_Stream6` | 5 | `.ioc:224-228` |
-| `OTG_FS` | 5 | `.ioc:234` |
-| `TIM1_UP_TIM10` | 5 | `.ioc:242` |
-| `USART3`、`USART6` | 5 | `.ioc:246-247` |
-| `TIM2`（HAL 时基） | 15 | `.ioc:243` |
-| `PendSV`、`SysTick` | 15 | `.ioc:235`、`:241` |
-| `HardFault` 与 `MemManage` 与 `BusFault` 与 `UsageFault` 与 `SVCall` | 0 | `.ioc:231-233`、`:237`、`:248` |
+| `CAN1_RX0`、`CAN1_RX1`、`CAN2_RX0`、`CAN2_RX1` | 5 | `.ioc` |
+| `DMA1_Stream1`、`DMA2_Stream1`、`DMA2_Stream2`、`DMA2_Stream3`、`DMA2_Stream6` | 5 | `.ioc` |
+| `OTG_FS` | 5 | `.ioc` |
+| `TIM1_UP_TIM10` | 5 | `.ioc` |
+| `USART3`、`USART6` | 5 | `.ioc` |
+| `TIM2`（HAL 时基） | 15 | `.ioc` |
+| `PendSV`、`SysTick` | 15 | `.ioc` |
+| `HardFault` 与 `MemManage` 与 `BusFault` 与 `UsageFault` 与 `SVCall` | 0 | `.ioc` |
 
-其余开关：`NVIC.PriorityGroup=NVIC_PRIORITYGROUP_4`（`:236`）、`NVIC.TimeBase=TIM2_IRQn`（`:244`）、`NVIC.TimeBaseIP=TIM2`（`:245`）、`NVIC.ForceEnableDMAVector=true`（`:230`）。最后一项保证五个 DMA 流的中断向量被强制使能，否则生成代码可能只使能外设而不使能向量。
+其余开关：`NVIC.PriorityGroup=NVIC_PRIORITYGROUP_4`、`NVIC.TimeBase=TIM2_IRQn`、`NVIC.TimeBaseIP=TIM2`、`NVIC.ForceEnableDMAVector=true`。最后一项保证五个 DMA 流的中断向量被强制使能，否则生成代码可能只使能外设而不使能向量。
 
 ## 5. DMA 分配
 
-`Dma.RequestsNb=5`（`.ioc:40`），每个请求对应一个流：
+`Dma.RequestsNb=5`（`.ioc`），每个请求对应一个流：
 
 | 请求 | 流与通道 | 方向 | 模式 | 优先级 |
 | --- | --- | --- | --- | --- |
@@ -125,15 +127,15 @@ USART3 与 USART6_TX 用循环模式，前者服务 DBUS 遥控器的连续接�
 
 | 外设 | 参数 | 位置 |
 | --- | --- | --- |
-| CAN1 / CAN2 | `Prescaler=2`、`BS1=15TQ`、`BS2=5TQ`、`SJW=1TQ`、`Mode=NORMAL`、`NART=ENABLE`、`ABOM=ENABLE` | `.ioc:5-19`、`:20-34` |
-| USART1 | 115200、8 位、无校验、收发 | `Core/Src/usart.c:46-51` |
-| USART3 | 100000、8 位、偶校验、仅接收 | `.ioc:428-435` |
-| USART6 | 115200、8 位、无校验、收发 | `.ioc:436-443` |
-| SPI1 | 主机、8 位、`POLARITY_HIGH`、`PHASE_2EDGE`、软件 NSS、`PRESCALER_64` | `.ioc:401-413` |
-| I2C3 | 400 kHz、`DUTYCYCLE_2`、7 位地址、`OwnAddress=0` | `.ioc:149-157` |
-| TIM10 | `Prescaler=0`、`Period=4999`、`PWM1`、`Pulse=0`、通道 1 | `.ioc:414-425` |
-| CRC | 只调用 `MX_CRC_Init()` | `.ioc:450-451` |
-| USB_DEVICE | CDC 类，全速 | `.ioc:444-447` |
+| CAN1 / CAN2 | `Prescaler=2`、`BS1=15TQ`、`BS2=5TQ`、`SJW=1TQ`、`Mode=NORMAL`、`NART=ENABLE`、`ABOM=ENABLE` | `.ioc` |
+| USART1 | 115200、8 位、无校验、收发 | `Core/Src/usart.c` |
+| USART3 | 100000、8 位、偶校验、仅接收 | `.ioc` |
+| USART6 | 115200、8 位、无校验、收发 | `.ioc` |
+| SPI1 | 主机、8 位、`POLARITY_HIGH`、`PHASE_2EDGE`、软件 NSS、`PRESCALER_64` | `.ioc` |
+| I2C3 | 400 kHz、`DUTYCYCLE_2`、7 位地址、`OwnAddress=0` | `.ioc` |
+| TIM10 | `Prescaler=0`、`Period=4999`、`PWM1`、`Pulse=0`、通道 1 | `.ioc` |
+| CRC | 只调用 `MX_CRC_Init()` | `.ioc` |
+| USB_DEVICE | CDC 类，全速 | `.ioc` |
 
 TIM10 的计数时钟是 APB2 定时器时钟 168 MHz，`Prescaler=0` 时计数频率 168 MHz，`Period=4999` 时更新频率
 
@@ -147,19 +149,19 @@ $$f_{PWM} = \frac{168\ \text{MHz}}{(0+1) \times (4999+1)} = 33.6\ \text{kHz}$$
 
 | 外设 | 引脚 | 位置 |
 | --- | --- | --- |
-| CAN1 | PD0 `CAN1_RX`、PD1 `CAN1_TX` | `.ioc:300-305` |
-| CAN2 | PB5 `CAN2_RX`、PB6 `CAN2_TX` | `.ioc:279-284` |
-| USART1 | PA9 `USART1_TX`、PB7 `USART1_RX` | `.ioc:269-270`、`:285-286` |
-| USART3 | PC10 `USART3_TX`、PC11 `USART3_RX` | `.ioc:287-290` |
-| USART6 | PG14 `USART6_TX`、PG9 `USART6_RX` | `.ioc:308-309`、`:316-317` |
-| SPI1 | PB3 `SCK`、PB4 `MISO`、PA7 `MOSI` | `.ioc:275-278`、`:267-268` |
-| I2C3 | PH7 `SCL`、PC9 `SDA` | `.ioc:324-325`、`:291-292` |
-| TIM10 | PF6 `TIM10_CH1` | `.ioc:306-307` |
-| USB OTG FS | PA11 `DM`、PA12 `DP` | `.ioc:255-258` |
-| SWD | PA13 `SWDIO`、PA14 `SWCLK` | `.ioc:259-262` |
-| 外部中断 | PA0 `KEY`、PG3 `GPXTI3` | `.ioc:249-254`、`:310-313` |
-| 普通输出 | PA4、PB0、PG6、PH11 | `.ioc:263-266`、`:271-274`、`:314-315`、`:322-323` |
-| 晶振 | PH0、PH1 | `.ioc:318-321` |
+| CAN1 | PD0 `CAN1_RX`、PD1 `CAN1_TX` | `.ioc` |
+| CAN2 | PB5 `CAN2_RX`、PB6 `CAN2_TX` | `.ioc` |
+| USART1 | PA9 `USART1_TX`、PB7 `USART1_RX` | `.ioc` |
+| USART3 | PC10 `USART3_TX`、PC11 `USART3_RX` | `.ioc` |
+| USART6 | PG14 `USART6_TX`、PG9 `USART6_RX` | `.ioc` |
+| SPI1 | PB3 `SCK`、PB4 `MISO`、PA7 `MOSI` | `.ioc` |
+| I2C3 | PH7 `SCL`、PC9 `SDA` | `.ioc` |
+| TIM10 | PF6 `TIM10_CH1` | `.ioc` |
+| USB OTG FS | PA11 `DM`、PA12 `DP` | `.ioc` |
+| SWD | PA13 `SWDIO`、PA14 `SWCLK` | `.ioc` |
+| 外部中断 | PA0 `KEY`、PG3 `GPXTI3` | `.ioc` |
+| 普通输出 | PA4、PB0、PG6、PH11 | `.ioc` |
+| 晶振 | PH0、PH1 | `.ioc` |
 
 5 项虚拟引脚的名称分别是 `VP_CRC_VS_CRC`、`VP_FREERTOS_VS_CMSIS_V1`、`VP_SYS_VS_tim2`、`VP_TIM10_VS_ClockSourceINT`、`VP_USB_DEVICE_VS_USB_DEVICE_CDC_FS`。`VP_SYS_VS_tim2` 就是 HAL 时基选 TIM2 的记录，它决定了会生成 `Core/Src/stm32f4xx_hal_timebase_tim.c`。
 
@@ -193,23 +195,23 @@ flowchart LR
 
 ## 8. FreeRTOS 配置
 
-`FREERTOS.` 前缀下的键（`.ioc:91-146`）生成到 `Core/Inc/FreeRTOSConfig.h`：
+`FREERTOS.` 前缀下的键（`.ioc`）生成到 `Core/Inc/FreeRTOSConfig.h`：
 
 | 键 | 云台 | 底盘 | 生成位置 |
 | --- | --- | --- | --- |
 | `HEAP_NUMBER`、`MEMORY_ALLOCATION` | 4、2 | 同 | `heap_4.c` 与动态分配 |
-| `configTOTAL_HEAP_SIZE` | 40960 | 同 | `FreeRTOSConfig.h:67` |
-| `configTICK_RATE_HZ` | 1000 | 同 | `FreeRTOSConfig.h:64` |
-| `configMAX_PRIORITIES` | 7 | 同 | `FreeRTOSConfig.h:65` |
-| `configMINIMAL_STACK_SIZE` | 256 | 512 | `FreeRTOSConfig.h:66` |
-| `configLIBRARY_LOWEST_INTERRUPT_PRIORITY` | 15 | 同 | `FreeRTOSConfig.h:104` |
-| `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` | 5 | 同 | `FreeRTOSConfig.h:110` |
+| `configTOTAL_HEAP_SIZE` | 40960 | 同 | `FreeRTOSConfig.h` |
+| `configTICK_RATE_HZ` | 1000 | 同 | `FreeRTOSConfig.h` |
+| `configMAX_PRIORITIES` | 7 | 同 | `FreeRTOSConfig.h` |
+| `configMINIMAL_STACK_SIZE` | 256 | 512 | `FreeRTOSConfig.h` |
+| `configLIBRARY_LOWEST_INTERRUPT_PRIORITY` | 15 | 同 | `FreeRTOSConfig.h` |
+| `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` | 5 | 同 | `FreeRTOSConfig.h` |
 | `configUSE_MUTEXES`、`configUSE_TASK_NOTIFICATIONS` | 1、1 | 同 | 内核功能开关 |
 | `INCLUDE_vTaskDelayUntil` | 0 | 同 | 无严格周期延时 |
 | `configUSE_TRACE_FACILITY`、`configCHECK_FOR_STACK_OVERFLOW` | 0、0 | 同 | 无任务列表与栈检查 |
 | `Tasks01` | `defaultTask,0,256` | `defaultTask,-3,512` | `Core/Src/freertos.c` |
 
-`Tasks01` 的第二段是优先级，第三段是栈字数。云台生成 `osPriorityNormal` 与 256 words（`Core/Src/freertos.c:123`），底盘生成 `osPriorityIdle` 与 512 words（`Core/Src/freertos.c:121`）。
+`Tasks01` 的第二段是优先级，第三段是栈字数。云台生成 `osPriorityNormal` 与 256 words（`Core/Src/freertos.c`），底盘生成 `osPriorityIdle` 与 512 words（`Core/Src/freertos.c`）。
 
 ## 9. 两块板的差异
 
@@ -228,7 +230,7 @@ flowchart LR
 | `USB_DEVICE` 描述符 | 默认 | `PID=202`、`shaobing_chassis`、`Virtual ComPort` | 功能配置 |
 | 其余 `Mcu.Pin*` 编号 | 从 `Mcu.Pin15` 起 | 整体后移一位 | 编号 |
 
-`USB_DEVICE` 的三条描述符键落在 `USB_DEVICE/App/usbd_desc.c:67-69` 的宏上，是两块板枚举出不同设备名与 PID 的原因。
+`USB_DEVICE` 的三条描述符键落在 `USB_DEVICE/App/usbd_desc.c` 的宏上，是两块板枚举出不同设备名与 PID 的原因。
 
 ## 10. 生成产物与标记数
 

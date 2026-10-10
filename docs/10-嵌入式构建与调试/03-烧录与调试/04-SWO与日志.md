@@ -97,7 +97,7 @@ sequenceDiagram
 
 不实现任何底层时，`printf` 要么链接失败，要么调用到空符号。判断方法很直接：看 `_write` 调用的 `__io_putchar` 有没有定义，看有没有代码真的调用 `printf`。
 
-输入方向同样缺底层。`Core/Src/syscalls.c` 的 `_read`（`:39-50`）调用弱符号 `__io_getchar`，仓库内也没有它的定义，`scanf` 与 `getchar` 同样不可用。
+输入方向同样缺底层。`Core/Src/syscalls.c` 的 `_read`调用弱符号 `__io_getchar`，仓库内也没有它的定义，`scanf` 与 `getchar` 同样不可用。
 
 两条路径的选择决定了发布镜像的行为：走 `__io_putchar` 时没有调试器也能输出，走半主机时没有调试器会卡在 `BKPT`。发布前要确认重定向落在哪一条上。
 
@@ -105,7 +105,7 @@ sequenceDiagram
 
 ## 6. SWO 引脚与 SPI1 的占用冲突
 
-SWO 在这两块板上用不了，原因是引脚冲突。SWO 固定用 PB3 的 AF0，而当前 PB3 被 SPI1 用作 SCK，PB4 用作 MISO，PA7 用作 MOSI（`Core/Src/spi.c:79-81`，`.ioc` 在 `2026sentriomeni.ioc:275-278`）。`.ioc` 里没有任何 `TRACE` 或 `DBGMCU` 配置项，仓库里也没有写 `DBGMCU` 的代码。
+SWO 在这两块板上用不了，原因是引脚冲突。SWO 固定用 PB3 的 AF0，而当前 PB3 被 SPI1 用作 SCK，PB4 用作 MISO，PA7 用作 MOSI（`Core/Src/spi.c`，`.ioc` 在 `2026sentriomeni.ioc`）。`.ioc` 里没有任何 `TRACE` 或 `DBGMCU` 配置项，仓库里也没有写 `DBGMCU` 的代码。
 
 PA5 与 PA6 在当前 `.ioc` 里没有分配（全文件搜索无 `PA5`、`PA6`）。按手册，SPI1 的 SCK 可复用映射到 PA5、MISO 可映射到 PA6，把这两根从 PB3、PB4 挪走后 PB3 即可作 SWO。这属于改动建议，未实测，改完要重新验证 BMI088 的 SPI 通信。
 
@@ -113,15 +113,15 @@ PA5 与 PA6 在当前 `.ioc` 里没有分配（全文件搜索无 `PA5`、`PA6`�
 
 ## 7. 串口通道与日志帧
 
-串口通道是现成的：`huart1` 是 USART1，115200、8 位、1 停止位、无校验（`Core/Src/usart.c:46-53`），引脚 PB7 作 RX、PA9 作 TX，复用 AF7（`:137-151`）。云台板在 `Task/Src/ImuTask.cpp:34` 调 `DebugUART_Init(&huart1)`，底盘板在 `Task/Src/ImuTask.cpp:33` 调用同一句。
+串口通道是现成的：`huart1` 是 USART1，115200、8 位、1 停止位、无校验（`Core/Src/usart.c`），引脚 PB7 作 RX、PA9 作 TX，复用 AF7。云台板在 `Task/Src/ImuTask.cpp` 调 `DebugUART_Init(&huart1)`，底盘板在 `Task/Src/ImuTask.cpp` 调用同一句。
 
-日志帧由 `BSP/Src/debug.cpp` 的 `SendDebugData` 打包：固定头 `0xAA 0xBB`（`:63-64`），按格式字符顺序追加定长字段，最后一次 `HAL_UART_Transmit` 发出（`:113`）。超时 100 ms、缓冲区 128 字节在 `BSP/Inc/debug.h:19-20`。帧没有长度与校验，接收端必须与发送端共享同一个格式字符串，细节见引用文档。
+日志帧由 `BSP/Src/debug.cpp` 的 `SendDebugData` 打包：固定头 `0xAA 0xBB`，按格式字符顺序追加定长字段，最后一次 `HAL_UART_Transmit` 发出。超时 100 ms、缓冲区 128 字节在 `BSP/Inc/debug.h`。帧没有长度与校验，接收端必须与发送端共享同一个格式字符串，细节见引用文档。
 
 帧结构的代价很明确：没有长度字段时，接收端只能靠格式字符串判断每个字段的位置；丢一个字节后所有后续字段都会错位，而校验的缺失让接收端无法发现这种错位。
 
 ## 8. printf 在本工程不可用的两层原因
 
-`printf` 在本工程里不可用，原因有两层。`Core/Src/syscalls.c` 的 `_write`（`:81-92`）调用弱符号 `__io_putchar`（声明在 `:36`，调用在 `:88`），而全仓库没有任何 `__io_putchar` 定义，调用点会落到空地址。另一方面也没有调用者：USB Device 的日志宏由 `USBD_DEBUG_LEVEL` 控制，当前是 0（`USB_DEVICE/Target/usbd_conf.h:72`），三个打印宏全部展开为空。
+`printf` 在本工程里不可用，原因有两层。`Core/Src/syscalls.c` 的 `_write`调用弱符号 `__io_putchar`（声明在 ，调用在 ），而全仓库没有任何 `__io_putchar` 定义，调用点会落到空地址。另一方面也没有调用者：USB Device 的日志宏由 `USBD_DEBUG_LEVEL` 控制，当前是 0（`USB_DEVICE/Target/usbd_conf.h`），三个打印宏全部展开为空。
 
 要用 `printf` 就得补一个 `__io_putchar`，把字符送到 `huart1` 或 ITM。送到串口时注意 `HAL_UART_Transmit` 是阻塞调用，不能放在高频任务里。RTT 是另一条路：它不占引脚、不依赖 SWO，靠调试器周期读 RAM 环形缓冲，本工程未使用，属通用备选。
 
@@ -141,12 +141,12 @@ PA5 与 PA6 在当前 `.ioc` 里没有分配（全文件搜索无 `PA5`、`PA6`�
 
 | 易错点 | 现象 | 对应位置或判据 |
 | --- | --- | --- |
-| 直接调 `printf` | 链接通过但运行跑飞，或没有任何输出 | `__io_putchar` 无定义（`syscalls.c:36,88`） |
-| 打开 `USBD_DEBUG_LEVEL` 就以为有日志 | 编译进 `printf`，却仍无输出 | 该宏打开后反而暴露 `__io_putchar` 缺失（`usbd_conf.h:72`） |
-| 在 PB3 上直接使能 SWO | BMI088 的 SPI 时钟失效，姿态数据异常 | PB3 是 SPI1_SCK（`spi.c:79-81`） |
+| 直接调 `printf` | 链接通过但运行跑飞，或没有任何输出 | `__io_putchar` 无定义（`syscalls.c,88`） |
+| 打开 `USBD_DEBUG_LEVEL` 就以为有日志 | 编译进 `printf`，却仍无输出 | 该宏打开后反而暴露 `__io_putchar` 缺失（`usbd_conf.h`） |
+| 在 PB3 上直接使能 SWO | BMI088 的 SPI 时钟失效，姿态数据异常 | PB3 是 SPI1_SCK（`spi.c`） |
 | 改主频后 SWO 变乱码 | 文本全是随机字符 | SWO 波特率由跟踪时钟分频，需同步改调试器设置 |
 | 忘记置 `TRCENA` | ITM 寄存器写不进，无输出 | `CoreDebug->DEMCR` 的使能位 |
-| 在高频循环里打印 | 控制周期被拖长，电机响应变差 | 阻塞发送，参考 `debug.h:19` 的 100 ms 超时 |
+| 在高频循环里打印 | 控制周期被拖长，电机响应变差 | 阻塞发送，参考 `debug.h` 的 100 ms 超时 |
 | 用无长度无校验的帧做长记录 | 丢一个字节后字段全部错位 | `SendDebugData` 帧结构 |
 | 半主机留在发布镜像里 | 无调试器时卡在 BKPT | 半主机需要调试器在线 |
 
@@ -190,11 +190,11 @@ PA5 与 PA6 在当前 `.ioc` 里没有分配（全文件搜索无 `PA5`、`PA6`�
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 引脚与复用（:73-95） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc` | SPI1 与 PA13/PA14 引脚配置（:259-262、:275-278） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | `huart1` 参数与 USART1 引脚（:46-53、:137-151） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/syscalls.c` | `_write` 与 `__io_putchar` 声明（:36、:81-92） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h` | `USBD_DEBUG_LEVEL` 与日志宏（:72、:110-132） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/debug.h` | 超时与缓冲区常量（:19-20） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp` | 帧打包与发送（:54-115） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ImuTask.cpp` | 底盘板 `DebugUART_Init` 调用点（:33） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 引脚与复用 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc` | SPI1 与 PA13/PA14 引脚配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | `huart1` 参数与 USART1 引脚 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/syscalls.c` | `_write` 与 `__io_putchar` 声明 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h` | `USBD_DEBUG_LEVEL` 与日志宏 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Inc/debug.h` | 超时与缓冲区常量 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/debug.cpp` | 帧打包与发送 |
+| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ImuTask.cpp` | 底盘板 `DebugUART_Init` 调用点 |

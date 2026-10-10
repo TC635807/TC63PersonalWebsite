@@ -9,9 +9,9 @@ updated: 2026-10-07
 
 温度环算出的占空比要变成热量，中间隔着一整条链路。固件能直接决定的部分只有定时器、通道和引脚，热量本身由外部驱动级、加热元件与供电轨决定，这三样都不在源码里。把链路按可见性切开，才能在排查时快速判断问题落在哪一侧。
 
-对象是 `Core/Src/tim.c` 的 `MX_TIM10_Init`、`Core/Src/main.c:117` 的调用与 `BMI088/Src/ImuTempControl.cpp` 的启动、更新函数，梳理固件侧的每个环节，并给出占空比到功率的换算前提。读完要能回答：33.6 kHz 是怎么算出来的；写 CCR1 要等哪个事件生效；NVIC 已经使能为什么中断不产生。
+对象是 `Core/Src/tim.c` 的 `MX_TIM10_Init`、`Core/Src/main.c` 的调用与 `BMI088/Src/ImuTempControl.cpp` 的启动、更新函数，梳理固件侧的每个环节，并给出占空比到功率的换算前提。读完要能回答：33.6 kHz 是怎么算出来的；写 CCR1 要等哪个事件生效；NVIC 已经使能为什么中断不产生。
 
-> 本页引用的行号相对固件仓库根目录。
+> 本页引用的路径相对固件仓库根目录。
 
 ## 加热通道的固件段与原理图段
 
@@ -19,8 +19,8 @@ updated: 2026-10-07
 
 | 段 | 组成 | 固件可见性 | 依据 |
 | --- | --- | --- | --- |
-| 定时器与通道 | TIM10 计数、通道 1 比较、CCR1 | 可见 | `Core/Src/tim.c:42-63` |
-| 引脚复用 | PF6 复用为 AF3_TIM10 | 可见 | `Core/Src/tim.c:100-109` |
+| 定时器与通道 | TIM10 计数、通道 1 比较、CCR1 | 可见 | `Core/Src/tim.c` |
+| 引脚复用 | PF6 复用为 AF3_TIM10 | 可见 | `Core/Src/tim.c` |
 | 驱动级 | 栅极驱动与功率开关 | 不可见 | 待现场确认 |
 | 加热元件 | 加热电阻或加热膜 | 不可见 | 待现场确认 |
 | 供电轨 | 驱动级电源电压 | 不可见 | 待现场确认 |
@@ -33,10 +33,10 @@ TIM10 挂在 APB2 上。APB2 预分频不为 1 时，定时器看到的计数时
 
 | 节点 | 值 | 依据 |
 | --- | --- | --- |
-| HSE | 12 MHz | `Core/Inc/stm32f4xx_hal_conf.h:99` |
-| PLLM、PLLN、PLLP | 6、168、2 | `Core/Src/main.c:169-171` |
+| HSE | 12 MHz | `Core/Inc/stm32f4xx_hal_conf.h` |
+| PLLM、PLLN、PLLP | 6、168、2 | `Core/Src/main.c` |
 | SYSCLK、HCLK | 168 MHz | 12 除以 6 再乘 168 除以 2 |
-| APB1、APB2 分频 | 4、2 | `Core/Src/main.c:184-185` |
+| APB1、APB2 分频 | 4、2 | `Core/Src/main.c` |
 | PCLK2 | 84 MHz | HCLK 除以 2 |
 | APB2 定时器时钟 | 168 MHz | 两倍 PCLK2 |
 
@@ -60,7 +60,7 @@ PWM1 模式下计数值小于比较值时输出为高，一周期共 $ARR+1$ 个
 
 $$D=\frac{CCR}{ARR+1}$$
 
-自动重装预装载被关闭（`Core/Src/tim.c:47`），运行期改 ARR 立即生效，可能产生半个周期。通道 1 的比较预装载由 HAL 无条件打开（`Core/Src/tim.c:60`），写 CCR1 先落在预装载寄存器，等下一个更新事件搬进影子寄存器才影响输出，延迟不超过一个 PWM 周期。
+自动重装预装载被关闭（`Core/Src/tim.c`），运行期改 ARR 立即生效，可能产生半个周期。通道 1 的比较预装载由 HAL 无条件打开（`Core/Src/tim.c`），写 CCR1 先落在预装载寄存器，更新事件到来时再搬进真正起作用的影子寄存器，因此比较值总在周期边界切换、不会切出窄脉冲；代价是写入最多晚一个 PWM 周期生效。
 
 两者的差别在运行期写值时体现：改 ARR 立刻改变周期，改 CCR1 最多晚一个周期生效。温度环的输出周期是毫秒级，一个 29.76 微秒的延迟可以忽略；但如果哪天改 ARR 做调频，就必须考虑那半个周期的毛刺。
 
@@ -68,15 +68,15 @@ $$D=\frac{CCR}{ARR+1}$$
 
 | 配置项 | 值 | 位置 |
 | --- | --- | --- |
-| 计数模式 | 向上计数 | `Core/Src/tim.c:44` |
-| 时钟分频 | TIM_CLOCKDIVISION_DIV1 | `Core/Src/tim.c:46` |
-| 自动重装预装载 | 关闭 | `Core/Src/tim.c:47` |
-| 通道模式 | TIM_OCMODE_PWM1 | `Core/Src/tim.c:56` |
-| 初始脉宽 | 0 | `Core/Src/tim.c:57` |
-| 输出极性 | 高电平有效 | `Core/Src/tim.c:58` |
-| 快速模式 | 关闭 | `Core/Src/tim.c:59` |
+| 计数模式 | 向上计数 | `Core/Src/tim.c` |
+| 时钟分频 | TIM_CLOCKDIVISION_DIV1 | `Core/Src/tim.c` |
+| 自动重装预装载 | 关闭 | `Core/Src/tim.c` |
+| 通道模式 | TIM_OCMODE_PWM1 | `Core/Src/tim.c` |
+| 初始脉宽 | 0 | `Core/Src/tim.c` |
+| 输出极性 | 高电平有效 | `Core/Src/tim.c` |
+| 快速模式 | 关闭 | `Core/Src/tim.c` |
 
-`HAL_TIM_Base_MspInit` 使能了 `TIM1_UP_TIM10_IRQn` 并设为优先级 5（`Core/Src/tim.c:80-84`），中断服务函数也映射到 `HAL_TIM_IRQHandler(&htim10)`（`Core/Src/stm32f4xx_it.c:219-228`）。运行期没有打开更新中断：`HAL_TIM_PWM_Start` 只置位 `CCER.CC1E` 与 `CR1.CEN`，工程里 `HAL_TIM_Base_Start_IT` 的唯一调用点给 TIM2 做 HAL 时基（`Core/Src/stm32f4xx_hal_timebase_tim.c:91`）。NVIC 使能与外设中断使能是两级开关，前者打开不代表后者打开，TIM10 的更新中断当前不产生，属按 HAL 实现推导。TIM10 不是带刹车输入的实例，启动过程不涉及 MOE。
+`HAL_TIM_Base_MspInit` 使能了 `TIM1_UP_TIM10_IRQn` 并设为优先级 5（`Core/Src/tim.c`），中断服务函数也映射到 `HAL_TIM_IRQHandler(&htim10)`（`Core/Src/stm32f4xx_it.c`）。运行期没有打开更新中断：`HAL_TIM_PWM_Start` 只置位 `CCER.CC1E` 与 `CR1.CEN`，工程里 `HAL_TIM_Base_Start_IT` 的唯一调用点给 TIM2 做 HAL 时基（`Core/Src/stm32f4xx_hal_timebase_tim.c`）。NVIC 使能与外设中断使能是两级开关，前者打开不代表后者打开，TIM10 的更新中断当前不产生，属按 HAL 实现推导。TIM10 不是带刹车输入的实例，启动过程不涉及 MOE（MOE 是高级定时器的输出使能位）。
 
 ```mermaid
 sequenceDiagram
@@ -126,36 +126,48 @@ flowchart TD
 
 ## 外部使能引脚的文档差异
 
-`Core/Src/gpio.c:57-60` 把 PG6 与 PH11 配成推挽输出并初始化为低，`:68-86` 只写模式与上下拉，源码里没有第二处引用。早期文档（`02-STM32 与 HAL/01-时钟树与GPIO/04-本项目引脚分配.md` 与 `02-STM32 与 HAL/02-定时器与PWM/02-PWM原理与配置.md`）把这两脚写成 `ImuTempControl::init()` 里拉高的加热使能，当前两块板的实现都只有 `HAL_TIM_PWM_Start`。
+`Core/Src/gpio.c` 把 PG6 与 PH11 配成推挽输出并初始化为低，同文件其余配置只写模式与上下拉，源码里没有第二处引用。早期文档（`02-STM32 与 HAL/01-时钟树与GPIO/04-本项目引脚分配.md` 与 `02-STM32 与 HAL/02-定时器与PWM/02-PWM原理与配置.md`）把这两脚写成 `ImuTempControl::init()` 里拉高的加热使能，当前两块板的实现都只有 `HAL_TIM_PWM_Start`。
 
-以当前源码为准，PG6 与 PH11 在温控通路里的作用待现场确认。当前 `ImuTempControl.cpp:11-13` 的 `init()` 只有一行 `HAL_TIM_PWM_Start`，函数体里没有 GPIO 写操作。
+以当前源码为准，PG6 与 PH11 在温控通路里的作用待现场确认。当前 `ImuTempControl.cpp` 的 `init()` 只有一行 `HAL_TIM_PWM_Start`，函数体里没有 GPIO 写操作。
+
+```cpp
+/* 摘录：BMI088/Src/ImuTempControl.cpp 的启动与更新 */
+void ImuTempControl_Init(void) {
+    HAL_TIM_PWM_Start(&htim10, TIM_CHANNEL_1);          /* 置位 CC1E 与 CEN */
+}
+
+void ImuTempControl_Update(float target, float temp, float dt) {
+    float duty = TempPID_Calculate(target, temp, dt);
+    __HAL_TIM_SET_COMPARE(&htim10, TIM_CHANNEL_1, (uint32_t)(Period * duty));
+}
+```
 
 ## 两块板的配置一致
 
-底盘板的实现与云台板逐行一致：`2026OmniSentryChassis/BMI088/Src/ImuTempControl.cpp:11-21` 同样只有 PWM 启动与 `Period * duty`，`2026OmniSentryChassis/Core/Src/tim.c:43-45` 同样是 PSC 0、ARR 4999、通道 1。两块板的固件版本一致时，温控硬件侧的差异只可能来自焊接、驱动级或加热元件，这给对照试验提供了前提。
+底盘板的实现与云台板逐行一致：`2026OmniSentryChassis/BMI088/Src/ImuTempControl.cpp` 同样只有 PWM 启动与 `Period * duty`，`2026OmniSentryChassis/Core/Src/tim.c` 同样是 PSC 0、ARR 4999、通道 1。两块板的固件版本一致时，温控硬件侧的差异只可能来自焊接、驱动级或加热元件，这给对照试验提供了前提。
 
 | 项 | 位置 | 内容 |
 | --- | --- | --- |
-| TIM10 句柄 | `Core/Src/tim.c:27` | 文件级 `htim10` |
-| 定时器初始化 | `Core/Src/tim.c:30-69` | PSC 0、ARR 4999、通道 1、PWM1 |
-| 引脚 MspPostInit | `Core/Src/tim.c:90-116` | PF6 复用推挽、AF3 |
-| 初始化调用点 | `Core/Src/main.c:117` | `MX_TIM10_Init()` 在 `MX_GPIO_Init()` 之后 |
-| PWM 启动 | `BMI088/Src/ImuTempControl.cpp:11-13` | `init()` 调 `HAL_TIM_PWM_Start` |
-| 占空比写入 | `BMI088/Src/ImuTempControl.cpp:15-21` | `update()` 写 CCR1 |
-| 任务启动 | `Task/Src/ImuTask.cpp:36` | `ImuTempControl_Init()` |
-| 任务更新 | `Task/Src/ImuTask.cpp:46` | `ImuTempControl_Update(45, temp, 0.001f)` |
+| TIM10 句柄 | `Core/Src/tim.c` | 文件级 `htim10` |
+| 定时器初始化 | `Core/Src/tim.c` | PSC 0、ARR 4999、通道 1、PWM1 |
+| 引脚 MspPostInit | `Core/Src/tim.c` | PF6 复用推挽、AF3 |
+| 初始化调用点 | `Core/Src/main.c` | `MX_TIM10_Init()` 在 `MX_GPIO_Init()` 之后 |
+| PWM 启动 | `BMI088/Src/ImuTempControl.cpp` | `init()` 调 `HAL_TIM_PWM_Start` |
+| 占空比写入 | `BMI088/Src/ImuTempControl.cpp` | `update()` 写 CCR1 |
+| 任务启动 | `Task/Src/ImuTask.cpp` | `ImuTempControl_Init()` |
+| 任务更新 | `Task/Src/ImuTask.cpp` | `ImuTempControl_Update(45, temp, 0.001f)` |
 
 ## 配置项容易混淆的地方
 
 | 容易读错的地方 | 现象 | 位置 |
 | --- | --- | --- |
 | 认为 GPIO 能直接驱动加热元件 | 引脚电流不足，热量达不到 | 驱动级不在源码内 |
-| 认为 NVIC 使能就有定时器中断 | 中断从不进入，计数照常 | `Core/Src/tim.c:80-84` |
-| 把 PCLK2 当定时器时钟 | 频率算成 16.8 kHz | `Core/Src/main.c:185` |
-| 用 Period 当满量程 | 占空比偏大一个计数 | `BMI088/Src/ImuTempControl.cpp:18` |
+| 认为 NVIC 使能就有定时器中断 | 中断从不进入，计数照常 | `Core/Src/tim.c` |
+| 把 PCLK2 当定时器时钟 | 频率算成 16.8 kHz | `Core/Src/main.c` |
+| 用 Period 当满量程 | 占空比偏大一个计数 | `BMI088/Src/ImuTempControl.cpp` |
 | 把占空比当功率 | 忽略 $V$、$R$ 与驱动级特性 | 功率公式的前提 |
-| 运行期改 ARR 后仍按旧周期换算 | 占空比整体偏移 | `Core/Src/tim.c:47` |
-| 认为 PG6 与 PH11 是加热使能 | 与当前源码不符 | `Core/Src/gpio.c:57-86` |
+| 运行期改 ARR 后仍按旧周期换算 | 占空比整体偏移 | `Core/Src/tim.c` |
+| 认为 PG6 与 PH11 是加热使能 | 与当前源码不符 | `Core/Src/gpio.c` |
 
 “用 Period 当满量程”这一条的影响是一个计数：占空比应当是 $CCR/5000$，按 $CCR/4999$ 计算时，$CCR=4999$ 的读数从 0.9998 变成 1.0000，相对误差约 0.02%。这个偏差在温度环的量纲问题面前可以忽略，但在需要精确标定占空比的场合要单独修正。
 
@@ -198,13 +210,13 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 配置与 PF6 复用 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | TIM10 初始化调用与时钟树 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | HSE 12 MHz |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | TIM10 中断向量 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基的 HAL_TIM_Base_Start_IT |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c` | PG6 与 PH11 输出配置 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp` | PWM 启动与占空比写入 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 温控调用点 |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/BMI088/Src/ImuTempControl.cpp` | 底盘板同构实现 |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/tim.c` | 底盘板 TIM10 配置 |
+| `Core/Src/tim.c` | TIM10 配置与 PF6 复用 |
+| `Core/Src/main.c` | TIM10 初始化调用与时钟树 |
+| `Core/Inc/stm32f4xx_hal_conf.h` | HSE 12 MHz |
+| `Core/Src/stm32f4xx_it.c` | TIM10 中断向量 |
+| `Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基的 HAL_TIM_Base_Start_IT |
+| `Core/Src/gpio.c` | PG6 与 PH11 输出配置 |
+| `BMI088/Src/ImuTempControl.cpp` | PWM 启动与占空比写入 |
+| `Task/Src/ImuTask.cpp` | 温控调用点 |
+| `底盘板 BMI088/Src/ImuTempControl.cpp` | 底盘板同构实现 |
+| `底盘板 Core/Src/tim.c` | 底盘板 TIM10 配置 |

@@ -7,13 +7,13 @@ updated: 2026-10-07
 
 # JWT 的签发与校验
 
-鉴权的凭据是一枚无状态 JWT：登录成功后服务端签发，后续请求把它放进 `Authorization: Bearer` 头。签发与解析都在 `backend/auth/jwt.py`，共 51 行；解码结果直接给 `get_current_user` 使用（`backend/routes/auth.py:28-55`）。
+鉴权的凭据是一枚无状态 JWT：登录成功后服务端签发，后续请求把它放进 `Authorization: Bearer` 头。签发与解析都在 `backend/auth/jwt.py`，共 51 行；解码结果直接给 `get_current_user` 使用（`backend/routes/auth.py`）。
 
 令牌本身的构成与生命周期在这里展开。密码一侧在 `02-密码哈希与截断.md`，用户存储在 `03-用户存储与凭据校验.md`，端点上的鉴权面在 `04-受保护端点的鉴权面.md`。
 
 ## 1. 令牌的载荷与签名
 
-`create_access_token` 接收一个字典，复制后补上过期时间再编码（`backend/auth/jwt.py:18-35`）：
+`create_access_token` 接收一个字典，复制后补上过期时间再编码（`backend/auth/jwt.py`）：
 
 ```python
 to_encode = data.copy()
@@ -25,30 +25,30 @@ to_encode.update({"exp": expire})
 encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
 ```
 
-载荷只有两个声明：调用方传入的 `sub` 与内部写入的 `exp`。没有 `iss`、`aud`、`jti`，也没有自定义的角色声明。签名算法来自配置（`:14` 的 `ALGORITHM = JWT_ALGORITHM`），密钥同样来自配置（`backend/config.py:168-171`）。
+载荷只有两个声明：调用方传入的 `sub` 与内部写入的 `exp`。没有 `iss`、`aud`、`jti`，也没有自定义的角色声明。签名算法来自配置（ 的 `ALGORITHM = JWT_ALGORITHM`），密钥同样来自配置（`backend/config.py`）。
 
 | 声明 | 来源 | 用途 |
 | --- | --- | --- |
 | `sub` | 调用方传入的用户名 | 解析后定位用户 |
 | `exp` | `utcnow` 加有效期 | 过期校验由库完成 |
 
-两个调用点都在 `backend/routes/auth.py`，注册与登录成功各一次（`:70`、`:89`），传入的都是 `{"sub": user.username}`。
+两个调用点都在 `backend/routes/auth.py`，注册与登录成功各一次，传入的都是 `{"sub": user.username}`。
 
 ## 2. 有效期与配置来源
 
-有效期的计算是 `60 * JWT_EXPIRATION_HOURS` 分钟（`backend/auth/jwt.py:15`），`JWT_EXPIRATION_HOURS` 默认 4（`backend/config.py:172`），所以默认有效期是 240 分钟。
+有效期的计算是 `60 * JWT_EXPIRATION_HOURS` 分钟（`backend/auth/jwt.py`），`JWT_EXPIRATION_HOURS` 默认 4（`backend/config.py`），所以默认有效期是 240 分钟。
 
-`backend/auth/jwt.py:5` 的模块注释写「默认有效期 24 小时」，与默认配置不一致。注释没有随配置变化更新，读文档不如读配置。
+`backend/auth/jwt.py` 的模块注释写「默认有效期 24 小时」，与默认配置不一致。注释没有随配置变化更新，读文档不如读配置。
 
 | 来源 | 值 | 位置 |
 | --- | --- | --- |
-| 模块注释 | 24 小时 | `auth/jwt.py:5` |
-| 配置默认值 | 4 小时 | `backend/config.py:172` |
-| 实际计算 | 240 分钟 | `auth/jwt.py:15` |
+| 模块注释 | 24 小时 | `auth/jwt.py` |
+| 配置默认值 | 4 小时 | `backend/config.py` |
+| 实际计算 | 240 分钟 | `auth/jwt.py` |
 
 ## 3. 解码与失败处理
 
-`decode_access_token` 用同一密钥与算法解码，捕获 `JWTError` 后返回 `None`（`backend/auth/jwt.py:38-51`）：
+`decode_access_token` 用同一密钥与算法解码，捕获 `JWTError` 后返回 `None`（`backend/auth/jwt.py`）：
 
 ```python
 try:
@@ -73,7 +73,7 @@ flowchart TD
 
 ## 4. 令牌与用户对象的对应
 
-`get_current_user` 用 `payload.get("sub")` 取用户名（`backend/routes/auth.py:40`），再查库返回 `User`。签名与有效期由库校验，用户是否仍然存在由这一层校验：令牌未过期但用户被删除时，返回 401 `用户不存在`（`:49-54`）。
+`get_current_user` 用 `payload.get("sub")` 取用户名（`backend/routes/auth.py`），再查库返回 `User`。签名与有效期由库校验，用户是否仍然存在由这一层校验：令牌未过期但用户被删除时，返回 401 `用户不存在`。
 
 令牌本身不携带权限信息，权限判断依赖查到的用户记录（会员等级、积分等）。这一设计让权限变更立即生效，不需要等令牌过期。
 
@@ -85,9 +85,9 @@ flowchart TD
 
 ## 5. 模型层对令牌的声明
 
-`backend/models/user.py` 定义了两个与令牌相关的模型：`Token`（`:56-59`）是登录与注册的响应模型，两个字段中 `token_type` 默认 `"bearer"`；`TokenData`（`:62-64`）是解码后载荷的声明，字段为可选的 `username`。
+`backend/models/user.py` 定义了两个与令牌相关的模型：`Token`是登录与注册的响应模型，两个字段中 `token_type` 默认 `"bearer"`；`TokenData`是解码后载荷的声明，字段为可选的 `username`。
 
-`TokenData` 在仓库里没有任何引用点。`decode_access_token` 的返回类型标注是 `Optional[dict]`（`auth/jwt.py:38`），调用方按字典取值，不构造 `TokenData`。这个模型目前是一条未接线的声明。
+`TokenData` 在仓库里没有任何引用点。`decode_access_token` 的返回类型标注是 `Optional[dict]`（`auth/jwt.py`），调用方按字典取值，不构造 `TokenData`。这个模型目前是一条未接线的声明。
 
 ```mermaid
 graph LR
@@ -104,14 +104,14 @@ graph LR
 
 ## 6. 前端侧的保存与携带
 
-前端把令牌存在 `localStorage`，键名是 `knowledgeDiver.token`（`frontend/src/api/auth.ts:3-15`）。登录成功立即写入（`:55`），请求时若存在就补上 `Authorization` 头（`:23-25`）。这套写法集中在 `api/auth.ts` 的 `authFetch` 里，Agent 模块另有自己的取令牌逻辑（`frontend/src/api/agent.ts:50-54`）。
+前端把令牌存在 `localStorage`，键名是 `knowledgeDiver.token`（`frontend/src/api/auth.ts`）。登录成功立即写入，请求时若存在就补上 `Authorization` 头。这套写法集中在 `api/auth.ts` 的 `authFetch` 里，Agent 模块另有自己的取令牌逻辑（`frontend/src/api/agent.ts`）。
 
 | 环节 | 位置 | 行为 |
 | --- | --- | --- |
-| 存储键 | `api/auth.ts:3` | `knowledgeDiver.token` |
-| 写入 | `:55` | 登录成功后 `setToken` |
-| 携带 | `:23-25` | 有令牌才加 `Authorization` |
-| 清除 | `:13-15` | `clearToken` 移除键 |
+| 存储键 | `api/auth.ts` | `knowledgeDiver.token` |
+| 写入 | — | 登录成功后 `setToken` |
+| 携带 | — | 有令牌才加 `Authorization` |
+| 清除 | — | `clearToken` 移除键 |
 
 存放在 `localStorage` 意味着同源脚本可以读取，页面出现脚本注入时令牌可被外带。换成 `HttpOnly` Cookie 需要后端改造认证入口，属另一种权衡。
 
@@ -130,12 +130,12 @@ graph LR
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
-| 按注释判断有效期 | 注释 24 小时，实际默认 4 小时 | `auth/jwt.py:5` 与 `backend/config.py:172` |
-| 期望解码失败有具体原因 | 统一返回 `None` | `auth/jwt.py:50-51` |
-| 认为 `TokenData` 在用 | 无引用点 | `models/user.py:62-64` |
-| 以为可以吊销单个令牌 | 无记录，只能换密钥 | `auth/jwt.py:18-51` |
-| 依赖令牌携带权限 | 权限从库里的用户记录读取 | `routes/auth.py:47-55` |
-| 忘记登录后写入令牌 | 请求缺少 `Authorization` 头 | `frontend/src/api/auth.ts:55` |
+| 按注释判断有效期 | 注释 24 小时，实际默认 4 小时 | `auth/jwt.py` 与 `backend/config.py` |
+| 期望解码失败有具体原因 | 统一返回 `None` | `auth/jwt.py` |
+| 认为 `TokenData` 在用 | 无引用点 | `models/user.py` |
+| 以为可以吊销单个令牌 | 无记录，只能换密钥 | `auth/jwt.py` |
+| 依赖令牌携带权限 | 权限从库里的用户记录读取 | `routes/auth.py` |
+| 忘记登录后写入令牌 | 请求缺少 `Authorization` 头 | `frontend/src/api/auth.ts` |
 
 ## 小结
 
@@ -180,9 +180,9 @@ graph LR
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/auth/jwt.py` | 模块注释（:5）、有效期计算（:15）、签发（:18-35）、解析（:38-51） |
-| `backend/config.py` | `JWT_*` 配置与校验（:168-172） |
-| `backend/routes/auth.py` | 签发调用（:70、:89）、`get_current_user`（:28-55） |
-| `backend/models/user.py` | `Token` 与 `TokenData`（:56-64） |
-| `frontend/src/api/auth.ts` | 令牌键与读写（:3-15）、登录写入（:55）、请求头（:23-25） |
-| `frontend/src/api/agent.ts` | Agent 模块的取令牌与携带（:50-54） |
+| `backend/auth/jwt.py` | 模块注释、有效期计算、签发、解析 |
+| `backend/config.py` | `JWT_*` 配置与校验 |
+| `backend/routes/auth.py` | 签发调用、`get_current_user` |
+| `backend/models/user.py` | `Token` 与 `TokenData` |
+| `frontend/src/api/auth.ts` | 令牌键与读写、登录写入、请求头 |
+| `frontend/src/api/agent.ts` | Agent 模块的取令牌与携带 |

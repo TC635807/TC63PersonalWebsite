@@ -7,22 +7,22 @@ updated: 2026-10-07
 
 # TLS 终止与证书绑定域名
 
-个人主页的线上地址是 https://knowledgediver.cloud/tc63/ 。这个 URL 里 HTTPS 与 /tc63 属于两层不同的机制：TLS 在 TCP 连接建立时完成，证书只回答「你是不是 knowledgediver.cloud」；路径分流发生在握手之后，由 nginx 的 location 决定。浏览器在握手阶段看不到 /tc63，也就不会为它单独校验任何东西。
+个人主页的线上地址是 https://knowledgediver.cloud/tc63/ 。这个 URL 里 HTTPS 与 /tc63 属于两层不同的机制：TLS 在 TCP 连接建立时完成，证书只回答「你是不是 knowledgediver.cloud」；路径分流发生在握手之后，由 nginx 的 location 决定。浏览器在握手阶段看不到 /tc63，也就不会为它单独校验任何东西。所谓 TLS 终止，就是加密隧道到 nginx 这一端就解开：nginx 出示证书、完成握手，之后以明文经回环地址访问 127.0.0.1:8000 的后端，证书与私钥只装在一处，后端进程完全不用处理 HTTPS。
 
 443 这一端由谁负责、证书为什么只有一张、nginx 从哪里读它、证书文件在磁盘上有哪两处组织，是配置 TLS 终止时必须先确定的事。TLS 的密码学细节不在范围内，重点是文件位置、引用方式与配置错误的表现。
 
 | 层 | 决定因素 | 本工程取值 | 出处 |
 | --- | --- | --- | --- |
-| 连接目标 | DNS A 记录 | `knowledgediver.cloud` → `43.136.78.68` | `README.md:158`、`personal-homepage-research/15-deploy-tc63.md:9` |
-| 证书校验 | 证书 SAN 与请求域名 | `knowledgediver.cloud`、`www.knowledgediver.cloud` | KD 仓库 `deploy/deploy.sh:108` |
-| 路径分流 | nginx `location` | `/tc63/` 归个人主页，`/` 与 `/api/` 归 KnowledgeDiver | `personal-homepage-research/15-deploy-tc63.md:13-15`、`:63-77` |
-| 站点文件 | `root` 指令 | `root /home/tc63/www`，其下 `tc63` 为软链 | `personal-homepage-research/15-deploy-tc63.md:71-74`、`README.md:163` |
+| 连接目标 | DNS A 记录 | `knowledgediver.cloud` → `43.136.78.68` | `README.md`、`personal-homepage-research/15-deploy-tc63.md` |
+| 证书校验 | 证书 SAN 与请求域名 | `knowledgediver.cloud`、`www.knowledgediver.cloud` | KD 仓库 `deploy/deploy.sh` 的签发命令 |
+| 路径分流 | nginx `location` | `/tc63/` 归个人主页，`/` 与 `/api/` 归 KnowledgeDiver | `personal-homepage-research/15-deploy-tc63.md` 的 location 插入记录 |
+| 站点文件 | `root` 指令 | `root /home/tc63/www`，其下 `tc63` 为软链 | `personal-homepage-research/15-deploy-tc63.md`、`README.md` 的站点接入说明 |
 
 KD 仓库的路径以服务器上的 `~/KnowledgeDiver` 为根，正文与附录都按这个根书写；个人主页仓库的路径按仓库根书写。
 
 ## 域名先于路径被校验
 
-TLS 握手开始时，客户端在 `ClientHello` 里带上 SNI 字段，写明想访问的域名。nginx 用这个字段挑出 `server_name` 匹配的 server 块，把对应的证书链发回去。客户端检查签发者、有效期与 SAN 列表里有没有该域名，全部通过之后才开始发 HTTP 请求。
+TLS 握手开始时，客户端在 `ClientHello` 里带上 SNI 字段，写明想访问的域名。SNI（Server Name Indication）让服务器在出示证书之前就知道客户端要哪个域名，同一个 443 端口才能为多个站点分别返回各自的证书；nginx 用这个字段挑出 `server_name` 匹配的 server 块，把对应的证书链发回去。客户端检查签发者、有效期与 SAN 列表里有没有该域名，全部通过之后才开始发 HTTP 请求。
 
 ```mermaid
 sequenceDiagram
@@ -41,13 +41,13 @@ sequenceDiagram
     N-->>B: 200 与 index.html
 ```
 
-证书里没有任何与路径有关的字段，SAN 是一串域名。校验通过之后，`/tc63/` 与 `/` 对 TLS 层完全等价。这也是子路径部署不需要第二张证书的根本原因。
+证书里没有任何与路径有关的字段，SAN（Subject Alternative Name，证书里登记「这张证书对哪些域名有效」的扩展字段）是一串域名。校验通过之后，`/tc63/` 与 `/` 对 TLS 层完全等价。这也是子路径部署不需要第二张证书的根本原因。
 
 ## 一个域名只有一张有效证书
 
-服务器上 nginx 1.24 的站点配置文件是 `/etc/nginx/sites-available/knowledgediver`，同时监听 80 与 443，证书由 Let’s Encrypt 签发（`personal-homepage-research/15-deploy-tc63.md:13`）。域名根已经被 KnowledgeDiver 占用：`/` 指向 `frontend/dist`，`/api/` 转发到 127.0.0.1:8000（`personal-homepage-research/15-deploy-tc63.md:14-15`）。
+服务器上 nginx 1.24 的站点配置文件是 `/etc/nginx/sites-available/knowledgediver`，同时监听 80 与 443，证书由 Let’s Encrypt 签发（`personal-homepage-research/15-deploy-tc63.md` 的服务器现状记录）。域名根已经被 KnowledgeDiver 占用：`/` 指向 `frontend/dist`，`/api/` 转发到 127.0.0.1:8000（同文档的 location 说明）。
 
-个人主页落在 `/tc63/`，处理方式是往已有的每个 server 块里插入三条 location，而不是新建 server 块（`personal-homepage-research/15-deploy-tc63.md:63-77`）：
+个人主页落在 `/tc63/`，处理方式是往已有的每个 server 块里插入三条 location，而不是新建 server 块（`personal-homepage-research/15-deploy-tc63.md` 的插入步骤）：
 
 ```nginx
 location = /tc63 { return 301 /tc63/; }
@@ -67,19 +67,36 @@ location ^~ /tc63/ {
 
 ## 80 与 443 两个入口的分工
 
-两个入口在配置里是分开的 server 块，职责也不同。
+两个入口在配置里是分开的 server 块，职责也不同。`listen 443 ssl http2;` 一行同时做了三件事：在 443 上监听、对这个端口启用 TLS、协商 HTTP/2。
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    ...
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name $DOMAIN www.$DOMAIN;
+    ...
+}
+```
+
+两段都由 `deploy/deploy.sh` 生成：HTTP 段每次重写，HTTPS 段只在证书已存在时追加（首次部署靠 certbot 的 nginx 插件补上）。
 
 | 入口 | 本工程行为 | 依据 |
 | --- | --- | --- |
-| 80 | 无证书阶段直接服务前端与接口；签发后由 certbot 加整站 301 跳到 443 | KD `deploy/deploy.sh:40-64`、`:108-110` |
-| 443 | `listen 443 ssl http2`，引用 fullchain、privkey 与 certbot 的 TLS 片段 | KD `deploy/deploy.sh:70-78` |
-| `/tc63` → `/tc63/` | 301 补尾斜杠，与协议无关 | `personal-homepage-research/15-deploy-tc63.md:66` |
+| 80 | 无证书阶段直接服务前端与接口；签发后由 certbot 加整站 301 跳到 443 | KD `deploy/deploy.sh` 的 HTTP server 块与签发步骤 |
+| 443 | `listen 443 ssl http2`，引用 fullchain、privkey 与 certbot 的 TLS 片段 | KD `deploy/deploy.sh` 的 443 server 块 |
+| `/tc63` → `/tc63/` | 301 补尾斜杠，与协议无关 | `personal-homepage-research/15-deploy-tc63.md` 的 location 插入记录 |
 
 第三条容易和协议重定向混淆：`location = /tc63 { return 301 /tc63/; }` 只补一个尾斜杠，HTTP 与 HTTPS 下都会触发。把 http 跳到 https 的是 certbot 写入的重定向，它在 server 块级别生效。
 
 ## 证书文件的引用只有四行
 
-443 server 块里与证书相关的配置是四行（KD `deploy/deploy.sh:75-78`）：
+443 server 块里与证书相关的配置是四行（KD `deploy/deploy.sh` 的 443 server 块）：
 
 ```nginx
 ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
@@ -129,7 +146,7 @@ flowchart TD
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | 用 IP 直接访问报证书域名不匹配 | 证书 SAN 只含域名，不含 IP | 一律用域名访问；IP 访问仅用于临时排查 |
-| `www.knowledgediver.cloud` 报证书错误 | 签发的 `-d` 参数漏了 www | 重新签发时同时给两个域名（KD `deploy/deploy.sh:108`） |
+| `www.knowledgediver.cloud` 报证书错误 | 签发的 `-d` 参数漏了 www | 重新签发时同时给两个域名（KD `deploy/deploy.sh` 的签发命令） |
 | `nginx -t` 报找不到证书 | 配置引用了 live 下不存在的文件名 | 先确认签发成功，再检查 `live/<域名>/` 目录 |
 | 续期成功后浏览器仍看到旧证书 | nginx 启动时读入内存，不自动跟随文件变化 | 续期后执行 `systemctl reload nginx`，或用 deploy hook 自动完成 |
 | 私钥被改成 644 或换属主 | 误以为 worker 进程需要读私钥 | 恢复 600 root；读私钥发生在 master 启动阶段 |
@@ -171,10 +188,10 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `README.md` | 线上地址、登录方式与更新脚本（`:143`、`:158-159`、`:163`） |
-| `personal-homepage-research/15-deploy-tc63.md` | 服务器现状、证书归属、location 插入内容（`:9`、`:13-15`、`:63-80`、`:163-167`） |
-| `deploy.sh`、`astro.config.mjs` | 本地构建与 base 前缀（`deploy.sh:9-13`、`astro.config.mjs:16-17`） |
-| `.github/workflows/deploy.yml` | GitHub Pages 侧的构建参数（`:8-11`、`:31`） |
-| KD 仓库 `deploy/deploy.sh` | certbot 安装、443 server 块与签发命令（`:21`、`:70-78`、`:107-113`） |
-| KD 仓库 `deploy/nginx.conf` | 样例 server 块（`:4-26`） |
+| `README.md` | 线上地址、登录方式与更新脚本 |
+| `personal-homepage-research/15-deploy-tc63.md` | 服务器现状、证书归属与 location 插入内容 |
+| `deploy.sh`、`astro.config.mjs` | 本地构建与 base 前缀 |
+| `.github/workflows/deploy.yml` | GitHub Pages 侧的构建参数 |
+| KD 仓库 `deploy/deploy.sh` | certbot 安装、443 server 块与签发命令 |
+| KD 仓库 `deploy/nginx.conf` | 样例 server 块 |
 | 证书目录 `/etc/letsencrypt/` | live、archive、renewal 三处布局（服务器文件，未在本机核对） |

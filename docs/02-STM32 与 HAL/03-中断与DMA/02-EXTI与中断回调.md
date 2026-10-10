@@ -62,7 +62,7 @@ flowchart TD
 把引脚设为 `GPIO_MODE_IT_RISING` 之类时，`HAL_GPIO_Init()` 会自动补齐 EXTI 侧的配置：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c:236-281（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c（节选） */
 if((GPIO_Init->Mode & EXTI_MODE) != 0x00U)
 {
   /* Enable SYSCFG Clock */
@@ -94,7 +94,7 @@ if((GPIO_Init->Mode & EXTI_MODE) != 0x00U)
 HAL 把清标志与用户逻辑分成了两层：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c:492-514 */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c */
 void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin)
 {
   /* EXTI line interrupt detected */
@@ -155,7 +155,7 @@ sequenceDiagram
 ### 3.1 两个引脚的配置
 
 ```c
-/* Core/Src/gpio.c:75-92（节选） */
+/* Core/Src/gpio.c（节选） */
   /*Configure GPIO pin : PG3 */
   GPIO_InitStruct.Pin = GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
@@ -169,10 +169,10 @@ sequenceDiagram
   HAL_GPIO_Init(KEY_GPIO_Port, &GPIO_InitStruct);
 ```
 
-`KEY_Pin` 在 `Core/Inc/main.h:60-61` 定义为 `PA0`：
+`KEY_Pin` 在 `Core/Inc/main.h` 定义为 `PA0`：
 
 ```c
-/* Core/Inc/main.h:59-61 */
+/* Core/Inc/main.h */
 /* Private defines -----------------------------------------------------------*/
 #define KEY_Pin GPIO_PIN_0
 #define KEY_GPIO_Port GPIOA
@@ -196,8 +196,8 @@ sequenceDiagram
 ```bash
 $ cd 2026OmniSentryGimbal
 $ grep -rn "EXTI" Core/Src Core/Inc BSP Task Communication USB_DEVICE
-./Core/Src/gpio.c:40: * EXTI
-./Core/Inc/stm32f4xx_hal_conf.h:85: #define HAL_EXTI_MODULE_ENABLED
+./Core/Src/gpio.c: * EXTI
+./Core/Inc/stm32f4xx_hal_conf.h: #define HAL_EXTI_MODULE_ENABLED
 ```
 
 于是链路断在三处：
@@ -329,11 +329,11 @@ extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/gpio.c` | `PG3` 上升沿配置（:75-79）、`KEY_Pin` 双边沿配置（:88-92） |
-| `2026OmniSentryGimbal/Core/Inc/main.h` | `KEY_Pin` 与 `KEY_GPIO_Port`（:60-61） |
+| `2026OmniSentryGimbal/Core/Src/gpio.c` | `PG3` 上升沿配置、`KEY_Pin` 双边沿配置 |
+| `2026OmniSentryGimbal/Core/Inc/main.h` | `KEY_Pin` 与 `KEY_GPIO_Port` |
 | `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 全部中断服务函数，未见 EXTI 相关项 |
-| `2026OmniSentryGimbal/startup_stm32f407xx.s` | `EXTI0_IRQHandler` 与 `EXTI3_IRQHandler` 的弱别名（:285-295）、`Default_Handler`（:111-115） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` | EXTI 分支配置（:236-281）、`HAL_GPIO_EXTI_IRQHandler()`（:492-500）、弱回调（:507-514） |
-| `2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `HAL_EXTI_MODULE_ENABLED`（:85） |
-| `第一章.md` | Cortex-M3/M4 的中断确定性延迟为 12 周期（:9） |
+| `2026OmniSentryGimbal/startup_stm32f407xx.s` | `EXTI0_IRQHandler` 与 `EXTI3_IRQHandler` 的弱别名、`Default_Handler` |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` | EXTI 分支配置、`HAL_GPIO_EXTI_IRQHandler()`、弱回调 |
+| `2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `HAL_EXTI_MODULE_ENABLED` |
+| `第一章.md` | Cortex-M3/M4 的中断确定性延迟为 12 周期 |
 | `2026OmniSentryChassis/Core/Src/gpio.c` | 底盘板同样的两个引脚配置，与云台板一致 |

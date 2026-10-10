@@ -7,7 +7,7 @@ updated: 2026-10-08
 
 # 客户端如何拉起 stdio 服务器
 
-stdio 传输的接入动作可以用一句概括：客户端按配置启动一个本机进程，通过它的标准输入输出交换 JSON-RPC 消息。没有端口、没有握手 URL、没有服务注册中心。本仓库的服务器按这个模型设计（`backend/mcp/stdio.py:49-51`），客户端侧则按各自的配置格式描述这条命令行。
+stdio 传输的接入动作可以用一句概括：客户端按配置启动一个本机进程，通过它的标准输入输出交换 JSON-RPC 消息。没有端口、没有握手 URL、没有服务注册中心。本仓库的服务器按这个模型设计（`backend/mcp/stdio.py`），客户端侧则按各自的配置格式描述这条命令行。
 
 客户端的差异集中在配置文件的形状与字段名上：Claude Desktop 用 `mcpServers`，dsh 用 profile 里的插件行，本仓库的爬虫服务还带一份通用的 `.mcp.json`。命令、参数、工作目录与环境变量的语义一致，都是启动子进程的参数。
 
@@ -31,13 +31,13 @@ sequenceDiagram
   C->>S: 关闭 stdin 或直接终止
 ```
 
-dsh 客户端在 stdio 传输下有一个额外步骤：官方 SDK 会先起一个临时探测进程确认能拉起，再起实际提供服务的进程（`node_modules/@deepseek-ai/dsh-mcp-client/README.md:28`）。这条行为对启动慢的服务器意味着启动阶段要付出两次进程创建的成本，对只读服务器（本仓库的 KnowledgeDiver 网关）影响很小，对需要拉起浏览器的服务器（爬虫）影响明显。
+dsh 客户端在 stdio 传输下有一个额外步骤：官方 SDK 会先起一个临时探测进程确认能拉起，再起实际提供服务的进程（`node_modules/@deepseek-ai/dsh-mcp-client/README.md`）。这条行为对启动慢的服务器意味着启动阶段要付出两次进程创建的成本，对只读服务器（本仓库的 KnowledgeDiver 网关）影响很小，对需要拉起浏览器的服务器（爬虫）影响明显。
 
 服务器侧不感知客户端数量：每个客户端各起一个进程，各自持有一份模块状态。本仓库的网关无跨进程共享状态，代价是嵌入模型在每个进程里各加载一份（见 22 领域相关单元）。
 
 ## 配置行的四个字段
 
-客户端配置行的公共字段是四个（`README.md:59`）：
+客户端配置行的公共字段是四个（`@deepseek-ai/dsh-mcp-client/README.md` 的配置说明）：
 
 | 字段 | 作用 | 缺省 |
 | --- | --- | --- |
@@ -46,20 +46,32 @@ dsh 客户端在 stdio 传输下有一个额外步骤：官方 SDK 会先起一�
 | `env` | 附加环境变量，合并到清理后的父环境之上 | 空 |
 | `cwd` | 子进程工作目录 | 继承客户端 |
 
-`env` 的合并语义需要单独记：客户端会先清理父进程环境，再叠加配置里的变量（`README.md:138`）。清理规则是丢弃名字匹配 `/KEY|PASSWORD|SECRET|TOKEN/i` 与 `DSH_*` 的环境变量，避免把宿主机的密钥透给第三方服务器。因此服务器需要的环境变量必须在配置里显式列出，不能指望从 shell 继承。
+`env` 的合并语义需要单独记：客户端会先清理父进程环境，再叠加配置里的变量（`@deepseek-ai/dsh-mcp-client/README.md`）。清理规则是丢弃名字匹配 `/KEY|PASSWORD|SECRET|TOKEN/i` 与 `DSH_*` 的环境变量，避免把宿主机的密钥透给第三方服务器。因此服务器需要的环境变量必须在配置里显式列出，不能指望从 shell 继承。
 
-`cwd` 决定服务器里相对路径的解析基准。KnowledgeDiver 的配置把它设成仓库根，因为数据库与卡片目录按进程工作目录解析（`backend/mcp/examples/claude_desktop_config.json`）；爬虫的 `.mcp.json` 没有设 `cwd`，改为让启动脚本自己推导仓库根（`dsh-plugin/scripts/launch.sh:26-33`）。
+`cwd` 决定服务器里相对路径的解析基准。KnowledgeDiver 的配置把它设成仓库根，因为数据库与卡片目录按进程工作目录解析（`backend/mcp/examples/claude_desktop_config.json`）；爬虫的 `.mcp.json` 没有设 `cwd`，改为让启动脚本自己推导仓库根（`dsh-plugin/scripts/launch.sh`）。
 
 ## 工具命名空间
 
-客户端侧的工具名由服务名与原始名拼成，dsh 的规则是 `mcp__<serverName>__<rawName>`（`README.md:75`）：
+客户端侧的工具名由服务名与原始名拼成，dsh 的规则是 `mcp__<serverName>__<rawName>`（`README.md`）：
 
 ```text
 serverName = better-crawler，rawName = fetch_url
 公开名 = mcp__better-crawler__fetch_url
 ```
 
-实现是一个纯函数（`lib/index.js:96-100`）：干净情况下逐字拼接；当服务名或原始名含不合法字符或被规范化时，拼接串会追加一段由 `(serverName, rawName)` 哈希出的短后缀，保证同一对身份得到同一个稳定名字，不同身份不会撞名（`:85-95`）。命名规则被当作 v1 契约固定下来，因为它直接影响会话历史与权限规则（`README.md:224`）。
+实现是 `lib/index.js` 里的纯函数 `publicToolName`：干净情况下逐字拼接；当服务名或原始名含不合法字符、或拼出来超过客户端名字长度上限时，追加一段由 `(serverName, rawName)` 哈希出的短后缀。命名规则被当作 v1 契约固定下来，因为它直接影响会话历史与权限规则（`@deepseek-ai/dsh-mcp-client/README.md`）。
+
+```js
+function publicToolName(serverName, rawName) {
+  const joined = `mcp__${serverName}__${rawName}`;
+  const normalized = joined.replace(INVALID_NAME_CHARS, "_");
+  if (normalized === joined && normalized.length <= MAX_PUBLIC_NAME_LENGTH) return normalized;
+  const hash = createHash("sha256").update(`${serverName}\0${rawName}`).digest("hex").slice(0, HASH_LENGTH);
+  return `${normalized.slice(0, MAX_PUBLIC_NAME_LENGTH - HASH_LENGTH - 1)}_${hash}`;
+}
+```
+
+短后缀取 SHA-256 的前 12 个十六进制字符：同一个身份每次都得到同一个名字，不同身份不会撞名，代价是名字可读性下降。
 
 本仓库爬虫的三个工具因此呈现为：
 
@@ -69,11 +81,11 @@ serverName = better-crawler，rawName = fetch_url
 | `fetch_urls` | `mcp__better-crawler__fetch_urls` |
 | `crawler_status` | `mcp__better-crawler__crawler_status` |
 
-（`dsh-plugin/README.md:12-14`）服务端注册时用的是原始名 `fetch_url`（`src/better_crawler/mcp_server.py:63-70`），命名空间只加在客户端一侧。
+（`dsh-plugin/README.md`）服务端注册时用的是原始名 `fetch_url`（`src/better_crawler/mcp_server.py`），命名空间只加在客户端一侧。
 
 ## 冲突与更新规则
 
-命名空间把同名工具隔离开，但同名的服务器与重复列出的工具另有规则（`README.md:77-81`）：
+命名空间把同名工具隔离开，但同名的服务器与重复列出的工具另有规则（`@deepseek-ai/dsh-mcp-client/README.md`）：
 
 | 情况 | 结果 |
 | --- | --- |
@@ -82,7 +94,7 @@ serverName = better-crawler，rawName = fetch_url
 | 一个服务器重复列出同一工具 | 整个工具清单被拒，保持上一版工具集 |
 | 更新与已注册工具名冲突 | 整次更新被拒，不产生部分工具集 |
 
-最后两条的实现是注册前先查重，命中即抛错（`lib/index.js:131-132`）。这保证模型看到的工具集要么是完整的旧集合，要么是完整的新集合，不会出现半更新状态。
+最后两条的实现是注册前先查重，命中即抛错（`lib/index.js` 的 `syncTools`）。这保证模型看到的工具集要么是完整的旧集合，要么是完整的新集合，不会出现半更新状态。
 
 ## 三种客户端的配置形态
 
@@ -90,12 +102,35 @@ serverName = better-crawler，rawName = fetch_url
 | --- | --- | --- | --- | --- |
 | Claude Desktop | `claude_desktop_config.json` | `knowledgediver` | `--username` 与 `--session` | `backend/mcp/examples/claude_desktop_config.json` |
 | Cursor | `cursor_mcp.json` | `knowledgediver` | `--username`，会话走默认 | `backend/mcp/examples/cursor_mcp.json` |
-| 通用客户端 | `.mcp.json` | `better-crawler` | 无身份参数，只有环境变量 | `/mnt/d/better-crawler-4-agent/.mcp.json:1-16` |
-| dsh | profile 插件行 | `better-crawler` | 配置字段而非命令行 JSON | `dsh-plugin/cordis.patch.yml:21-37` |
+| 通用客户端 | `.mcp.json` | `better-crawler` | 无身份参数，只有环境变量 | `/mnt/d/better-crawler-4-agent/.mcp.json` |
+| dsh | profile 插件行 | `better-crawler` | 配置字段而非命令行 JSON | `dsh-plugin/cordis.patch.yml` |
+
+那个通用客户端的 `.mcp.json` 长这样（完整内容）：
+
+```json
+{
+  "mcpServers": {
+    "better-crawler": {
+      "command": "python",
+      "args": [
+        "scripts/launch.py"
+      ],
+      "env": {
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONUTF8": "1",
+        "BETTER_CRAWLER_TIMEOUT": "25",
+        "BETTER_CRAWLER_MAX_CHARS": "50000"
+      }
+    }
+  }
+}
+```
+
+它就是「命令加参数加环境变量」的最小表达：`command` 与 `args` 决定启动什么，`env` 补齐服务器需要的变量。
 
 三种形态的公共点是都把同一条命令行表达出来。差异在身份传递方式：KnowledgeDiver 需要用户名与会话，爬虫只需要环境变量。接入一个新服务器时，先确认它是否要求身份参数，再决定配置里是否要放 `--username` 这类参数。
 
-服务器的自述名称与客户端的服务名是两回事：KnowledgeDiver 的 `serverInfo.name` 是 `knowledgediver-readonly`（`backend/mcp/server.py:34`），而配置里的键名与工具前缀用的是配置里的服务名。改其中一处不会同步另一处。
+服务器的自述名称与客户端的服务名是两回事：KnowledgeDiver 的 `serverInfo.name` 是 `knowledgediver-readonly`（`backend/mcp/server.py`），而配置里的键名与工具前缀用的是配置里的服务名。改其中一处不会同步另一处。
 
 ```mermaid
 flowchart TD
@@ -125,13 +160,13 @@ flowchart TD
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| 连接模型 | 一客户端一子进程，stdio 交换 JSON-RPC | `backend/mcp/stdio.py:49-51` |
-| 配置字段 | command、args、env、cwd | `@deepseek-ai/dsh-mcp-client/README.md:59` |
-| 环境清理 | 丢弃密钥类与 `DSH_*` 变量 | `README.md:138` |
-| 命名空间 | `mcp__<serverName>__<rawName>` | `README.md:75`、`lib/index.js:96-100` |
-| 冲突规则 | 服务名重复失败、工具重名整份拒绝 | `README.md:77-81` |
-| 命名契约 | v1 固定，影响历史与权限 | `README.md:224` |
-| 探测进程 | stdio 协商先起临时进程 | `README.md:28` |
+| 连接模型 | 一客户端一子进程，stdio 交换 JSON-RPC | `backend/mcp/stdio.py` 的同步入口 |
+| 配置字段 | command、args、env、cwd | `@deepseek-ai/dsh-mcp-client/README.md` |
+| 环境清理 | 丢弃密钥类与 `DSH_*` 变量 | `@deepseek-ai/dsh-mcp-client/README.md` |
+| 命名空间 | `mcp__<serverName>__<rawName>` | `@deepseek-ai/dsh-mcp-client/README.md` 与 `lib/index.js` 的 `publicToolName` |
+| 冲突规则 | 服务名重复失败、工具重名整份拒绝 | `@deepseek-ai/dsh-mcp-client/README.md` 与 `lib/index.js` 的 `syncTools` |
+| 命名契约 | v1 固定，影响历史与权限 | `@deepseek-ai/dsh-mcp-client/README.md` |
+| 探测进程 | stdio 协商先起临时进程 | `@deepseek-ai/dsh-mcp-client/README.md` |
 
 ### 设计权衡
 
@@ -161,14 +196,14 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `node_modules/@deepseek-ai/dsh-mcp-client/README.md` | 客户端配置、命名空间与冲突规则（:28-93、:136-138、:224） |
-| `node_modules/@deepseek-ai/dsh-mcp-client/lib/index.js` | 公开名实现与清单查重（:96-100、:131-132） |
+| `node_modules/@deepseek-ai/dsh-mcp-client/README.md` | 客户端配置、命名空间与冲突规则|
+| `node_modules/@deepseek-ai/dsh-mcp-client/lib/index.js` | 公开名实现与清单查重|
 | `backend/mcp/examples/claude_desktop_config.json` | KnowledgeDiver 的 Claude Desktop 配置 |
 | `backend/mcp/examples/cursor_mcp.json` | KnowledgeDiver 的 Cursor 配置 |
-| `backend/mcp/stdio.py` | 服务器侧 stdio 会话入口（:49-51） |
-| `backend/mcp/server.py` | `serverInfo.name`（:34） |
-| `/mnt/d/better-crawler-4-agent/.mcp.json` | 通用客户端配置样例（:1-16） |
-| `dsh-plugin/cordis.patch.yml` | dsh 插件行（:21-37） |
-| `dsh-plugin/README.md` | 工具名与安装说明（:5-35） |
-| `src/better_crawler/mcp_server.py` | 服务端工具注册（:36-44、:63-124） |
-| `dsh-plugin/scripts/launch.sh` | 启动脚本的仓库根推导（:26-39） |
+| `backend/mcp/stdio.py` | 服务器侧 stdio 会话入口|
+| `backend/mcp/server.py` | `serverInfo.name`|
+| `/mnt/d/better-crawler-4-agent/.mcp.json` | 通用客户端配置样例|
+| `dsh-plugin/cordis.patch.yml` | dsh 插件行|
+| `dsh-plugin/README.md` | 工具名与安装说明|
+| `src/better_crawler/mcp_server.py` | 服务端工具注册|
+| `dsh-plugin/scripts/launch.sh` | 启动脚本的仓库根推导|

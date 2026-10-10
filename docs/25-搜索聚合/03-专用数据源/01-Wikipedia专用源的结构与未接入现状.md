@@ -13,19 +13,49 @@ updated: 2026-10-07
 
 ## 1. 客户端的构造与两套能力
 
-`WikipediaClient`（`backend/scraper/wikipedia_client.py:19`）的构造只接收一个超时参数，默认 5 秒（`backend/scraper/wikipedia_client.py:27`）。它自带一个浏览器风格的 User-Agent（`backend/scraper/wikipedia_client.py:30`），并对外提供三个方法：判断是否维基地址（`backend/scraper/wikipedia_client.py:33`）、关键词搜索（`backend/scraper/wikipedia_client.py:37`）、按 URL 取正文（`backend/scraper/wikipedia_client.py:94`）。
+`WikipediaClient`（`backend/scraper/wikipedia_client.py`）的构造只接收一个超时参数，默认 5 秒（`backend/scraper/wikipedia_client.py`）。它自带一个浏览器风格的 User-Agent（`backend/scraper/wikipedia_client.py`），并对外提供三个方法：判断是否维基地址（`backend/scraper/wikipedia_client.py`）、关键词搜索（`backend/scraper/wikipedia_client.py`）、按 URL 取正文（`backend/scraper/wikipedia_client.py`）。
 
-模块注释写明支持 zh 与 en 等多语言，这一点体现在请求参数的 `lang` 上，两套 API 都会用它拼出域名（`backend/scraper/wikipedia_client.py:52`、`:143`）。
+模块注释写明支持 zh 与 en 等多语言，这一点体现在请求参数的 `lang` 上，两套 API 都会用它拼出域名（`backend/scraper/wikipedia_client.py`）。
 
 ## 2. 搜索接口的请求与结果构造
 
-搜索走 MediaWiki 的 query 接口，参数是 `list=search`、`srsearch`、`srlimit` 与 `srprop=size|wordcount`（`backend/scraper/wikipedia_client.py:42`）。
+搜索走 MediaWiki 的 query 接口，参数是 `list=search`、`srsearch`、`srlimit` 与 `srprop=size|wordcount`（`backend/scraper/wikipedia_client.py`）。
 
-请求头、代理与超时三件套在 `backend/scraper/wikipedia_client.py:53` 一并传入，代理来自 `get_proxy_dict()`。返回码不是 200 时记一条 warning 并返回空列表（`backend/scraper/wikipedia_client.py:61`）。
+请求头、代理与超时三件套在 `backend/scraper/wikipedia_client.py` 一并传入，代理来自 `get_proxy_dict()`。返回码不是 200 时记一条 warning 并返回空列表（`backend/scraper/wikipedia_client.py`）。
 
-结果逐条构造：只保留同时有标题与 pageid 的条目（`backend/scraper/wikipedia_client.py:72`），地址按 `https://{lang}.wikipedia.org/wiki/{title}` 拼接并把空格换成下划线（`backend/scraper/wikipedia_client.py:74`），返回字段还带 `wordcount` 与 `size`（`backend/scraper/wikipedia_client.py:79`）。
+结果逐条构造：只保留同时有标题与 pageid 的条目（`backend/scraper/wikipedia_client.py`），地址按 `https://{lang}.wikipedia.org/wiki/{title}` 拼接并把空格换成下划线（`backend/scraper/wikipedia_client.py`），返回字段还带 `wordcount` 与 `size`（`backend/scraper/wikipedia_client.py`）。
 
-整个同步过程包在函数内部，异常一律转成空列表（`backend/scraper/wikipedia_client.py:86`）。`srprop` 请求了 `size` 与 `wordcount` 两个字段（`backend/scraper/wikipedia_client.py:48`），结果里也保留了它们（`backend/scraper/wikipedia_client.py:79`），但两者都不参与后续判断——调用方如果要用字数做筛选，需要自己判断阈值。
+整个同步过程包在函数内部，异常一律转成空列表（`backend/scraper/wikipedia_client.py`）。`srprop` 请求了 `size` 与 `wordcount` 两个字段（`backend/scraper/wikipedia_client.py`），结果里也保留了它们（`backend/scraper/wikipedia_client.py`），但两者都不参与后续判断——调用方如果要用字数做筛选，需要自己判断阈值。
+
+搜索的请求参数与结果构造合起来是这样：
+
+```python
+# backend/scraper/wikipedia_client.py（节选）
+params = {
+    "action": "query",
+    "format": "json",
+    "list": "search",
+    ,"srsearch": keyword,
+    "srlimit": max_results,
+    "srprop": "size|wordcount",
+    "utf8": 1,
+}
+api_url = f"https://{lang}.wikipedia.org/w/api.php"
+resp = requests.get(api_url, params=params, headers=self.headers,
+                    proxies=get_proxy_dict(), timeout=self.timeout)
+...
+for item in search_results:
+    title = item.get("title", "")
+    page_id = item.get("pageid", "")
+    if title and page_id:
+        url = f"https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}"
+        results.append({
+            "title": title, "url": url, "pageid": page_id,
+            "wordcount": item.get("wordcount", 0), "size": item.get("size", 0),
+        })
+```
+
+域名用 f-string 按 `lang` 拼出，条目地址则按维基的惯例把标题里的空格换成下划线；`srprop` 要来的 `size` 与 `wordcount` 只是原样带出，代码里没有任何阈值判断。
 
 ```mermaid
 sequenceDiagram
@@ -43,16 +73,37 @@ sequenceDiagram
 
 ## 3. 正文的两条获取路径
 
-`fetch_page()`（`backend/scraper/wikipedia_client.py:94`）先从 URL 里解出标题与语言（`backend/scraper/wikipedia_client.py:116`），再按顺序尝试两条接口：
+`fetch_page()`（`backend/scraper/wikipedia_client.py`）先从 URL 里解出标题与语言（`backend/scraper/wikipedia_client.py`），再按顺序尝试两条接口：
 
 | 顺序 | 接口 | 参数要点 | 结果处理 |
 | --- | --- | --- | --- |
 | 第一条 | Parse API | `prop=text`、`disabletoc`、`disableeditsection`、`redirects` | BeautifulSoup 去除脚本、样式、表格、图片与脚注后取文本 |
 | 第二条 | Extracts API | `prop=extracts`、`exintro=False`、`explaintext=True` | 直接使用 `extract` 字段 |
 
-Parse 路径在取到 HTML 后用 `soup.get_text()` 逐行清理空行（`backend/scraper/wikipedia_client.py:164`），并且只在清洗结果不少于 100 字符时才接受（`backend/scraper/wikipedia_client.py:169`）。
+Parse 路径在取到 HTML 后用 `soup.get_text()` 逐行清理空行（`backend/scraper/wikipedia_client.py`），并且只在清洗结果不少于 100 字符时才接受（`backend/scraper/wikipedia_client.py`）。
 
-这条长度线让它自动跳到下一条接口，而不会把一段残缺的解析结果当成正文。Extracts 路径跳过 `pageid = "-1` 的缺失条目（`backend/scraper/wikipedia_client.py:203`），有正文就返回。两条接口都各自轮询桌面端点与移动端点：Parse 在 `backend/scraper/wikipedia_client.py:143`，Extracts 在 `backend/scraper/wikipedia_client.py:186`。轮询在单个端点超时或返回异常时继续下一个，因此一次取正文最多发生四次请求。
+这条长度线让它自动跳到下一条接口，而不会把一段残缺的解析结果当成正文。Extracts 路径跳过 `pageid = "-1` 的缺失条目（`backend/scraper/wikipedia_client.py`），有正文就返回。两条接口都各自轮询桌面端点与移动端点，轮询在单个端点超时或抛异常时继续下一个，因此一次取正文最多发生四次请求。
+
+```python
+# backend/scraper/wikipedia_client.py（节选）
+for base_url in [f"https://{lang}.wikipedia.org/w/api.php",
+                 f"https://{lang}.m.wikipedia.org/w/api.php"]:   # 桌面 → 移动
+    resp = requests.get(base_url, params=parse_params, headers=self.headers,
+                        proxies=get_proxy_dict(), timeout=self.timeout)
+    if resp.status_code != 200:
+        continue
+    data = resp.json()
+    if "parse" in data:
+        html = data["parse"].get("text", {}).get("*", "")
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script", "style", "table", "figure", "img", "sup"]):
+            tag.decompose()
+        clean_text = ...
+        if len(clean_text) >= 100:          # 太短就继续下一条接口
+            return page_title, clean_text
+```
+
+`soup([标签名列表])` 是 BeautifulSoup 的批量查找写法，`tag.decompose()` 把命中的元素连同子节点从文档树里删掉，所以导航框与脚注不会混进正文。
 
 ```mermaid
 flowchart TD
@@ -72,13 +123,26 @@ flowchart TD
   J -->|"否"| K["返回 (None, None)"]
 ```
 
-四个端点按顺序尝试，任何一步拿到合格正文就返回，因此失败路径的代价是四次串行请求加上各自的 5 秒超时。Extracts 接口用 `explaintext=True` 直接取纯文本、用 `exintro=False` 取全文而不是导语（`backend/scraper/wikipedia_client.py:181`），这两项参数是为了让回退结果也能达到卡片生成所需的长度。
+四个端点按顺序尝试，任何一步拿到合格正文就返回，因此失败路径的代价是四次串行请求加上各自的 5 秒超时。Extracts 接口用 `explaintext=True` 直接取纯文本、用 `exintro=False` 取全文而不是导语（`backend/scraper/wikipedia_client.py`），这两项参数是为了让回退结果也能达到卡片生成所需的长度。
 
 ## 4. 同步库如何接进异步链路
 
-两个公开方法都是 `async`，内部却用 `requests` 发同步请求，桥接方式是线程池加 `run_in_executor`：搜索在 `backend/scraper/wikipedia_client.py:90`，取正文在 `backend/scraper/wikipedia_client.py:218`。
+两个公开方法都是 `async`，内部却用 `requests` 发同步请求，桥接方式是线程池加 `run_in_executor`：搜索在 `backend/scraper/wikipedia_client.py`，取正文在 `backend/scraper/wikipedia_client.py`。
 
 `asyncio.get_event_loop()` 取当前循环，`ThreadPoolExecutor()` 每次调用新建——也就是说这条实现没有复用线程池，也没有像搜索客户端那样给并发数加信号量。每次调用新建线程池意味着线程创建成本计入延迟；批量搜索时应由调用方在更外层限制并发，模块本身不提供这个闸门。
+
+桥接的写法在两个方法里是一样的：
+
+```python
+# backend/scraper/wikipedia_client.py（节选）
+def _search_sync():
+    ...                       # 里面是 requests 的同步调用
+loop = asyncio.get_event_loop()
+with ThreadPoolExecutor() as executor:
+    return await loop.run_in_executor(executor, _search_sync)
+```
+
+`run_in_executor()` 把同步函数丢进线程池执行并返回可 await 的对象，`with` 块结束时线程池随之销毁，既不跨调用复用，也没有像搜索客户端那样的信号量闸门。
 
 四个端点的串行尝试加上 5 秒超时，决定了一次取正文的最坏耗时量级。客户端没有缓存层：同一关键词再次搜索会重新请求 API，同一页面再次获取也会重新走一遍端点轮询。需要缓存时应由调用方在这一层之外加，否则批量任务里的重复请求会明显拉长总耗时。两套接口的返回结构并不相同：搜索接口给出条目数组，Parse 接口给出 HTML 字符串，Extracts 接口给出以 pageid 为键的字典。客户端把三种结构统一成两类返回值——搜索返回字典列表，取正文返回标题与正文的二元组。
 
@@ -137,7 +201,7 @@ flowchart TD
 ### 基础题
 
 1. 一次 `fetch_page()` 在 Parse 与 Extracts 都失败时最多发出几次 HTTP 请求？写出计数依据。
-2. Parse 清洗结果只有 80 字符时会走哪条路径？说明判据所在行。
+2. Parse 清洗结果只有 80 字符时会走哪条路径？说明判据是什么。
 3. `search_wikipedia()` 返回的每条结果包含哪些字段？它们的来源字段名分别是什么？
 
 ### 挑战题

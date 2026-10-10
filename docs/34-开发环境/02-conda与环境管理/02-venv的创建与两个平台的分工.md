@@ -31,11 +31,32 @@ KnowledgeDiver 的 `.venv` 正好是这种情况：它在 Windows 侧创建（`h
 
 只有 `pyvenv.cfg` 是两边都有的。这解释了为什么跨平台复用环境目录往往以失败告终：布局与路径两边都不一样。
 
+```bash
+# Windows 侧创建的 KnowledgeDiver 环境
+$ ls /mnt/d/KnowledgeDiver/.venv
+Include  Lib  Scripts  pyvenv.cfg  share
+
+# Linux 侧一个现成环境（本机 mujoco 项目，供对照）
+$ ls ~/mujoco/.venv
+bin  include  lib  lib64  pyvenv.cfg  share
+```
+
+记录文件同名，里面的 `home` 与 `executable` 却是各自平台的路径：
+
+```text
+# Windows 布局
+home = C:\Srtp
+executable = C:\Srtp\python.exe
+# Linux 布局
+home = /usr/bin
+executable = /usr/bin/python3.14
+```
+
 ## 3. 从 WSL 使用 Windows 环境的边界
 
 WSL 能执行 Windows 的可执行文件，因此在 `/mnt/d` 下的 Windows 环境里，`Scripts/python.exe` 在技术上是可以被调用的。但这时运行的仍是 Windows 版解释器：它看到的路径是 Windows 路径，加载的是 Windows 版的二进制包，环境变量与工作目录的语义也随之切换。
 
-于是出现一种混合状态：命令能跑，但报错信息里的路径与你在 WSL 里写的路径对不上。除非确实需要 Windows 侧的解释器（例如依赖只有 Windows 轮子），更省事的做法是在 WSL 里重建一份 Linux 布局的环境。
+于是出现一种混合状态：命令能跑，但报错信息里的路径与你在 WSL 里写的路径对不上。除非确实需要 Windows 侧的解释器（例如依赖只发布了 Windows 轮子，即 wheel，一种预编译好的二进制包格式），更省事的做法是在 WSL 里重建一份 Linux 布局的环境。
 
 ```mermaid
 flowchart TD
@@ -58,7 +79,7 @@ flowchart TD
 
 ## 5. conda 在这套分工里的位置
 
-以下内容属于通用做法，本机没有 conda 安装，无法在仓库内核实（详见 01-本仓库的Python环境现状）。
+conda 部分按通用做法给出：本机没有安装实例，无法用仓库文件佐证，因此只讲原理与命令，不给本项目的取值（判断依据见 01-本仓库的Python环境现状）。
 
 conda 与 venv 的定位不同：它同时管理解释器版本与二进制依赖，尤其适合需要 CUDA、cuDNN 这类非纯 Python 依赖的场景；venv 只隔离 Python 包，遇到二进制依赖要靠预编译轮子。选择时看项目是否需要 conda 提供的非 Python 组件，而不是看哪个更流行。
 
@@ -66,7 +87,7 @@ conda 与 venv 的定位不同：它同时管理解释器版本与二进制依�
 
 conda 环境里用 `pip install` 安装的包与 conda 自己安装的包会落在同一套 `site-packages` 里，版本冲突时排查困难。通用做法是：能用 conda 装的优先用 conda，纯 Python 且 conda 源里没有的再用 pip；记录依赖时把两种来源分开写。
 
-这条规则在本仓库没有对应实例，因为仓库走的是 venv 加 `requirements.txt` 一条路。
+混用的代价是排查版本冲突前要先判断某个包由谁安装；只走一条路（例如 venv 加 `requirements.txt`）就不会遇到这个问题，本仓库属于后者。
 
 ```mermaid
 flowchart LR
@@ -81,9 +102,9 @@ flowchart LR
 
 判断是否需要引入 conda 的一个实用标准是「有没有非 Python 的二进制依赖需要与解释器版本绑定」。只在这个条件成立时，换工具才有收益。
 
-## 7. 与本仓库现状的对应
+## 7. 怎么根据现状做选择
 
-本仓库的事实是：环境为 Windows 布局、启动脚本按 Linux 布局激活、依赖清单在 `requirements.txt`。因此当前最实际的改动是重建环境，而不是引入 conda。
+布局不匹配时，决策依据是「环境要在哪个平台运行」：在哪一侧运行就用哪一侧的解释器重建环境，而不是去改激活脚本迁就旧布局。只有依赖里确实含非 Python 二进制时才值得引入 conda。本仓库的环境是 Windows 布局而启动脚本按 Linux 布局激活，因此最实际的改动是重建环境。
 
 如果后续确实需要 conda，建议把它放在实验目录内单独管理，与 KnowledgeDiver 的环境分开，避免两套依赖体系互相污染。
 

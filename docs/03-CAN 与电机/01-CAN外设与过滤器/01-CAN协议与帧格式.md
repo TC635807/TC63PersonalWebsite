@@ -43,7 +43,7 @@ CAN 2.0B 定义了四种帧，加上帧间隔组成一次完整的总线活动�
 | 过载帧 Overload Frame | 接收方需要延迟下一帧 | 由硬件自动发送，代码不可见 |
 | 帧间隔 Intermission | 帧与帧之间强制 3 位隐性 | 由硬件自动插入 |
 
-本项目所有发送函数都把帧头写成同一组值，以云台板 `BSP/Src/bsp_can.cpp:96-99` 为例：
+本项目所有发送函数都把帧头写成同一组值，以云台板 `BSP/Src/bsp_can.cpp` 为例：
 
 ```c
 TxHeader.StdId = 0x200; //标准标识符
@@ -114,7 +114,7 @@ $$L_{std} = 44 + 8n \qquad L_{ext} = 64 + 8n \quad \text{（不含填充位）}$
 
 ### 3.3 本项目的一帧实例
 
-云台板向 `0x200` 发一帧 8 字节数据，四个电机电流按大端拼接（`BSP/Src/bsp_can.cpp:96-109`）：
+云台板向 `0x200` 发一帧 8 字节数据，四个电机电流按大端拼接（`BSP/Src/bsp_can.cpp`）：
 
 ```c
 TxHeader.StdId = 0x200;
@@ -174,26 +174,26 @@ sequenceDiagram
 
 | 标识符 | 方向 | 内容 | 出处 |
 | --- | --- | --- | --- |
-| 0x141 | 云台板发出 | 瓴控 LK 电机的使能、转矩、速度、位置命令 | `bsp_can.cpp:342` 起 |
-| 0x1FF | 云台板发出 | 大疆 5 到 8 号电机电流 | `bsp_can.cpp:175` |
-| 0x200 | 两板发出 | 大疆 1 到 4 号电机电流 | `bsp_can.cpp:96`、`148` |
-| 0x201 到 0x20x | 电机反馈 | 大疆电机状态 | `bsp_can.cpp:597` 起 |
-| 0x2FF | 云台板发出 | 大疆 9 到 11 号电机电流 | `bsp_can.cpp:201` |
+| 0x141 | 云台板发出 | 瓴控 LK 电机的使能、转矩、速度、位置命令 | `bsp_can.cpp` 起 |
+| 0x1FF | 云台板发出 | 大疆 5 到 8 号电机电流 | `bsp_can.cpp` |
+| 0x200 | 两板发出 | 大疆 1 到 4 号电机电流 | `bsp_can.cpp`、`148` |
+| 0x201 到 0x20x | 电机反馈 | 大疆电机状态 | `bsp_can.cpp` 起 |
+| 0x2FF | 云台板发出 | 大疆 9 到 11 号电机电流 | `bsp_can.cpp` |
 
 第二组是操作输入与板间状态。遥控器通道决定操作意图，云台 yaw 角与弹量供另一块板做状态估计，它们的更新率比电机环低一档，晚一点到达不影响稳定，因此排在中段。
 
 | 标识符 | 方向 | 内容 | 出处 |
 | --- | --- | --- | --- |
-| 0x301 | 两板互发 | 遥控器通道与开关 | `bsp_can.cpp:506` |
-| 0x302 | 云台板发出 | 云台 yaw 角 | `bsp_can.cpp:529` |
-| 0x303 | 底盘板发出 | 累计弹量与弹速 | 底盘 `bsp_can.cpp:495` |
+| 0x301 | 两板互发 | 遥控器通道与开关 | `bsp_can.cpp` |
+| 0x302 | 云台板发出 | 云台 yaw 角 | `bsp_can.cpp` |
+| 0x303 | 底盘板发出 | 累计弹量与弹速 | 底盘 `bsp_can.cpp` |
 
 第三组是底盘传感器数据。底盘 IMU 姿态与旋转速度用于上层决策，变化尺度比控制环慢，允许被其他帧抢先，于是取数值最大、仲裁优先级最低的一档。
 
 | 标识符 | 方向 | 内容 | 出处 |
 | --- | --- | --- | --- |
-| 0x401 | 底盘板发出 | 底盘 IMU 姿态 | `bsp_can.cpp:694` |
-| 0x501 | 底盘板发出 | 底盘旋转速度 | `bsp_can.cpp:707` |
+| 0x401 | 底盘板发出 | 底盘 IMU 姿态 | `bsp_can.cpp` |
+| 0x501 | 底盘板发出 | 底盘旋转速度 | `bsp_can.cpp` |
 
 按数值排序就是优先级排序。电机反馈的 0x201 到 0x20x 排在命令帧 0x1FF 与 0x200 之后，0x301 的板间遥控帧排在最后。这个次序决定了总线拥塞时，命令帧先于板间状态帧获得发送机会。
 
@@ -226,7 +226,7 @@ $$S_{max} = \left\lfloor \frac{97}{4} \right\rfloor = 24 \ \text{位}$$
 
 ### 5.3 从帧长看总线余量
 
-以云台板 CAN1 为例，控制中心任务每 1 ms 发 4 帧（`Task/Src/ControlCenterTask.cpp:106-108`），再计入 yaw 电机 1 kHz 的反馈帧，负载是：
+以云台板 CAN1 为例，控制中心任务每 1 ms 发 4 帧（`Task/Src/ControlCenterTask.cpp`），再计入 yaw 电机 1 kHz 的反馈帧，负载是：
 
 $U_{CAN1} \approx (4000 + 1000) \times 132\ \mu s \approx 66.0\%$
 
@@ -268,7 +268,7 @@ stateDiagram-v2
 | 错误被动 Error Passive | 被动错误标志，6 个隐性位 | 能，但出错后要等额外 8 位才发下一帧 |
 | 总线关闭 Bus Off | 不发送，脱离总线 | 不能，直到恢复 |
 
-本项目两块板都配了 `AutoBusOff = ENABLE`（`Core/Src/can.c:48`、`can.c:80`），HAL 把它转成 `CAN_MCR_ABOM` 置位（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c:387-395`）。于是进入 Bus Off 后，硬件在监测到 128 次连续 11 位隐性后自动回到错误主动状态，不需要软件介入。这条配置掩盖了一类问题：总线故障恢复后代码看不到任何痕迹，只能靠 `hcan->ErrorCode` 与 ESR 寄存器事后判断。
+本项目两块板都配了 `AutoBusOff = ENABLE`（`Core/Src/can.c`、`can.c`），HAL 把它转成 `CAN_MCR_ABOM` 置位（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c`）。于是进入 Bus Off 后，硬件在监测到 128 次连续 11 位隐性后自动回到错误主动状态，不需要软件介入。这条配置掩盖了一类问题：总线故障恢复后代码看不到任何痕迹，只能靠 `hcan->ErrorCode` 与 ESR 寄存器事后判断。
 
 ## 7. 帧头字段与协议字段的对应
 
@@ -283,18 +283,18 @@ HAL 的 `CAN_TxHeaderTypeDef` 与协议字段一一对应，没有额外抽象�
 | `DLC` | DLC 字段 | 8 |
 | `TransmitGlobalTime` | 时间触发模式下的时间戳 | 未使用 |
 
-接收侧同样是直接映射，`RxHeader.StdId` 就是仲裁场里的 11 位标识符（`stm32f4xx_hal_can.c:1548`）。回调里用 `switch(RxHeader.StdId)` 分派，等价于按标识符做一次精确匹配（`BSP/Src/bsp_can.cpp:597`）。
+接收侧同样是直接映射，`RxHeader.StdId` 就是仲裁场里的 11 位标识符（`stm32f4xx_hal_can.c`）。回调里用 `switch(RxHeader.StdId)` 分派，等价于按标识符做一次精确匹配（`BSP/Src/bsp_can.cpp`）。
 
 字节序在项目里不统一，两块板各自成对，需要按帧查表：
 
 | 帧 | 字段 | 拼接方式 | 出处 |
 | --- | --- | --- | --- |
-| 0x200 / 0x1FF / 0x2FF | 电机电流，`int16_t` | 大端，先高字节 | `bsp_can.cpp:102-109` |
-| 0x141 | 命令字在字节 0，电流在字节 4 到 5 | 小端 | `bsp_can.cpp:390-391` |
-| 0x301 | 三个通道各占两字节 | 大端 | `bsp_can.cpp:512-518` |
-| 0x302 | `float` 拆四字节 | 大端，先高字节 | `bsp_can.cpp:544-547` |
-| 0x303 | 前两字节 `int16_t`，字节 2 到 5 为 `float` | 前者大端，后者按本机小端顺序 | 底盘 `bsp_can.cpp:501-510` |
-| 0x303 接收 | 同上 | `(RxData[5]<<24)|(RxData[4]<<16)|(RxData[3]<<8)|RxData[2]` 还原 `float` | `bsp_can.cpp:677-681` |
+| 0x200 / 0x1FF / 0x2FF | 电机电流，`int16_t` | 大端，先高字节 | `bsp_can.cpp` |
+| 0x141 | 命令字在字节 0，电流在字节 4 到 5 | 小端 | `bsp_can.cpp` |
+| 0x301 | 三个通道各占两字节 | 大端 | `bsp_can.cpp` |
+| 0x302 | `float` 拆四字节 | 大端，先高字节 | `bsp_can.cpp` |
+| 0x303 | 前两字节 `int16_t`，字节 2 到 5 为 `float` | 前者大端，后者按本机小端顺序 | 底盘 `bsp_can.cpp` |
+| 0x303 接收 | 同上 | `(RxData[5]<<24)|(RxData[4]<<16)|(RxData[3]<<8)|RxData[2]` 还原 `float` | `bsp_can.cpp` |
 
 0x303 在同一帧里混用了两种字节序。发送端用位移取高字节写 `int16_t`，用指针取 `float` 的原始字节写后续四字节；接收端相应地用位移读 `int16_t`，用反向拼装还原 `float`。两侧写对时结果正确，但这一帧的格式无法从字段本身看出，改动任何一侧都要同步改另一侧。
 
@@ -308,7 +308,7 @@ HAL 的 `CAN_TxHeaderTypeDef` 与协议字段一一对应，没有额外抽象�
 | 认为一帧长度固定 | 负载估算用 108 微秒 | 最坏 132 微秒，差 22% |
 | 认为 CAN FD 可用 | 配了更高的数据段速率 | F407 的 bxCAN 只支持经典帧，没有 BRS 与数据段速率 |
 | 混用字节序且不写注释 | 0x303 的 `float` 与 `int16_t` 拼接方向不同 | 见第 7 节表格 |
-| 用整型保存百分之一单位的角度 | 小数被截断 | `BSP/Src/bsp_can.cpp:696-703` 把除以 100 的结果写进 `int16_t` 字段 |
+| 用整型保存百分之一单位的角度 | 小数被截断 | `BSP/Src/bsp_can.cpp` 把除以 100 的结果写进 `int16_t` 字段 |
 | 依赖 Bus Off 自动恢复的静默性 | 故障现场没有记录 | `ABOM` 置位后恢复过程不被记录，需软件读 ESR |
 
 ## 9. 小结
@@ -354,9 +354,9 @@ HAL 的 `CAN_TxHeaderTypeDef` 与协议字段一一对应，没有额外抽象�
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/can.c` | CAN1 与 CAN2 初始化参数、`AutoBusOff`（:48、:80） |
-| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 发送帧头（:96-99）、反馈解析（:597-712） |
-| `2026OmniSentryChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp` | 0x303 与 0x309 发送（:488-550） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c` | `ABOM` 写入（:387-395）、`StdId` 读取（:1548） |
-| `2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp` | 命令帧发送节奏（:131-137） |
+| `2026OmniSentryGimbal/Core/Src/can.c` | CAN1 与 CAN2 初始化参数、`AutoBusOff` |
+| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 发送帧头、反馈解析 |
+| `2026OmniSentryChassis/2026OmniSentryChassis/BSP/Src/bsp_can.cpp` | 0x303 与 0x309 发送 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c` | `ABOM` 写入、`StdId` 读取 |
+| `2026OmniSentryGimbal/Task/Src/ControlCenterTask.cpp` | 命令帧发送节奏 |
 | `can通信波特率问题.md` | 波特率与时钟树的排障记录 |

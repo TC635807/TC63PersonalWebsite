@@ -107,20 +107,20 @@ sequenceDiagram
 
 ## 6. 初始化入口与两次调用
 
-`MX_USB_DEVICE_Init()` 在 `USB_DEVICE/App/usb_device.c:64-91` 定义，四步失败都调用 `Error_Handler()`。工程里有两处调用：
+`MX_USB_DEVICE_Init()` 在 `USB_DEVICE/App/usb_device.c` 定义，四步失败都调用 `Error_Handler()`。工程里有两处调用：
 
 ```c
-/* Core/Src/main.c:121 */
+/* Core/Src/main.c */
   MX_USB_DEVICE_Init();
 ...
-/* Core/Src/main.c:130 */
+/* Core/Src/main.c */
   MX_FREERTOS_Init();
-/* Core/Src/main.c:133 */
+/* Core/Src/main.c */
   osKernelStart();
 ```
 
 ```c
-/* Core/Src/freertos.c:146-155（节选） */
+/* Core/Src/freertos.c（节选） */
 void StartDefaultTask(void const * argument)
 {
   /* init code for USB_DEVICE */
@@ -132,16 +132,16 @@ void StartDefaultTask(void const * argument)
 }
 ```
 
-第一次调用在调度器启动之前，此时 `usbRxQueue` 还没有创建（`Core/Src/freertos.c:114` 在 `MX_FREERTOS_Init()` 内执行）。第二次调用在 `StartDefaultTask` 里，调度器已经运行、队列已经存在。同一套初始化被执行两次，第二次会重新复位 OTG FS 并触发一次重新枚举。硬件上是否能观察到主机的断开重连属于待实测项。
+第一次调用在调度器启动之前，此时 `usbRxQueue` 还没有创建（`Core/Src/freertos.c` 在 `MX_FREERTOS_Init()` 内执行）。第二次调用在 `StartDefaultTask` 里，调度器已经运行、队列已经存在。同一套初始化被执行两次，第二次会重新复位 OTG FS 并触发一次重新枚举。硬件上是否能观察到主机的断开重连属于待实测项。
 
-接收回调因此保留了一个空指针保护分支：`usbd_cdc_if.c:266-268` 判断 `usbRxQueue == NULL` 时跳过入队、只重挂端点。这段分支覆盖的是第一次初始化到队列创建之间的窗口。
+接收回调因此保留了一个空指针保护分支：`usbd_cdc_if.c` 判断 `usbRxQueue == NULL` 时跳过入队、只重挂端点。这段分支覆盖的是第一次初始化到队列创建之间的窗口。
 
 ## 7. 描述符、端点宏与外设侧参数
 
 类回调表与配置描述符都在类库里：
 
 ```c
-/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c:141-164（节选） */
+/* Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c（节选） */
 USBD_ClassTypeDef  USBD_CDC =
 {
   USBD_CDC_Init,
@@ -155,16 +155,16 @@ USBD_ClassTypeDef  USBD_CDC =
 };
 ```
 
-配置描述符在 `usbd_cdc.c:168-265`：`bNumInterfaces` 为 `0x02`，接口 0 为通信接口（类 `0x02`、子类 `0x02`、协议 `0x01`），带三条功能描述符与命令端点；接口 1 为数据接口（类 `0x0A`），带 OUT 与 IN 两条批量端点。
+配置描述符在 `usbd_cdc.c`：`bNumInterfaces` 为 `0x02`，接口 0 为通信接口（类 `0x02`、子类 `0x02`、协议 `0x01`），带三条功能描述符与命令端点；接口 1 为数据接口（类 `0x0A`），带 OUT 与 IN 两条批量端点。
 
 ```c
-/* usbd_cdc.c:238-264（节选） */
+/* usbd_cdc.c（节选） */
   0x09, 0x04, 0x01, 0x00, 0x02, 0x0A, 0x00, 0x00, 0x00,  /* 数据接口 */
   0x07, 0x05, CDC_OUT_EP, 0x02, 64, 0x00, 0x00,           /* 批量 OUT */
   0x07, 0x05, CDC_IN_EP,  0x02, 64, 0x00, 0x00            /* 批量 IN  */
 ```
 
-端点宏集中在 `Class/CDC/Inc/usbd_cdc.h:43-74` 这一段。
+端点宏集中在 `Class/CDC/Inc/usbd_cdc.h` 这一段。
 
 | 宏 | 值 | 含义 |
 | --- | --- | --- |
@@ -175,12 +175,12 @@ USBD_ClassTypeDef  USBD_CDC =
 | `CDC_CMD_PACKET_SIZE` | `8` | 命令端点包大小 |
 | `CDC_FS_BINTERVAL` | `0x10` | 命令端点的轮询间隔 |
 
-端点开关在 `usbd_cdc.c:329-349` 的全速分支里完成：先以 64 字节打开数据 IN 与数据 OUT，再以 8 字节打开命令 IN，并把命令端点的 `bInterval` 设为 `CDC_FS_BINTERVAL`。本工程没有在 `USB_DEVICE/` 下覆盖这些宏（类头文件用 `#ifndef` 包裹），配置描述符与端点开关都直接引用类库默认值。
+端点开关在 `usbd_cdc.c` 的全速分支里完成：先以 64 字节打开数据 IN 与数据 OUT，再以 8 字节打开命令 IN，并把命令端点的 `bInterval` 设为 `CDC_FS_BINTERVAL`。本工程没有在 `USB_DEVICE/` 下覆盖这些宏（类头文件用 `#ifndef` 包裹），配置描述符与端点开关都直接引用类库默认值。
 
 外设侧的引脚与中断：
 
 ```c
-/* USB_DEVICE/Target/usbd_conf.c:78-95（节选） */
+/* USB_DEVICE/Target/usbd_conf.c（节选） */
     GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_11;
     GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -189,19 +189,19 @@ USBD_ClassTypeDef  USBD_CDC =
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
 ```
 
-PA11 为 DM、PA12 为 DP，走 `GPIO_AF10_OTG_FS`。中断优先级为 5，服务函数在 `Core/Src/stm32f4xx_it.c:331-340`，只调用 `HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS)`。设备句柄 `hUsbDeviceFS` 在 `USB_DEVICE/App/usbd_cdc_if.c:109` 外部声明。
+PA11 为 DM、PA12 为 DP，走 `GPIO_AF10_OTG_FS`。中断优先级为 5，服务函数在 `Core/Src/stm32f4xx_it.c`，只调用 `HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS)`。设备句柄 `hUsbDeviceFS` 在 `USB_DEVICE/App/usbd_cdc_if.c` 外部声明。
 
-FIFO 分配在 `usbd_conf.c:365-367`：接收 FIFO 为 `0x80` words，发送 FIFO 0 为 `0x40`，发送 FIFO 1 为 `0x80`。三项之和为 `0x140`，等于 320 words，与 OTG FS 的总 FIFO 容量一致（按参考手册值，未在板子上实测）。
+FIFO 分配在 `usbd_conf.c`：接收 FIFO 为 `0x80` words，发送 FIFO 0 为 `0x40`，发送 FIFO 1 为 `0x80`。三项之和为 `0x140`，等于 320 words，与 OTG FS 的总 FIFO 容量一致（按参考手册值，未在板子上实测）。
 
-主机侧的身份信息在 `USB_DEVICE/App/usbd_desc.c:65-69`：`USBD_VID` 为 `1155`（0x0483）、`USBD_PID_FS` 为 `22336`（0x5740）、产品字符串为 `STM32 Virtual ComPort`。这两个 ID 是 ST 官方虚拟串口例程的默认组合，工程没有改成自己的编号。
+主机侧的身份信息在 `USB_DEVICE/App/usbd_desc.c`：`USBD_VID` 为 `1155`（0x0483）、`USBD_PID_FS` 为 `22336`（0x5740）、产品字符串为 `STM32 Virtual ComPort`。这两个 ID 是 ST 官方虚拟串口例程的默认组合，工程没有改成自己的编号。
 
 ## 8. 易错点
 
-- `CDC_Control_FS` 不解析 Line Coding。`usbd_cdc_if.c:180-244` 的 `switch` 覆盖了 `CDC_SET_LINE_CODING` 与 `CDC_GET_LINE_CODING` 等九个命令，全部分支为空，函数末尾统一返回 `USBD_OK`。主机设置波特率时收到成功应答，但设备不保存也不使用任何参数。
+- `CDC_Control_FS` 不解析 Line Coding。`usbd_cdc_if.c` 的 `switch` 覆盖了 `CDC_SET_LINE_CODING` 与 `CDC_GET_LINE_CODING` 等九个命令，全部分支为空，函数末尾统一返回 `USBD_OK`。主机设置波特率时收到成功应答，但设备不保存也不使用任何参数。
 - 设备级 `bDeviceClass` 写成 0x02。设备描述符把 `bDeviceClass` 填成 `0x02`，即设备级声明为 CDC；另一种常见做法是填 `0x00`，把类定义留给接口描述符。两种写法在主流系统上都能枚举，差异在于系统匹配驱动的顺序。工程沿用 ST 例程的写法，按事实记录即可。
 - VID/PID 沿用 ST 默认导致同名设备。两块板插在同一台电脑上时，设备名与管理器里的条目相同，串口号可能出现互换。这是推断，未在同机双板条件下实测。要根治需要换成项目自己的 `idVendor` 与 `idProduct`，并同步更新主机侧 INF 或 udev 规则。
-- 初始化被调用两次。`main.c:121` 与 `freertos.c:149` 各调用一次 `MX_USB_DEVICE_Init()`，两次调用之间的差异与待确认项见第 6 节。
-- LPM 关闭。`USB_DEVICE/Target/usbd_conf.h:74` 的 `USBD_LPM_ENABLED` 为 `0U`，链路电源管理未启用。设备描述符因此走 `bcdUSB 0x0200` 的常规分支，BOS 描述符中的 LPM 能力位不会出现。总线空闲时设备不会主动请求挂起。
+- 初始化被调用两次。`main.c` 与 `freertos.c` 各调用一次 `MX_USB_DEVICE_Init()`，两次调用之间的差异与待确认项见第 6 节。
+- LPM 关闭。`USB_DEVICE/Target/usbd_conf.h` 的 `USBD_LPM_ENABLED` 为 `0U`，链路电源管理未启用。设备描述符因此走 `bcdUSB 0x0200` 的常规分支，BOS 描述符中的 LPM 能力位不会出现。总线空闲时设备不会主动请求挂起。
 
 ## 9. 小结
 
@@ -238,7 +238,7 @@ FIFO 分配在 `usbd_conf.c:365-367`：接收 FIFO 为 `0x80` words，发送 FIF
 
 5 把设备身份改成项目自有的 VID/PID。要求说明需要修改的文件与宏、主机侧需要同步的动作，并分析未同步时会出现什么现象。
 6 让 `CDC_Control_FS` 实际保存 Line Coding 参数。要求给出需要保存的结构体字段、保存位置、以及在收发路径上使用这些参数的可行方式。
-7 论证是否应该删除 `freertos.c:149` 的第二次初始化。要求给出可以观察到的判据、验证步骤，以及结论对接收回调空指针保护分支的影响。
+7 论证是否应该删除 `freertos.c` 的第二次初始化。要求给出可以观察到的判据、验证步骤，以及结论对接收回调空指针保护分支的影响。
 
 ---
 
@@ -246,14 +246,14 @@ FIFO 分配在 `usbd_conf.c:365-367`：接收 FIFO 为 `0x80` words，发送 FIF
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | 应用回调与端点参数（:109、:152-160、:180-244、:266-268、:297-313） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.h` | 应用缓冲大小（:52-53）、发送函数声明（:109） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usb_device.c` | 初始化四步（:64-91） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c` | 设备身份（:65-69） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | 引脚与中断（:78-95）、FIFO 分配（:365-367） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h` | 设备库配置（:66-81） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h` | 端点宏与包大小（:43-74）、句柄结构（:120-132） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c` | 类回调表（:141-164）、配置描述符（:168-265）、端点开关（:287-379）、端点重挂（:853-881） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 初始化调用与调度器启动（:121、:130、:133） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/freertos.c` | 第二次初始化（:146-155）、队列创建（:114） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | OTG FS 中断服务（:331-340） |
+| `USB_DEVICE/App/usbd_cdc_if.c` | 应用回调与端点参数 |
+| `USB_DEVICE/App/usbd_cdc_if.h` | 应用缓冲大小、发送函数声明 |
+| `USB_DEVICE/App/usb_device.c` | 初始化四步 |
+| `USB_DEVICE/App/usbd_desc.c` | 设备身份 |
+| `USB_DEVICE/Target/usbd_conf.c` | 引脚与中断、FIFO 分配 |
+| `USB_DEVICE/Target/usbd_conf.h` | 设备库配置 |
+| `Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h` | 端点宏与包大小、句柄结构 |
+| `Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c` | 类回调表、配置描述符、端点开关、端点重挂 |
+| `Core/Src/main.c` | 初始化调用与调度器启动 |
+| `Core/Src/freertos.c` | 第二次初始化、队列创建 |
+| `Core/Src/stm32f4xx_it.c` | OTG FS 中断服务 |

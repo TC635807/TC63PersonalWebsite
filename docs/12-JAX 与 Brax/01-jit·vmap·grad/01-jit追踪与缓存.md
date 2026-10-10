@@ -7,7 +7,7 @@ updated: 2026-10-07
 
 # jit 追踪与缓存
 
-JAX 默认按算子逐个派发，一个 12 维动作的小网络前向在 Python 侧要分派几十次，每帧的固定开销远大于计算本身。mjx-go1-getup 的训练侧从来看不到这个开销，因为策略前向被 brax 包在 `jax.lax.scan` 与 `vmap` 里整体编译；只有交互式观察器那种每帧直接调用一次的写法才需要显式 `jax.jit`（`docs/viewer-guide.md:51-80` 记录了这两侧的差异）。
+JAX 默认按算子逐个派发，一个 12 维动作的小网络前向在 Python 侧要分派几十次，每帧的固定开销远大于计算本身。mjx-go1-getup 的训练侧从来看不到这个开销，因为策略前向被 brax 包在 `jax.lax.scan` 与 `vmap` 里整体编译；只有交互式观察器那种每帧直接调用一次的写法才需要显式 `jax.jit`（`docs/viewer-guide.md` 记录了这两侧的差异）。
 
 这里按三层来写：先说明 jit 到底省掉了什么，再拆开追踪与编译缓存的机制、列出会触发重新编译的几类改动，然后逐个核对本仓库的落点，最后说明为什么观察器里的随机键必须固定成常量、以及一个在 trace 期被读成常量的课程旋钮为什么改不动。
 
@@ -75,7 +75,7 @@ flowchart TD
 
 ## 4. 观察器：三处按帧调用各自 jit
 
-`sim/watch_v20_fast.py:342-347` 把三处按帧调用的函数分别编译：
+`sim/watch_v20_fast.py` 把三处按帧调用的函数分别编译：
 
 ```python
 _dummy_rng = jp.zeros((2,), dtype=jp.uint32)
@@ -84,13 +84,13 @@ reset_jit = jax.jit(env.reset)
 step_jit = jax.jit(env.step, donate_argnums=0)
 ```
 
-策略的随机键被固定成 `_dummy_rng` 常量（`sim/watch_v20_fast.py:344-345`）。策略是 `deterministic=True` 的推理，不需要真随机；若每帧传入不同 key，形状与 dtype 虽不变，但把 key 当常量的写法会失效，缓存不命中并反复编译。这里体现的规则是：推理用的 key 一律固定，只有训练采样才需要真的推进随机流。
+策略的随机键被固定成 `_dummy_rng` 常量（`sim/watch_v20_fast.py`）。策略是 `deterministic=True` 的推理，不需要真随机；若每帧传入不同 key，形状与 dtype 虽不变，但把 key 当常量的写法会失效，缓存不命中并反复编译。这里体现的规则是：推理用的 key 一律固定，只有训练采样才需要真的推进随机流。
 
-`sim/view_go1.py:546-549` 是同一写法，注释写明 `donate_argnums=0` 把单步从 25.9 ms 压到 14.8 ms。起身状态机的 `gk.fsm_step` 单独 jit（`sim/view_go1.py:556`），getup_v2 的 42 维单帧组装也单独 jit（`sim/view_go1.py:594-606`），理由是逐条 eager 调用每帧要发起多次 kernel launch。
+`sim/view_go1.py` 是同一写法，注释写明 `donate_argnums=0` 把单步从 25.9 ms 压到 14.8 ms。起身状态机的 `gk.fsm_step` 单独 jit（`sim/view_go1.py`），getup_v2 的 42 维单帧组装也单独 jit（`sim/view_go1.py`），理由是逐条 eager 调用每帧要发起多次 kernel launch。
 
 三处编译的调用频率不同：`act_jit` 与 `step_jit` 每帧一次，`reset_jit` 只在重置时调用。调用频率低的函数即使不 jit 也未必致命，但本仓库统一处理，避免以后把某处挪进热路径时忘记编译。
 
-扫描点可视化是一条更强的判据。`sim/watch_v20_fast.py:384-395` 与 `sim/view_go1.py:710-723` 把「采样点坐标 + 地面高 + 高度特征」合成一个 `@jax.jit` 函数，实测 51.6 ms 降到 0.32 ms（`docs/viewer-guide.md:120-136`）。这一处最能说明问题：函数体没变，只是从逐条调用改成编译成一个 kernel。
+扫描点可视化是一条更强的判据。`sim/watch_v20_fast.py` 与 `sim/view_go1.py` 把「采样点坐标 + 地面高 + 高度特征」合成一个 `@jax.jit` 函数，实测 51.6 ms 降到 0.32 ms（`docs/viewer-guide.md`）。这一处最能说明问题：函数体没变，只是从逐条调用改成编译成一个 kernel。
 
 ```mermaid
 sequenceDiagram
@@ -110,27 +110,27 @@ sequenceDiagram
 
 ## 5. 其余落点：探针、评估与姿态池
 
-`sim/eval_stairs.py:77-93` 除了 reset 与 step，还把 `place`（把批量环境摆到台阶的指定位置）单独编译成 `jax.jit(jax.vmap(place))`。`sim/make_getup_posepool.py:57-63` 只 jit reset，用来批量采样摔倒姿态池。`sim/probe_handover.py:250-266` 对 `first_act` 与 `step_set` 各自 jit；`sim/probe_handover.py:748` 在函数内部用 `@jax.jit` 装饰局部函数 `one`。这些落点对应同一条规则：按帧或按批调用的纯函数都要编译，包括只跑一次的探针主循环。
+`sim/eval_stairs.py` 除了 reset 与 step，还把 `place`（把批量环境摆到台阶的指定位置）单独编译成 `jax.jit(jax.vmap(place))`。`sim/make_getup_posepool.py` 只 jit reset，用来批量采样摔倒姿态池。`sim/probe_handover.py` 对 `first_act` 与 `step_set` 各自 jit；`sim/probe_handover.py` 在函数内部用 `@jax.jit` 装饰局部函数 `one`。这些落点对应同一条规则：按帧或按批调用的纯函数都要编译，包括只跑一次的探针主循环。
 
-批量脚本统一写成 `jax.jit(jax.vmap(env.reset))` 的形式，见 `sim/probe_getup_v2.py:77-79`、`sim/eval_getup.py:135-144`、`sim/probe_nefc.py:49-51`。vmap 本身在第 2 篇展开，这里只记 jit 包在外层。
+批量脚本统一写成 `jax.jit(jax.vmap(env.reset))` 的形式，见 `sim/probe_getup_v2.py`、`sim/eval_getup.py`、`sim/probe_nefc.py`。vmap 本身在第 2 篇展开，这里只记 jit 包在外层。
 
-评估与训练的批量不同，前向各有一份编译产物，这属于正常行为：`train/train_getup.py:115` 的评估环境数默认 128，`train/train_getup.py:118` 的训练环境数默认 768，两个形状的缓存互不覆盖。
+评估与训练的批量不同，前向各有一份编译产物，这属于正常行为：`train/train_getup.py` 的评估环境数默认 128，`train/train_getup.py` 的训练环境数默认 768，两个形状的缓存互不覆盖。
 
 ## 6. 训练侧：trace 期常量决定课程推进方式
 
-`envs/go1_getup.py:94-100` 的 `difficulty` 是 trace 期常量。注释与 `train/train_getup.py:164-169` 的 `--difficulty` 帮助都说明：编译缓存命中时改它不会重编，运行中推进难度无效，课程只能靠多次运行加 `--restore`。这个判断来自 `sim/probe_reset_cost.py` 的实测，但该脚本已不在当前检出（待确认）。
+`envs/go1_getup.py` 的 `difficulty` 是 trace 期常量。注释与 `train/train_getup.py` 的 `--difficulty` 帮助都说明：编译缓存命中时改它不会重编，运行中推进难度无效，课程只能靠多次运行加 `--restore`。这个判断来自 `sim/probe_reset_cost.py` 的实测，但该脚本已不在当前检出（待确认）。
 
 一旦某个字段在 trace 时被读成常量，训练循环里改它就只在 Python 侧改了一个没人再读的对象。要推进课程，只能改参数后重新启动进程，让新的常量进入新的编译产物。
 
-`train/train_getup.py:399-401` 的 dry_run 用 `jax.random.PRNGKey(0)` 初始化网络，只做形状自检，不调用 `ppo.train`。这是在不触发训练编译的前提下验证网络输入层的方式。
+`train/train_getup.py` 的 dry_run 用 `jax.random.PRNGKey(0)` 初始化网络，只做形状自检，不调用 `ppo.train`。这是在不触发训练编译的前提下验证网络输入层的方式。
 
 `--dry_run` 只建环境与网络，不进入 `ppo.train`，所以它不会产生 rollout 与更新循环的编译产物。用它验证维度是安全的；反过来，把它当作性能基准时，测到的只是初始化时间。
 
-`train/train_go1.py:677` 的注释记录了一个相关事实：网络输入层形状由环境自动推断，brax 在 `mjx_env.py` 里用 `jax.eval_shape(reset)` 走一遍追踪而不执行计算。改了 `height_scan` 这类会改 obs 维度的开关，网络形状随之改变，不需要手改。这条与本节的主题相通：`eval_shape` 只追踪、不执行，所以它得到的形状就是追踪器眼里的形状。
+`train/train_go1.py` 的注释记录了一个相关事实：网络输入层形状由环境自动推断，brax 在 `mjx_env.py` 里用 `jax.eval_shape(reset)` 走一遍追踪而不执行计算。改了 `height_scan` 这类会改 obs 维度的开关，网络形状随之改变，不需要手改。这条与本节的主题相通：`eval_shape` 只追踪、不执行，所以它得到的形状就是追踪器眼里的形状。
 
 ## 7. 首帧慢与反复重编的区分
 
-两种现象都表现为耗时尖峰，判别方式看尖峰的形状。首帧慢是单调的：主循环前面的若干帧耗时偏高，之后回落到稳态，不会再次升高；反复重编是周期性的，每次调用点走到不同的形状或分支就再出现一次尖峰。`sim/view_go1.py:764-774` 的预热把前者提前结清；`sim/watch_v20_fast.py:449-452` 每帧重建 command 数组则属于后者的诱因，地址变化会让图缓存失效。
+两种现象都表现为耗时尖峰，判别方式看尖峰的形状。首帧慢是单调的：主循环前面的若干帧耗时偏高，之后回落到稳态，不会再次升高；反复重编是周期性的，每次调用点走到不同的形状或分支就再出现一次尖峰。`sim/view_go1.py` 的预热把前者提前结清；`sim/watch_v20_fast.py` 每帧重建 command 数组则属于后者的诱因，地址变化会让图缓存失效。
 
 | 形态 | 表现 | 处理 |
 | --- | --- | --- |
@@ -144,14 +144,14 @@ sequenceDiagram
 
 | 现象 | 原因 | 对应位置 |
 | --- | --- | --- |
-| 单帧多花约 11 ms，帧率腰斩 | 每帧 eager 调策略 | `sim/watch_v20_fast.py:343` |
-| 缓存不命中，反复编译 | 每次传不同 rng | `sim/watch_v20_fast.py:344-345` |
-| 日志显示难度变了，环境其实没变 | 运行中改 trace 期常量 | `envs/go1_getup.py:97-99` |
-| 头几百帧 step 数百毫秒，之后自行恢复 | 未预热就进主循环 | `sim/view_go1.py:764-774` |
-| 报 `Array has been deleted` | 复用被捐赠的数组 | `sim/watch_v20_fast.py:449-452` |
-| 测到的是派发时间，不是帧耗时 | 在设备同步前计时 | `sim/watch_v20_fast.py:455-458` |
-| jit 前就失败，报 `ScopeParamShapeError` | obs 维度与策略不符 | `docs/viewer-guide.md:295-297` |
-| 注释写留 60%，代码写 0.45 | 注释与代码不一致 | `train/train_getup.py:38-42` |
+| 单帧多花约 11 ms，帧率腰斩 | 每帧 eager 调策略 | `sim/watch_v20_fast.py` |
+| 缓存不命中，反复编译 | 每次传不同 rng | `sim/watch_v20_fast.py` |
+| 日志显示难度变了，环境其实没变 | 运行中改 trace 期常量 | `envs/go1_getup.py` |
+| 头几百帧 step 数百毫秒，之后自行恢复 | 未预热就进主循环 | `sim/view_go1.py` |
+| 报 `Array has been deleted` | 复用被捐赠的数组 | `sim/watch_v20_fast.py` |
+| 测到的是派发时间，不是帧耗时 | 在设备同步前计时 | `sim/watch_v20_fast.py` |
+| jit 前就失败，报 `ScopeParamShapeError` | obs 维度与策略不符 | `docs/viewer-guide.md` |
+| 注释写留 60%，代码写 0.45 | 注释与代码不一致 | `train/train_getup.py` |
 
 ## 9. 小结
 

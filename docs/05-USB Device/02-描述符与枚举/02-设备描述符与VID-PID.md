@@ -11,7 +11,7 @@ updated: 2026-10-07
 
 本工程这一份是 CubeMX 生成 CDC 工程后的默认值，没有做项目化定制。VID 与 PID 仍取 ST 的 0x0483 与 0x5740，字符串索引指向 ST 提供的回调，设备与产品名也保持出厂文本。这一组取值能正常工作，但会带来设备识别上的限制。
 
-本页按偏移逐字段拆开 `usbd_desc.c:155-181` 的数组，核对每一处的宏来源，然后单独说明 VID 与 PID 与主机驱动的对应关系，以及沿用一个不属于本项目的编号会造成什么结果。所有数值都可以在仓库里比对，推断的部分会单独标注。
+本页按偏移逐字段拆开 `usbd_desc.c` 的数组，核对每一处的宏来源，然后单独说明 VID 与 PID 与主机驱动的对应关系，以及沿用一个不属于本项目的编号会造成什么结果。所有数值都可以在仓库里比对，推断的部分会单独标注。
 
 > 源码索引
 
@@ -28,11 +28,11 @@ updated: 2026-10-07
 
 设备描述符是主机在枚举开始时读取的第一份描述符，长度固定 18 字节。主机通常分两次读它。第一次只请求前 8 字节，因为此时主机还不知道设备的端点 0 包长，只能用保守的方式试探；第 8 个字节恰好是 `bMaxPacketSize0`，主机拿到它之后按这个包长重新发起一次请求，取回完整 18 字节。
 
-库对两次请求的处理相同，都是按主机给出的 `wLength` 截断后发送（`usbd_ctlreq.c:656-671`）。设备侧只有一份 18 字节数组，主机要多少字节就发多少，不需要为试探请求准备第二份数据。这一点在后文的易错点里还会用到：8 字节与 18 字节不是两条路径。
+库对两次请求的处理相同，都是按主机给出的 `wLength` 截断后发送（`usbd_ctlreq.c`）。设备侧只有一份 18 字节数组，主机要多少字节就发多少，不需要为试探请求准备第二份数据。这一点在后文的易错点里还会用到：8 字节与 18 字节不是两条路径。
 
 ## 逐偏移拆开这 18 个字节
 
-本工程的设备描述符数组在 `usbd_desc.c:155-181`。按偏移整理如下，数值列取自数组内容与相关宏。
+本工程的设备描述符数组在 `usbd_desc.c`。按偏移整理如下，数值列取自数组内容与相关宏。
 
 | 偏移 | 字段 | 本工程取值 | 含义 |
 | --- | --- | --- | --- |
@@ -57,6 +57,24 @@ updated: 2026-10-07
 
 多字节字段统一按小端存放，低字节在前。读数组时按出现顺序把低位字节放前面，不能按人眼顺序直接拼。0x00 在前、0x02 在后合成的是 0x0200，不是 0x0002。下面按数组顺序画出 18 个字节的排列。
 
+数组本身写成下面这样，每一项都能追到一个宏：
+
+```c
+/* 摘录：USB_DEVICE/App/usbd_desc.c 的设备描述符数组 */
+uint8_t USBD_FS_DeviceDesc[USB_LEN_DEV_DESC] = {
+    0x12,                              /* bLength = 18 */
+    USB_DESC_TYPE_DEVICE,              /* bDescriptorType = 0x01 */
+    LOBYTE(0x0200), HIBYTE(0x0200),    /* bcdUSB = 2.00 */
+    0x02, 0x02, 0x00,                  /* CDC / 抽象控制模型 / 无协议 */
+    USB_MAX_EP0_SIZE,                  /* bMaxPacketSize0 = 64 */
+    LOBYTE(USBD_VID), HIBYTE(USBD_VID),        /* 0x0483 */
+    LOBYTE(USBD_PID_FS), HIBYTE(USBD_PID_FS),  /* 0x5740 */
+    LOBYTE(0x0200), HIBYTE(0x0200),    /* bcdDevice = rel 2.00 */
+    USBD_IDX_MFC_STR, USBD_IDX_PRODUCT_STR, USBD_IDX_SERIAL_STR,
+    USBD_MAX_NUM_CONFIGURATION,        /* 1 份配置 */
+};
+```
+
 ```mermaid
 flowchart LR
   B0["0 bLength 0x12"] --> B1["1 类型 0x01"]
@@ -76,9 +94,9 @@ flowchart LR
 
 ### bcdUSB 用 BCD 编码表示规范版本
 
-`bcdUSB` 表示设备支持的 USB 规范版本，编码为 BCD，即每个十六进制位对应一个十进制位。0x0200 读作 2.00，对应 USB 2.00；0x0201 读作 2.01，对应 USB 2.01。本工程非 LPM 分支写入 0x00 与 0x02 两个字节，合成 0x0200（`usbd_desc.c:163-166`）。
+`bcdUSB` 表示设备支持的 USB 规范版本，编码为 BCD，即每个十六进制位对应一个十进制位。0x0200 读作 2.00，对应 USB 2.00；0x0201 读作 2.01，对应 USB 2.01。本工程非 LPM 分支写入 0x00 与 0x02 两个字节，合成 0x0200（`usbd_desc.c`）。
 
-当 `USBD_LPM_ENABLED` 为 1 时，数组改走另一分支，字节变为 0x01 与 0x02，合成 0x0201，用来声明支持 LPM 的 L1 挂起恢复。本工程该宏为 0（`usbd_conf.h:74`），因此设备对外声明 0x0200。同一个开关还决定 BOS 描述符是否编译（`usbd_desc.c:185-205`），只改一处会让声明与实现不一致。
+当 `USBD_LPM_ENABLED` 为 1 时，数组改走另一分支，字节变为 0x01 与 0x02，合成 0x0201，用来声明支持 LPM 的 L1 挂起恢复。本工程该宏为 0（`usbd_conf.h`），因此设备对外声明 0x0200。同一个开关还决定 BOS 描述符是否编译（`usbd_desc.c`），只改一处会让声明与实现不一致。
 
 ### 设备级类别的三个字段
 
@@ -88,28 +106,28 @@ flowchart LR
 
 ### bMaxPacketSize0 决定端点 0 一次能读多少
 
-`bMaxPacketSize0` 是端点 0 的最大包长，本工程填 `USB_MAX_EP0_SIZE`，该宏在 `usbd_def.h:157` 定义为 64。库在总线复位时打开端点 0 用的也是同一个宏（`usbd_core.c:825`、`usbd_core.c:831`），描述符里的声明与控制器里的实际配置来自同一处，不会漂移。
+`bMaxPacketSize0` 是端点 0 的最大包长，本工程填 `USB_MAX_EP0_SIZE`，该宏在 `usbd_def.h` 定义为 64。库在总线复位时打开端点 0 用的也是同一个宏（`usbd_core.c`），描述符里的声明与控制器里的实际配置来自同一处，不会漂移。
 
 全速设备的端点 0 包长只能取 8、16、32 或 64。主机在拿到这个值之前只能用最大包长试探，这也是它先读 8 字节的原因。这个字段只约束端点 0，与数据端点的包长无关，后者写在端点描述符里。
 
 ### idVendor 与 idProduct 是两个 16 位编号
 
-`idVendor` 与 `idProduct` 占偏移 8 到 11 四个字节。本工程的宏在 `usbd_desc.c:65` 与 `usbd_desc.c:68`：
+`idVendor` 与 `idProduct` 占偏移 8 到 11 四个字节。本工程的宏在 `usbd_desc.c`：
 
 | 宏 | 十进制 | 十六进制 | 归属 |
 | --- | --- | --- | --- |
 | `USBD_VID` | 1155 | 0x0483 | STMicroelectronics |
 | `USBD_PID_FS` | 22336 | 0x5740 | STM32 Virtual ComPort 示例 |
 
-描述符数组用 `LOBYTE` 与 `HIBYTE` 把两个宏拆成两个字节（`usbd_desc.c:171-174`）。宏写的是十进制，十六进制值只在注释与主机侧工具里出现，核对时用 1155 与 22336 去搜源码更直接。
+描述符数组用 `LOBYTE` 与 `HIBYTE` 把两个宏拆成两个字节（`usbd_desc.c`）。宏写的是十进制，十六进制值只在注释与主机侧工具里出现，核对时用 1155 与 22336 去搜源码更直接。
 
 ### bcdDevice 是固件版本而不是规范版本
 
-`bcdDevice` 是设备自身的版本号，与 `bcdUSB` 无关，两者在同一份数组里相邻，容易看混。本工程写 0x00 与 0x02，合成 0x0200，注释标为 rel. 2.00（`usbd_desc.c:175-176`）。主机与驱动可以用它区分同一 VID 与 PID 下的不同固件版本，本工程没有利用这个能力，改版本号不影响枚举。
+`bcdDevice` 是设备自身的版本号，与 `bcdUSB` 无关，两者在同一份数组里相邻，容易看混。本工程写 0x00 与 0x02，合成 0x0200，注释标为 rel. 2.00（`usbd_desc.c`）。主机与驱动可以用它区分同一 VID 与 PID 下的不同固件版本，本工程没有利用这个能力，改版本号不影响枚举。
 
 ### 三个字符串索引指向回调而不是文本
 
-`iManufacturer` `iProduct` `iSerialNumber` 取 `usbd_def.h:102-107` 的宏：
+`iManufacturer` `iProduct` `iSerialNumber` 取 `usbd_def.h` 的宏：
 
 | 字段 | 宏 | 值 | 对应回调 |
 | --- | --- | --- | --- |
@@ -117,11 +135,11 @@ flowchart LR
 | `iProduct` | `USBD_IDX_PRODUCT_STR` | 2 | `USBD_FS_ProductStrDescriptor` |
 | `iSerialNumber` | `USBD_IDX_SERIAL_STR` | 3 | `USBD_FS_SerialStrDescriptor` |
 
-索引 0 留给语言 ID 描述符，主机会先取它。索引值本身没有内容，返回文本的是回调函数。序列号的内容不是常量，`Get_SerialNum()` 每次请求时从 `UID_BASE` 处的三个 32 位寄存器读出并转成十六进制文本（`usbd_desc.c:388-405`、`usbd_desc.h:48-50`）。同一颗芯片的 UID 固定，序列号在设备复位与重新插拔后保持稳定。
+索引 0 留给语言 ID 描述符，主机会先取它。索引值本身没有内容，返回文本的是回调函数。序列号的内容不是常量，`Get_SerialNum()` 每次请求时从 `UID_BASE` 处的三个 32 位寄存器读出并转成十六进制文本（`usbd_desc.c`、`usbd_desc.h`）。同一颗芯片的 UID 固定，序列号在设备复位与重新插拔后保持稳定。
 
 ### bNumConfigurations 与配置上限引用同一个宏
 
-`bNumConfigurations` 填 `USBD_MAX_NUM_CONFIGURATION`，值为 1（`usbd_desc.c:180`、`usbd_conf.h:68`）。同一个宏还被 `USBD_SetConfig()` 用作配置编号的上限判断（`usbd_ctlreq.c:730`），描述符里声明的数量与请求处理里能接受的编号出自同一个常量，两边不会漂移。当前只有一份配置，`SET_CONFIGURATION` 只接受值 1。
+`bNumConfigurations` 填 `USBD_MAX_NUM_CONFIGURATION`，值为 1（`usbd_desc.c`、`usbd_conf.h`）。同一个宏还被 `USBD_SetConfig()` 用作配置编号的上限判断（`usbd_ctlreq.c`），描述符里声明的数量与请求处理里能接受的编号出自同一个常量，两边不会漂移。当前只有一份配置，`SET_CONFIGURATION` 只接受值 1。
 
 ## 宏与数组分别写在哪里
 
@@ -129,14 +147,14 @@ flowchart LR
 
 | 项 | 位置 | 值 |
 | --- | --- | --- |
-| `USBD_VID` | `usbd_desc.c:65` | 1155 |
-| `USBD_PID_FS` | `usbd_desc.c:68` | 22336 |
-| `USBD_MANUFACTURER_STRING` | `usbd_desc.c:67` | STMicroelectronics |
-| `USBD_PRODUCT_STRING_FS` | `usbd_desc.c:69` | STM32 Virtual ComPort |
-| 设备描述符数组 | `usbd_desc.c:155-181` | 18 字节 |
-| 设备描述符回调 | `usbd_desc.c:258-263` | 返回数组与长度 |
+| `USBD_VID` | `usbd_desc.c` | 1155 |
+| `USBD_PID_FS` | `usbd_desc.c` | 22336 |
+| `USBD_MANUFACTURER_STRING` | `usbd_desc.c` | STMicroelectronics |
+| `USBD_PRODUCT_STRING_FS` | `usbd_desc.c` | STM32 Virtual ComPort |
+| 设备描述符数组 | `usbd_desc.c` | 18 字节 |
+| 设备描述符回调 | `usbd_desc.c` | 返回数组与长度 |
 
-设备描述符数组与字符串宏分处同一文件的不同段落，宏定义集中在文件开头，数组在中段，回调在文件末尾。主机在地址分配前后各读一次设备描述符，库的入口是 `USBD_GetDescriptor()`（`usbd_ctlreq.c:428-672`），类型号 0x01 分支调用 `pdev->pDesc->GetDeviceDescriptor`（`usbd_ctlreq.c:449-451`），也就是 `USBD_FS_DeviceDescriptor()`。完整往返见本单元《枚举流程》。
+设备描述符数组与字符串宏分处同一文件的不同段落，宏定义集中在文件开头，数组在中段，回调在文件末尾。主机在地址分配前后各读一次设备描述符，库的入口是 `USBD_GetDescriptor()`（`usbd_ctlreq.c`），类型号 0x01 分支调用 `pdev->pDesc->GetDeviceDescriptor`（`usbd_ctlreq.c`），也就是 `USBD_FS_DeviceDescriptor()`。完整往返见本单元《枚举流程》。
 
 ## VID 与 PID 如何与主机驱动对应
 
@@ -224,9 +242,9 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.c | 宏定义（:65-71）、设备描述符数组（:155-181）、BOS（:185-205）、回调（:258-263）、序列号（:388-405） |
-| /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/App/usbd_desc.h | `DEVICE_ID1` 至 `DEVICE_ID3`（:48-50）、序列号长度（:52） |
-| /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.h | `USBD_MAX_NUM_CONFIGURATION`（:68）、`USBD_LPM_ENABLED`（:74） |
-| /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h | `USBD_IDX_*`（:102-107）、`USB_MAX_EP0_SIZE`（:157） |
-| /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c | `USBD_GetDescriptor`（:428-672）、`USBD_SetConfig` 上限（:730） |
-| /home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c | 端点 0 打开（:825、:831） |
+| USB_DEVICE/App/usbd_desc.c | 宏定义、设备描述符数组、BOS、回调、序列号 |
+| USB_DEVICE/App/usbd_desc.h | `DEVICE_ID1` 至 `DEVICE_ID3`、序列号长度 |
+| USB_DEVICE/Target/usbd_conf.h | `USBD_MAX_NUM_CONFIGURATION`、`USBD_LPM_ENABLED` |
+| Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h | `USBD_IDX_*`、`USB_MAX_EP0_SIZE` |
+| Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c | `USBD_GetDescriptor`、`USBD_SetConfig` 上限 |
+| Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c | 端点 0 打开 |

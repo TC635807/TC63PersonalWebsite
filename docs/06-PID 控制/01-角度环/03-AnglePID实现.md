@@ -22,41 +22,41 @@ updated: 2026-10-07
 | `calculate` | 派生类 | 整数角接口，返回 `int16_t` |
 | `handleZeroCross` | 派生类私有 | 最近等价角 |
 
-`using PidBase::PidBase;`（`angle_pid.h:14`）把基类构造函数透传过来，派生类不再重复写初始化列表。
+`using PidBase::PidBase;`（`angle_pid.h`）把基类构造函数透传过来，派生类不再重复写初始化列表。
 
-基类提供两套计算：`Calculate`（`PidBase.h:29-61`）在输出饱和时停积分，`Calculate_with`（`:63-91`）无条件积分后再限幅。`AnglePID::calculate` 内部调用 `Calculate`。
+基类提供两套计算：`Calculate`（`PidBase.h`）在输出饱和时停积分，`Calculate_with`无条件积分后再限幅。`AnglePID::calculate` 内部调用 `Calculate`。
 
 ## 2. calculate 的三行
 
-云台板 `angle_pid.cpp:7-11`：
+云台板 `angle_pid.cpp`：
 
 ```cpp
 int16_t AnglePID::calculate(int32_t target, int32_t feedback, float dt) {
-    int32_t fb = handleZeroCross(target, feedback);
-    float output = Calculate(static_cast<float>(target), static_cast<float>(fb), dt);
-    return static_cast<int16_t>(output);
+ int32_t fb = handleZeroCross(target, feedback);
+ float output = Calculate(static_cast<float>(target), static_cast<float>(fb), dt);
+ return static_cast<int16_t>(output);
 }
 ```
 
 三行的分工：
 
-| 行 | 动作 | 关键点 |
-| --- | --- | --- |
-| `:8` | 跨零处理 | 只平移反馈，目标保持原值 |
-| `:9` | 调用基类 | 两个整数先转成 `float` |
-| `:10` | 截断返回 | 浮点直接转 `int16_t` |
+| 动作 | 关键点 |
+| --- | --- |
+| 跨零处理 | 只平移反馈，目标保持原值 |
+| 调用基类 | 两个整数先转成 `float` |
+| 截断返回 | 浮点直接转 `int16_t` |
 
 目标不平移而反馈平移，两者之差等于平移后的最近路径误差。若两边都平移，误差会互相抵消，跨零处理失去作用。
 
 ```mermaid
 flowchart TD
-  A["calculate target feedback dt"] --> B["fb = handleZeroCross target feedback"]
-  B --> C["output = PidBase::Calculate target fb dt"]
-  C --> D["return static_cast int16_t output"]
-  C -.-> E["内部顺序 反向清积分 微分 比例微分 条件积分 限幅"]
+ A["calculate target feedback dt"] --> B["fb = handleZeroCross target feedback"]
+ B --> C["output = PidBase::Calculate target fb dt"]
+ C --> D["return static_cast int16_t output"]
+ C -.-> E["内部顺序 反向清积分 微分 比例微分 条件积分 限幅"]
 ```
 
-基类 `Calculate` 的内部顺序在 `PidBase.h:29-61`：误差、反向清积分、微分、比例与微分求和、输出未饱和才累加积分、加积分、限幅、保存状态。角度环没有改变这个顺序。
+基类 `Calculate` 的内部顺序在 `PidBase.h`：误差、反向清积分、微分、比例与微分求和、输出未饱和才累加积分、加积分、限幅、保存状态。角度环没有改变这个顺序。
 
 派生而不重写 `Calculate`，目的是复用基类的浮点计算与限幅逻辑，只在整数角度这一层做适配。新增接口先把两个整数角度折算到最近路径，再送进基类，基类看到的始终是小量。
 
@@ -84,7 +84,7 @@ C 封装的静态实例参数是 `maxOutput = 5000`，输出被限幅在 ±5000�
 
 ## 4. 跨零函数的接口
 
-`handleZeroCross(int32_t target, int32_t current)` 返回平移后的当前角，不返回值就直接暴露给外部。它是私有成员（`angle_pid.h:20`），外部只能通过 `calculate` 间接使用。
+`handleZeroCross(int32_t target, int32_t current)` 返回平移后的当前角，不返回值就直接暴露给外部。它是私有成员（`angle_pid.h`），外部只能通过 `calculate` 间接使用。
 
 云台板用 while 循环平移，底盘板用单次 if。两板签名相同，差异只在函数体，见跨零单元。
 
@@ -94,32 +94,32 @@ C 封装的静态实例参数是 `maxOutput = 5000`，输出被限幅在 ±5000�
 
 ```cpp
 extern "C" {
-    static AnglePID angle_pid(15.0f, 0.8f, 0.08f, 5000.0f, 5000.0f);
-    void angle_pid_clear() { angle_pid.Clear(); }
-    int16_t angle_pid_calculate(int32_t target, int32_t actual_angle, float dt) {
-        return angle_pid.calculate(target, actual_angle, dt);
-    }
+ static AnglePID angle_pid(15.0f, 0.8f, 0.08f, 5000.0f, 5000.0f);
+ void angle_pid_clear() { angle_pid.Clear(); }
+ int16_t angle_pid_calculate(int32_t target, int32_t actual_angle, float dt) {
+ return angle_pid.calculate(target, actual_angle, dt);
+ }
 }
 ```
 
-静态实例在文件作用域内构造一次，`angle_pid_clear` 调基类 `Clear`，只清 `integral` 与 `prevError`（`PidBase.h:23-26`），不清 `prevTarget`。`angle_pid_calculate` 转发到 `calculate`。
+静态实例在文件作用域内构造一次，`angle_pid_clear` 调基类 `Clear`，只清 `integral` 与 `prevError`（`PidBase.h`），不清 `prevTarget`。`angle_pid_calculate` 转发到 `calculate`。
 
-上一组参数以注释形式保留：`2.0f / 0.0f / 0.1f / 5000.0f / 5000.0f`（云台板 `:34`，底盘板 `:26`）。当前生效的是 `15.0f / 0.8f / 0.08f / 5000.0f / 5000.0f`（云台板 `:35`，底盘板 `:27`）。
+上一组参数以注释形式保留：`2.0f / 0.0f / 0.1f / 5000.0f / 5000.0f`（云台板与底盘板各有一份）。当前生效的是 `15.0f / 0.8f / 0.08f / 5000.0f / 5000.0f`（云台板与底盘板各有一份）。
 
 全工程没有 `angle_pid_calculate` 的调用点。grep 结果只有定义与声明两处，两个板都是如此。运行中的角度控制由任务自己构造 `AnglePID` 实例完成，C 封装属预留接口或历史残留。
 
 ```mermaid
 sequenceDiagram
-  participant T as GimbalTask
-  participant A as AnglePID
-  participant B as PidBase
-  T->>A: calculate target feedback dt
-  A->>A: handleZeroCross target feedback
-  A->>B: Calculate target fb dt
-  B->>B: 反向清积分 与 微分 与 条件积分
-  B-->>A: float output
-  A-->>T: int16_t output
-  Note over A,B: 若改用 C 封装 则对象是文件静态实例
+ participant T as GimbalTask
+ participant A as AnglePID
+ participant B as PidBase
+ T->>A: calculate target feedback dt
+ A->>A: handleZeroCross target feedback
+ A->>B: Calculate target fb dt
+ B->>B: 反向清积分 与 微分 与 条件积分
+ B-->>A: float output
+ A-->>T: int16_t output
+ Note over A,B: 若改用 C 封装 则对象是文件静态实例
 ```
 
 ## 6. 两板差异
@@ -132,17 +132,17 @@ sequenceDiagram
 | `PidBase` 成员可见性 | public，任务可直接改 `maxIntegral` | protected，外部不可直接改 |
 | 运行路径是否调用跨零 | 否，任务调基类 `Calculate` | 底盘任务未使用 `AnglePID` |
 
-`PidBase.h` 的成员在云台板是 public（`:92` 的 `//protected:` 被注释），在底盘板是 protected（`:63`）。云台任务 `GimbalTask.cpp:32` 直接写 `PitchAnglePID.maxIntegral = 1000`，依赖这一点才能编译。
+`PidBase.h` 的成员在云台板是 public（源码里的 `//protected:` 被注释），在底盘板是 protected。云台任务 `GimbalTask.cpp` 直接写 `PitchAnglePID.maxIntegral = 1000`，依赖这一点才能编译。
 
 ## 7. 易错点
 
 | # | 易错点 | 表现 | 位置 |
 | --- | --- | --- | --- |
-| 1 | 忽略返回类型 | 输出大于 32767 时截断或未定义 | `angle_pid.cpp:10` |
+| 1 | 忽略返回类型 | 输出大于 32767 时截断或未定义 | `angle_pid.cpp` |
 | 2 | 以为截断会四舍五入 | 向零取整，小数被丢弃 | 同上 |
-| 3 | 目标与反馈都平移 | 误差抵消，跨零失效 | `:8` |
-| 4 | 以为 C 封装在跑 | 全工程无调用点 | `:41-43` |
-| 5 | 调 `Clear` 后以为状态全清 | `prevTarget` 保留，反向清积分判据可能沿用旧值 | `PidBase.h:23-26` |
+| 3 | 目标与反馈都平移 | 误差抵消，跨零失效 |—|
+| 4 | 以为 C 封装在跑 | 全工程无调用点 |—|
+| 5 | 调 `Clear` 后以为状态全清 | `prevTarget` 保留，反向清积分判据可能沿用旧值 | `PidBase.h` |
 | 6 | 跨板复制代码 | 两板跨零实现不同，`PidBase` 可见性也不同 | `angle_pid.cpp`、`PidBase.h` |
 
 ## 8. 小结
@@ -182,9 +182,9 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/PID/Src/angle_pid.cpp` | 云台板实现与 C 封装（`:7-43`） |
-| `2026OmniSentryChassis/PID/Src/angle_pid.cpp` | 底盘板实现（`:7-35`） |
-| `2026OmniSentryGimbal/PID/Inc/angle_pid.h` | 类声明与 C 接口（`:12-33`） |
-| `2026OmniSentryGimbal/PID/PidBase.h` | 构造函数、`Clear`、两套计算（`:15-91`） |
-| `2026OmniSentryChassis/PID/PidBase.h` | 成员为 protected 的基类（`:63-70`） |
+| `2026OmniSentryGimbal/PID/Src/angle_pid.cpp` | 云台板实现与 C 封装 |
+| `2026OmniSentryChassis/PID/Src/angle_pid.cpp` | 底盘板实现 |
+| `2026OmniSentryGimbal/PID/Inc/angle_pid.h` | 类声明与 C 接口 |
+| `2026OmniSentryGimbal/PID/PidBase.h` | 构造函数、`Clear`、两套计算 |
+| `2026OmniSentryChassis/PID/PidBase.h` | 成员为 protected 的基类 |
 

@@ -13,13 +13,13 @@ updated: 2026-10-07
 
 ## 1. 文件定位与两板归属
 
-`Algorithm/Src/MahonyAHRS.c` 共 239 行，配套头文件 `Algorithm/Inc/MahonyAHRS.h` 共 39 行。文件顶部注释把它标为 Madgwick 对 Mahony 算法的实现，来源是 x-io 的公开 AHRS 代码。云台板把它列入 CMake 源文件（`CMakeLists.txt:70`）却没有调用点，改它不影响云台板输出；底盘板没有 `FusionAHRS`，`Task/Src/ImuTask.cpp:10` 包含该头文件，`:40` 与 `:59` 调用 `MahonyAHRSupdateIMU`，此处才是生效路径。
+`Algorithm/Src/MahonyAHRS.c` 共 239 行，配套头文件 `Algorithm/Inc/MahonyAHRS.h` 共 39 行。文件顶部注释把它标为 Madgwick 对 Mahony 算法的实现，来源是 x-io 的公开 AHRS 代码。云台板把它列入 `CMakeLists.txt` 的源文件清单却没有调用点，改它不影响云台板输出；底盘板没有 `FusionAHRS`，`Task/Src/ImuTask.cpp` 包含该头文件并调用 `MahonyAHRSupdateIMU`，此处才是生效路径。
 
-逐行解读的价值在于：算法主体与云台板生效路径 `FusionAHRS.cpp:88-136` 结构一致；同时它的积分、磁力计、`invSqrt` 三块在云台板生效路径里被裁掉，对照能看清云台板做了哪些简化。
+逐行解读的价值在于：算法主体与云台板生效路径 `FusionAHRS.cpp` 结构一致；同时它的积分、磁力计、`invSqrt` 三块在云台板生效路径里被裁掉，对照能看清云台板做了哪些简化。
 
 ## 2. 整体结构与数据流
 
-`MahonyAHRSupdate`（`:52-151`）是九轴入口，接收磁力计 `mx/my/mz`。磁力计三个分量同时为零时直接转调 `MahonyAHRSupdateIMU`（`:61-64`）。`MahonyAHRSupdateIMU`（`:156-222`）是六轴版本，只使用加速度计。两个函数结构相同：归一化观测、预测场方向、叉积误差、比例与可选积分校正、积分四元数、归一化。
+`MahonyAHRSupdate`是九轴入口，接收磁力计 `mx/my/mz`。磁力计三个分量同时为零时直接转调 `MahonyAHRSupdateIMU`。`MahonyAHRSupdateIMU`是六轴版本，只使用加速度计。两个函数结构相同：归一化观测、预测场方向、叉积误差、比例与可选积分校正、积分四元数、归一化。
 
 ```mermaid
 flowchart TD
@@ -39,62 +39,99 @@ flowchart TD
 
 ## 3. 逐行：宏与全局变量
 
-| 行号 | 名称 | 取值 | 状态与用途 |
-| --- | --- | --- | --- |
-| `:24` | `sampleFreq` | `1000.0f` | 采样频率宏，积分与积分项使用，也是底盘板的步长来源 |
-| `:25` | `twoKpDef` | `2.0f * 0.5f` 即 1.0 | 比例增益初值，`twoKp` 取它 |
-| `:26` | `twoKiDef` | `2.0f * 0.0f` 即 0.0 | 积分增益初值，`twoKi` 取它 |
-| `:28` | `GYRO_STATIC_THRESH` | `0.015f` | 定义后无引用，死常量 |
-| `:33` | `twoKp` | 1.0 | 比例校正系数，`:128-130` 与 `:198-200` 使用 |
-| `:34` | `twoKi` | 0.0 | 积分使能与系数，`:113` 与 `:182` 判断 |
-| `:35` | `q0..q3` 定义 | 被注释 | 头文件 `MahonyAHRS.h:21` 声明为 `extern`，工程内没有定义 |
-| `:36` | `integralFBx/y/z` | 0.0 | 积分误差累加器 |
-| `:38-39` | `gyroZ_bias`、`imu_static` | 0.0、0 | 定义后无引用，死变量 |
+| 名称 | 取值 | 状态与用途 |
+| --- | --- | --- |
+| `sampleFreq` | `1000.0f` | 采样频率宏，积分与积分项使用，也是底盘板的步长来源 |
+| `twoKpDef` | `2.0f * 0.5f` 即 1.0 | 比例增益初值，`twoKp` 取它 |
+| `twoKiDef` | `2.0f * 0.0f` 即 0.0 | 积分增益初值，`twoKi` 取它 |
+| `GYRO_STATIC_THRESH` | `0.015f` | 定义后无引用，死常量 |
+| `twoKp` | 1.0 | 比例校正系数 使用 |
+| `twoKi` | 0.0 | 积分使能与系数 判断 |
+| `q0..q3` 定义 | 被注释 | 头文件 `MahonyAHRS.h` 声明为 `extern`，工程内没有定义 |
+| `integralFBx/y/z` | 0.0 | 积分误差累加器 |
+| `gyroZ_bias`、`imu_static` | 0.0、0 | 定义后无引用，死变量 |
 
-头文件声明 `extern volatile float q0, q1, q2, q3;`（`MahonyAHRS.h:21`），对应的定义在源文件里被注释掉（`:35`）。算法函数改用参数 `q[4]` 传递四元数，`q0..q3` 没有被任何表达式引用，所以链接期不会报未定义符号。若后续代码直接使用这四个全局量，会出现链接错误。
+头文件声明 `extern volatile float q0, q1, q2, q3;`（`MahonyAHRS.h`），对应的定义在源文件里被注释掉。算法函数改用参数 `q[4]` 传递四元数，`q0..q3` 没有被任何表达式引用，所以链接期不会报未定义符号。若后续代码直接使用这四个全局量，会出现链接错误。
 
 ## 4. 逐行：九轴入口
 
-函数签名 `void MahonyAHRSupdate(float q[4], float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz)`（`:52`）。角速度与加速度用参数传入，与旧版 Madgwick 用全局量的写法不同。
+函数签名 `void MahonyAHRSupdate(float q[4], float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz)`。角速度与加速度用参数传入，与旧版 Madgwick 用全局量的写法不同。
 
-| 行号 | 代码要点 | 说明 |
-| --- | --- | --- |
-| `:53-58` | 局部变量 | `recipNorm`、乘积项、`halfv/halfw/halfe`、`qa/qb/qc` |
-| `:61-64` | `mx==0 && my==0 && mz==0` 判断 | 磁力计无有效值时转六轴版本，避免归一化除零得 NaN |
-| `:67-73` | 加速度计非零检查与归一化 | 零向量会跳过整个反馈块，`recipNorm = invSqrt(ax*ax+ay*ay+az*az)` |
-| `:76-79` | 归一化磁力计 | 同一套 `invSqrt` |
-| `:82-97` | 预计算 $q_i q_j$ 与地磁参考方向 | `hx`、`hy` 求模得到 `bx`，`bz` 取投影；`:96` 用的是标准 `sqrt` |
-| `:100-105` | 预测重力与磁场方向的一半 | `halfvx = q1*q3 - q0*q2` 等；`halfw` 用 `bx`、`bz` 与 $q$ 组合 |
-| `:108-110` | 叉积误差 | 重力误差加磁场误差，各含一半因子 |
-| `:113-125` | 积分通道与清零 | `twoKi > 0` 时累加并加入角速度，否则清零，注释写的是防止积分饱和 |
-| `:128-143` | 比例通道与四元数累加 | `gx += twoKp * halfex`，`gx *= 0.5f / sampleFreq`，用 `qa/qb/qc` 保存旧值避免同步污染 |
-| `:146-150` | 归一化 | `invSqrt(q0^2+q1^2+q2^2+q3^2)` |
+| 代码要点 | 说明 |
+| --- | --- |
+| 局部变量 | `recipNorm`、乘积项、`halfv/halfw/halfe`、`qa/qb/qc` |
+| `mx==0 && my==0 && mz==0` 判断 | 磁力计无有效值时转六轴版本，避免归一化除零得 NaN（NaN 是浮点的非法数，一旦进入积分会污染后续所有姿态值） |
+| 加速度计非零检查与归一化 | 零向量会跳过整个反馈块，`recipNorm = invSqrt(ax*ax+ay*ay+az*az)` |
+| 归一化磁力计 | 同一套 `invSqrt` |
+| 预计算 $q_i q_j$ 与地磁参考方向 | `hx`、`hy` 求模得到 `bx`，`bz` 取投影，这一步用的是标准 `sqrt` |
+| 预测重力与磁场方向的一半 | `halfvx = q1*q3 - q0*q2` 等；`halfw` 用 `bx`、`bz` 与 $q$ 组合 |
+| 叉积误差 | 重力误差加磁场误差，各含一半因子 |
+| 积分通道与清零 | `twoKi > 0` 时累加并加入角速度，否则清零，注释写的是防止积分饱和 |
+| 比例通道与四元数累加 | `gx += twoKp * halfex`，`gx *= 0.5f / sampleFreq`，用 `qa/qb/qc` 保存旧值避免同步污染 |
+| 归一化 | `invSqrt(q0^2+q1^2+q2^2+q3^2)` |
 
 比例通道里 `twoKp = 2K_p`，误差项 `halfe = e/2`，两者乘积等于 $K_p e$。积分通道同理，`twoKi = 2K_i` 与 `halfe` 相乘得到 $K_i e$。
 
+对应源码的主体结构：
+
+```c
+/* 摘录：Algorithm/Src/MahonyAHRS.c 九轴入口主体（省略局部变量声明） */
+if (mx == 0.0f && my == 0.0f && mz == 0.0f) {          /* 无磁力计 → 六轴版 */
+    MahonyAHRSupdateIMU(q, gx, gy, gz, ax, ay, az);
+    return;
+}
+if (!(ax == 0.0f && ay == 0.0f && az == 0.0f)) {       /* 加速度计有效才做校正 */
+    recipNorm = invSqrt(ax*ax + ay*ay + az*az);
+    ax *= recipNorm; ay *= recipNorm; az *= recipNorm;  /* 归一化观测 */
+    /* ... 预计算 q 乘积项，求 halfv/halfw 与叉积 halfe ... */
+    if (twoKi > 0.0f) {                                 /* 积分通道，默认关闭 */
+        integralFBx += twoKi * halfex * (1.0f / sampleFreq);
+        gx += integralFBx;
+    } else { integralFBx = integralFBy = integralFBz = 0.0f; }
+    gx += twoKp * halfex;                               /* 比例通道 */
+}
+gx *= (0.5f / sampleFreq);                              /* 预乘 Δt/2 */
+q[0] += (-qb * gx - qc * gy - q[3] * gz);               /* 四元数累加 */
+recipNorm = invSqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+q[0] *= recipNorm;                                      /* 归一化 */
+```
+
 ## 5. 逐行：六轴入口与快速平方根倒数
 
-六轴版本 `MahonyAHRSupdateIMU`（`:156-222`）是九轴版本去掉磁力计后的形式：
+六轴版本 `MahonyAHRSupdateIMU` 是九轴版本去掉磁力计后的形式：
 
-| 行号 | 代码要点 | 说明 |
-| --- | --- | --- |
-| `:162-169` | 加速度计非零检查与归一化 | 与九轴版一致 |
-| `:172-179` | 预测重力的一半与叉积误差 | `halfvx = q1*q3 - q0*q2`、`halfex = ay*halfvz - az*halfvy` 等 |
-| `:182-195` | 积分通道与清零 | 结构与 `:113-125` 相同 |
-| `:198-214` | 比例、预乘与累加 | `gx += twoKp * halfex`，再乘 `0.5f / sampleFreq` |
-| `:217-221` | 归一化 | 与九轴版相同 |
+| 代码要点 | 说明 |
+| --- | --- |
+| 加速度计非零检查与归一化 | 与九轴版一致 |
+| 预测重力的一半与叉积误差 | `halfvx = q1*q3 - q0*q2`、`halfex = ay*halfvz - az*halfvy` 等 |
+| 积分通道与清零 | 与九轴版结构相同 |
+| 比例、预乘与累加 | `gx += twoKp * halfex`，再乘 `0.5f / sampleFreq` |
+| 归一化 | 与九轴版相同 |
 
-这个六轴版本就是底盘板实际调用的函数（`Task/Src/ImuTask.cpp:40`、`:59`）。云台板生效路径 `FusionAHRS::mahonyUpdate`（`FusionAHRS.cpp:88-136`）与它逐块对应，差别是去掉了积分通道、把 `invSqrt` 换成 `1.0f / std::sqrt`、把 `sampleFreq` 宏换成成员 `sampleFreq_`。
+这个六轴版本就是底盘板实际调用的函数（`Task/Src/ImuTask.cpp`）。云台板生效路径 `FusionAHRS::mahonyUpdate`（`FusionAHRS.cpp`）与它逐块对应，差别是去掉了积分通道、把 `invSqrt` 换成 `1.0f / std::sqrt`、把 `sampleFreq` 宏换成成员 `sampleFreq_`。
 
-`invSqrt`（`:228-236`）：
+`invSqrt`：
 
-| 行号 | 代码 | 说明 |
-| --- | --- | --- |
-| `:229-230` | `halfx = 0.5f * x`、`y = x` | 牛顿迭代需要的半值与初值 |
-| `:231-233` | `long i = *(long*)&y; i = 0x5f3759df - (i>>1); y = *(float*)&i;` | 位运算给出平方根倒数的近似初值 |
-| `:234` | `y = y * (1.5f - halfx * y * y)` | 一次牛顿迭代 |
+| 代码 | 说明 |
+| --- | --- |
+| `halfx = 0.5f * x`、`y = x` | 牛顿迭代需要的半值与初值 |
+| `long i = *(long*)&y; i = 0x5f3759df - (i>>1); y = *(float*)&i;` | 位运算给出平方根倒数的近似初值 |
+| `y = y * (1.5f - halfx * y * y)` | 一次牛顿迭代 |
 
-`long` 在 ARM EABI 下是 32 位，魔数常量按 32 位浮点位模式设计，能工作；换到 `long` 为 64 位的主机编译，这段位运算会失效，属按平台规格说明。通过 `*(long*)&y` 做类型双关在 C 标准下是未定义行为，编译器开启严格别名优化时可能被改变行为，属推断。一次牛顿迭代后的相对误差在 0.2% 以内，也是按文献结论，未在本工程实测。
+```c
+/* 摘录：Algorithm/Src/MahonyAHRS.c 的 invSqrt */
+float invSqrt(float x) {
+    float halfx = 0.5f * x;
+    float y = x;
+    long i = *(long*)&y;
+    i = 0x5f3759df - (i >> 1);          /* 位运算给出近似初值 */
+    y = *(float*)&i;
+    y = y * (1.5f - (halfx * y * y));   /* 一次牛顿迭代 */
+    return y;
+}
+```
+
+`long` 在 ARM EABI 下是 32 位，魔数常量按 32 位浮点位模式设计，能工作；换到 `long` 为 64 位的主机编译，这段位运算会失效，属按平台规格说明。通过 `*(long*)&y` 做类型双关（把同一段内存按另一种类型重新解释）在 C 标准下是未定义行为，编译器开启严格别名优化（假定不同类型的指针不会指向同一块内存）时可能被改变行为，属推断。一次牛顿迭代（用切线逼近修正初值）后的相对误差在 0.2% 以内，也是按文献结论，未在本工程实测。
 
 ## 6. 数值验证：静止输入下的校正量符号
 
@@ -129,17 +166,17 @@ stateDiagram-v2
 
 ## 7. 编译、调用与链接回收
 
-- 文件被编译：`CMakeLists.txt:67` 列头文件、`:70` 列源文件。
-- 云台板无调用点：云台板仓库内只有 `MahonyAHRS.c:17` 包含 `MahonyAHRS.h`，没有文件调用 `MahonyAHRSupdate` 或 `MahonyAHRSupdateIMU`。
-- 底盘板有调用点：`Task/Src/ImuTask.cpp:10` 包含头文件，`:40` 与 `:59` 调用 `MahonyAHRSupdateIMU`。
-- 链接回收：云台板链接参数含 `-Wl,--gc-sections`（`cmake/gcc-arm-none-eabi.cmake:41`），构建 map 中该目标文件的段落在地址 0 处，属云台板构建产物观察；底盘板 map 中 `.text.MahonyAHRSupdateIMU` 有实际地址。
-- 云台板生效算法：`FusionAHRS::mahonyUpdate`（`FusionAHRS.cpp:88-136`），六轴、只有比例项。
+- 文件被编译：`CMakeLists.txt` 同时列出头文件与源文件。
+- 云台板无调用点：云台板仓库内只有 `MahonyAHRS.c` 包含 `MahonyAHRS.h`，没有文件调用 `MahonyAHRSupdate` 或 `MahonyAHRSupdateIMU`。
+- 底盘板有调用点：`Task/Src/ImuTask.cpp` 包含头文件 调用 `MahonyAHRSupdateIMU`。
+- 链接回收：云台板链接参数含 `-Wl,--gc-sections`（`cmake/gcc-arm-none-eabi.cmake`，让链接器回收没有被引用的代码段），构建 map 中该目标文件的段落在地址 0 处，属云台板构建产物观察；底盘板 map 中 `.text.MahonyAHRSupdateIMU` 有实际地址。
+- 云台板生效算法：`FusionAHRS::mahonyUpdate`（`FusionAHRS.cpp`），六轴、只有比例项。
 
 ## 8. 易错点
 
 | # | 易错点 | 表现 |
 | --- | --- | --- |
-| 1 | 把 `:96` 的 `sqrt` 当成全部 | 其余归一化走 `invSqrt`，精度与实现不同 |
+| 1 | 把某处 `sqrt` 当成全部 | 其余归一化走 `invSqrt`，精度与实现不同 |
 | 2 | 认为 `twoKi > 0` 分支会执行 | 默认 `twoKi = 0`，积分项每步清零 |
 | 3 | 在云台板修改 `MahonyAHRS.c` 观察效果 | 云台板无调用点，输出不变；底盘板改它则生效 |
 | 4 | 引用 `q0..q3` 全局量 | 定义被注释，会链接失败 |
@@ -170,7 +207,7 @@ stateDiagram-v2
 
 ### 基础题
 
-1. 列出 `MahonyAHRSupdate` 中三个无引用的符号及其行号。
+1. 列出 `MahonyAHRSupdate` 中的三个无引用符号，并说明它们为什么不会引起链接错误。
 2. 说明 `mx/my/mz` 全零时的执行路径。
 3. 用 $q=[1,0,0,0]$、$a=(0,0,1)$ 复算叉积误差。
 
@@ -184,10 +221,10 @@ stateDiagram-v2
 | 路径 | 用途 |
 | --- | --- |
 | `2026OmniSentryGimbal/Algorithm/Src/MahonyAHRS.c` | 逐行对象（全文 239 行） |
-| `2026OmniSentryGimbal/Algorithm/Inc/MahonyAHRS.h` | `extern` 声明与函数原型（`:19-31`） |
-| `2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 云台板生效的对应实现（`:88-136`） |
-| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 云台板调用链（`:49-59`） |
-| `2026OmniSentryGimbal/CMakeLists.txt` | 云台板源文件清单（`:67-70`） |
-| `2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake` | 云台板链接参数 `gc-sections`（`:41`） |
-| `2026OmniSentryChassis/Task/Src/ImuTask.cpp` | 底盘板调用点（`:10-59`） |
-| `2026OmniSentryChassis/Algorithm/Src/MahonyAHRS.c` | 底盘板生效实现（`:24-222`） |
+| `2026OmniSentryGimbal/Algorithm/Inc/MahonyAHRS.h` | `extern` 声明与函数原型 |
+| `2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 云台板生效的对应实现 |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 云台板调用链 |
+| `2026OmniSentryGimbal/CMakeLists.txt` | 云台板源文件清单 |
+| `2026OmniSentryGimbal/cmake/gcc-arm-none-eabi.cmake` | 云台板链接参数 `gc-sections` |
+| `2026OmniSentryChassis/Task/Src/ImuTask.cpp` | 底盘板调用点 |
+| `2026OmniSentryChassis/Algorithm/Src/MahonyAHRS.c` | 底盘板生效实现 |

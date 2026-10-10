@@ -13,7 +13,7 @@ updated: 2026-10-07
 
 ## 1. 博查的请求体与固定候选池
 
-博查的请求体在 `backend/search/bocha.py:78` 附近拼装，字段有四个：`query`、`freshness`、`summary` 与 `count`。前两个是查询语义，`count` 被硬编码为 60，注释给出了理由：候选池必须远大于目标来源数（本仓库默认 `max_sources=2`，`backend/config.py:98`），下游的加权筛选才有选择余地。
+博查的请求体在 `backend/search/bocha.py` 附近拼装，字段有四个：`query`、`freshness`、`summary` 与 `count`。前两个是查询语义，`count` 被硬编码为 60，注释给出了理由：候选池必须远大于目标来源数（本仓库默认 `max_sources=2`，`backend/config.py`），下游的加权筛选才有选择余地。
 
 ```python
 payload = {
@@ -24,15 +24,31 @@ payload = {
 }
 ```
 
-与之配套的注释记录了一处历史问题：早期按 `max_results` 截断返回条数，当目标来源数是 5 时 API 只回 3 到 5 条，筛选环节无米下锅，低质 URL 直接进入抓取（`backend/search/bocha.py:82`）。因此博查这条实现刻意不做客户端截断，`max_results` 参数在解析函数里也没有被使用（`backend/search/bocha.py:124`）。
+与之配套的注释记录了一处历史问题：早期按 `max_results` 截断返回条数，当目标来源数是 5 时 API 只回 3 到 5 条，筛选环节无米下锅，低质 URL 直接进入抓取（`backend/search/bocha.py`）。因此博查这条实现刻意不做客户端截断，`max_results` 参数在解析函数里也没有被使用（`backend/search/bocha.py`）。
 
-同样地，百度实现保留了全量候选（`backend/search/baidu.py:68`）。两条实现的选择一致：适配层只负责拿到尽可能全的候选，挑哪几条交给下游。
+同样地，百度实现保留了全量候选（`backend/search/baidu.py`）。两条实现的选择一致：适配层只负责拿到尽可能全的候选，挑哪几条交给下游。
 
 `count` 与 `max_results` 的关系容易读错。`max_results` 是调用方希望拿到几条，`count` 是向服务端要几条。博查按次计费，返回条数不额外计费，所以放大候选池不会增加成本；服务端在超过上限时会自行钳制。
 
 ## 2. 博查的状态码到异常类型的映射
 
-`_do_search()` 把 HTTP 状态码翻译成三类语义（`backend/search/bocha.py:96`）：
+`_do_search()` 把 HTTP 状态码翻译成三类语义，映射就是几个连续的 `if`：
+
+```python
+# backend/search/bocha.py（节选）
+response = await client.post(self.api_url, json=payload)
+
+if response.status_code == 429:
+    raise RateLimitError(f"[Bocha] 限速 429 for {query!r}")
+if response.status_code in (401, 403):
+    raise FatalSearchError(f"[Bocha] 认证失败 (HTTP {response.status_code})")
+if response.status_code == 402:
+    raise FatalSearchError(f"[Bocha] 余额/额度不足 (HTTP 402) for {query!r}")
+if not response.is_success:
+    raise RuntimeError(f"[Bocha] HTTP {response.status_code} for {query!r}")
+```
+
+`response.is_success` 是 httpx 对「状态码落在 2xx」的判断，最后一条因此兜住了所有未预期的非 2xx，按瞬态交给基类重试。
 
 | 状态码 | 含义 | 抛出的异常 | 基类的动作 |
 | --- | --- | --- | --- |
@@ -55,11 +71,11 @@ flowchart TD
   H -->|"是"| J["解析 webPages.value"]
 ```
 
-业务层的错误还要再判一次：响应体里的 `code` 不等于 200 时，`msg` 中若含有「额度」「余额」「欠费」或对应英文关键词，同样按致命错误上抛（`backend/search/bocha.py:130`）；其余业务错误记一条 warning 后返回空列表。HTTP 层与业务层都参与分类，是因为额度不足既可能以 402 出现，也可能以 200 加错误码的形式返回。
+业务层的错误还要再判一次：响应体里的 `code` 不等于 200 时，`msg` 中若含有「额度」「余额」「欠费」或对应英文关键词，同样按致命错误上抛（`backend/search/bocha.py`）；其余业务错误记一条 warning 后返回空列表。HTTP 层与业务层都参与分类，是因为额度不足既可能以 402 出现，也可能以 200 加错误码的形式返回。
 
 ## 3. 黑名单域名的 60 秒缓存
 
-博查支持 `exclude` 参数排除指定域名。本仓库的黑名单来自域名质量模块，读取路径是 `backend/scraper/domain_quality.py` 的 `list_blocked()`，上限 100 个（`backend/search/bocha.py:27`）。每次搜索都查一次 SQLite 会带来额外延迟，因此模块级用两个全局变量做 60 秒内存缓存（`backend/search/bocha.py:22`）：
+博查支持 `exclude` 参数排除指定域名。本仓库的黑名单来自域名质量模块，读取路径是 `backend/scraper/domain_quality.py` 的 `list_blocked()`，上限 100 个（`backend/search/bocha.py`）。每次搜索都查一次 SQLite 会带来额外延迟，因此模块级用两个全局变量做 60 秒内存缓存（`backend/search/bocha.py`）：
 
 ```python
 _blocked_cache: list[str] = []
@@ -67,25 +83,119 @@ _blocked_cache_ts: float = 0.0
 _BLOCKED_CACHE_TTL = 60.0
 ```
 
-缓存读取失败时把结果置空并刷新时间戳（`backend/search/bocha.py:37`），也就是故障期间不会反复重试读取，而是按空黑名单继续搜索。这个取舍偏向可用性：宁可暂时放行被拉黑的域名，也不让搜索因黑名单读取失败而中断。缓存是模块级的，多个客户端实例共享，因此 `list_blocked()` 的调用频率与实例数无关。
+缓存读取失败时把结果置空并刷新时间戳（`backend/search/bocha.py`），也就是故障期间不会反复重试读取，而是按空黑名单继续搜索。这个取舍偏向可用性：宁可暂时放行被拉黑的域名，也不让搜索因黑名单读取失败而中断。缓存是模块级的，多个客户端实例共享，因此 `list_blocked()` 的调用频率与实例数无关。
+
+```python
+# backend/search/bocha.py（节选）
+def _get_excluded_domains() -> list[str]:
+    """读取 DomainQualityCache 当前封禁域名列表，60s 内存缓存。Bocha exclude 上限 100 个。"""
+    global _blocked_cache, _blocked_cache_ts
+    now = time.time()
+    if _blocked_cache and now - _blocked_cache_ts < _BLOCKED_CACHE_TTL:
+        return _blocked_cache
+    try:
+        from backend.scraper.domain_quality import get_domain_quality
+        _blocked_cache = get_domain_quality().list_blocked(limit=100)
+        _blocked_cache_ts = now
+    except Exception as e:
+        logger.debug("[Bocha] Failed to load blocked domains: %s", e)
+        _blocked_cache = []
+        _blocked_cache_ts = now
+    return _blocked_cache
+```
+
+`global` 声明让函数直接改写模块级变量，缓存因此是所有实例共用的一份；失败分支同样刷新时间戳，等于把故障也缓存 60 秒。`limit=100` 对应博查 `exclude` 参数能接受的上限。
 
 ## 4. 从响应字段到结果列表
 
-解析函数 `_parse_response()`（`backend/search/bocha.py:124`）沿着 `data → webPages → value` 逐层取字段，每一层都先判类型再取下一层，遇到不符合预期的结构就返回空列表。条目级只取三个字段：`url`、`name`、`snippet`（`backend/search/bocha.py:158`），其中 `title` 来自 `name` 而不是 `title`，这是与 Exa 最直接的字段口径差异。
+解析函数 `_parse_response()`（`backend/search/bocha.py`）沿着 `data → webPages → value` 逐层取字段，每一层都先判类型再取下一层，遇到不符合预期的结构就返回空列表。条目级只取三个字段：`url`、`name`、`snippet`（`backend/search/bocha.py`），其中 `title` 来自 `name` 而不是 `title`，这是与 Exa 最直接的字段口径差异。
 
-`totalEstimatedMatches` 只用于日志（`backend/search/bocha.py:164`），不参与结果构造。
+```python
+# backend/search/bocha.py（节选）
+results_data = data.get("data", {})
+if not isinstance(results_data, dict):
+    return []
+web_pages = results_data.get("webPages", {})
+if not isinstance(web_pages, dict):
+    return []
+items = web_pages.get("value", [])
+if not isinstance(items, list):
+    return []
+
+results = []
+for item in items:
+    ...
+    results.append(SearchResult(
+        url=url,
+        title=item.get("name", ""),      # 博查的标题字段叫 name
+        snippet=item.get("snippet", ""),
+    ))
+```
+
+`isinstance` 检查是逐层的防御：上游某层返回了字符串或 `null`，函数就退回空列表，而不是在下一层 `.get()` 上抛 `AttributeError`。
+
+`totalEstimatedMatches` 只用于日志（`backend/search/bocha.py`），不参与结果构造。
 
 ## 5. Exa 走 MCP 端点
 
-Exa 客户端的 `EXA_MCP_URL` 固定为 `https://mcp.exa.ai/mcp`（`backend/search/exa.py:36`），请求体是标准 JSON-RPC 调用 `tools/call`，工具名 `web_search_exa`，参数包含 `query`、`numResults`、`type=auto` 与 `livecrawl=fallback`（`backend/search/exa.py:48`）。
+Exa 客户端的 `EXA_MCP_URL` 固定为 `https://mcp.exa.ai/mcp`（`backend/search/exa.py`），请求体是标准 JSON-RPC 调用 `tools/call`，工具名 `web_search_exa`，参数包含 `query`、`numResults`、`type=auto` 与 `livecrawl=fallback`（`backend/search/exa.py`）。
 
-与博查相比，这里多了一层协议：HTTP 状态码只用来判 429，其余语义都在 JSON-RPC 的 `result` 里。请求头声明同时接受 `application/json` 与 `text/event-stream`（`backend/search/exa.py:68`），因为 MCP 服务端可能以 SSE 流式返回。`numResults` 直接使用调用方传入的 `max_results`，这一点与博查的固定候选池不同：Exa 这条实现不放大候选池。
+```python
+# backend/search/exa.py（节选）
+payload = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+        "name": "web_search_exa",
+        "arguments": {
+            "query": query,
+            "numResults": max_results,
+            "type": "auto",
+            "livecrawl": "fallback",
+        },
+    },
+}
+
+response = await client.post(
+    self.EXA_MCP_URL, json=payload,
+    headers={"Accept": "application/json, text/event-stream",
+             "Content-Type": "application/json"},
+)
+if response.status_code == 429:
+    raise RateLimitError("Exa API rate limit exceeded")
+```
+
+JSON-RPC 是「用统一信封调用远端方法」的协议：`method` 指定要调的函数、`params` 放参数、`id` 用来把响应与请求对上。`Accept` 头同时声明接受 JSON 与 `text/event-stream`，因为服务端可能以 SSE 流式返回。
+
+与博查相比，这里多了一层协议：HTTP 状态码只用来判 429，其余语义都在 JSON-RPC 的 `result` 里。请求头声明同时接受 `application/json` 与 `text/event-stream`（`backend/search/exa.py`），因为 MCP 服务端可能以 SSE 流式返回。`numResults` 直接使用调用方传入的 `max_results`，这一点与博查的固定候选池不同：Exa 这条实现不放大候选池。
 
 ## 6. SSE 与直连 JSON 两条解析路径
 
-`_parse_exa_response()`（`backend/search/exa.py:87`）先尝试从 SSE 行里提取 `content`，失败再按普通 JSON 解析。SSE 分支逐行扫描以 `data:` 开头的行，把冒号后的内容按 JSON 解析，取出 `result.content`（`backend/search/exa.py:97`）。
+`_parse_exa_response()`先尝试从 SSE 行里提取 `content`，失败再按普通 JSON 解析。SSE 分支逐行扫描以 `data:` 开头的行，把冒号后的内容按 JSON 解析，取出 `result.content`（`backend/search/exa.py`）。
 
-直连分支直接解析整个响应体，取 `result.content` 列表（`backend/search/exa.py:113`）。两条路径最后都汇入 `_extract_results()`，把 `content` 每一项的 `text` 字段交给文本解析。
+```python
+# backend/search/exa.py（节选）
+def _extract_content(self, text: str) -> Optional[list]:
+    """从 SSE data: 行中提取 content 字段。"""
+    for line in text.strip().split("\n"):
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        json_str = line[5:].strip()
+        try:
+            parsed = json.loads(json_str)
+            result = parsed.get("result")
+            if result and "content" in result:
+                return result["content"]
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return None
+```
+
+SSE（Server-Sent Events）是服务端按行持续推送文本的格式，每行自带 `data:` 前缀；`line[5:]` 就是切掉这个前缀后的 JSON 片段。
+
+直连分支直接解析整个响应体，取 `result.content` 列表（`backend/search/exa.py`）。两条路径最后都汇入 `_extract_results()`，把 `content` 每一项的 `text` 字段交给文本解析。
 
 ```mermaid
 flowchart TD
@@ -108,24 +218,24 @@ flowchart TD
 
 ## 7. 文本响应的两种格式
 
-Exa 返回的是人可读文本，格式并不固定。`_parse_text_results()`（`backend/search/exa.py:133`）用「是否含 `Title:` 或 `URL:`」作为分派条件：
+Exa 返回的是人可读文本，格式并不固定。`_parse_text_results()`（`backend/search/exa.py`）用「是否含 `Title:` 或 `URL:`」作为分派条件：
 
-- 结构化格式逐行推进，`Title:` 开启一条新结果，`URL:` 记录地址，`Highlights:` 之后的非空行累加进 `snippet`，`Published:` / `Author:` / `ID:` / `Score:` 一律跳过（`backend/search/exa.py:177`）。最后一行结果在循环外补收（`backend/search/exa.py:185`）。
-- 简单格式按空行切块，要求每块至少两行且第二行以 `http` 开头，第一行作为标题、第二行作为地址、其余合并成摘要（`backend/search/exa.py:194`）。两种格式都可能解析出零条结果。这种情况不抛异常，基类因此不会重试，也不会触发回退——「格式没匹配上」与「确实没有结果」在当前实现里无法区分，这是一处已知的口径模糊。
+- 结构化格式逐行推进，`Title:` 开启一条新结果，`URL:` 记录地址，`Highlights:` 之后的非空行累加进 `snippet`，`Published:` / `Author:` / `ID:` / `Score:` 一律跳过（`backend/search/exa.py`）。最后一行结果在循环外补收（`backend/search/exa.py`）。
+- 简单格式按空行切块，要求每块至少两行且第二行以 `http` 开头，第一行作为标题、第二行作为地址、其余合并成摘要（`backend/search/exa.py`）。两种格式都可能解析出零条结果。这种情况不抛异常，基类因此不会重试，也不会触发回退——「格式没匹配上」与「确实没有结果」在当前实现里无法区分，这是一处已知的口径模糊。
 
 ## 8. 两个来源的字段口径对照
 
 | 维度 | 博查 | Exa |
 | --- | --- | --- |
 | 协议 | HTTP POST，JSON 请求与响应 | MCP JSON-RPC，响应可能是 SSE |
-| 认证 | `Authorization: Bearer` 头（`backend/search/bocha.py:117`） | 无显式鉴权头 |
+| 认证 | `Authorization: Bearer` 头（`backend/search/bocha.py`） | 无显式鉴权头 |
 | 候选池 | 固定 `count=60` | 透传 `numResults` |
 | 标题字段 | `name` | 文本里的 `Title:` 行 |
 | 摘要字段 | `snippet` | `Highlights:` 段拼接 |
 | 致命错误来源 | 状态码 401/403/402 与业务错误码 | 仅 429 有专门分支 |
-| 超时 | `BOCHA_TIMEOUT=30`（`backend/config.py:78`） | `EXA_TIMEOUT=30`（`backend/config.py:87`） |
+| 超时 | `BOCHA_TIMEOUT=30`（`backend/config.py`） | `EXA_TIMEOUT=30`（`backend/config.py`） |
 
-两条实现都自带 `httpx.AsyncClient` 的懒加载与所有权标记：外部传入客户端时不关闭，自己创建的在 `close()` 里关闭（`backend/search/bocha.py:110`、`backend/search/exa.py:80`）。这让测试可以注入假客户端而不泄漏连接。
+两条实现都自带 `httpx.AsyncClient` 的懒加载与所有权标记：外部传入客户端时不关闭，自己创建的在 `close()` 里关闭（`backend/search/bocha.py`、`backend/search/exa.py`）。这让测试可以注入假客户端而不泄漏连接。
 
 ## 9. 易错点
 

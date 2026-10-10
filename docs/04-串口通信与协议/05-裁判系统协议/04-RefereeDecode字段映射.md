@@ -11,7 +11,7 @@ updated: 2026-10-07
 
 `RefereeProtocol` 校验通过后调用 `frame_cb_(cmd_id, &buffer_[7], data_len_)`，把数据段首指针交给上层。`RefereeDecode::onFrame` 负责把这条原始指针解释成具体字段，并写入全局 `g_referee_info`。映射采用零拷贝：不复制数据段，直接把指针 `reinterpret_cast` 成对应结构体指针，再逐字段取值。
 
-`g_referee_info`（类型 `RefereeInfo`）是所有下游代码唯一能看到裁判数据的地方。字段清单在 `Communication/Inc/referee_decode.h:456-499`，声明为全局对象在 `:501`。
+`g_referee_info`（类型 `RefereeInfo`）是所有下游代码唯一能看到裁判数据的地方。字段清单在 `Communication/Inc/referee_decode.h`，声明为全局对象在 。
 
 零拷贝的成立依赖三个隐含前提：结构体按 1 字节对齐、线上字节序与主机一致、位域分配顺序与编译器一致。三者都在默认配置下成立，改动任一项都会让字段静默取错值，而不是报错。
 
@@ -54,63 +54,63 @@ flowchart TD
 3. 逐字段取值写入 `g_referee_info`。
 4. 六个字段都写完之后置 `updated = true`。
 
-映射表按命令列出结构体字段、`g_referee_info` 目标字段与写入行号。未列出的结构体成员不被读取。
+映射表按命令列出结构体字段、`g_referee_info` 目标字段与处理方式。未列出的结构体成员不被读取。
 
-### 0x0001 GAME_STATUS（`referee_decode.cpp:33-46`）
+### 0x0001 GAME_STATUS（`referee_decode.cpp`）
 
-| 结构体字段 | 类型 | 目标字段 | 写入行 |
+| 结构体字段 | 类型 | 目标字段 | 处理 |
 | --- | --- | --- | --- |
-| `game_type` | 位域 4 位 | `game_type` | `:40` |
-| `game_progress` | 位域 4 位 | `game_progress` | `:41` |
-| `stage_remain_time` | `uint16_t` | `stage_remain_time` | `:42` |
+| `game_type` | 位域 4 位 | `game_type` | 写入 |
+| `game_progress` | 位域 4 位 | `game_progress` | 写入 |
+| `stage_remain_time` | `uint16_t` | `stage_remain_time` | 写入 |
 | `SyncTimeStamp` | `uint64_t` | 无 | 不读取 |
 
-### 0x0201 ROBOT_STATUS（`:52-73`）
+### 0x0201 ROBOT_STATUS
 
-| 结构体字段 | 类型 | 目标字段 | 写入行 |
+| 结构体字段 | 类型 | 目标字段 | 处理 |
 | --- | --- | --- | --- |
-| `robot_id` | `uint8_t` | `robot_id` | `:59` |
-| `robot_level` | `uint8_t` | `robot_level` | `:60` |
-| `current_HP` | `uint16_t` | `current_hp` | `:62` |
-| `maximum_HP` | `uint16_t` | `max_hp` | `:63` |
-| `chassis_power_limit` | `uint16_t` | `chassis_power_limit` | `:65` |
-| `power_management_gimbal_output` | 位域 1 位 | `gimbal_output` | `:67` |
-| `power_management_chassis_output` | 位域 1 位 | `chassis_output` | `:68` |
-| `power_management_shooter_output` | 位域 1 位 | `shooter_output` | `:69` |
+| `robot_id` | `uint8_t` | `robot_id` | 写入 |
+| `robot_level` | `uint8_t` | `robot_level` | 写入 |
+| `current_HP` | `uint16_t` | `current_hp` | 写入 |
+| `maximum_HP` | `uint16_t` | `max_hp` | 写入 |
+| `chassis_power_limit` | `uint16_t` | `chassis_power_limit` | 写入 |
+| `power_management_gimbal_output` | 位域 1 位 | `gimbal_output` | 写入 |
+| `power_management_chassis_output` | 位域 1 位 | `chassis_output` | 写入 |
+| `power_management_shooter_output` | 位域 1 位 | `shooter_output` | 写入 |
 | `shooter_barrel_cooling_value`、`shooter_barrel_heat_limit` | `uint16_t` | 无 | 不读取 |
 
-### 0x0202 POWER_HEAT_DATA（`:79-93`）
+### 0x0202 POWER_HEAT_DATA
 
-| 结构体字段 | 类型 | 目标字段 | 写入行 |
+| 结构体字段 | 类型 | 目标字段 | 处理 |
 | --- | --- | --- | --- |
-| `buffer_energy` | `uint16_t` | `buffer_energy` | `:86` |
-| `shooter_17mm_heat` | `uint16_t` | `shooter_heat_17mm` | `:88` |
-| `shooter_42mm_heat` | `uint16_t` | `shooter_heat_42mm` | `:89` |
+| `buffer_energy` | `uint16_t` | `buffer_energy` | 写入 |
+| `shooter_17mm_heat` | `uint16_t` | `shooter_heat_17mm` | 写入 |
+| `shooter_42mm_heat` | `uint16_t` | `shooter_heat_42mm` | 写入 |
 | `reserved1`、`reserved2`、`reserved3` | 保留 | 无 | 不读取 |
 
-### 0x0203 ROBOT_POS（`:99-112`）
+### 0x0203 ROBOT_POS
 
-| 结构体字段 | 类型 | 目标字段 | 写入行 |
+| 结构体字段 | 类型 | 目标字段 | 处理 |
 | --- | --- | --- | --- |
-| `x` | `float` | `robot_x` | `:106` |
-| `y` | `float` | `robot_y` | `:107` |
-| `angle` | `float` | `robot_angle` | `:108` |
+| `x` | `float` | `robot_x` | 写入 |
+| `y` | `float` | `robot_y` | 写入 |
+| `angle` | `float` | `robot_angle` | 写入 |
 
-### 0x0206 HURT_DATA（`:118-130`）
+### 0x0206 HURT_DATA
 
-| 结构体字段 | 类型 | 目标字段 | 写入行 |
+| 结构体字段 | 类型 | 目标字段 | 处理 |
 | --- | --- | --- | --- |
-| `armor_id` | 位域 4 位 | `hurt_armor_id` | `:125` |
-| `hurt_HP_deduction_reason` | 位域 4 位 | `hurt_type` | `:126` |
+| `armor_id` | 位域 4 位 | `hurt_armor_id` | 写入 |
+| `hurt_HP_deduction_reason` | 位域 4 位 | `hurt_type` | 写入 |
 
-### 0x0207 SHOOT_DATA（`:136-150`）
+### 0x0207 SHOOT_DATA
 
-| 结构体字段 | 类型 | 目标字段 | 写入行 |
+| 结构体字段 | 类型 | 目标字段 | 处理 |
 | --- | --- | --- | --- |
-| `bullet_type` | `uint8_t` | `bullet_type` | `:143` |
-| `shooter_number` | `uint8_t` | `shooter_id` | `:144` |
-| `launching_frequency` | `uint8_t` | `shoot_freq` | `:145` |
-| `initial_speed` | `float` | `bullet_speed` | `:146` |
+| `bullet_type` | `uint8_t` | `bullet_type` | 写入 |
+| `shooter_number` | `uint8_t` | `shooter_id` | 写入 |
+| `launching_frequency` | `uint8_t` | `shoot_freq` | 写入 |
+| `initial_speed` | `float` | `bullet_speed` | 写入 |
 
 六个分支的结构体字段命名与目标字段命名并不一一对应：`current_HP` 对应 `current_hp`，`shooter_number` 对应 `shooter_id`，`hurt_HP_deduction_reason` 对应 `hurt_type`。改字段名时两侧要同时改。
 
@@ -118,7 +118,7 @@ flowchart TD
 
 ## pack(1) 决定了 sizeof 与对齐
 
-线上结构体全部包在 `#pragma pack(push,1)` 与 `#pragma pack(pop)` 之间（`Communication/Inc/referee_decode.h:15`、`:450`）。压缩到 1 字节对齐后，`sizeof` 与线上数据段长度相等，且 `alignof` 为 1，任意字节偏移的 `reinterpret_cast` 都不会触发未对齐访问。
+线上结构体全部包在 `#pragma pack(push,1)` 与 `#pragma pack(pop)` 之间（`Communication/Inc/referee_decode.h`）。压缩到 1 字节对齐后，`sizeof` 与线上数据段长度相等，且 `alignof` 为 1，任意字节偏移的 `reinterpret_cast` 都不会触发未对齐访问。
 
 去掉 `pack` 会同时改变两件东西。下面是用同一份头文件去掉 pack 前后编译得到的 `sizeof`：
 
@@ -133,32 +133,32 @@ flowchart TD
 | `hurt_data_t` | 1 | 1 | 单个字节，无填充 |
 | `referee_frame_header_t` | 5 | 6 | `uint16_t` 后补 1 字节 |
 
-`onFrame` 的长度校验写的是 `len < sizeof(结构体)`。去掉 pack 后 `game_status_t` 的 `sizeof` 变成 16，11 字节的合法数据段会被判为过短，比赛状态数据全部丢失。`RefereeInfo` 定义在 `pragma pack(pop)` 之后（`referee_decode.h:456-499`），不参与线上映射，它是普通结构体，本机编译 `sizeof` 为 48。
+`onFrame` 的长度校验写的是 `len < sizeof(结构体)`。去掉 pack 后 `game_status_t` 的 `sizeof` 变成 16，11 字节的合法数据段会被判为过短，比赛状态数据全部丢失。`RefereeInfo` 定义在 `pragma pack(pop)` 之后（`referee_decode.h`），不参与线上映射，它是普通结构体，本机编译 `sizeof` 为 48。
 
 对齐还决定访问方式。pack 到 1 之后 `uint16_t` 与 `float` 成员可能落在奇数地址上，Cortex-M4 支持非对齐的字访问，但同一成员的访问会拆成多次总线动作，这是压缩布局的效率代价。
 
 ## 小端与位域顺序的隐含前提
 
-帧内所有多字节整数按小端存放：`data_len_` 与 `cmd_id_` 的合成方式是低字节在前（`referee_protocol.cpp:47`、`:88`），CRC16 的接收值同样低字节在前（`:114-116`）。数据段里的 `uint16_t`、`uint64_t` 与 `float` 通过 `reinterpret_cast` 直接按主机字节序读取，隐含前提是线上也是小端。Cortex-M4 为小端，与官方协议的整数编码一致；`float` 字段（`robot_pos_t` 的三个坐标、`shoot_data_t` 的弹速、`power_heat_data_t` 的 `reserved3`）的线上字节序按官方手册为小端，此处属按手册推断，未在两块板上抓包核对。
+帧内所有多字节整数按小端存放：`data_len_` 与 `cmd_id_` 的合成方式是低字节在前（`referee_protocol.cpp`），CRC16 的接收值同样低字节在前。数据段里的 `uint16_t`、`uint64_t` 与 `float` 通过 `reinterpret_cast` 直接按主机字节序读取，隐含前提是线上也是小端。Cortex-M4 为小端，与官方协议的整数编码一致；`float` 字段（`robot_pos_t` 的三个坐标、`shoot_data_t` 的弹速、`power_heat_data_t` 的 `reserved3`）的线上字节序按官方手册为小端，此处属按手册推断，未在两块板上抓包核对。
 
 位域顺序同样依赖编译器。`game_status_t` 把 `game_type` 与 `game_progress` 声明在同一个 `uint8_t` 里，各占 4 位；`hurt_data_t` 的 `armor_id` 与 `hurt_HP_deduction_reason` 同样。GCC 在小端目标上把先声明的位域放在低位，因此 `game_type` 占字节 0 的低 4 位，`game_progress` 占高 4 位。这一顺序由编译器 ABI 决定，属推断，未在目标板上核对。
 
 ## updated 标志的实际语义
 
-`RefereeInfo::updated` 初值为 `false`（`Communication/Inc/referee_decode.h:498`），六个分支在写完全部字段后都置 `true`。全工程没有把 `updated` 清回 `false` 的代码，也没有重置接口。
+`RefereeInfo::updated` 初值为 `false`（`Communication/Inc/referee_decode.h`），六个分支在写完全部字段后都置 `true`。全工程没有把 `updated` 清回 `false` 的代码，也没有重置接口。
 
 由此它的语义是「自本机启动以来成功解析过至少一帧」，而不是「本帧刚更新」。按命令区分也做不到：任一分支置位后，其它命令的更新无法从该标志看出，各字段也没有各自的版本号或时间戳。把 `updated` 当逐帧新数据标志会造成两个后果：首次置位后的每一轮循环都会当成有新数据；某一路命令断更时无法察觉。
 
-全局对象没有读写锁或双缓冲。写入发生在 `USART6_IRQHandler` 的中断上下文，读取发生在任务上下文。Cortex-M4 对对齐的 16 位与 32 位读写是单指令，单个字段不会撕裂，但一组跨命令的字段可能来自不同帧。底盘板只读 `bullet_speed`（`Task/Src/ControlCenterTask.cpp:123`），没有这种跨字段一致性问题。
+全局对象没有读写锁或双缓冲。写入发生在 `USART6_IRQHandler` 的中断上下文，读取发生在任务上下文。Cortex-M4 对对齐的 16 位与 32 位读写是单指令，单个字段不会撕裂，但一组跨命令的字段可能来自不同帧。底盘板只读 `bullet_speed`（`Task/Src/ControlCenterTask.cpp`），没有这种跨字段一致性问题。
 
 ## 两块板的定义位置与消费点
 
-两块板的 `referee_decode.cpp` 只有一行不同：云台板在 `:9` 定义 `g_referee_info`，底盘板在 `:9` 写成 `extern`，定义本体放在 `Message_Bus/message_bus.cpp:13`，并在 `Message_Bus/message_bus.h:60` 声明。
+两块板的 `referee_decode.cpp` 只有一行不同：云台板在  定义 `g_referee_info`，底盘板在  写成 `extern`，定义本体放在 `Message_Bus/message_bus.cpp`，并在 `Message_Bus/message_bus.h` 声明。
 
 | 板 | 定义位置 | 读取者 | 读到的字段 |
 | --- | --- | --- | --- |
-| 云台板 | `Communication/Src/referee_decode.cpp:9` | 无 | 无 |
-| 底盘板 | `Message_Bus/message_bus.cpp:13` | `Task/Src/ControlCenterTask.cpp:123`、`:127` | `bullet_speed` |
+| 云台板 | `Communication/Src/referee_decode.cpp` | 无 | 无 |
+| 底盘板 | `Message_Bus/message_bus.cpp` | `Task/Src/ControlCenterTask.cpp` | `bullet_speed` |
 
 云台板的 `onFrame` 同样会被链接进固件，但因为没有接收通路，六个分支不会被执行，`updated` 永远保持 `false`。底盘板在 1 ms 控制周期里读第 123 行的弹速做发弹统计，第 127 行把统计值随裁判数据发到 CAN。
 
@@ -185,9 +185,9 @@ sequenceDiagram
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
-| 认为结构体没有 pack | 手动按默认对齐算偏移，字段全错 | `referee_decode.h:15`、`:450` |
-| 去掉 pack 后长度校验拒绝合法帧 | 11 字节状态帧被丢弃 | `referee_decode.cpp:35` 的 `sizeof` 变为 16 |
-| 把 `updated` 当逐帧标志 | 每轮循环都读到「有新数据」 | 置位后无清除代码，`:44` 等六处 |
+| 认为结构体没有 pack | 手动按默认对齐算偏移，字段全错 | `referee_decode.h` |
+| 去掉 pack 后长度校验拒绝合法帧 | 11 字节状态帧被丢弃 | `referee_decode.cpp` 的 `sizeof` 变为 16 |
+| 把 `updated` 当逐帧标志 | 每轮循环都读到「有新数据」 | 置位后无清除代码， 等六处 |
 | 认为六个分支覆盖全部字段 | 枪口冷却值、热量上限、保留字段取不到 | 结构体成员未写入 `g_referee_info` |
 | 按结构体字段名找目标字段 | `shooter_number`、`hurt_HP_deduction_reason` 找不到 | 目标名是 `shooter_id`、`hurt_type` |
 | 在云台板读裁判字段 | 全是初值 0 | 无接收通路，分支不执行 |
@@ -237,10 +237,10 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Communication/Inc/referee_decode.h` | `pack`（:15、:450）、`RefereeInfo`（:456-499）、`updated` 初值（:498）、全局声明（:501） |
-| `2026OmniSentryGimbal/Communication/Src/referee_decode.cpp` | 六个解析分支（:33-150）、`updated` 置位（:44 等六处） |
-| `2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp` | 小端合成（:47、:88）、CRC16 接收值（:114-116） |
-| `2026OmniSentryChassis/Message_Bus/message_bus.cpp` | `g_referee_info` 定义（:13） |
-| `2026OmniSentryChassis/Message_Bus/message_bus.h` | 全局声明（:60） |
-| `2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp` | 读取 `bullet_speed`（:123、:127） |
-| `2026OmniSentryGimbal/Communication/Inc/referee_protocol.h` | `buffer_[256]`（:41） |
+| `2026OmniSentryGimbal/Communication/Inc/referee_decode.h` | `pack`、`RefereeInfo`、`updated` 初值、全局声明 |
+| `2026OmniSentryGimbal/Communication/Src/referee_decode.cpp` | 六个解析分支各自置位 `updated` |
+| `2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp` | 小端合成、CRC16 接收值 |
+| `2026OmniSentryChassis/Message_Bus/message_bus.cpp` | `g_referee_info` 定义 |
+| `2026OmniSentryChassis/Message_Bus/message_bus.h` | 全局声明 |
+| `2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp` | 读取 `bullet_speed` |
+| `2026OmniSentryGimbal/Communication/Inc/referee_protocol.h` | `buffer_[256]` |

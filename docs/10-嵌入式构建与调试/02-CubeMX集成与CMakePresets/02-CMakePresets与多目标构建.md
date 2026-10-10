@@ -86,7 +86,7 @@ $$\text{flags} = \text{TARGET\_FLAGS} + \text{CMAKE\_C\_FLAGS} + \text{CMAKE\_C\
 | 公共 C 标志 | `-Wall -fdata-sections -ffunction-sections` | 同 |
 | 配置标志 | `-O0 -g3` | `-Os -g0` |
 
-`cmake/stm32cubemx/CMakeLists.txt:8` 用生成器表达式按配置给 `DEBUG` 宏：`$<$<CONFIG:Debug>:DEBUG>`。构建类型未指定时，顶层 `CMakeLists.txt:15-19` 兜底为 `Debug`。
+`cmake/stm32cubemx/CMakeLists.txt` 用生成器表达式按配置给 `DEBUG` 宏：`$<$<CONFIG:Debug>:DEBUG>`。构建类型未指定时，顶层 `CMakeLists.txt` 兜底为 `Debug`。
 
 三段里只有最后一段随配置变化，前两段对 Debug 与 Release 相同。因此从 Debug 切到 Release 时，指令集、FPU 与段粒度都不变，变化的是优化级别与调试信息，这也是两个构建目录可以共用同一份源码与工具链文件的原因。
 
@@ -94,20 +94,20 @@ $$\text{flags} = \text{TARGET\_FLAGS} + \text{CMAKE\_C\_FLAGS} + \text{CMAKE\_C\
 
 | 字段 | 底盘 | 云台 |
 | --- | --- | --- |
-| version 3 | `CMakePresets.json:2` | 同 |
-| default 预设 | `:3-12` | `:3-12` |
-| generator | `:7` Ninja | `:7` Ninja |
-| binaryDir | `:8` `build/${presetName}` | `:8` 同 |
-| toolchainFile | `:9` `cmake/gcc-arm-none-eabi.cmake` | `:9` 同 |
-| Debug 与 Release | `:13-19`、`:20-26` | `:13-19`、`:20-26` |
-| buildPresets.Debug | `:30-31` 指向 `Debug-1` | `:29-31` 指向 `Debug` |
-| buildPresets.Release | `:33-36` 指向 `Release` | `:33-36` 同 |
+| version 3 | `CMakePresets.json` | 同 |
+| default 预设 | — | — |
+| generator |  Ninja |  Ninja |
+| binaryDir |  `build/${presetName}` |  同 |
+| toolchainFile |  `cmake/gcc-arm-none-eabi.cmake` |  同 |
+| Debug 与 Release | — | — |
+| buildPresets.Debug |  指向 `Debug-1` |  指向 `Debug` |
+| buildPresets.Release |  指向 `Release` |  同 |
 
 两板的配置预设完全一致，构建预设里只有 Debug 一项的回指名不同。这个差异不影响配置阶段，只在 `cmake --build --preset` 时暴露。
 
 ## 6. 底盘板的 Debug-1 缺陷
 
-底盘 `CMakePresets.json:30-31` 的构建预设名为 `Debug-1`，`configurePreset` 也写 `Debug-1`，但 `configurePresets` 里只有 `default`、`Debug`、`Release`。按预设解析规则，`cmake --build --preset Debug-1` 会因找不到同名配置预设而失败；云台板同一位置写的是 `Debug`，可用。该命令在本次未实测，结论由文件内容推出。
+底盘 `CMakePresets.json` 的构建预设名为 `Debug-1`，`configurePreset` 也写 `Debug-1`，但 `configurePresets` 里只有 `default`、`Debug`、`Release`。按预设解析规则，`cmake --build --preset Debug-1` 会因找不到同名配置预设而失败；云台板同一位置写的是 `Debug`，可用。该命令在本次未实测，结论由文件内容推出。
 
 修复方式有两种：把构建预设名与回指名都改为 `Debug`，或在配置预设里补一个 `Debug-1`。前一种改动面小，后一种会多出重复的构建目录。选择哪一种取决于是否真的需要两套 Debug 配置。
 
@@ -135,7 +135,7 @@ $$\text{flags} = \text{TARGET\_FLAGS} + \text{CMAKE\_C\_FLAGS} + \text{CMAKE\_C\
 
 ## 8. clang 工具链不在预设内
 
-`cmake/starm-clang.cmake` 存在于两板 `cmake/` 目录，但 `CMakePresets.json` 的 `toolchainFile` 只指向 `gcc-arm-none-eabi.cmake`。默认库模式为 `STARM_PICOLIBC`（`starm-clang.cmake:28`），要用它得手动传 `-DCMAKE_TOOLCHAIN_FILE=cmake/starm-clang.cmake`。
+`cmake/starm-clang.cmake` 存在于两板 `cmake/` 目录，但 `CMakePresets.json` 的 `toolchainFile` 只指向 `gcc-arm-none-eabi.cmake`。默认库模式为 `STARM_PICOLIBC`（`starm-clang.cmake`），要用它得手动传 `-DCMAKE_TOOLCHAIN_FILE=cmake/starm-clang.cmake`。
 
 手动传参会绕开 `binaryDir`，输出落在命令行当前目录或 `-B` 指定的位置。用 clang 工具链时建议单独指定构建目录，避免与预设目录混在一起，导致下一次用预设构建时读到错误的缓存。
 
@@ -143,12 +143,12 @@ $$\text{flags} = \text{TARGET\_FLAGS} + \text{CMAKE\_C\_FLAGS} + \text{CMAKE\_C\
 
 | # | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- | --- |
-| 1 | 用不存在的构建预设 | 配置阶段报找不到预设 | 底盘 `CMakePresets.json:30-31` |
+| 1 | 用不存在的构建预设 | 配置阶段报找不到预设 | 底盘 `CMakePresets.json` |
 | 2 | 在错误的构建目录里构建 | 编出别的板或主机目标的产物 | `build/Debug`、`cmake-build-debug` |
 | 3 | 改了工具链仍用旧 cache | 编译器与缓存不一致，报错难定位 | `cmake-build-debug/CMakeCache.txt` |
 | 4 | 把 `build/Debug` 当成当前板 | 源路径指向另一板 | 底盘 `build/Debug/build.ninja` |
-| 5 | 认为预设会覆盖全部构建目录 | `cmake-build-*` 不受预设管理 | `CMakePresets.json:8` |
-| 6 | 只改 `CMAKE_BUILD_TYPE` 就改优化 | 需要重新 configure 才生效 | `gcc-arm-none-eabi.cmake:31-34` |
+| 5 | 认为预设会覆盖全部构建目录 | `cmake-build-*` 不受预设管理 | `CMakePresets.json` |
+| 6 | 只改 `CMAKE_BUILD_TYPE` 就改优化 | 需要重新 configure 才生效 | `gcc-arm-none-eabi.cmake` |
 | 7 | 用 clang 工具链却不指定 | 报链接器或库缺失 | `starm-clang.cmake` 未被预设引用 |
 
 ## 10. 小结

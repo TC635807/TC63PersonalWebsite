@@ -7,20 +7,20 @@ updated: 2026-10-07
 
 # 全局上下文的两个 Provider
 
-这个前端的全局状态只有两块：当前登录用户与当前主题。两者都用 React Context 实现，各自一个 Provider、一个消费 Hook，放在 `src/contexts/` 下。认证上下文管 110 行，主题上下文管 59 行，逻辑都不复杂，但它们的初始化时机与失效处理决定了整个应用的第一屏行为。
+这个前端的全局状态只有两块：当前登录用户与当前主题。两者都用 React Context 实现，各自一个 Provider、一个消费 Hook，放在 `src/contexts/` 下。Context 是 React 的跨层共享机制：Provider 在树上提供一个值，消费 Hook 内部用 `useContext` 取出来，深层组件不必一路接 props。这里选 Context 而不是状态库，是因为全局状态只有两块、消费点也少，引入外部库的收益不抵它的依赖与心智成本；代价是 Provider 的 value 每次新建对象都会让所有消费方重渲染，所以字段要尽量稳定。认证上下文管 110 行，主题上下文管 59 行，逻辑都不复杂，但它们的初始化时机与失效处理决定了整个应用的第一屏行为。
 
-认证上下文的消费方有四个：外壳读用户与登录态（`src/App.tsx:50`）、主题包装层读用户来决定存储键（`src/App.tsx:843`）、登录页拿 `login` 与 `register`（`src/components/AuthPage.tsx:13`）、定价页读登录态（`src/components/PricingPage.tsx:44`）。主题上下文只有一个消费方，用户菜单里的明暗切换（`src/components/UserMenu.tsx:18`）。 两个 Provider 可以按"约定、生命周期、存储、嵌套顺序"四段来读，重点在几个容易忽略的失效路径。
+认证上下文的消费方有四个：外壳读用户与登录态（`src/App.tsx`）、主题包装层读用户来决定存储键、登录页拿 `login` 与 `register`（`src/components/AuthPage.tsx`）、定价页读登录态（`src/components/PricingPage.tsx`）。主题上下文只有一个消费方，用户菜单里的明暗切换（`src/components/UserMenu.tsx`）。 两个 Provider 可以按"约定、生命周期、存储、嵌套顺序"四段来读，重点在几个容易忽略的失效路径。
 
 ## 两个上下文各自持有什么
 
 | 上下文 | 字段 | 定义位置 | 消费方 |
 | --- | --- | --- | --- |
-| 认证 | `user`、`loading`、`error`、`login`、`register`、`logout`、`refreshUser`、`isAuthenticated` | `src/contexts/AuthContext.tsx:5-14` | `src/App.tsx:50`、`src/App.tsx:843`、`src/components/AuthPage.tsx:13`、`src/components/PricingPage.tsx:44` |
-| 主题 | `theme`、`toggleTheme` | `src/contexts/ThemeContext.tsx:5-8` | `src/components/UserMenu.tsx:18` |
+| 认证 | `user`、`loading`、`error`、`login`、`register`、`logout`、`refreshUser`、`isAuthenticated` | `src/contexts/AuthContext.tsx` | `src/App.tsx`、`src/components/AuthPage.tsx`、`src/components/PricingPage.tsx` |
+| 主题 | `theme`、`toggleTheme` | `src/contexts/ThemeContext.tsx` | `src/components/UserMenu.tsx` |
 
 字段划分对应两类用途：认证上下文把"用户数据"、"加载中"、"错误信息"与四个动作平铺在一起，调用方按需取；主题上下文只暴露当前值与切换函数，持久化细节不外露。
 
-`isAuthenticated` 没有独立状态，它从用户对象派生（`src/contexts/AuthContext.tsx:96`）：
+`isAuthenticated` 没有独立状态，它从用户对象派生（`src/contexts/AuthContext.tsx`）：
 
 ```tsx
 isAuthenticated: !!user,
@@ -30,7 +30,7 @@ isAuthenticated: !!user,
 
 ## 空值约定与使用处的报错
 
-两个上下文都以 `null` 作为默认值，并在消费 Hook 里显式检查（`src/contexts/AuthContext.tsx:16`、`src/contexts/ThemeContext.tsx:10`）：
+两个上下文都以 `null` 作为默认值，并在消费 Hook 里显式检查（`src/contexts/AuthContext.tsx`、`src/contexts/ThemeContext.tsx`）：
 
 ```tsx
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -41,13 +41,13 @@ if (!context) {
 }
 ```
 
-用 `null` 而不是给一个字段齐全的假默认值，是为了让"忘了包 Provider"立刻变成一个错误，而不是变成一堆 `undefined` 调用。报错信息里写明必须包在哪个 Provider 内（`src/contexts/AuthContext.tsx:106-108`、`src/contexts/ThemeContext.tsx:57`）。
+用 `null` 而不是给一个字段齐全的假默认值，是为了让"忘了包 Provider"立刻变成一个错误，而不是变成一堆 `undefined` 调用。报错信息里写明必须包在哪个 Provider 内（`src/contexts/AuthContext.tsx`、`src/contexts/ThemeContext.tsx`）。
 
-类型层面，Hook 的返回类型是去掉 `null` 的具体类型（`src/contexts/AuthContext.tsx:104`、`src/contexts/ThemeContext.tsx:55`），所以调用方不需要处理空值，检查集中在 Hook 内部。
+类型层面，Hook 的返回类型是去掉 `null` 的具体类型（`src/contexts/AuthContext.tsx`、`src/contexts/ThemeContext.tsx`），所以调用方不需要处理空值，检查集中在 Hook 内部。
 
 ## 认证状态的三段生命周期
 
-启动阶段先读本地 token，再请求当前用户（`src/contexts/AuthContext.tsx:23-39`）：
+启动阶段先读本地 token，再请求当前用户（`src/contexts/AuthContext.tsx`）：
 
 ```tsx
 const loadUser = useCallback(async () => {
@@ -68,11 +68,11 @@ const loadUser = useCallback(async () => {
 }, [])
 ```
 
-没有 token 时直接结束加载，不去打接口；有 token 但请求失败时清掉 token 并保持用户为空。`loading` 初始值为 `true`（`src/contexts/AuthContext.tsx:20`），因此首屏在没有结论前一定处于加载态，这个初始值同时被 `ThemedApp` 用来决定是否渲染主题层（`src/App.tsx:843-844`）。
+没有 token 时直接结束加载，不去打接口；有 token 但请求失败时清掉 token 并保持用户为空。`loading` 初始值为 `true`（`src/contexts/AuthContext.tsx`），因此首屏在没有结论前一定处于加载态，这个初始值同时被 `ThemedApp` 用来决定是否渲染主题层（`src/App.tsx`）。
 
-登录与注册的流程一致：清错误、调接口（接口内部写入 token）、再拉一次用户资料写进状态（`src/contexts/AuthContext.tsx:45-56`、`:58-69`）。失败时把可读信息写进 `error` 并继续向上抛（`src/contexts/AuthContext.tsx:51-55`），让表单能显示提示。
+登录与注册的流程一致：清错误、调接口（接口内部写入 token）、再拉一次用户资料写进状态（`src/contexts/AuthContext.tsx`）。失败时把可读信息写进 `error` 并继续向上抛，让表单能显示提示。
 
-退出只做两件事：清 token、把用户置空（`src/contexts/AuthContext.tsx:71-74`）。刷新用户是给任务完成后的积分更新用的（`src/contexts/AuthContext.tsx:76-84`），失败时保留当前用户数据，只打警告。
+退出只做两件事：清 token、把用户置空（`src/contexts/AuthContext.tsx`）。刷新用户是给任务完成后的积分更新用的，失败时保留当前用户数据，只打警告。
 
 ```mermaid
 flowchart TD
@@ -90,7 +90,7 @@ flowchart TD
 
 ## token 的存取与请求头
 
-token 放在 `localStorage` 里，不进 Context，由 `src/api/auth.ts` 单独封装。键名是常量（`src/api/auth.ts:3`），三个操作分别读写删（`src/api/auth.ts:5-15`）：
+token 放在 `localStorage` 里，不进 Context，由 `src/api/auth.ts` 单独封装。localStorage 是浏览器按域名隔离的键值存储，刷新与重开页面都还在，但不会自动带进请求，所以要每次现读现拼头。键名是常量，三个操作分别读写删：
 
 ```tsx
 const TOKEN_KEY = 'knowledgeDiver.token'
@@ -99,9 +99,24 @@ export function setToken(token: string): void { localStorage.setItem(TOKEN_KEY, 
 export function clearToken(): void { localStorage.removeItem(TOKEN_KEY) }
 ```
 
-请求函数在每次调用时现读 token 并拼 `Authorization` 头（`src/api/auth.ts:17-25`、`:76-91`）。这样做的结果是：登录接口写入 token 之后，后续任何请求都能立刻带上，不需要等 Context 状态更新；反过来，退出后即使有旧请求在途，新请求也不会再带头。
+请求函数在每次调用时现读 token 并拼 `Authorization` 头（`src/api/auth.ts`）。这样做的结果是：登录接口写入 token 之后，后续任何请求都能立刻带上，不需要等 Context 状态更新；反过来，退出后即使有旧请求在途，新请求也不会再带头。
 
-两个请求函数的分工需要区分：`authFetch` 允许匿名（无 token 时不加头，`src/api/auth.ts:23-25`），用于登录与注册；`authFetchWithToken` 在无 token 时直接抛错（`src/api/auth.ts:77-80`），用于所有需要登录的业务接口。后者对 `FormData` 不设置 `Content-Type`（`src/api/auth.ts:85-88`），避免覆盖浏览器生成的 multipart 边界。
+两个请求函数的分工需要区分，关键几行如下（`src/api/auth.ts`）：
+
+```tsx
+// authFetch：允许匿名，有 token 才加头
+if (token) headers['Authorization'] = `Bearer ${token}`
+
+// authFetchWithToken：无 token 直接抛错，用于需要登录的接口
+if (!token) throw new Error('未认证')
+
+// 上传时不要把 Content-Type 写死
+if (!(options.body instanceof FormData)) {
+  headers['Content-Type'] = 'application/json'
+}
+```
+
+`authFetch` 用于登录与注册；`authFetchWithToken` 用于所有需要登录的业务接口。后者对 `FormData` 不设置 `Content-Type`，是因为 multipart/form-data 的编码要求由浏览器自动生成一段 boundary 来分隔各字段，手写 `Content-Type` 会把 boundary 丢掉。
 
 ```mermaid
 sequenceDiagram
@@ -122,7 +137,7 @@ sequenceDiagram
 
 ## 主题按用户隔离
 
-主题值只有两个，初始值从 `localStorage` 读（`src/contexts/ThemeContext.tsx:12-17`），并且在浏览器环境缺失时回落到暗色（`src/contexts/ThemeContext.tsx:13`）：
+主题值只有两个，初始值从 `localStorage` 读（`src/contexts/ThemeContext.tsx`），并且在浏览器环境缺失时回落到暗色：
 
 ```tsx
 function readStoredTheme(key: string): Theme {
@@ -133,25 +148,42 @@ function readStoredTheme(key: string): Theme {
 }
 ```
 
-初始化用的是惰性初值函数（`src/contexts/ThemeContext.tsx:23`），只在首次渲染时读一次存储，后续渲染不再读。
+初始化用的是惰性初值函数——`useState(() => ...)` 只在首次渲染执行一次，之后的渲染不再调用它——所以存储只读一次。
 
-切换用户时存储键会变（外层传进来的是 `theme:用户名`，`src/App.tsx:845`），组件需要换一份存储。它用两个引用区分三件事（`src/contexts/ThemeContext.tsx:24-35`）：
+切换用户时存储键会变（外层传进来的是 `theme:用户名`），组件需要换一份存储。它用两个 ref 区分三件事——ref 在多次渲染间保持同一个对象，改它不会触发重渲染：
 
 | 引用 | 作用 |
 | --- | --- |
-| `storageKeyRef` | 每次渲染同步为当前键，供写入 effect 使用（`src/contexts/ThemeContext.tsx:28`） |
-| `prevKeyRef` | 记住上一次的键，用来判断是否真的发生了切换（`src/contexts/ThemeContext.tsx:25`、`:32-33`） |
-| `theme` 状态 | 当前主题，切换键时从新键重新读（`src/contexts/ThemeContext.tsx:34`） |
+| `storageKeyRef` | 每次渲染同步为当前键，供写入 effect 使用（`src/contexts/ThemeContext.tsx`） |
+| `prevKeyRef` | 记住上一次的键，用来判断是否真的发生了切换（`src/contexts/ThemeContext.tsx`） |
+| `theme` 状态 | 当前主题，切换键时从新键重新读（`src/contexts/ThemeContext.tsx`） |
 
-两个 effect 分工明确：写 DOM 与存储的 effect 只依赖 `theme`（`src/contexts/ThemeContext.tsx:39-42`），切换键的 effect 只依赖 `storageKey`（`src/contexts/ThemeContext.tsx:31-35`）。如果用同一个 effect 同时依赖两者，键变化时会先把旧主题按新键写一遍，把用户在新键下的偏好覆盖掉。
+两个 effect 分工明确（`src/contexts/ThemeContext.tsx`）；effect 指组件渲染后执行的副作用函数，依赖数组决定它何时重跑：
 
-主题最终落到根元素的属性上（`src/contexts/ThemeContext.tsx:40`），样式用属性选择器覆盖：
+```tsx
+// 切换键：只在 storageKey 变化时从新键重读
+useEffect(() => {
+  if (prevKeyRef.current === storageKey) return
+  prevKeyRef.current = storageKey
+  setTheme(readStoredTheme(storageKey))
+}, [storageKey])
+
+// 持久化：只依赖 theme，写入用的键通过 ref 现取
+useEffect(() => {
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem(storageKeyRef.current, theme)
+}, [theme])
+```
+
+写 DOM 与存储的 effect 只依赖 `theme`，切换键的 effect 只依赖 `storageKey`。如果用同一个 effect 同时依赖两者，键变化时会先把旧主题按新键写一遍，把用户在新键下的偏好覆盖掉。
+
+主题最终落到根元素的属性上（`src/contexts/ThemeContext.tsx`），样式用属性选择器覆盖：
 
 ```tsx
 document.documentElement.setAttribute('data-theme', theme)
 ```
 
-暗色是默认样式，浅色是一层覆盖（`src/styles.css:93`、`src/styles.css:135-136`）。切换动作本身只是一个三元翻转（`src/contexts/ThemeContext.tsx:44-46`）。
+暗色是默认样式，浅色是一层覆盖（`src/styles.css`）。切换动作本身只是一个三元翻转（`src/contexts/ThemeContext.tsx`）。
 
 ```mermaid
 stateDiagram-v2
@@ -165,33 +197,33 @@ stateDiagram-v2
 
 ## Provider 嵌套顺序与重渲染
 
-外壳的嵌套是 `AuthProvider` 包 `ThemedApp`，`ThemedApp` 再包 `ThemeProvider` 与 `AppContent`（`src/App.tsx:842-858`）。顺序由依赖决定：存储键需要用户信息，所以主题层必须在认证层内部。
+外壳的嵌套是 `AuthProvider` 包 `ThemedApp`，`ThemedApp` 再包 `ThemeProvider` 与 `AppContent`（`src/App.tsx`）。顺序由依赖决定：存储键需要用户信息，所以主题层必须在认证层内部。
 
-`ThemedApp` 在认证未完成时返回 `null`（`src/App.tsx:844`），于是主题层与整个应用都推迟到认证有结论之后才挂载。这样主题只需要读一次存储，不会出现"先按匿名键渲染、登录后再切换"的闪烁。
+`ThemedApp` 在认证未完成时返回 `null`（`src/App.tsx`），于是主题层与整个应用都推迟到认证有结论之后才挂载。这样主题只需要读一次存储，不会出现"先按匿名键渲染、登录后再切换"的闪烁。
 
-两个 Provider 的 `value` 都是每次渲染新建的对象字面量（`src/contexts/AuthContext.tsx:88-97`、`src/contexts/ThemeContext.tsx:49`），因此 Provider 自身每次重渲染都会让所有消费方重渲染。对认证上下文来说这不是问题，因为用户数据变化本来就该广播；对主题上下文来说消费方只有一个，代价可以忽略。
+两个 Provider 的 `value` 都是每次渲染新建的对象字面量（`src/contexts/AuthContext.tsx`、`src/contexts/ThemeContext.tsx`），因此 Provider 自身每次重渲染都会让所有消费方重渲染。对认证上下文来说这不是问题，因为用户数据变化本来就该广播；对主题上下文来说消费方只有一个，代价可以忽略。
 
 ## 易错点
 
 | 位置 | 问题 | 建议 |
 | --- | --- | --- |
-| `src/contexts/AuthContext.tsx:33-35` | 任何错误都会清 token，包括网络不通或后端 5xx，用户会被动退出登录 | 区分 401 与网络错误，只在鉴权失败时清 token |
-| `src/contexts/AuthContext.tsx:71-74` | 退出只清本地 token，没有通知服务端 | 若后端支持注销接口，在清本地前调用一次 |
-| `src/contexts/AuthContext.tsx:76-84` | 刷新用户失败时静默保留旧数据 | 需要把失败暴露给调用方，否则积分显示会长期停在旧值 |
-| `src/contexts/ThemeContext.tsx:39-42` | 持久化 effect 只依赖 theme，写入键靠引用读取 | 保持这个分工，不要把 storageKey 加进依赖 |
-| `src/contexts/ThemeContext.tsx:13` | 服务端渲染分支直接返回暗色 | 本工程是纯客户端渲染，该分支属于防御性写法 |
-| `src/App.tsx:843-844` | 认证加载期间返回 null，首屏白屏时间等于 /me 请求耗时 | 需要改进时给主题层一个不依赖用户的默认键 |
+| `src/contexts/AuthContext.tsx` | 任何错误都会清 token，包括网络不通或后端 5xx，用户会被动退出登录 | 区分 401 与网络错误，只在鉴权失败时清 token |
+| `src/contexts/AuthContext.tsx` | 退出只清本地 token，没有通知服务端 | 若后端支持注销接口，在清本地前调用一次 |
+| `src/contexts/AuthContext.tsx` | 刷新用户失败时静默保留旧数据 | 需要把失败暴露给调用方，否则积分显示会长期停在旧值 |
+| `src/contexts/ThemeContext.tsx` | 持久化 effect 只依赖 theme，写入键靠引用读取 | 保持这个分工，不要把 storageKey 加进依赖 |
+| `src/contexts/ThemeContext.tsx` | 服务端渲染分支直接返回暗色 | 本工程是纯客户端渲染，该分支属于防御性写法 |
+| `src/App.tsx` | 认证加载期间返回 null，首屏白屏时间等于 /me 请求耗时 | 需要改进时给主题层一个不依赖用户的默认键 |
 
 ## 小结
 
 ### 核心概念
 
-* 全局状态只有认证与主题两块，各自一个 Provider、一个消费 Hook（`src/contexts/AuthContext.tsx:104`、`src/contexts/ThemeContext.tsx:55`）。
-* 上下文默认值为 `null`，消费 Hook 内抛错，让漏包 Provider 立刻暴露（`src/contexts/AuthContext.tsx:106-108`）。
-* `isAuthenticated` 由用户对象派生，不单独维护（`src/contexts/AuthContext.tsx:96`）。
-* token 存在 `localStorage`，由 `src/api/auth.ts` 封装，请求时现读（`src/api/auth.ts:3-15`、`:76-91`）。
-* 主题存储键按用户名隔离，切换键与持久化由两个 effect 分开处理（`src/contexts/ThemeContext.tsx:31-42`）。
-* 主题落到根元素的 `data-theme` 属性，样式用属性选择器覆盖（`src/contexts/ThemeContext.tsx:40`、`src/styles.css:93`）。
+* 全局状态只有认证与主题两块，各自一个 Provider、一个消费 Hook（`src/contexts/AuthContext.tsx`、`src/contexts/ThemeContext.tsx`）。
+* 上下文默认值为 `null`，消费 Hook 内抛错，让漏包 Provider 立刻暴露（`src/contexts/AuthContext.tsx`）。
+* `isAuthenticated` 由用户对象派生，不单独维护（`src/contexts/AuthContext.tsx`）。
+* token 存在 `localStorage`，由 `src/api/auth.ts` 封装，请求时现读。
+* 主题存储键按用户名隔离，切换键与持久化由两个 effect 分开处理（`src/contexts/ThemeContext.tsx`）。
+* 主题落到根元素的 `data-theme` 属性，样式用属性选择器覆盖（`src/contexts/ThemeContext.tsx`）。
 
 ### 设计权衡
 

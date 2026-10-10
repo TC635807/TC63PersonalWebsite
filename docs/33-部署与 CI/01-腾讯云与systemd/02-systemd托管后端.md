@@ -7,13 +7,35 @@ updated: 2026-10-07
 
 # systemd 如何托管后端
 
-ssh 登上云主机，敲 `systemctl status knowledgediver`，屏幕上会给出一个 Main PID、一行 `active (running)` 和最近几条日志。这几项都由 systemd 根据 `deploy/knowledgediver.service` 这份十几行的配置文件托管出来，后端自己并不打印它们。读懂这十几行，等于读懂了后端进程的目录、环境、启动命令与死亡后的行为。
+ssh 登上云主机，敲 `systemctl status knowledgediver`，屏幕上会给出一个 Main PID、一行 `active (running)` 和最近几条日志。这几项都由 systemd 根据 `deploy/knowledgediver.service` 这份十几行的配置文件托管出来，后端自己并不打印它们。没有 systemd，后端就只是一个挂在 ssh 会话上的前台进程：终端一关就退出，崩溃了也不会被拉起，更谈不上开机自启。和 `nohup`、`screen` 这类「把进程挂到后台」的做法相比，systemd 的差别在于它是声明式的：unit 描述的是期望状态（该跑什么、崩了怎么办），机器重启后它按这份描述重放；后台工具只保住当前这个进程，机器一关就没了。代价是要学 unit 的写法，收益是托管行为集中在一份可版本化的文件里。读懂这十几行，等于读懂了后端进程的目录、环境、启动命令与死亡后的行为。
 
 unit 文件的三段结构对上 `ExecStart` 里的每个参数之后，仓库里两份长得不一样的 service 文件、日志与重启的实际命令，以及几个容易看错的地方都能串起来。
 
 ## 一份 unit 文件被 systemd 读成什么
 
 unit 文件分成 `[Unit]`、`[Service]`、`[Install]` 三段。第一段描述"它是什么、什么时候可以启动"；第二段描述"怎么启动、失败怎么办"；第三段描述"开机时属于哪个 target"。
+
+systemd 是 Linux 上的服务管理器，也是系统启动后由内核拉起的第一个进程；「拉起某个常驻程序、崩了按策略重拉、开机自启、把它的输出收进日志」这些活都归它管。描述「跑哪个程序、怎么跑」的配置文件叫 unit，服务类的扩展名是 `.service`。`deploy/knowledgediver.service` 全文只有十几行：
+
+```ini
+[Unit]
+Description=KnowledgeDiver Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/knowledgediver
+Environment="PYTHONPATH=/opt/knowledgediver"
+Environment="HF_ENDPOINT=https://hf-mirror.com"
+ExecStart=/opt/knowledgediver/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+三段各管一件事：`[Unit]` 说它是什么、依赖谁；`[Service]` 是主体，说怎么启动、失败怎么办；`[Install]` 说 `systemctl enable` 时它挂到哪个启动目标上。
 
 | 段 | 键 | 作用 |
 | --- | --- | --- |
@@ -46,9 +68,25 @@ sequenceDiagram
 
 ## 逐行读 ExecStart 里的每个参数
 
-脚本生成的启动命令是 `ExecStart=$APP_DIR/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000`（`deploy/deploy.sh:129`）。其中 `$APP_DIR/.venv/bin/uvicorn` 用的是虚拟环境里的解释器入口，而不是系统 `uvicorn`，这样后端依赖与系统 Python 隔离；`backend.main:app` 指向应用对象；后两个参数决定只监听本机 8000。
+脚本生成的启动命令是 `ExecStart=$APP_DIR/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000`。其中 `$APP_DIR/.venv/bin/uvicorn` 用的是虚拟环境里的解释器入口，而不是系统 `uvicorn`，这样后端依赖与系统 Python 隔离；`backend.main:app` 指向应用对象；后两个参数决定只监听本机 8000。
 
-环境变量有三行（`deploy/deploy.sh:126-128`）：`PYTHONPATH` 让 `backend` 包可以被找到；`HF_ENDPOINT` 指向国内镜像，模型下载走它；`PLAYWRIGHT_BROWSERS_PATH` 指向项目内的浏览器目录。三行缺一行都会以某种功能失败的形式暴露出来，而不是启动失败。
+环境变量有三行，都由 `deploy/deploy.sh` 写进 unit：`PYTHONPATH` 让 `backend` 包可以被找到；`HF_ENDPOINT` 指向国内镜像，模型下载走它；`PLAYWRIGHT_BROWSERS_PATH` 指向项目内的浏览器目录。三行缺一行都会以某种功能失败的形式暴露出来，而不是启动失败。
+
+```bash
+# deploy/deploy.sh 第 6 步：把 unit 写到 /etc/systemd/system/（节选）
+cat > /etc/systemd/system/knowledgediver.service << EOF
+[Service]
+WorkingDirectory=$APP_DIR
+Environment="PYTHONPATH=$APP_DIR"
+Environment="HF_ENDPOINT=https://hf-mirror.com"
+Environment="PLAYWRIGHT_BROWSERS_PATH=$APP_DIR/.playwright"
+ExecStart=$APP_DIR/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+EOF
+```
+
+这里的 `$APP_DIR` 会在写入前被替换成脚本所在仓库的真实路径，所以换目录部署不用改脚本；留档版里写死的 `/opt/knowledgediver` 是那种情况的示例。三行环境变量各自解决一个问题：`PYTHONPATH` 是 Python 的模块搜索路径，不设它时从 `/etc/systemd/system` 启动的进程找不到项目的 `backend` 包（`backend.main:app` 直接 import 失败）；`HF_ENDPOINT` 是 HuggingFace 的下载入口，指向 `hf-mirror.com` 是为了国内拉模型不走直连；`PLAYWRIGHT_BROWSERS_PATH` 告诉 Playwright 去项目内的 `.playwright` 找浏览器。
 
 ## 两份 service 文件的差异
 
@@ -56,11 +94,11 @@ sequenceDiagram
 
 | 项 | 留档版 | 脚本生成版 |
 | --- | --- | --- |
-| 目录 | `/opt/knowledgediver`（`deploy/knowledgediver.service:7-10`） | `$APP_DIR`，即仓库根（`deploy/deploy.sh:125-129`） |
-| 浏览器路径 | 没有这一行 | 有 `PLAYWRIGHT_BROWSERS_PATH`（`deploy/deploy.sh:128`） |
+| 目录 | `/opt/knowledgediver`（写死在 `deploy/knowledgediver.service`） | `$APP_DIR`，即仓库根（由 `deploy/deploy.sh` 生成） |
+| 浏览器路径 | 没有这一行 | 有 `PLAYWRIGHT_BROWSERS_PATH`，由 `deploy/deploy.sh` 生成 |
 | 其余键 | 与生成版一致 | 与留档版一致 |
 
-差异里最有后果的是浏览器路径。`server_start.sh:139-145` 专门检查了这一行：脚本里的 `export` 不会传进 systemd 服务，如果 unit 里没有 `PLAYWRIGHT_BROWSERS_PATH`，后端运行时找不到项目内的浏览器。留档版照抄安装会踩到这个点。
+差异里最有后果的是浏览器路径。`server_start.sh` 里有一处专门检查了这一行：脚本里的 `export` 不会传进 systemd 服务，如果 unit 里没有 `PLAYWRIGHT_BROWSERS_PATH`，后端运行时找不到项目内的浏览器。留档版照抄安装会踩到这个点。
 
 ## 进程死掉之后会发生什么
 
@@ -83,7 +121,26 @@ stateDiagram-v2
 
 ## 前端 service 与 nginx 的关系
 
-`deploy/knowledgediver-frontend.service` 用 `npm run preview -- --host 127.0.0.1 --port 5173`（`deploy/knowledgediver-frontend.service:8`）把构建产物再起一个预览服务。nginx 的配置里没有任何一行指向 5173，对外页面始终由 `dist` 目录直接提供。`server_start.sh:166-178` 的处理顺序也印证了这一点：它优先 `systemctl restart knowledgediver-frontend`，服务没装时退化成 `nohup npm run preview`。两条路都不会影响对外访问。
+`deploy/knowledgediver-frontend.service` 用 `npm run preview -- --host 127.0.0.1 --port 5173` 把构建产物再起一个预览服务。nginx 的配置里没有任何一行指向 5173，对外页面始终由 `dist` 目录直接提供。`server_start.sh` 里对前端的处理顺序也印证了这一点：它优先 `systemctl restart knowledgediver-frontend`，服务没装时退化成 `nohup npm run preview`。两条路都不会影响对外访问。
+
+```ini
+# deploy/knowledgediver-frontend.service（全文）
+[Unit]
+Description=KnowledgeDiver Frontend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/knowledgediver/frontend
+ExecStart=/usr/bin/npm run preview -- --host 127.0.0.1 --port 5173
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+它比后端 unit 还简单：就是一个常驻的 `npm run preview`，即 Vite 的静态预览服务器。它监听 5173 而不是 80/443，外面也没有任何转发指向它，所以重启它页面不会变化；留着它的意义只是本机也能用 systemd 的方式预览前端。
 
 ## 重启与看日志的命令
 
@@ -96,7 +153,9 @@ stateDiagram-v2
 | 开机自启 | `systemctl enable knowledgediver` |
 | 临时停掉自愈 | 改 `Restart=no` 后 `daemon-reload` |
 
-日志没有写到文件，而是进了 journal。`systemctl status` 只显示最后几行，追一次完整启动过程要用 `journalctl -u knowledgediver --since "10 min ago"`。
+日志没有写到文件，而是进了 journal。`systemctl status` 只显示最后几行，追一次完整启动过程要用 `journalctl -u knowledgediver --since "10 min ago"`。命令里的 `-u` 表示只看这个 unit 的日志，`-f` 表示持续跟随新输出，作用相当于日志版的 `tail -f`。
+
+改完 unit 之后容易漏掉 `daemon-reload`：systemd 启动时把 unit 文件读进内存，之后一直使用内存里的那一份；磁盘上的文件改了却不 reload，`restart` 用的仍是旧配置。
 
 ## 常见判断偏差
 

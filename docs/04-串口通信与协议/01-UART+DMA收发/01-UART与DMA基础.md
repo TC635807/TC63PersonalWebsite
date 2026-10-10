@@ -50,7 +50,7 @@ flowchart TD
     PB -. "8N1 时跳过校验位" .-> ST
 ```
 
-接收方在每个位时间的中间采样，避免边沿抖动。停止位为高说明本帧正常结束；停止位为低置帧错误 `FE`；校验位不符置校验错误 `PE`；上一个字节还没被读走又来了新字节置溢出错误 `ORE`。三个错误位在同一状态寄存器里，HAL 的 `__HAL_UART_CLEAR_IDLEFLAG` 会先读 `SR` 再读 `DR`，这一对读操作同时清掉了 `IDLE`、`RXNE`、`ORE`、`FE`、`NE`（`Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:502-508`、`:540`）。
+接收方在每个位时间的中间采样，避免边沿抖动。停止位为高说明本帧正常结束；停止位为低置帧错误 `FE`；校验位不符置校验错误 `PE`；上一个字节还没被读走又来了新字节置溢出错误 `ORE`。三个错误位在同一状态寄存器里，HAL 的 `__HAL_UART_CLEAR_IDLEFLAG` 会先读 `SR` 再读 `DR`，这一对读操作同时清掉了 `IDLE`、`RXNE`、`ORE`、`FE`、`NE`（`Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h`）。
 
 三类错误的共同点是都由硬件置位、都需要软件读写寄存器清除。漏清的后果是标志长期挂起，中断反复进入或状态判断失真。
 
@@ -58,7 +58,7 @@ flowchart TD
 
 USART 的接收采样时钟由 `PCLK` 分频得到。过采样 16 倍时，每个位时间被切成 16 个采样时钟；接收方取第 8、9、10 个采样点做多数表决，因此对波特率偏差的容忍度约为正负 3%。过采样 8 倍把采样点压缩到 3 个，容忍度下降到一半，最高可用速率提高到 `PCLK/8`。
 
-两个板都取 `UART_OVERSAMPLING_16`（`Core/Src/usart.c:53`、`:82`、`:111`），所以 `CR1` 的 `OVER8` 位为 0。选 16 倍的理由是容差更大，代价是相同 `PCLK` 下的最高波特率减半。本工程三路串口的波特率都不超过 115200，远未触及上限。
+两个板都取 `UART_OVERSAMPLING_16`（`Core/Src/usart.c`），所以 `CR1` 的 `OVER8` 位为 0。选 16 倍的理由是容差更大，代价是相同 `PCLK` 下的最高波特率减半。本工程三路串口的波特率都不超过 115200，远未触及上限。
 
 ## BRR 由分频值换算而来
 
@@ -66,13 +66,23 @@ USART 的接收采样时钟由 `PCLK` 分频得到。过采样 16 倍时，每�
 
 $$USARTDIV = \frac{f_{PCLK}}{16 \cdot Baud}$$
 
-`USARTDIV` 的高 12 位是整数部分（尾数），低 4 位是小数部分。HAL 不直接用浮点，而是把公式放大 100 倍后用整数运算，再拆回尾数和小数（`stm32f4xx_hal_uart.h:860-868`）：
+`USARTDIV` 的高 12 位是整数部分（尾数），低 4 位是小数部分。HAL 不直接用浮点，而是把公式放大 100 倍后用整数运算，再拆回尾数和小数（`stm32f4xx_hal_uart.h`）：
 
 $$DIV100 = \left\lfloor \frac{f_{PCLK} \times 25}{4 \cdot Baud} \right\rfloor, \quad mant = \left\lfloor DIV100 / 100 \right\rfloor, \quad frac = \left\lfloor \frac{(DIV100 - 100 \cdot mant) \times 16 + 50}{100} \right\rfloor$$
 
-写寄存器的值 `BRR = (mant << 4) + frac`。`UART_SetConfig` 在判断外设挂在哪条总线上之后调用这组宏：`USART1` 与 `USART6` 取 `PCLK2`，`USART2/3` 等取 `PCLK1`（`stm32f4xx_hal_uart.c:3764-3792`）。
+写寄存器的值 `BRR = (mant << 4) + frac`。`UART_SetConfig` 在判断外设挂在哪条总线上之后调用这组宏：`USART1` 与 `USART6` 取 `PCLK2`，`USART2/3` 等取 `PCLK1`（`stm32f4xx_hal_uart.c`）。HAL 的宏就是这段算术的直译（摘自 `stm32f4xx_hal_uart.h`）：
 
-云台板的时钟链是 HSE 12 MHz 经 `PLLM=6` 得 2 MHz，`PLLN=168` 得 336 MHz，`PLLP=2` 得 SYSCLK 168 MHz；`APB1CLKDivider = RCC_HCLK_DIV4` 得 `PCLK1 = 42 MHz`，`APB2CLKDivider = RCC_HCLK_DIV2` 得 `PCLK2 = 84 MHz`（`Core/Src/main.c:165-185`）。两条总线的分频比不同，同一个波特率算出的 `BRR` 也不同。
+```c
+#define UART_DIVMANT_SAMPLING16(_PCLK_, _BAUD_)   (UART_DIV_SAMPLING16(_PCLK_, _BAUD_) / 100U)
+#define UART_BRR_SAMPLING16(_PCLK_, _BAUD_) \
+    ((UART_DIVMANT_SAMPLING16(_PCLK_, _BAUD_) << 4U) + \
+     (UART_DIVFRAQ_SAMPLING16(_PCLK_, _BAUD_) & 0xF0U) + \
+     (UART_DIVFRAQ_SAMPLING16(_PCLK_, _BAUD_) & 0x0FU))
+```
+
+`<< 4` 把尾数放到高 12 位，两个 `&` 把小数部分合进低 4 位，中间量用 `uint64_t` 防溢出。宏里的 `_PCLK_` 必须传该实例真正挂的那条总线频率，否则算出来的分频值直接是错的。
+
+云台板的时钟链是 HSE 12 MHz 经 `PLLM=6` 得 2 MHz，`PLLN=168` 得 336 MHz，`PLLP=2` 得 SYSCLK 168 MHz；`APB1CLKDivider = RCC_HCLK_DIV4` 得 `PCLK1 = 42 MHz`，`APB2CLKDivider = RCC_HCLK_DIV2` 得 `PCLK2 = 84 MHz`（`Core/Src/main.c`）。两条总线的分频比不同，同一个波特率算出的 `BRR` 也不同。
 
 | 实例 | 总线 | `PCLK` | 目标波特率 | `USARTDIV` | 尾数 | 小数 | `BRR` | 实际波特率 | 偏差 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -92,15 +102,15 @@ $$DIV100 = \left\lfloor \frac{f_{PCLK} \times 25}{4 \cdot Baud} \right\rfloor, \
 
 | 实例 | 波特率 | `WordLength` | `Parity` | `StopBits` | `Mode` | 出处 |
 | --- | --- | --- | --- | --- | --- | --- |
-| USART1 | 115200 | `UART_WORDLENGTH_8B` | `UART_PARITY_NONE` | 1 | `UART_MODE_TX_RX` | `usart.c:47-51` |
-| USART3 | 100000 | `UART_WORDLENGTH_8B` | `UART_PARITY_EVEN` | 1 | `UART_MODE_RX` | `usart.c:76-80` |
-| USART6 | 115200 | `UART_WORDLENGTH_8B` | `UART_PARITY_NONE` | 1 | `UART_MODE_TX_RX` | `usart.c:105-109` |
+| USART1 | 115200 | `UART_WORDLENGTH_8B` | `UART_PARITY_NONE` | 1 | `UART_MODE_TX_RX` | `usart.c` |
+| USART3 | 100000 | `UART_WORDLENGTH_8B` | `UART_PARITY_EVEN` | 1 | `UART_MODE_RX` | `usart.c` |
+| USART6 | 115200 | `UART_WORDLENGTH_8B` | `UART_PARITY_NONE` | 1 | `UART_MODE_TX_RX` | `usart.c` |
 
-这三个字段由 `UART_SetConfig` 拼进 `CR1`：`WordLength` 决定 `M` 位，`Parity` 决定 `PCE` 与 `PS` 位（`stm32f4xx_hal_uart.c:3754-3757`）。USART3 写进去的组合是 `M=0`、`PCE=1`、`PS=0`，即偶校验。
+这三个字段由 `UART_SetConfig` 拼进 `CR1`：`WordLength` 决定 `M` 位，`Parity` 决定 `PCE` 与 `PS` 位（`stm32f4xx_hal_uart.c`）。USART3 写进去的组合是 `M=0`、`PCE=1`、`PS=0`，即偶校验。
 
 需要标出的一处口径冲突（按手册推断，待实测）：
 
-- 按 STM32F4 的 USART 手册，`M=0` 且 `PCE=1` 的帧是 7 数据位加 1 个校验位，校验位在数据寄存器里占最高位。HAL 的中断接收路径也按这个理解，对 8 位字长加校验的组合只取 `DR` 的低 7 位（`stm32f4xx_hal_uart.c:3650-3657`）。
+- 按 STM32F4 的 USART 手册，`M=0` 且 `PCE=1` 的帧是 7 数据位加 1 个校验位，校验位在数据寄存器里占最高位。HAL 的中断接收路径也按这个理解，对 8 位字长加校验的组合只取 `DR` 的低 7 位（`stm32f4xx_hal_uart.c`）。
 - DBUS 规定的是 8 数据位加偶校验。若严格按手册，USART3 的 `M=0` 少了一个数据位。
 - 本工程的接收走 DMA，DMA 按字节搬 `DR` 的低 8 位，会把校验位所在的那一位一并搬进缓冲区。由此推断 8 个原始数据位仍可能被完整重组，但这条推断没有在硬件上验证，标为待实测。
 - 若要和 DBUS 的 8 数据位严格对齐，正确组合是 9 位字长加偶校验（`M=1`、`PCE=1`，即 8 数据位加 1 校验位）。同批次其它 RoboMaster 工程在相同波特率下普遍用这个组合。
@@ -145,7 +155,7 @@ flowchart TD
 
 图中同时画出 SPI1 的两条请求，是为了说明 DMA2 上多外设共存时的通道占用（SPI1_RX 走 `DMA2_Stream2`、SPI1_TX 走 `DMA2_Stream3`，都属于通道 3；本单元正文只讨论串口三条，SPI1 的配置在 `Core/Src/spi.c`）。
 
-映射关系按外设数据手册的 DMA 请求表确定，不来自代码。本工程实际用到的三对是 `USART3_RX → DMA1_Stream1 通道 4`、`USART6_RX → DMA2_Stream1 通道 5`、`USART6_TX → DMA2_Stream6 通道 5`（`Core/Src/usart.c:180-181`、`:226-227`、`:244-245`，以及 `2026sentriomeni.ioc` 的 `Dma.*` 项）。
+映射关系按外设数据手册的 DMA 请求表确定，不来自代码。本工程实际用到的三对是 `USART3_RX → DMA1_Stream1 通道 4`、`USART6_RX → DMA2_Stream1 通道 5`、`USART6_TX → DMA2_Stream6 通道 5`（`Core/Src/usart.c`，以及 `2026sentriomeni.ioc` 的 `Dma.*` 项）。
 
 ## 普通模式、循环模式与双缓冲
 
@@ -169,29 +179,29 @@ stateDiagram-v2
 
 ## 自研 Init 如何覆盖 CubeMX 的缓冲模式
 
-本工程没有走 HAL 的 DMA 收发接口，而是自建 `UsartDma` 类。它的 `Init()` 先把 `CR3` 的 `DMAR` 与 `DMAT` 位置上，再用 `DMAEx_MultiBufferStart_NoIT` 打开 `DBM` 并启动流（`Communication/Src/usart_dma.cpp:33-48`、`:118-178`）。因此 CubeMX 生成时给每条流选的循环或普通模式，在启动后不再决定运行时行为，`DBM` 成为实际的缓冲策略。细节见 `02-空闲中断与双缓冲接收`。
+本工程没有走 HAL 的 DMA 收发接口，而是自建 `UsartDma` 类。它的 `Init` 先把 `CR3` 的 `DMAR` 与 `DMAT` 位置上，再用 `DMAEx_MultiBufferStart_NoIT` 打开 `DBM` 并启动流（`Communication/Src/usart_dma.cpp`）。因此 CubeMX 生成时给每条流选的循环或普通模式，在启动后不再决定运行时行为，`DBM` 成为实际的缓冲策略。细节见 `02-空闲中断与双缓冲接收`。
 
-| 句柄 | 外设 | 流与通道 | CubeMX 写入的模式 | 自研 `Init()` 之后的实际行为 |
+| 句柄 | 外设 | 流与通道 | CubeMX 写入的模式 | 自研 `Init` 之后的实际行为 |
 | --- | --- | --- | --- | --- |
 | `hdma_usart3_rx` | USART3 RX | DMA1_Stream1 通道 4 | `DMA_CIRCULAR` | 打开 `DBM`，按空闲中断手动切块 |
 | `hdma_usart6_rx` | USART6 RX | DMA2_Stream1 通道 5 | `DMA_NORMAL` | 同样被打开 `DBM`，与 USART3 走同一条代码路径 |
-| `hdma_usart6_tx` | USART6 TX | DMA2_Stream6 通道 5 | `DMA_CIRCULAR` | 未被 `Init()` 触碰，若走 HAL 发送则保持循环 |
+| `hdma_usart6_tx` | USART6 TX | DMA2_Stream6 通道 5 | `DMA_CIRCULAR` | 未被 `Init` 触碰，若走 HAL 发送则保持循环 |
 
 `hdma_usart6_tx` 的 `DMA_CIRCULAR` 在发送侧是不合适的取值：循环模式下发送流写满缓冲后自动重发，HAL 的传输完成回调会被反复触发，发送没有自然终点。本工程全工程没有 `Uart_Transmit_DMA` 的调用点，所以这条配置目前只是潜在问题，未在线路上表现（`04-收发实现与回调链` 有完整核对）。
 
-HAL 的 `HAL_DMA_Init` 负责把 `CR` 的其余字段写进去（`stm32f4xx_hal_dma.c:227-250`），自研启动函数只在此之后改 `DBM` 与地址，不改通道号。`__HAL_DMA_ENABLE` 与 `__HAL_DMA_SET_COUNTER` 是后续重装用到的两个宏（`stm32f4xx_hal_dma.h:417`、`:627`）。
+HAL 的 `HAL_DMA_Init` 负责把 `CR` 的其余字段写进去（`stm32f4xx_hal_dma.c`），自研启动函数只在此之后改 `DBM` 与地址，不改通道号。`__HAL_DMA_ENABLE` 与 `__HAL_DMA_SET_COUNTER` 是后续重装用到的两个宏（`stm32f4xx_hal_dma.h`）。
 
 ## 基础层面的易错点
 
 | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- |
-| 把 `BRR` 当波特率 | 直接用目标值或整数分频写寄存器 | `stm32f4xx_hal_uart.c:3784-3792` 由宏算出分频值 |
-| 忽略 `PCLK` 来源 | USART1/6 与 USART3 用了同一条总线的分频假设 | `stm32f4xx_hal_uart.c:3764-3783` 区分 `PCLK1` 与 `PCLK2` |
+| 把 `BRR` 当波特率 | 直接用目标值或整数分频写寄存器 | `stm32f4xx_hal_uart.c` 由宏算出分频值 |
+| 忽略 `PCLK` 来源 | USART1/6 与 USART3 用了同一条总线的分频假设 | `stm32f4xx_hal_uart.c` 区分 `PCLK1` 与 `PCLK2` |
 | 8 位字长加校验等于 8 数据位 | DBUS 口径按 8 数据位理解 | 按手册 `M=0`、`PCE=1` 为 7 数据位加校验，待实测 |
 | 认为 `NDTR` 是已传输字节数 | 用 `NDTR` 直接当长度 | `NDTR` 是剩余数，已传输数为 `初值 - NDTR` |
 | 认为 DMA 通道可自由选择 | 把请求接到任意流的任意通道 | 流与通道的对应由硬件固定，只能查表 |
 | 忽略流的独占性 | 两个外设抢同一条流 | 同一条流同一时刻只服务一个请求 |
-| 认为 CubeMX 的 DMA 模式在运行时生效 | 按 `CIRCULAR` 推演接收行为 | 自研 `Init()` 置 `DBM`，模式被覆盖 |
+| 认为 CubeMX 的 DMA 模式在运行时生效 | 按 `CIRCULAR` 推演接收行为 | 自研 `Init` 置 `DBM`，模式被覆盖 |
 
 ## 小结
 
@@ -202,7 +212,7 @@ HAL 的 `HAL_DMA_Init` 负责把 `CR` 的其余字段写进去（`stm32f4xx_hal_
 - USART1 与 USART6 挂 APB2 取 `PCLK2`，USART3 挂 APB1 取 `PCLK1`，两块板分别是 84 MHz 与 42 MHz。
 - STM32F4 的 DMA 由流与通道两层构成：流是传输引擎，通道是固定的请求选择；一条流同一时刻只服务一个请求。
 - 普通模式停在 `NDTR` 归零，循环模式自动重装；双缓冲用两块内存与 `CT` 位，把 `NDTR` 语义从总长度变成当前块的进度。
-- 本工程的接收 DMA 由自研 `Init()` 打开 `DBM`，CubeMX 的循环或普通模式在启动后不再生效。
+- 本工程的接收 DMA 由自研 `Init` 打开 `DBM`，CubeMX 的循环或普通模式在启动后不再生效。
 
 ### 设计权衡
 
@@ -236,12 +246,12 @@ HAL 的 `HAL_DMA_Init` 负责把 `CR` 的其余字段写进去（`stm32f4xx_hal_
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/usart.c` | 三路 USART 的帧格式（:46-53、:75-82、:104-111）与 DMA/NVIC 配置（:180-199、:226-263） |
-| `2026OmniSentryGimbal/Core/Src/main.c` | 时钟树（:165-185）与 `Uart_Init` 调用（:125） |
-| `2026OmniSentryGimbal/Core/Src/dma.c` | DMA 控制器时钟与 NVIC 使能（:39-63） |
-| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 自研接收启动与双缓冲入口（:33-48、:118-178） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c` | BRR 与 `CR1` 写入（:3731-3792）、中断接收的位宽处理（:3650-3657） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h` | BRR 宏（:860-878）、清空闲标志序列（:502-508、:540） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `HAL_DMA_Init` 写 `CR`（:227-250）、双缓冲中断回调（:804-825、:878-898） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h` | `__HAL_DMA_ENABLE`（:417）、`__HAL_DMA_SET_COUNTER`（:627） |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | 三路 USART 的帧格式与 DMA/NVIC 配置 |
+| `2026OmniSentryGimbal/Core/Src/main.c` | 时钟树与 `Uart_Init` 调用 |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | DMA 控制器时钟与 NVIC 使能 |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 自研接收启动与双缓冲入口 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c` | BRR 与 `CR1` 写入、中断接收的位宽处理 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h` | BRR 宏、清空闲标志序列 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `HAL_DMA_Init` 写 `CR`、双缓冲中断回调 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_dma.h` | `__HAL_DMA_ENABLE`、`__HAL_DMA_SET_COUNTER` |
 | `2026OmniSentryChassis/Core/Src/usart.c` | 与云台板逐字相同的串口配置 |

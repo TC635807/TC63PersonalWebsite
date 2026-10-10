@@ -45,7 +45,7 @@ flowchart TD
 
 ## 2. 逐项解读
 
-按原文件顺序列出，行号对应 `Core/Inc/FreeRTOSConfig.h`。
+按配置文件的原有顺序列出，条目名对应 `Core/Inc/FreeRTOSConfig.h`。
 
 ### 2.1 基础开关与调度
 
@@ -112,14 +112,14 @@ flowchart TD
 最后三项需要特别注意：本工程把 `SysTick_Handler` 交给了 FreeRTOS，而 HAL 的时基改用 TIM2：
 
 ```c
-/* Core/Inc/FreeRTOSConfig.h:130-133 */
+/* Core/Inc/FreeRTOSConfig.h */
 /* IMPORTANT: This define is commented when used with STM32Cube firmware, when the timebase source is SysTick,
               to prevent overwriting SysTick_Handler defined within STM32Cube HAL */
 
 #define xPortSysTickHandler SysTick_Handler
 ```
 
-对应的是 `Core/Src/stm32f4xx_hal_timebase_tim.c`。HAL 的时基由 TIM2 提供，优先级 `TICK_INT_PRIORITY = 15`（`stm32f4xx_hal_conf.h:151`）。这是正确的设计：SysTick 必须给 RTOS 用，HAL 另找定时器，否则 `HAL_GetTick()` 和内核滴答会互相覆盖。
+对应的是 `Core/Src/stm32f4xx_hal_timebase_tim.c`。HAL 的时基由 TIM2 提供，优先级 `TICK_INT_PRIORITY = 15`（`stm32f4xx_hal_conf.h`）。这是正确的设计：SysTick 必须给 RTOS 用，HAL 另找定时器，否则 `HAL_GetTick()` 和内核滴答会互相覆盖。
 
 ### 2.6 本工程没有定义、但很重要的项
 
@@ -129,7 +129,7 @@ flowchart TD
 | --- | --- | --- |
 | `configCHECK_FOR_STACK_OVERFLOW` | 0 | 栈溢出检测完全关闭（见 `04`） |
 | `INCLUDE_uxTaskGetStackHighWaterMark` | 0 | 栈水位 API 不可用 |
-| `configUSE_TIME_SLICING` | 1 | 同优先级任务按 tick 轮转。本工程运行期创建的 6 个任务（`defaultTask` + 5 个应用任务，不含内核 IDLE；`StartTestTask_Init()` 在 `freertos.c:134` 被注释掉）全是优先级 3，这条决定调度行为 |
+| `configUSE_TIME_SLICING` | 1 | 同优先级任务按 tick 轮转。本工程运行期创建的 6 个任务（`defaultTask` + 5 个应用任务，不含内核 IDLE；`StartTestTask_Init()` 在 `freertos.c` 被注释掉）全是优先级 3，这条决定调度行为 |
 | `configUSE_TIMERS` | 0 | 没有定时器任务，不需要 `vApplicationGetTimerTaskMemory` |
 | `configUSE_MALLOC_FAILED_HOOK` | 0 | 分配失败不会回调，静默返回 `NULL` |
 | `configUSE_TRACE_FACILITY` | 0 | 无 `uxTaskGetSystemState`，也没有运行时间统计 |
@@ -160,9 +160,9 @@ flowchart TD
 
 | 现象 | 来自哪一行代码 |
 | --- | --- |
-| `osDelay(1)` 就是 1 ms | `FireTask.cpp:70`、`ControlCenterTask.cpp:111` 的控制周期；`gimbalTask` 用的是 `osDelay(2)`（`GimbalTask.cpp:100`） |
-| `osDelay(5)` = 5 ms | `UsbConnectTask.cpp:148` 轮询 `USBD_BUSY` 的间隔 |
-| `osDelay(10)` = 10 ms | `UsbConnectTask.cpp:154` USB 任务主循环周期 |
+| `osDelay(1)` 就是 1 ms | `FireTask.cpp`、`ControlCenterTask.cpp` 的控制周期；`gimbalTask` 用的是 `osDelay(2)`（`GimbalTask.cpp`） |
+| `osDelay(5)` = 5 ms | `UsbConnectTask.cpp` 轮询 `USBD_BUSY` 的间隔 |
+| `osDelay(10)` = 10 ms | `UsbConnectTask.cpp` USB 任务主循环周期 |
 | `1.0f / 1000.0f` 当 dt | `ImuTask.cpp` 里 `1kHz` 的融合频率 |
 | `configTICK_RATE_HZ = 1000` 与 `HAL_Delay(1)` 数值相同 | 两个时基恰好都是 1 ms，见 `03` 易错点 3 |
 
@@ -179,10 +179,10 @@ flowchart TD
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)256)
 ```
 
-两个 `1` 意味着内核里 `tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE` 为真（`FreeRTOS.h:1048`），于是 CMSIS 的 `osThreadCreate` 会走双分支：
+两个 `1` 意味着内核里 `tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE` 为真（`FreeRTOS.h`），于是 CMSIS 的 `osThreadCreate` 会走双分支：
 
 ```c
-/* CMSIS_RTOS/cmsis_os.c:216-226（节选） */
+/* CMSIS_RTOS/cmsis_os.c（节选） */
 #if( configSUPPORT_STATIC_ALLOCATION == 1 ) &&  ( configSUPPORT_DYNAMIC_ALLOCATION == 1 )
   if((thread_def->buffer != NULL) && (thread_def->controlblock != NULL)) {
     handle = xTaskCreateStatic( ... );
@@ -254,7 +254,7 @@ flowchart TD
   I --> J["好消息 这类错误编译期就能发现"]
 ```
 
-本工程当前的状态：`configSUPPORT_STATIC_ALLOCATION = 1` 且已提供 `vApplicationGetIdleTaskMemory()`（`freertos.c:80-86`），其余开关都是关的，所以不需要任何别的回调。上面这张图的 6 条依赖里，本工程目前只需要满足第 5 条（静态分配的空闲任务内存）。
+本工程当前的状态：`configSUPPORT_STATIC_ALLOCATION = 1` 且已提供 `vApplicationGetIdleTaskMemory()`（`freertos.c`），其余开关都是关的，所以不需要任何别的回调。上面这张图的 6 条依赖里，本工程目前只需要满足第 5 条（静态分配的空闲任务内存）。
 
 ### 3.6 INCLUDE 裁剪：在省 Flash 和留余地之间
 
@@ -266,10 +266,10 @@ flowchart TD
 | `INCLUDE_vTaskCleanUpResources = 0` | 本来就已废弃，无所谓 |
 | `INCLUDE_uxTaskGetStackHighWaterMark` 未定义 | 栈水位不可用（见 `04`） |
 
-`INCLUDE_vTaskDelayUntil = 0` 需要单独说明。本工程 `GimbalTask` 在循环末尾调用 `osDelay(2)`（`GimbalTask.cpp:100`，源码注释写的是 1 ms 控制周期）：
+`INCLUDE_vTaskDelayUntil = 0` 需要单独说明。本工程 `GimbalTask` 在循环末尾调用 `osDelay(2)`（`GimbalTask.cpp`，源码注释写的是 1 ms 控制周期）：
 
 ```cpp
-/* Task/Src/GimbalTask.cpp:100 */
+/* Task/Src/GimbalTask.cpp */
 osDelay(2); // 1ms控制周期
 ```
 
@@ -288,18 +288,18 @@ osDelay(2); // 1ms控制周期
 
 ```bash
 $ grep -rn "configENABLE_FPU\|configENABLE_MPU" --include=*.c --include=*.h Middlewares/ Core/
-Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:984:#ifndef configENABLE_MPU
-Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:985:	#define configENABLE_MPU 0
-Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:988:/* Set configENABLE_FPU to 1 to enable FPU support and 0 to disable it. ...
-Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:990:#ifndef configENABLE_FPU
-Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:991:	#define configENABLE_FPU 1
-Core/Inc/FreeRTOSConfig.h:55:#define configENABLE_FPU                         0
-Core/Inc/FreeRTOSConfig.h:56:#define configENABLE_MPU                         0
+Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:#ifndef configENABLE_MPU
+Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:	#define configENABLE_MPU 0
+Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:/* Set configENABLE_FPU to 1 to enable FPU support and 0 to disable it. ...
+Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:#ifndef configENABLE_FPU
+Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:	#define configENABLE_FPU 1
+Core/Inc/FreeRTOSConfig.h:#define configENABLE_FPU                         0
+Core/Inc/FreeRTOSConfig.h:#define configENABLE_MPU                         0
 ```
 
 命中的全是"默认定义处"和本工程的定义处，没有一处使用。
 
-而且这里有个反直觉的地方：`FreeRTOS.h:991` 的默认值是 1，本工程把它改成了 0。如果 `configENABLE_FPU` 真能关掉 FPU 支持，那本工程那些满屏的 `float` 运算（`FusionAHRS`、PID、三角函数）就会出问题。事实是：ARM_CM4F port 是否保存 FPU 上下文（S16~S31）由 `EXC_RETURN` 的值决定，与 `configENABLE_FPU` 无关。硬件会在使用 FPU 后自动置位 `CONTROL.FPCA`，异常返回时 LR 的 bit 4 就会指示"要恢复 FPU 上下文"，port 的汇编会照着做。
+而且这里有个反直觉的地方：`FreeRTOS.h` 的默认值是 1，本工程把它改成了 0。如果 `configENABLE_FPU` 真能关掉 FPU 支持，那本工程那些满屏的 `float` 运算（`FusionAHRS`、PID、三角函数）就会出问题。事实是：ARM_CM4F port 是否保存 FPU 上下文（S16~S31）由 `EXC_RETURN` 的值决定，与 `configENABLE_FPU` 无关。硬件会在使用 FPU 后自动置位 `CONTROL.FPCA`，异常返回时 LR 的 bit 4 就会指示"要恢复 FPU 上下文"，port 的汇编会照着做。
 
 结论与操作建议：这两行在本工程里是无害的噪音，可以留着。但要知道它们是 CubeMX 模板从别的 port（如 ARMv8-M / ST 自己的定制 port）带过来的。如果换了移植层，就必须重新确认它们有没有被使用。配置项看起来生效与配置项真的生效是两件不同的事。
 
@@ -310,7 +310,7 @@ Core/Inc/FreeRTOSConfig.h:56:#define configENABLE_MPU                         0
 ### 4.1 换算公式的真实实现
 
 ```c
-/* CMSIS_RTOS/cmsis_os.c:102-113 */
+/* CMSIS_RTOS/cmsis_os.c */
 static unsigned portBASE_TYPE makeFreeRtosPriority (osPriority priority)
 {
   unsigned portBASE_TYPE fpriority = tskIDLE_PRIORITY;
@@ -326,7 +326,7 @@ static unsigned portBASE_TYPE makeFreeRtosPriority (osPriority priority)
 CMSIS 的枚举从 -3 开始：
 
 ```c
-/* CMSIS_RTOS/cmsis_os.h:173-180 */
+/* CMSIS_RTOS/cmsis_os.h */
   osPriorityIdle          = -3,          ///< priority: idle (lowest)
   osPriorityLow           = -2,          ///< priority: low
   /* osPriorityBelowNormal = -1 */
@@ -359,7 +359,7 @@ CMSIS 优先级等于 0 的 `osPriorityNormal`，在 FreeRTOS 里是优先级 3�
 `configMAX_PRIORITIES = 7` 的边界性就体现在这里：`osPriorityRealtime` 映射到 6，需要 `configMAX_PRIORITIES >= 7`。如果这个值被改小（比如 6），`xTaskCreate` 里会执行钳位：
 
 ```c
-/* tasks.c:924-933（节选） */
+/* tasks.c（节选） */
 	if( uxPriority >= ( UBaseType_t ) configMAX_PRIORITIES )
 	{
 		uxPriority = ( UBaseType_t ) configMAX_PRIORITIES - ( UBaseType_t ) 1U;
@@ -375,12 +375,12 @@ CMSIS 优先级等于 0 的 `osPriorityNormal`，在 FreeRTOS 里是优先级 3�
 
 | 任务 | 创建位置 | 传入优先级 | 实际 FreeRTOS 优先级 |
 | --- | --- | --- | --- |
-| `defaultTask` | `freertos.c:123` | `osPriorityNormal` | 3 |
-| `StartFireTask` | `FireTask.cpp:80` | `osPriorityNormal` | 3 |
-| `imuTask` | `ImuTask.cpp:123` | `osPriorityNormal` | 3 |
-| `gimbalTask` | `GimbalTask.cpp:110` | `osPriorityNormal` | 3 |
-| `StartControlCenterTask` | `ControlCenterTask.cpp:122` | `osPriorityNormal` | 3 |
-| `StartUsbConnectTask` | `UsbConnectTask.cpp:177` | `osPriorityNormal` | 3 |
+| `defaultTask` | `freertos.c` | `osPriorityNormal` | 3 |
+| `StartFireTask` | `FireTask.cpp` | `osPriorityNormal` | 3 |
+| `imuTask` | `ImuTask.cpp` | `osPriorityNormal` | 3 |
+| `gimbalTask` | `GimbalTask.cpp` | `osPriorityNormal` | 3 |
+| `StartControlCenterTask` | `ControlCenterTask.cpp` | `osPriorityNormal` | 3 |
+| `StartUsbConnectTask` | `UsbConnectTask.cpp` | `osPriorityNormal` | 3 |
 | 空闲任务 | 内核自动创建 | `tskIDLE_PRIORITY` | 0 |
 
 ```mermaid
@@ -413,7 +413,7 @@ flowchart TD
 结论有三条：
 
 1. `osPriorityNormal` 是 7 个档位里的第 4 档（优先级 3），不是最低档。
-2. 6 个任务全部同优先级，所以它们之间是时间片轮转（`configUSE_TIME_SLICING` 默认为 1，`FreeRTOS.h:793-794`），每 1 ms 轮一圈。这也是为什么 `GimbalTask` 里的 `osDelay(1)` 能让出 CPU：它主动阻塞 1 tick，正好和其他任务的轮转节奏对上。
+2. 6 个任务全部同优先级，所以它们之间是时间片轮转（`configUSE_TIME_SLICING` 默认为 1，`FreeRTOS.h`），每 1 ms 轮一圈。这也是为什么 `GimbalTask` 里的 `osDelay(1)` 能让出 CPU：它主动阻塞 1 tick，正好和其他任务的轮转节奏对上。
 3. 优先级配置在本工程实际上是装饰性的。唯一真实的优先级差别是"任务（3）与空闲任务（0）"。如果想让某个任务更及时（比如 `imuTask` 必须在 1 ms 内完成），必须显式把它的优先级提到 `osPriorityAboveNormal` 或 `osPriorityHigh`。当前配置下这 6 个任务的优先级改不改都一样。
 
 > 顺带一个真实的隐患：`osPriorityNormal` 映射到 3，而 `configMAX_PRIORITIES = 7`，

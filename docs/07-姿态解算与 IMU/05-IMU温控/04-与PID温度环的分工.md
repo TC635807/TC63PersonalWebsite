@@ -26,9 +26,9 @@ updated: 2026-10-07
 
 ## 温度环与本单元的接口数据流
 
-接口只有一个函数：`ImuTempControl_Update(float targetTemp, float currentTemp, float dt)`（`BMI088/Src/ImuTempControl.cpp:15`）。三个实参都是浮点，单位是摄氏度、摄氏度、秒。`dt` 是控制周期，当前调用点传 0.001f（`Task/Src/ImuTask.cpp:46`），对应标称 1 kHz。
+接口只有一个函数：`ImuTempControl_Update(float targetTemp, float currentTemp, float dt)`（`BMI088/Src/ImuTempControl.cpp`）。三个实参都是浮点，单位是摄氏度、摄氏度、秒。`dt` 是控制周期，当前调用点传 0.001f（`Task/Src/ImuTask.cpp`），对应标称 1 kHz。
 
-`update` 内部先调 `temp_pid_calculate(targetTemp, currentTemp, dt)`（`:16`），返回值赋给 `uint32_t duty`，再做换算：
+`update` 内部先调 `temp_pid_calculate(targetTemp, currentTemp, dt)`，返回值赋给 `uint32_t duty`，再做换算：
 
 ```cpp
 void ImuTempControl::update(float targetTemp, float currentTemp, float dt) {
@@ -44,10 +44,10 @@ void ImuTempControl::update(float targetTemp, float currentTemp, float dt) {
 
 | 段 | 输入 | 输出 | 位置 |
 | --- | --- | --- | --- |
-| `BMI088_Read` | 无 | 温度摄氏度 | `BMI088/Src/BMI088.cpp:166-176` |
-| `ImuTempControl_Update` | 目标、温度、`dt` | 无 | `BMI088/Src/ImuTempControl.cpp:15-21` |
-| `temp_pid_calculate` | 目标、温度、`dt` | duty 码值 | `PID/Src/temp_pid.cpp:47-50` |
-| `__HAL_TIM_SET_COMPARE` | duty | CCR1 | `BMI088/Src/ImuTempControl.cpp:20` |
+| `BMI088_Read` | 无 | 温度摄氏度 | `BMI088/Src/BMI088.cpp` |
+| `ImuTempControl_Update` | 目标、温度、`dt` | 无 | `BMI088/Src/ImuTempControl.cpp` |
+| `temp_pid_calculate` | 目标、温度、`dt` | duty 码值 | `PID/Src/temp_pid.cpp` |
+| `__HAL_TIM_SET_COMPARE` | duty | CCR1 | `BMI088/Src/ImuTempControl.cpp` |
 
 接口上的控制量是 PID 的输出原值，没有经过归一化。这一点决定了换算一侧必须知道自己收到的是什么量纲，而当前实现把控制量当成占空比直接乘周期，量纲在交界处断开。
 
@@ -71,9 +71,9 @@ sequenceDiagram
 
 ## 温度环的 PID 参数与限幅
 
-温度环构造参数是 `TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)`（`PID/Src/temp_pid.cpp:41`），依次是 $K_p$、$K_i$、$K_d$、输出上限、积分上限。比例增益 1600 的量级来自温度误差的量纲：误差是摄氏度，输出是整数控制量，1 摄氏度的误差对应 1600 的输出。微分项为 0，积分上限 4400 略低于输出上限 4500。
+温度环构造参数是 `TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)`（`PID/Src/temp_pid.cpp`），依次是 $K_p$、$K_i$、$K_d$、输出上限、积分上限。比例增益 1600 的量级来自温度误差的量纲：误差是摄氏度，输出是整数控制量，1 摄氏度的误差对应 1600 的输出。微分项为 0，积分上限 4400 略低于输出上限 4500。限制积分值可以缩短退出饱和的时间。
 
-输出被限幅在 0 到 4500。函数声明为 `int16_t`（`PID/Inc/temp_pid.h:29`），赋给 `uint32_t duty` 时发生整型转换；由于限幅保证了非负，转换结果与数值一致。控制量的物理含义由后续换算定义，温度环本身只保证它落在 0 到 4500。
+输出被限幅在 0 到 4500。函数声明为 `int16_t`（`PID/Inc/temp_pid.h`），赋给 `uint32_t duty` 时发生整型转换；由于限幅保证了非负，转换结果与数值一致。控制量的物理含义由后续换算定义，温度环本身只保证它落在 0 到 4500。
 
 | 参数 | 值 | 含义 |
 | --- | --- | --- |
@@ -82,6 +82,16 @@ sequenceDiagram
 | $K_d$ | 0.0f | 微分项关闭 |
 | 输出上限 | 4500.0f | 控制量上限 |
 | 积分上限 | 4400.0f | 抗积分饱和上限 |
+
+```c
+/* 简化：PID/Src/temp_pid.cpp 的 PI 计算与限幅，取值与上表一致 */
+error = target - current;
+integral += error * dt;
+if (integral > 4400.0f) integral = 4400.0f;        /* 积分上限，抗饱和 */
+float out = 1600.0f * error + 0.2f * integral;     /* Kp=1600, Ki=0.2, Kd=0 */
+if (out > 4500.0f) out = 4500.0f;                  /* 输出上限 */
+return (int16_t)out;
+```
 
 ## 温度波动如何传到 yaw
 
@@ -93,7 +103,7 @@ $$\Delta\theta_{yaw}=\int \beta\,\Delta T(\tau)\,d\tau$$
 
 这条路径解释了为什么温控与姿态解算要分开看：温控的任务是把 $\Delta T$ 压小，姿态一侧的任务是把残余零偏估掉。两者都不处理随机噪声积分，随机项只能靠时间平均或更好的传感器。
 
-本工程没有磁力计，`Task/Src/ImuTask.cpp:15` 的 `mag` 声明后未赋值，yaw 只能靠陀螺积分维持，温度稳定对 yaw 的作用比对水平角更直接。
+本工程没有磁力计，`Task/Src/ImuTask.cpp` 的 `mag` 声明后未赋值，yaw 只能靠陀螺积分维持，温度稳定对 yaw 的作用比对水平角更直接。
 
 ```mermaid
 flowchart TD
@@ -126,19 +136,19 @@ flowchart TD
 
 | 项 | 位置 | 归属 |
 | --- | --- | --- |
-| PID 参数与满量程 | `PID/Src/temp_pid.cpp:41` | 温度环 |
-| 单向限幅 | `PID/Src/temp_pid.cpp:20-32` | 温度环 |
-| 占空比换算 | `BMI088/Src/ImuTempControl.cpp:18` | 温度环的量纲问题 |
-| PWM 启动 | `BMI088/Src/ImuTempControl.cpp:11-13` | 本单元 |
-| TIM10 配置 | `Core/Src/tim.c:42-63` | 本单元 |
-| 温度读取与换算 | `BMI088/Src/BMI088.cpp:141-162` | BMI088 驱动单元 |
-| 初始化调用 | `Task/Src/ImuTask.cpp:36` | 本单元与调度 |
-| 温度发布 | `Task/Src/ImuTask.cpp:107` | 只用于温控，不参与姿态补偿 |
-| 温度与姿态的关系 | `Algorithm/Src/FusionAHRS.cpp:30-41` | 融合单元 |
+| PID 参数与满量程 | `PID/Src/temp_pid.cpp` | 温度环 |
+| 单向限幅 | `PID/Src/temp_pid.cpp` | 温度环 |
+| 占空比换算 | `BMI088/Src/ImuTempControl.cpp` | 温度环的量纲问题 |
+| PWM 启动 | `BMI088/Src/ImuTempControl.cpp` | 本单元 |
+| TIM10 配置 | `Core/Src/tim.c` | 本单元 |
+| 温度读取与换算 | `BMI088/Src/BMI088.cpp` | BMI088 驱动单元 |
+| 初始化调用 | `Task/Src/ImuTask.cpp` | 本单元与调度 |
+| 温度发布 | `Task/Src/ImuTask.cpp` | 只用于温控，不参与姿态补偿 |
+| 温度与姿态的关系 | `Algorithm/Src/FusionAHRS.cpp` | 融合单元 |
 
 ## 交界处最脆弱的一环
 
-换算只有一个表达式：`compare = Period * duty`（`BMI088/Src/ImuTempControl.cpp:18`）。`Period` 是 4999，控制量上限 4500，于是比较值上限约 $4999\times4500=22\,495\,500$，远超 $ARR+1=5000$。只要控制量非零，比较值就达到或超过 ARR，PWM1 模式下输出恒为高，占空比 100%。
+换算只有一个表达式：`compare = Period * duty`（`BMI088/Src/ImuTempControl.cpp`）。`Period` 是 4999，控制量上限 4500，于是比较值上限约 $4999\times4500=22\,495\,500$，远超 $ARR+1=5000$。只要控制量非零，比较值就达到或超过 ARR，PWM1 模式下输出恒为高，占空比 100%。
 
 把边界列出来更直观：
 
@@ -161,19 +171,19 @@ flowchart TD
 
 测试分两步。第一步固定控制量，绕过温度环直接写 CCR1，用示波器测 PF6 占空比，验证换算表达式。第二步固定温度误差，观察控制量的数值范围是否落在 0 到 4500，验证温度环限幅。两步都通过之后，再合起来做闭环阶跃测试。
 
-固定控制量的做法是在 `BMI088/Src/ImuTempControl.cpp:16` 与 `:18` 之间插入临时分支，跳过 PID 直接赋值。这属于临时探针，测完要撤回。绕过温度环后温度会持续上升，测试窗口要短，或者断开加热元件只测波形。
+固定控制量的做法是在 `BMI088/Src/ImuTempControl.cpp` 的 PID 调用与比较值写入之间插入临时分支，跳过 PID 直接赋值。这属于临时探针，测完要撤回。绕过温度环后温度会持续上升，测试窗口要短，或者断开加热元件只测波形。
 
 ## 边界划错时的表现
 
 | 容易读错的地方 | 现象 | 位置 |
 | --- | --- | --- |
-| 把饱和算成 PID 参数问题 | 调 $K_p$ 无改善 | `BMI088/Src/ImuTempControl.cpp:18` |
-| 认为控制量已经是占空比 | 数值范围 0 到 4500 被当成 0% 到 100% | `PID/Src/temp_pid.cpp:41` |
-| 用 `Period` 当满量程 | 分母少一个计数 | `BMI088/Src/ImuTempControl.cpp:18` |
-| 把 `int16_t` 返回值当无符号 | 限幅保证了非负，暂时无影响 | `PID/Inc/temp_pid.h:29` |
-| 认为温度波动不影响 yaw | 零偏随温度积分进 yaw | `FusionAHRS.cpp:30-41` |
-| 把温度不收敛归到融合算法 | 融合不控制温度 | `FusionAHRS.cpp:22-28` |
-| 忽略 `dt` 实参与循环不一致 | 积分项按错误周期累积 | `Task/Src/ImuTask.cpp:46` |
+| 把饱和算成 PID 参数问题 | 调 $K_p$ 无改善 | `BMI088/Src/ImuTempControl.cpp` |
+| 认为控制量已经是占空比 | 数值范围 0 到 4500 被当成 0% 到 100% | `PID/Src/temp_pid.cpp` |
+| 用 `Period` 当满量程 | 分母少一个计数 | `BMI088/Src/ImuTempControl.cpp` |
+| 把 `int16_t` 返回值当无符号 | 限幅保证了非负，暂时无影响 | `PID/Inc/temp_pid.h` |
+| 认为温度波动不影响 yaw | 零偏随温度积分进 yaw | `FusionAHRS.cpp` |
+| 把温度不收敛归到融合算法 | 融合不控制温度 | `FusionAHRS.cpp` |
+| 忽略 `dt` 实参与循环不一致 | 积分项按错误周期累积 | `Task/Src/ImuTask.cpp` |
 
 第七条的后果限于积分项：$K_i$ 为 0.2，误差累积按 `dt` 加权，`dt` 取 0.001 而实际周期 1.3 毫秒时，积分增长速度高出约 30%。比例项不受 `dt` 影响，所以现象是回稳变慢而非比例响应变化。
 
@@ -216,10 +226,10 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp` | 接口与占空比换算 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Inc/ImuTempControl.h` | 类声明 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/temp_pid.cpp` | 温度环实现与限幅 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/temp_pid.h` | 返回类型声明 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 调用点与周期实参 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 零偏估计与温度路径 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Message_Bus/message_bus.h` | 温度发布结构 |
+| `BMI088/Src/ImuTempControl.cpp` | 接口与占空比换算 |
+| `BMI088/Inc/ImuTempControl.h` | 类声明 |
+| `PID/Src/temp_pid.cpp` | 温度环实现与限幅 |
+| `PID/Inc/temp_pid.h` | 返回类型声明 |
+| `Task/Src/ImuTask.cpp` | 调用点与周期实参 |
+| `Algorithm/Src/FusionAHRS.cpp` | 零偏估计与温度路径 |
+| `Message_Bus/message_bus.h` | 温度发布结构 |

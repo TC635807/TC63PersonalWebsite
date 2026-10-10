@@ -62,7 +62,7 @@ flowchart TD
 
 ## 2. 空页与扫描件
 
-空页不会报错，只是不进入结果：图片页、封面、纯分隔页都会被跳过。如果整本 PDF 一页都没抽出文字，函数抛出固定提示（`parser.py:93-94`），说明可能是扫描图片版且不支持 OCR。
+空页不会报错，只是不进入结果：图片页、封面、纯分隔页都会被跳过。如果整本 PDF 一页都没抽出文字，函数抛出固定提示（`parser.py`），说明可能是扫描图片版且不支持 OCR。
 
 | 输入 | 结果 |
 | --- | --- |
@@ -75,9 +75,9 @@ flowchart TD
 
 ## 3. 依赖导入的位置
 
-`pdfplumber` 在函数内部导入（`parser.py:77`），不在模块顶部。这样做让未安装依赖的环境也能加载整个解析模块，只有在解析 PDF 时才触发导入。
+`pdfplumber` 在函数内部导入（`parser.py`），不在模块顶部。这样做让未安装依赖的环境也能加载整个解析模块，只有在解析 PDF 时才触发导入。
 
-代价是缺依赖时抛的是 `ImportError`，不是 `ParseError`。路由只捕获 `ParseError`（`backend/routes/documents.py:60-63`），因此未安装 `pdfplumber` 的部署会在上传 PDF 时返回 500，而不是 400 与可读提示。依赖本身已在 `requirements.txt` 声明（`requirements.txt:19`）。
+代价是缺依赖时抛的是 `ImportError`，不是 `ParseError`。路由只捕获 `ParseError`（`backend/routes/documents.py`），因此未安装 `pdfplumber` 的部署会在上传 PDF 时返回 500，而不是 400 与可读提示。依赖本身已在 `requirements.txt` 声明（`requirements.txt`）。
 
 | 情况 | 异常类型 | 路由表现 |
 | --- | --- | --- |
@@ -128,6 +128,20 @@ sequenceDiagram
 
 ## 5. 抽取结果的固有损失
 
+PDF 抽字是按页面坐标做的，示意如下：
+
+```python
+# 示意：逐页抽取并拼接
+parts = []
+for page in pdf.pages:
+    text = page.extract_text() or ""
+    if text.strip():                 # 空页（多为扫描件）跳过
+        parts.append(text.strip())
+return "\n\n".join(parts)            # 页与页之间用空行分隔
+```
+
+"PDF 是排版指令而不是文本容器"：文件里保存的是"在坐标 (x, y) 画这个字形"，没有段落、标题、阅读顺序的概念。抽取工具只能按坐标启发式地还原顺序，因此多栏排版、表格、公式会串行错位，这是格式本身的损失而不是库的缺陷。用空行拼接页面保留了"页"这个边界，也顺便让下游能按页定位问题。
+
 即使一切正常，`extract_text()` 的输出也不是原文的完整再现：
 
 | 现象 | 原因 |
@@ -154,11 +168,11 @@ sequenceDiagram
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
-| 认为缺依赖会返回 400 | `ImportError` 不被捕获 | `parser.py:77` 与 `documents.py:62` |
-| 认为任何解析失败都是 `ParseError` | 单页异常直接上抛 | `parser.py:85-91` |
-| 期待表格结构保留 | 只调用 `extract_text` | `parser.py:87` |
-| 把加密文件当成损坏 | 文案统一 | `parser.py:81-82` |
-| 认为空页会导致失败 | 空页只被跳过 | `parser.py:88-89` |
+| 认为缺依赖会返回 400 | `ImportError` 不被捕获 | `parser.py` 与 `documents.py` |
+| 认为任何解析失败都是 `ParseError` | 单页异常直接上抛 | `parser.py` |
+| 期待表格结构保留 | 只调用 `extract_text` | `parser.py` |
+| 把加密文件当成损坏 | 文案统一 | `parser.py` |
+| 认为空页会导致失败 | 空页只被跳过 | `parser.py` |
 
 ## 小结
 
@@ -202,6 +216,6 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/documents/parser.py` | `_parse_pdf` 全文（:74-96） |
-| `backend/routes/documents.py` | `ParseError` 转 400（:60-63） |
-| `requirements.txt` | `pdfplumber` 版本声明（:19） |
+| `backend/documents/parser.py` | `_parse_pdf` 全文 |
+| `backend/routes/documents.py` | `ParseError` 转 400 |
+| `requirements.txt` | `pdfplumber` 版本声明 |

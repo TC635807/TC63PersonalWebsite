@@ -15,7 +15,20 @@ updated: 2026-10-07
 
 `package.json` 里 `build` 指向 `astro build`。Astro 会把 `src/pages/` 与 `docs/` 下的内容走一遍 Markdown 管线，生成静态 HTML 与配套资源，最后统一写进 `dist`。文档区里每个单元的文件都在这条管线上，因此文档的渲染规则与页面代码共用同一套配置。
 
-`astro.config.mjs:26-32` 定义了这条管线：remark-math 解析公式语法，rehype-katex 把公式渲染成 HTML，rehype-mermaid 处理图表代码块，Shiki 负责代码高亮。插件顺序不是随手排的，Shiki 的高亮排在用户插件之前，所以 `rehype-mermaid` 拿到的已经是高亮后的结构，需要先把纯文本还原出来（`src/lib/rehype-mermaid.mjs:1-13`）。
+`astro.config.mjs` 定义了这条管线：remark-math 解析公式语法，rehype-katex 把公式渲染成 HTML，rehype-mermaid 处理图表代码块，Shiki 负责代码高亮。插件顺序不是随手排的，Shiki 的高亮排在用户插件之前，所以 `rehype-mermaid` 拿到的已经是高亮后的结构，需要先把纯文本还原出来（见 `src/lib/rehype-mermaid.mjs`）。
+
+```js
+// astro.config.mjs（节选）
+markdown: {
+  processor: unified({
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeKatex, rehypeMermaid],
+  }),
+  shikiConfig: { theme: 'github-light' },
+},
+```
+
+Astro 是静态站点生成器：构建时把每个页面与 Markdown 编译成 HTML，产出 `dist/`，线上只要一个静态文件服务器，不需要 Node 常驻进程。Markdown 的转换被拆成两级插件树——`remark` 插件处理 Markdown 语法树（这里只加公式语法），`rehype` 插件处理 HTML 树（KaTeX 把公式变成 HTML，mermaid 插件把图表代码块换成容器）。Shiki 是构建期的代码高亮器，它在构建时就把高亮结果写进 HTML，所以线上不加载任何高亮脚本。
 
 ```mermaid
 flowchart LR
@@ -29,9 +42,20 @@ flowchart LR
 
 ## site 与 base 决定链接前缀
 
-`astro.config.mjs:15-17` 里两行最关键：`site` 写死为 `https://knowledgediver.cloud`，`base` 取 `process.env.SITE_BASE ?? '/tc63'`。`site` 影响 canonical、og:url 这类绝对地址；`base` 影响所有静态资源与站内链接的前缀。
+`astro.config.mjs` 里有两行最关键：`site` 写死为 `https://knowledgediver.cloud`，`base` 取 `process.env.SITE_BASE ?? '/tc63'`。`site` 影响 canonical、og:url 这类绝对地址；`base` 影响所有静态资源与站内链接的前缀。
 
-默认值 `/tc63` 对应服务器部署：站点挂在 `knowledgediver.cloud` 下的子路径。`astro.config.mjs:8-14` 的注释把两种部署位置写得很清楚，其中 GitHub Pages 那一行明确要求构建时传入 `SITE_BASE=/TC63PersonalWebsite`。
+```js
+// astro.config.mjs（节选）
+export default defineConfig({
+  site: 'https://knowledgediver.cloud',
+  base: process.env.SITE_BASE ?? '/tc63',
+  // ...
+});
+```
+
+`??` 是 JavaScript 的空值合并运算符：左边为 `null` 或 `undefined` 时取右边的值，所以没设 `SITE_BASE` 就落到默认的 `/tc63`，CI 里显式传入时才切成 Pages 前缀。两个键分工不同：`site` 是站点的规范地址，参与 canonical、`og:url` 这类绝对地址的生成，改它不会改变站点实际被访问的地址；`base` 是子路径前缀，构建器用它给资源 URL 加前缀。
+
+默认值 `/tc63` 对应服务器部署：站点挂在 `knowledgediver.cloud` 下的子路径。`astro.config.mjs` 开头的注释把两种部署位置写得很清楚，其中 GitHub Pages 那一行明确要求构建时传入 `SITE_BASE=/TC63PersonalWebsite`。
 
 | 部署位置 | 访问地址 | base |
 | --- | --- | --- |
@@ -51,13 +75,57 @@ flowchart TD
 
 ## 站内链接为什么必须走 url()
 
-`base` 只作用于构建器认识的链接。手写在模板里的 `"/projects/"` 不会被自动加前缀，页面在子路径下就会打到域名根。仓库因此提供了统一出口 `src/lib/url.ts`：它从 `import.meta.env.BASE_URL` 取出 base，去掉尾斜杠后拼在路径前面（`src/lib/url.ts:11-17`）。站内链接与图片路径都走这个函数，部署位置变化时不需要逐个改模板。
+`base` 只作用于构建器认识的链接。手写在模板里的 `"/projects/"` 不会被自动加前缀，页面在子路径下就会打到域名根。仓库因此提供了统一出口 `src/lib/url.ts`：它从 `import.meta.env.BASE_URL` 取出 base，去掉尾斜杠后拼在路径前面。站内链接与图片路径都走这个函数，部署位置变化时不需要逐个改模板。
 
-同一个理由解释了 `deploy.sh` 里的自检：构建完成后它检查 `dist/index.html` 里是否存在 `href="/tc63/`（`deploy.sh:25-29`）。如果发现链接不带 `/tc63` 前缀，说明这份产物是用 Pages 的 `SITE_BASE` 构建的，脚本会拒绝提交，避免把 Pages 版产物推到服务器分支上。
+```ts
+// src/lib/url.ts（全文）
+export const BASE = import.meta.env.BASE_URL;
+const ROOT = BASE.endsWith('/') ? BASE.slice(0, -1) : BASE;
+
+export function url(path = '/'): string {
+  const p = path.startsWith('/') ? path : '/' + path;
+  return ROOT + p;
+}
+```
+
+`import.meta.env.BASE_URL` 是 Astro 在构建时注入的常量，值就是配置里的 `base`（带尾斜杠）。这个函数先去掉尾斜杠、再保证传入路径以 `/` 开头，最后拼接：模板里写 `url('/projects/')`，换部署位置时 base 自动跟着变。
+
+同一个理由解释了 `deploy.sh` 里的自检：构建完成后它检查 `dist/index.html` 里是否存在 `href="/tc63/`。如果发现链接不带 `/tc63` 前缀，说明这份产物是用 Pages 的 `SITE_BASE` 构建的，脚本会拒绝提交，避免把 Pages 版产物推到服务器分支上。
+
+```bash
+# deploy.sh：构建产物的前缀自检（节选）
+[ -f dist/index.html ] || { echo "✗ dist/index.html 不存在，构建失败了？"; exit 1; }
+if ! grep -q 'href="/tc63/' dist/index.html; then
+  echo "⚠️ dist 里的链接不是 /tc63 前缀 —— 是不是用 SITE_BASE 构建过 Pages 版本？重新构建。"
+  exit 1
+fi
+```
+
+`grep -q` 是「只判断有没有匹配、不打印匹配内容」，退出码 0 表示找到、1 表示没找到，前面的 `!` 取反即可当成「没找到就报错」；`[ -f 文件 ] || { ... }` 则是「文件不存在就执行后面这串」的惯用写法。放在本地构建之后跑，是为了让前缀错误当场暴露，而不是等服务器上样式成片 404 才发现。
 
 ## 公式与图表在两个不同阶段完成
 
-公式在构建期就变成 HTML，页面加载时不需要额外脚本，首屏不会闪。图表走的是另一条路：`rehype-mermaid` 只把代码块还原成 `<pre class="mermaid">` 容器（`src/lib/rehype-mermaid.mjs:7-10`），SVG 由页面里懒加载的客户端脚本渲染。这样做的收益是构建不需要浏览器环境，代价是关掉 JS 时页面里留下的是一段可读的图表源码。
+公式在构建期就变成 HTML，页面加载时不需要额外脚本，首屏不会闪。图表走的是另一条路：`rehype-mermaid` 只把代码块还原成 `<pre class="mermaid">` 容器，SVG 由页面里懒加载的客户端脚本渲染。这样做的收益是构建不需要浏览器环境，代价是关掉 JS 时页面里留下的是一段可读的图表源码。
+
+```js
+// src/lib/rehype-mermaid.mjs：把 mermaid 代码块换成纯文本容器
+function toDiagram(node) {
+  const source = textOf(node).replace(/\s+$/, '');
+  return {
+    type: 'element',
+    tagName: 'div',
+    properties: { className: ['diagram'] },
+    children: [{
+      type: 'element',
+      tagName: 'pre',
+      properties: { className: ['mermaid'], 'data-diagram': 'mermaid' },
+      children: [{ type: 'text', value: source }],
+    }],
+  };
+}
+```
+
+这是个 HTML 语法树上的转换：拿到节点、把纯文本抽出来、换成 `<pre class="mermaid">` 容器。`<pre class="mermaid">` 是 mermaid 约定的挂载点，浏览器里的脚本找到它、读出文本、生成 SVG；「等图滚进视口才渲染」就是懒加载，它让首屏不必为一个远处的图付出代价，也让构建环境不需要装浏览器。
 
 ## 本地构建与 CI 构建的差别
 
@@ -75,7 +143,7 @@ flowchart TD
 
 `dist` 里是逐页生成的 HTML 与按内容哈希命名的静态资源。每个页面在 `dist` 下都有对应的目录与 `index.html`，文档单元的 URL 直接由目录层级决定，因此改文件名等于改链接，旧链接不会自动跳转。
 
-## 产物里有什么
+## 为什么 `dist` 也留在仓库里
 
 `dist` 里是逐页生成的 HTML、按内容哈希命名的资源文件与文档页面。`.gitignore` 明确没有忽略 `dist/`，注释给出的理由是服务器只做 `git pull`，不在服务器上装 Node 也不在服务器上构建。这个选择让产物随源码一起进入版本历史，也意味着每次发布都会产生一份新的二进制式快照。
 

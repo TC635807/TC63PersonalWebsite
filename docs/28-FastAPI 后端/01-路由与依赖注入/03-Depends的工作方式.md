@@ -13,14 +13,26 @@ updated: 2026-10-07
 
 ## 1. 三种参数在签名里的区分
 
-一个端点签名里可能同时出现业务参数、带默认值的查询参数与依赖参数。`backend/routes/cards.py:47-50` 是最小示例：`session_id` 有默认值，`current_user` 用 `Depends`。
+一个端点签名里可能同时出现业务参数、带默认值的查询参数与依赖参数。区分规则是：有 `Depends` 默认值的参数由框架调用工厂函数后注入，普通带默认值的参数从查询串解析，没有默认值的参数是必填项。示意如下：
+
+```python
+@router.get("/api/cards")
+async def list_cards(
+    session_id: str = "default",              # 查询参数，缺省时用默认值
+    current_user: User = Depends(get_current_user),  # 框架调用依赖函数后注入
+    store: CardStore = Depends(get_card_store),      # 同一个依赖在一次请求内只求值一次
+):
+    ...
+```
+
+`backend/routes/cards.py` 是最小示例：`session_id` 有默认值，`current_user` 用 `Depends`。
 
 | 写法 | 解析方式 | 例子 |
 | --- | --- | --- |
-| `name: str` 无默认值 | 必填查询参数 | `routes/cards.py:60` 的查询串字段 |
-| `name: str = "默认"` | 可选查询参数 | `routes/cards.py:49` 的 `session_id` |
-| `obj: T = Depends(f)` | 调用 `f` 取返回值 | `routes/sessions.py:24` 的 `store` |
-| `request: Request` | 由框架注入请求对象 | `routes/auth.py:60` |
+| `name: str` 无默认值 | 必填查询参数 | `routes/cards.py` 的查询串字段 |
+| `name: str = "默认"` | 可选查询参数 | `routes/cards.py` 的 `session_id` |
+| `obj: T = Depends(f)` | 调用 `f` 取返回值 | `routes/sessions.py` 的 `store` |
+| `request: Request` | 由框架注入请求对象 | `routes/auth.py` |
 
 `Depends` 的实参是「可调用对象」，可以是同步函数、异步函数或类。仓库里全部使用函数，没有依赖类。
 
@@ -40,7 +52,7 @@ async def get_current_user(
     ...
 ```
 
-`get_user_store` 不接收任何参数（`backend/routes/auth.py:23-25`），`get_current_user` 自身带一个 `Depends` 参数（`:28-29`），构成两层依赖链。同步提供者会被 FastAPI 放进线程池执行，异步提供者直接在事件循环里执行，这一点对构造存储这类轻量操作没有可感知差别。
+`get_user_store` 不接收任何参数（`backend/routes/auth.py`），`get_current_user` 自身带一个 `Depends` 参数，构成两层依赖链。同步提供者会被 FastAPI 放进线程池执行，异步提供者直接在事件循环里执行，这一点对构造存储这类轻量操作没有可感知差别。
 
 ## 3. 子依赖链的解析顺序
 
@@ -65,11 +77,11 @@ sequenceDiagram
   F->>E: 调用端点并传入参数字典
 ```
 
-链上任意一层抛出 `HTTPException`，后续层不会执行，端点函数也不会被调用。`get_current_user` 在 token 无效时抛 401（`backend/routes/auth.py:31-38`）。
+链上任意一层抛出 `HTTPException`，后续层不会执行，端点函数也不会被调用。`get_current_user` 在 token 无效时抛 401（`backend/routes/auth.py`）。
 
 ## 4. 同一请求内的结果缓存
 
-FastAPI 对同一个依赖函数在同一请求内只解析一次，结果复用。仓库里最直接的例子是 `backend/routes/auth.py:94` 的 `get_me`：它同时依赖 `get_current_user` 与 `get_user_store`，两个依赖互不嵌套，各解析一次。
+FastAPI 对同一个依赖函数在同一请求内只解析一次，结果复用。仓库里最直接的例子是 `backend/routes/auth.py` 的 `get_me`：它同时依赖 `get_current_user` 与 `get_user_store`，两个依赖互不嵌套，各解析一次。
 
 缓存按依赖函数对象计，不按参数计。若同一个依赖带不同参数，缓存语义就要靠 `use_cache=False` 或直接调用函数来规避。仓库当前没有出现参数化依赖，所以缓存行为按默认值理解，属框架通用行为。
 
@@ -82,23 +94,23 @@ FastAPI 对同一个依赖函数在同一请求内只解析一次，结果复用
 
 ## 5. 直接构造与依赖注入的混用
 
-并非所有存储都通过依赖获取。`backend/routes/cards.py:52` 在端点体内直接构造 `SqliteCardStore`：
+并非所有存储都通过依赖获取。`backend/routes/cards.py` 在端点体内直接构造 `SqliteCardStore`：
 
 ```python
 store = SqliteCardStore(username=current_user.username, session_id=session_id)
 cards = store.list_cards()
 ```
 
-同一个模块的另一个端点则把用户对象作为依赖注入（`:49`）。两种方式并存：用户身份必须走依赖（要解析 token），存储实例可以依赖注入也可以就地构造。
+同一个模块的另一个端点则把用户对象作为依赖注入。两种方式并存：用户身份必须走依赖（要解析 token），存储实例可以依赖注入也可以就地构造。
 
 | 方式 | 位置 | 特点 |
 | --- | --- | --- |
-| 依赖注入存储 | `routes/sessions.py:24-26` | 端点签名声明，便于替换与测试 |
-| 端点内构造存储 | `routes/cards.py:52` | 需要组合用户名与会话 ID，就地构造更直接 |
+| 依赖注入存储 | `routes/sessions.py` | 端点签名声明，便于替换与测试 |
+| 端点内构造存储 | `routes/cards.py` | 需要组合用户名与会话 ID，就地构造更直接 |
 
 ## 6. 依赖提供者的重复定义
 
-会话存储的提供者在三个模块里各有一份（`backend/routes/sessions.py:19-21`、`backend/routes/session_io.py:35`、`backend/routes/share.py:19`），实现相同：拿当前用户再构造 `SessionStore`。Hub 模块另有一个 `get_hub_store`（`backend/routes/hub.py:31`），用户存储提供者只在 `auth.py` 出现一次（`:23-25`）。
+会话存储的提供者在三个模块里各有一份（`backend/routes/sessions.py`、`backend/routes/session_io.py`、`backend/routes/share.py`），实现相同：拿当前用户再构造 `SessionStore`。Hub 模块另有一个 `get_hub_store`（`backend/routes/hub.py`），用户存储提供者只在 `auth.py` 出现一次。
 
 ```mermaid
 graph TD
@@ -114,20 +126,20 @@ graph TD
 
 ## 7. 依赖的返回值与类型标注
 
-提供者的返回类型同时是端点的参数类型，`store: SqliteUserStore = Depends(get_user_store)`（`backend/routes/auth.py:60`）与 `store: SessionStore = Depends(get_session_store)`（`backend/routes/sessions.py:24`）都是这种形态。类型标注让编辑器与 OpenAPI 生成器能推断端点参数结构。
+提供者的返回类型同时是端点的参数类型，`store: SqliteUserStore = Depends(get_user_store)`（`backend/routes/auth.py`）与 `store: SessionStore = Depends(get_session_store)`（`backend/routes/sessions.py`）都是这种形态。类型标注让编辑器与 OpenAPI 生成器能推断端点参数结构。
 
-需要注意返回类型与端点内使用是否一致。`routes/export.py` 的注释把 `CardStore` 当类型，实际运行时传入的是 `InMemoryCardStore`（`backend/routes/export.py:28-36`），两者同属 `BaseCardStore` 的子类，类型层面靠鸭子类型成立。
+需要注意返回类型与端点内使用是否一致。`routes/export.py` 的注释把 `CardStore` 当类型，实际运行时传入的是 `InMemoryCardStore`（`backend/routes/export.py`），两者同属 `BaseCardStore` 的子类，类型层面靠鸭子类型成立。
 
 ## 8. 易错点
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
 | 把 `Depends` 实参写成调用 | 传入函数返回值而非函数对象 | 依赖要写 `Depends(f)` 而非 `f()` |
-| 认为依赖每次调用都重新执行 | 同一请求内结果被缓存 | `routes/auth.py:94` 两依赖共存 |
-| 在提供者里做重活 | 每个请求都会触发 | `get_user_store` 只构造对象（`auth.py:23-25`） |
-| 以为 `session_id` 也是注入 | 它是查询参数默认值 | `routes/cards.py:49` |
-| 找不到 `get_session_store` 的定义 | 三份同名实现分布在不同模块 | `sessions.py:19`、`session_io.py:35`、`share.py:19` |
-| 依赖抛错后期望端点兜底 | 端点不会被执行 | `auth.py:31-38` 的 401 |
+| 认为依赖每次调用都重新执行 | 同一请求内结果被缓存 | `routes/auth.py` 两依赖共存 |
+| 在提供者里做重活 | 每个请求都会触发 | `get_user_store` 只构造对象（`auth.py`） |
+| 以为 `session_id` 也是注入 | 它是查询参数默认值 | `routes/cards.py` |
+| 找不到 `get_session_store` 的定义 | 三份同名实现分布在不同模块 | `sessions.py`、`session_io.py`、`share.py` |
+| 依赖抛错后期望端点兜底 | 端点不会被执行 | `auth.py` 的 401 |
 
 ## 小结
 
@@ -172,10 +184,10 @@ graph TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/routes/auth.py` | 提供者定义（:23-25、:28-29）、401 分支（:31-38）、双依赖端点（:94） |
-| `backend/routes/sessions.py` | `get_session_store`（:19-21）与端点用法（:24-26） |
-| `backend/routes/session_io.py` | 同名提供者（:35） |
-| `backend/routes/share.py` | 同名提供者（:19） |
-| `backend/routes/hub.py` | `get_hub_store`（:31） |
-| `backend/routes/cards.py` | 端点内构造存储（:52）、查询参数默认值（:49） |
-| `backend/routes/export.py` | 存储类型与运行时实例的差异（:28-36） |
+| `backend/routes/auth.py` | 提供者定义、401 分支、双依赖端点 |
+| `backend/routes/sessions.py` | `get_session_store`与端点用法 |
+| `backend/routes/session_io.py` | 同名提供者 |
+| `backend/routes/share.py` | 同名提供者 |
+| `backend/routes/hub.py` | `get_hub_store` |
+| `backend/routes/cards.py` | 端点内构造存储、查询参数默认值 |
+| `backend/routes/export.py` | 存储类型与运行时实例的差异 |

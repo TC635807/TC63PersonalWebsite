@@ -7,15 +7,17 @@ updated: 2026-10-08
 
 # 工具 schema 的三段结构与层级来源
 
-MCP 的 `tools/list` 返回的每个元素只有三个字段：`name`、`description`、`inputSchema`（`backend/mcp/gateway.py:65-69`）。这三个字段没有独立维护，而是从 Agent 侧的注册表逐字段派生。注册表里的 schema 写成 OpenAI function calling 的形状，外层 `type`，内层 `function`，`function` 再分 `name`、`description`、`parameters`（`backend/agent/tool_registry.py:54-232`）。
+MCP 的 `tools/list` 返回的每个元素只有三个字段：`name`、`description`、`inputSchema`（`backend/mcp/gateway.py`）。这三个字段没有独立维护，而是从 Agent 侧的注册表逐字段派生。注册表里的 schema 写成 OpenAI function calling 的形状，外层 `type`，内层 `function`，`function` 再分 `name`、`description`、`parameters`（`backend/agent/tool_registry.py`）。
 
-两套格式的差别只在包装层：OpenAI 的 `function.parameters` 与 MCP 的 `inputSchema` 都是 JSON Schema 子集，代码直接深拷贝复用（`gateway.py:68-69`）。因此改注册表一处，Agent 上下文与 MCP 客户端同时生效。这也是把 schema 拆出到注册表的动机之一：原先它和执行分支写在一个类里，MCP 导出要遍历注册表而不是复制一遍工具定义（`tool_registry.py:1-9`）。
+两套格式的差别只在包装层：OpenAI 的 `function.parameters` 与 MCP 的 `inputSchema` 都是 JSON Schema 子集，代码直接深拷贝复用（`gateway.py`）。因此改注册表一处，Agent 上下文与 MCP 客户端同时生效。这也是把 schema 拆出到注册表的动机之一：原先它和执行分支写在一个类里，MCP 导出要遍历注册表而不是复制一遍工具定义（`tool_registry.py`）。
+
+把工具定义收敛成一份带类型描述的 schema，是让模型能用工具的前提：模型看不到函数签名，只能靠 `description` 与 `inputSchema` 决定调哪个工具、传什么参数。因此 schema 不只是文档，而是接口契约；两端共用同一份，才能避免「描述改了、执行没改」的漂移。
 
 参数校验与返回值结构属于相邻两页。
 
 ## schema 的三段结构
 
-每个工具是一个字典，形状固定（以 `search_similar_cards` 为例，`backend/agent/tool_registry.py:54-70`）：
+每个工具是一个字典，形状固定（以 `search_similar_cards` 为例，`backend/agent/tool_registry.py`）：
 
 ```python
 {
@@ -43,11 +45,11 @@ MCP 的 `tools/list` 返回的每个元素只有三个字段：`name`、`descrip
 | `function` | `description` | 给模型读的用途说明与调用时机 |
 | `function` | `parameters` | JSON Schema 子集，描述入参 |
 
-没有 `required` 的工具（例如 `list_cards`、`get_card_tree`、`assess_knowledge_base`）表示零必填参数，参数对象可以为空（`tool_registry.py:104-108`、`:115-119`、`:183-187`）。
+没有 `required` 的工具（例如 `list_cards`、`get_card_tree`、`assess_knowledge_base`）表示零必填参数，参数对象可以为空（`tool_registry.py` 里这几个工具的 schema）。
 
 ## 十三个工具与三个层级
 
-`TOOL_SCHEMAS` 共十三个工具（`tool_registry.py:54-232`），层级映射单独列在 `TOOL_TIER_MAP` 里，每条都要手工登记（`:247-261`）：
+`TOOL_SCHEMAS` 共十三个工具（`tool_registry.py`），层级映射单独列在 `TOOL_TIER_MAP` 里，每条都要手工登记：
 
 | 层级 | 数量 | 工具 |
 | --- | --- | --- |
@@ -55,9 +57,9 @@ MCP 的 `tools/list` 返回的每个元素只有三个字段：`name`、`descrip
 | prescribe | 1 | plan_knowledge_gaps |
 | write | 4 | search_by_keyword、expand_from_card、refresh_card、link_card |
 
-三个层级在注册表文档里各有定义：read 不改知识库也不消耗 AI 调用；prescribe 只读但消耗一次 AI 调用；write 会联网或改动卡片与链接（`:11-15`）。MCP 网关只导出 read 层，处方与写层永不注册（`backend/mcp/gateway.py:32-35`）。
+三个层级在注册表文档里各有定义：read 不改知识库也不消耗 AI 调用；prescribe 只读但消耗一次 AI 调用；write 会联网或改动卡片与链接。MCP 网关只导出 read 层，处方与写层永不注册（`backend/mcp/gateway.py`）。
 
-未登记的工具名在 `tool_tier` 里按 read 处理（`:271-273`），注释写明这是保守选择：不会因为未知工具而放宽权限。这条兜底与 MCP 网关的“拒绝非 read 层”断言方向一致，都倾向于收紧。
+未登记的工具名在 `tool_tier` 里按 read 处理，注释写明这是保守选择：不会因为未知工具而放宽权限。这条兜底与 MCP 网关的“拒绝非 read 层”断言方向一致，都倾向于收紧。
 
 ## 描述文本承担的选择逻辑
 
@@ -65,22 +67,22 @@ MCP 的 `tools/list` 返回的每个元素只有三个字段：`name`、`descrip
 
 | 工具 | 描述里的调用时机 | 来源 |
 | --- | --- | --- |
-| search_similar_cards | 查找已有知识的第一步，应始终优先调用 | `tool_registry.py:59` |
-| get_card_info | 语义搜索命中后读取完整内容 | `:75` |
-| get_linked_cards | 扩展上下文、了解相关主题 | `:89` |
-| list_cards | 问“有哪些卡片”或知识库概览时 | `:103` |
-| get_card_tree | 决定挂载位置、评估薄弱层、选择扩展源卡 | `:114` |
-| assess_card_quality | 找最薄弱卡片 | `:169` |
-| assess_knowledge_base | 判断优先补哪个主题域 | `:182` |
-| assess_exploration_need | 联网前评估必要性 | `:206` |
+| search_similar_cards | 查找已有知识的第一步，应始终优先调用 | `backend/agent/tool_registry.py` |
+| get_card_info | 语义搜索命中后读取完整内容 | 同上 |
+| get_linked_cards | 扩展上下文、了解相关主题 | 同上 |
+| list_cards | 问“有哪些卡片”或知识库概览时 | 同上 |
+| get_card_tree | 决定挂载位置、评估薄弱层、选择扩展源卡 | 同上 |
+| assess_card_quality | 找最薄弱卡片 | 同上 |
+| assess_knowledge_base | 判断优先补哪个主题域 | 同上 |
+| assess_exploration_need | 联网前评估必要性 | 同上 |
 
-写层描述更长，因为要约束使用条件。例如 `refresh_card` 的描述写明“最后手段，触发条件非常严格，通常不调用”（`:155`），`search_by_keyword` 的描述要求歧义短词自带领域限定（`:129`）。这些文字直接进入模型上下文，改描述等同于改决策规则。
+写层描述更长，因为要约束使用条件。例如 `refresh_card` 的描述写明“最后手段，触发条件非常严格，通常不调用”，`search_by_keyword` 的描述要求歧义短词自带领域限定。这些文字直接进入模型上下文，改描述等同于改决策规则。
 
 MCP 客户端把这些描述原样展示给它的模型，因此描述必须自包含：客户端没有 Agent 的提示词上下文，仅凭 `tools/list` 的文本决定调用。跨端复用时，描述里不应依赖只有本仓库才懂的约定。
 
 ## JSON Schema 子集的字段清单
 
-`parameters` 用到的字段只有五个，都在校验函数里有对应实现（`backend/mcp/gateway.py:92-138`）：
+`parameters` 用到的字段只有五个，都在校验函数里有对应实现（`backend/mcp/gateway.py`）：
 
 | 字段 | 出现位置举例 | 校验行为 |
 | --- | --- | --- |
@@ -90,7 +92,7 @@ MCP 客户端把这些描述原样展示给它的模型，因此描述必须自�
 | `default` | `limit`、`threshold` | 缺失时填入 |
 | `enum` | `link_card.parent` | 取值必须在列表内 |
 
-类型映射只覆盖六种：字符串、整数、数字、布尔、对象、数组（`gateway.py:75-82`）。布尔是整数的子类，校验函数对期望为 integer 或 number 的值额外排除布尔（`:85-89`），避免 `limit=True` 通过。没有 `$ref`、`oneOf`、`additionalProperties` 等复杂关键字，超出六种类型的 schema 会被当作“无类型约束”跳过类型检查。
+类型映射只覆盖六种：字符串、整数、数字、布尔、对象、数组（`gateway.py`）。布尔是整数的子类，校验函数对期望为 integer 或 number 的值额外排除布尔，避免 `limit=True` 通过。没有 `$ref`、`oneOf`、`additionalProperties` 等复杂关键字，超出六种类型的 schema 会被当作“无类型约束”跳过类型检查。
 
 ```mermaid
 flowchart TD
@@ -104,7 +106,18 @@ flowchart TD
 
 ## 从注册表到 MCP 清单的字段映射
 
-派生函数只取三个字段并做一次深拷贝（`backend/mcp/gateway.py:60-72`）：
+派生函数只取三个字段并做一次深拷贝（`backend/mcp/gateway.py` 的 `mcp_tools`，主干如下）：
+
+```python
+for schema in registry.schemas_for_tiers(READ_TIERS):
+    fn = schema["function"]
+    tools.append({
+        "name": fn["name"],
+        "description": fn.get("description", ""),
+        "inputSchema": copy.deepcopy(fn.get("parameters") or {"type": "object", "properties": {}}),
+    })
+tools.sort(key=lambda t: t["name"])
+```
 
 | MCP 字段 | 来源 | 处理 |
 | --- | --- | --- |
@@ -112,9 +125,9 @@ flowchart TD
 | `description` | `function.description` | 缺失时为空串 |
 | `inputSchema` | `function.parameters` | 深拷贝，缺失时补空对象 schema |
 
-最后按名字排序（`:71`），保证 `tools/list` 顺序稳定。网关构造时把结果存成字典（`:144-146`），`list_tools` 每次返回深拷贝（`:155-156`），客户端改不动内部状态。
+最后按名字排序，保证 `tools/list` 顺序稳定。网关构造时把结果存成字典，`list_tools` 每次返回深拷贝，客户端改不动内部状态。
 
-回归测试断言 `inputSchema` 与注册表的 `parameters` 完全相等（`tests/backend/test_mcp_server.py:94-98`），这把“派生而非手写”的约束固定下来。若以后在派生时做字段改名，这条断言会失败，提醒改动者同步更新两端的文档与客户端。
+回归测试断言 `inputSchema` 与注册表的 `parameters` 完全相等（`tests/backend/test_mcp_server.py`），这把“派生而非手写”的约束固定下来。若以后在派生时做字段改名，这条断言会失败，提醒改动者同步更新两端的文档与客户端。
 
 ```mermaid
 sequenceDiagram
@@ -134,7 +147,7 @@ sequenceDiagram
 
 ## 别名表与工具名容错
 
-模型可能把工具名说错，注册表准备了一张别名表（`backend/agent/tool_registry.py:238-244`）：
+模型可能把工具名说错，注册表准备了一张别名表（`backend/agent/tool_registry.py`）：
 
 | 别名 | 实际工具 |
 | --- | --- |
@@ -144,7 +157,7 @@ sequenceDiagram
 | `assess_exploration` | `assess_exploration_need` |
 | `search_similar` | `search_similar_cards` |
 
-解析顺序是精确匹配优先，再查别名（`backend/agent/tools.py:264-274`）。`get_card` 没有同时映射到 `get_card_info` 与 `get_card_tree`，注释说明这是为了避免歧义（`tool_registry.py:237`）。别名机制只存在于 Agent 侧的执行器里；MCP 网关的白名单按精确名字判断，客户端传别名会得到 `-32601`。
+解析顺序是精确匹配优先，再查别名（`backend/agent/tools.py`）。`get_card` 没有同时映射到 `get_card_info` 与 `get_card_tree`，注释说明这是为了避免歧义（`tool_registry.py`）。别名机制只存在于 Agent 侧的执行器里；MCP 网关的白名单按精确名字判断，客户端传别名会得到 `-32601`。
 
 ## 易错点
 
@@ -161,13 +174,13 @@ sequenceDiagram
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| schema 外层 | `type: function` | `backend/agent/tool_registry.py:54-232` |
+| schema 外层 | `type: function` | `backend/agent/tool_registry.py` |
 | schema 内层 | name、description、parameters | 同上 |
-| 工具数量 | 13，其中 read 层 8 | `:247-261` |
-| MCP 清单字段 | name、description、inputSchema | `backend/mcp/gateway.py:60-72` |
-| 层级未登记 | 按 read 处理 | `tool_registry.py:271-273` |
-| 参数关键字 | type、properties、required、default、enum | `gateway.py:92-138` |
-| 别名 | 5 条，仅 Agent 侧生效 | `tool_registry.py:238-244`、`tools.py:264-274` |
+| 工具数量 | 13，其中 read 层 8 | `TOOL_TIER_MAP` |
+| MCP 清单字段 | name、description、inputSchema | `backend/mcp/gateway.py` |
+| 层级未登记 | 按 read 处理 | `tool_registry.py` |
+| 参数关键字 | type、properties、required、default、enum | `gateway.py` |
+| 别名 | 5 条，仅 Agent 侧生效 | `tool_registry.py`、`tools.py` |
 
 ### 设计权衡
 
@@ -197,8 +210,8 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/agent/tool_registry.py` | 十三个 schema、层级映射与别名（:54-232、:235-261、:271-283） |
-| `backend/agent/tools.py` | 别名解析与工具名匹配（:264-274） |
-| `backend/mcp/gateway.py` | schema 派生与参数关键字支持（:60-72、:92-138） |
-| `tests/backend/test_mcp_server.py` | schema 与清单一致性断言（:79-98） |
-| `backend/mcp/__init__.py` | 只读导出与手写实现说明（:1-22） |
+| `backend/agent/tool_registry.py` | 十三个 schema、层级映射与别名|
+| `backend/agent/tools.py` | 别名解析与工具名匹配|
+| `backend/mcp/gateway.py` | schema 派生与参数关键字支持|
+| `tests/backend/test_mcp_server.py` | schema 与清单一致性断言|
+| `backend/mcp/__init__.py` | 只读导出与手写实现说明|

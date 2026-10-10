@@ -7,9 +7,17 @@ updated: 2026-10-08
 
 # JSON-RPC 消息信封与分发顺序
 
-客户端把一行 JSON 写进标准输入，服务端把一行 JSON 写回标准输出——这是 MCP 最基础的通信形态。MCP（Model Context Protocol）是一套让模型客户端调用外部工具的协议，消息格式借用 JSON-RPC：每条消息带 `jsonrpc` 字段，请求另有 `id` 与 `method`，响应带 `result` 或 `error`。KnowledgeDiver 的 MCP 实现手写了一层 JSON-RPC 处理器，入口是 `McpServer.handle_message`（`backend/mcp/server.py:166-201`）。它接收一条已经解析成 Python 对象的消息，返回一条响应或 `None`。解析本身不在这一层，标准输入输出与逐行解码交给 `stdio.py`，因此这一层可以脱离传输单独测试。
+客户端把一行 JSON 写进标准输入，服务端把一行 JSON 写回标准输出——这是 MCP 最基础的通信形态。MCP（Model Context Protocol）是一套让模型客户端调用外部工具的协议，消息格式借用 JSON-RPC：每条消息带 `jsonrpc` 字段，请求另有 `id` 与 `method`，响应带 `result` 或 `error`。三种信封的最小形状如下（示意）：
 
-“返回 None”是这套实现里最需要先记住的约定：通知没有响应，非法通知也静默丢弃。JSON-RPC 规定通知不产生响应，代码把“没有 id 或 id 为 null”直接定义为通知（`:170-171`），于是连格式错误的通知也不会得到错误响应。客户端如果发了一条忘了带 id 的请求，就只能等超时。
+```json
+{"jsonrpc": "2.0", "id": 1, "method": "ping"}
+{"jsonrpc": "2.0", "id": 1, "result": {}}
+{"jsonrpc": "2.0", "method": "notifications/initialized"}
+```
+
+第一行是请求（有 `id`、有 `method`），第二行是对它的响应（`id` 原样回填、结果放在 `result`），第三行是通知（没有 `id`，因此不产生响应）。KnowledgeDiver 的 MCP 实现手写了一层 JSON-RPC 处理器，入口是 `McpServer.handle_message`（`backend/mcp/server.py`）。它接收一条已经解析成 Python 对象的消息，返回一条响应或 `None`。解析本身不在这一层，标准输入输出与逐行解码交给 `stdio.py`，因此这一层可以脱离传输单独测试。
+
+“返回 None”是这套实现里最需要先记住的约定：通知没有响应，非法通知也静默丢弃。JSON-RPC 规定通知不产生响应，代码把“没有 id 或 id 为 null”直接定义为通知（`handle_message` 开头两行），于是连格式错误的通知也不会得到错误响应。客户端如果发了一条忘了带 id 的请求，就只能等超时。
 
 文中关于 JSON-RPC 规范的说法按通用做法标注，代码未实现的部分会明确写出。
 
@@ -23,7 +31,7 @@ updated: 2026-10-08
 | 通知 | 有 `method`，无 `id` 或 `id` 为 null | 返回 `None` |
 | 响应 | 通常由客户端发出，含 `result` 或 `error` | 本服务器不处理，会被当成缺 method 的请求 |
 
-判据在进入校验之前就固定下来（`backend/mcp/server.py:170-171`）：
+判据在进入校验之前就固定下来，一共两行（`backend/mcp/server.py`）：
 
 ```python
 msg_id = message.get("id")
@@ -34,7 +42,7 @@ is_notification = "id" not in message or msg_id is None
 
 ## 响应信封的两个工厂
 
-响应只有两种形状，各自一个静态方法（`backend/mcp/server.py:126-132`）：
+响应只有两种形状，各自一个静态方法（`backend/mcp/server.py`）：
 
 ```python
 @staticmethod
@@ -52,7 +60,7 @@ def _error(msg_id, code, message):
 
 ## 校验顺序与各自的返回
 
-进入分发前有四道校验，顺序固定（`backend/mcp/server.py:168-184`）：
+进入分发前有四道校验，顺序固定（`backend/mcp/server.py`）：
 
 | 顺序 | 检查 | 失败返回 |
 | --- | --- | --- |
@@ -61,9 +69,26 @@ def _error(msg_id, code, message):
 | 3 | `method` 是非空字符串 | 通知返回 `None`，请求返回 `-32600` |
 | 4 | `params` 是对象或缺失 | 通知返回 `None`，请求返回 `-32602` |
 
-第一道校验用 `None` 作响应 id，因为此时还没有可回填的 id；这与 stdio 层的解析错误响应形状一致。第二、三道把非法请求归为 `-32600`，第四道归为 `-32602`，区分的是“请求本身不合法”与“参数不合法”。
+第一道校验用 `None` 作响应 id，因为此时还没有可回填的 id；这与 stdio 层的解析错误响应形状一致。第二、三道把非法请求归为 `-32600`，第四道归为 `-32602`，区分的是“请求本身不合法”与“参数不合法”。四道校验的骨架与源码一致：
 
-`params` 缺失时被归一成空字典（`:180-182`），因此不传 params 的方法调用等价于传 `{}`。`params` 传数组或字符串会得到 `-32602`，与 JSON-RPC 规范里允许数组位置参数的做法不同：本实现只支持具名参数，按通用做法标注为子集实现。
+```python
+if not isinstance(message, dict):
+    return self._error(None, ERR_INVALID_REQUEST, "请求必须是 JSON 对象")
+if message.get("jsonrpc") != "2.0":
+    return None if is_notification else self._error(msg_id, ERR_INVALID_REQUEST, "jsonrpc 必须是 '2.0'")
+method = message.get("method")
+if not isinstance(method, str) or not method:
+    return None if is_notification else self._error(msg_id, ERR_INVALID_REQUEST, "缺少 method")
+params = message.get("params")
+if params is None:
+    params = {}
+if not isinstance(params, dict):
+    return None if is_notification else self._error(msg_id, ERR_INVALID_PARAMS, "params 必须是对象")
+```
+
+`-326xx` 是 JSON-RPC 为服务端错误保留的号段：`-32600` 请求不合法、`-32601` 方法不存在、`-32602` 参数不合法、`-32603` 服务端内部错误；`-32700` 更负一位，表示「解析不出 JSON」，由传输层而不是协议层发出。
+
+`params` 缺失时被归一成空字典，因此不传 params 的方法调用等价于传 `{}`。`params` 传数组或字符串会得到 `-32602`，与 JSON-RPC 规范里允许数组位置参数的做法不同：本实现只支持具名参数，按通用做法标注为子集实现。
 
 ```mermaid
 flowchart TD
@@ -81,7 +106,23 @@ flowchart TD
 
 ## 方法分发表
 
-分发是一串顺序 `if`，没有注册表（`backend/mcp/server.py:186-201`）：
+分发是一串顺序 `if`，没有注册表（`backend/mcp/server.py`）：
+
+```python
+if method == "initialize":
+    return None if is_notification else self._ok(msg_id, self._initialize(params))
+if method in ("notifications/initialized", "initialized", "notifications/cancelled"):
+    return None
+if method == "ping":
+    return None if is_notification else self._ok(msg_id, {})
+if method == "tools/list":
+    return None if is_notification else self._ok(msg_id, self._tools_list())
+if method == "tools/call":
+    if is_notification:
+        return None
+    return await self._tools_call(params, msg_id)
+return None if is_notification else self._error(msg_id, ERR_METHOD_NOT_FOUND, f"未实现的方法: {method}")
+```
 
 | method | 处理 | 响应 |
 | --- | --- | --- |
@@ -92,15 +133,15 @@ flowchart TD
 | `tools/call` | 参数校验与执行 | `result.content` 与 `result.isError` |
 | 其他 | 未实现 | `-32601`，消息含方法名 |
 
-三种通知名并列在同一个分支里（`:188`），其中 `initialized` 是 `notifications/initialized` 的兼容写法。`notifications/cancelled` 只被忽略，没有中断正在执行的任务：`tools/call` 是逐个处理的，同一行输入里不存在并发执行，取消没有可作用的对象。按 MCP 的取消语义，客户端收到取消通知后服务端应尽力停止；本仓库未实现，标注为未实现。
+三种通知名并列在同一个分支里，其中 `initialized` 是 `notifications/initialized` 的兼容写法。`notifications/cancelled` 只被忽略，没有中断正在执行的任务：`tools/call` 是逐个处理的，同一行输入里不存在并发执行，取消没有可作用的对象。按 MCP 的取消语义，客户端收到取消通知后服务端应尽力停止；本仓库未实现，标注为未实现。
 
-未实现方法统一返回 `-32601`，包括 `resources/list`、`prompts/list` 等 MCP 其他方法族（回归测试对 `resources/list` 断言了这一点，`tests/backend/test_mcp_server.py:254-255`）。服务器在 capabilities 里只声明了 `tools`，客户端的模型据此不会再调用其他方法族。
+未实现方法统一返回 `-32601`，包括 `resources/list`、`prompts/list` 等 MCP 其他方法族（回归测试对 `resources/list` 断言了这一点，见 `tests/backend/test_mcp_server.py`）。服务器在 capabilities 里只声明了 `tools`，客户端的模型据此不会再调用其他方法族。
 
 ## 通知为什么不回响应
 
-通知的处理只有两种结果：命中的分支返回 `None`，未命中的分支在“是通知”时也返回 `None`（`:199-201`）。`tools/call` 尤其需要这一条（`:195-196`）：通知形式的调用不产生响应，避免把执行结果写到没有人等待的通道上。
+通知的处理只有两种结果：命中的分支返回 `None`，未命中的分支在“是通知”时也返回 `None`。`tools/call` 尤其需要这一条：通知形式的调用不产生响应，避免把执行结果写到没有人等待的通道上。
 
-代价是诊断困难。一条格式错误的通知不会留下协议层记录，只能靠 stderr 日志或调用方自己的约定发现。回归测试覆盖了 `notifications/initialized` 返回 None（`tests/backend/test_mcp_server.py:246-248`），但没有覆盖错误通知的静默路径。
+代价是诊断困难。一条格式错误的通知不会留下协议层记录，只能靠 stderr 日志或调用方自己的约定发现。回归测试覆盖了 `notifications/initialized` 返回 None（`tests/backend/test_mcp_server.py`），但没有覆盖错误通知的静默路径。
 
 ```mermaid
 sequenceDiagram
@@ -124,7 +165,7 @@ sequenceDiagram
 
 ## 批处理与 id 为 null 的边界
 
-JSON-RPC 2.0 规定一个数组可以承载多条消息，服务端应按数组逐条处理并返回数组。本实现遇到数组会走“消息不是对象”分支，返回单条 `-32600`（`:168-169`）。批处理未实现，按规范标注为子集。
+JSON-RPC 2.0 规定一个数组可以承载多条消息，服务端应按数组逐条处理并返回数组。本实现遇到数组会走“消息不是对象”分支，返回单条 `-32600`。批处理未实现，按规范标注为子集。
 
 `id` 为 null 的请求按通知处理，因此不会得到错误响应。若客户端想确认服务器是否活着，用 `ping` 并带上非 null 的 id；用 null 作 id 的 ping 不会得到任何回复，这不代表服务器没在工作。
 
@@ -145,14 +186,14 @@ JSON-RPC 2.0 规定一个数组可以承载多条消息，服务端应按数组�
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| 通知判据 | 无 `id` 或 `id` 为 null | `backend/mcp/server.py:170-171` |
-| 响应形状 | `result` 或 `error` 二选一 | `:126-132` |
-| 非法请求 | `-32600`，第一道检查 id 为 null | `:168-169`、`:173-178` |
-| 非法参数 | `-32602` | `:183-184` |
-| 未实现方法 | `-32601`，消息含方法名 | `:199-201` |
-| 通知方法 | initialized 系列与 cancelled，均无响应 | `:188-189` |
-| 方法集 | initialize、ping、tools/list、tools/call | `:186-197` |
-| 批处理 | 未实现，数组判为 `-32600` | `:168-169` |
+| 通知判据 | 无 `id` 或 `id` 为 null | `McpServer.handle_message` 开头 |
+| 响应形状 | `result` 或 `error` 二选一 | `McpServer._ok` 与 `McpServer._error` |
+| 非法请求 | `-32600`，第一道检查 id 为 null | `handle_message` 的对象检查与 `jsonrpc` 检查 |
+| 非法参数 | `-32602` | `handle_message` 的 `params` 检查 |
+| 未实现方法 | `-32601`，消息含方法名 | `handle_message` 的方法分发兜底 |
+| 通知方法 | initialized 系列与 cancelled，均无响应 | `handle_message` 的通知分支 |
+| 方法集 | initialize、ping、tools/list、tools/call | `McpServer` 的 `if` 分发链 |
+| 批处理 | 未实现，数组判为 `-32600` | `handle_message` 首道对象检查 |
 
 ### 设计权衡
 
@@ -182,8 +223,8 @@ JSON-RPC 2.0 规定一个数组可以承载多条消息，服务端应按数组�
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/mcp/server.py` | 消息校验、分发与响应工厂（:126-132、:166-201） |
-| `backend/mcp/stdio.py` | 解析错误响应的形状（:30-45） |
-| `backend/mcp/gateway.py` | 错误码常量与工具层错误（:37-40、:171-191） |
-| `tests/backend/test_mcp_server.py` | 协议语义回归断言（:224-300） |
-| `backend/mcp/__init__.py` | 协议层模块划分说明（:1-22） |
+| `backend/mcp/server.py` | 消息校验、分发与响应工厂 |
+| `backend/mcp/stdio.py` | 解析错误响应的形状 |
+| `backend/mcp/gateway.py` | 错误码常量与工具层错误 |
+| `tests/backend/test_mcp_server.py` | 协议语义回归断言 |
+| `backend/mcp/__init__.py` | 协议层模块划分说明 |

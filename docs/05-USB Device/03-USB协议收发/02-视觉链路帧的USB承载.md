@@ -15,7 +15,7 @@ updated: 2026-10-07
 
 USB CDC 对上位机呈现为一个 COM 口，对固件呈现为一个字节流。字节流没有消息边界，上位机一次 `write` 的 29 字节可能在设备侧被拆成两包，也可能与下一帧粘在一个包里。
 
-本工程的分帧策略是定长加帧头：帧头固定为 `'S'` `'P'`（0x53 0x50），帧长固定为 29 或 43 字节，收到帧头后按固定长度取满再校验 CRC16。定长意味着解析器不需要长度域，代价是协议一旦加字段就要同时改两端。
+本工程的分帧策略是定长加帧头：帧头固定为 `'S'` `'P'`（0x53 0x50），帧长固定为 29 或 43 字节，收到帧头后按固定长度取满再校验 CRC16（CRC 是按多项式除法算出的校验值，接收方重算并比对，用来发现传输过程中的位错误）。定长意味着解析器不需要长度域，代价是协议一旦加字段就要同时改两端。
 
 | 链路方向 | 长度 | 帧头 | 校验 | 发送方 |
 | --- | --- | --- | --- | --- |
@@ -72,7 +72,21 @@ flowchart TD
 | 39 | 2 | uint16 | bullet_count | 累计发射计数 |
 | 41 | 2 | uint16 | crc16 | 小端，覆盖偏移 0 到 40 |
 
-两张表与 `云台串口协议.md` 的字段表逐项对应，也与 `Task/Inc/UsbConnectTask.h:44-77` 的两个 `#pragma pack(1)` 结构体一致。字段顺序与类型一旦变动，三处必须同步：协议文本、结构体、上位机脚本的格式串。
+两张表与 `云台串口协议.md` 的字段表逐项对应，也与 `Task/Inc/UsbConnectTask.h` 的两个 `#pragma pack(1)` 结构体一致。字段顺序与类型一旦变动，三处必须同步：协议文本、结构体、上位机脚本的格式串。
+
+接收帧在固件里就是一个 packed 结构体，偏移与上表一一对应：
+
+```c
+/* 摘录：Task/Inc/UsbConnectTask.h 的接收帧结构体 */
+#pragma pack(1)
+typedef struct {
+    uint8_t  head0, head1, mode;              /* 偏移 0 到 2 */
+    float    yaw, yaw_vel, yaw_acc;           /* 偏移 3 到 14 */
+    float    pitch, pitch_vel, pitch_acc;     /* 偏移 15 到 26 */
+    uint16_t crc16;                           /* 偏移 27，小端，覆盖 0 到 26 */
+} vision_to_gimbal_t;                         /* 29 字节 */
+#pragma pack()
+```
 
 ## 3. CRC16 的实测参数与注释冲突
 
@@ -81,13 +95,13 @@ flowchart TD
 | 参数 | 取值 | 证据 |
 | --- | --- | --- |
 | 标准多项式 | 0x1021 | 由反射式 0x8408 反推 |
-| 反射式多项式 | 0x8408 | `Algorithm/Src/CRC16.cpp:7-29` 的表逐项匹配 |
-| 初值 | 0xFFFF | 调用处传入，`usb_protocol.cpp:41-45`、`usb_decode.cpp:79-83` |
+| 反射式多项式 | 0x8408 | `Algorithm/Src/CRC16.cpp` 的表逐项匹配 |
+| 初值 | 0xFFFF | 调用处传入，`usb_protocol.cpp`、`usb_decode.cpp` |
 | 输入输出反射 | 是 | 表按低位先进生成 |
 | 结果异或 | 0x0000 | 实现里没有异或步骤 |
 | 校验值 | `crc16("123456789", 0xFFFF) = 0x6F91` | 实测，等价于 CRC-16/MCRF4XX |
 
-`generate_gimbal_packet.py:10` 的注释写「多项式 0x8005，初始 0x0000 的表格」，两处都与代码不符：表与固件一致，初值取的是函数默认参数 0xFFFF。文档与代码冲突时以代码为准，这条要显式标出，属待现场确认项。
+`generate_gimbal_packet.py` 的注释写「多项式 0x8005，初始 0x0000 的表格」，两处都与代码不符：表与固件一致，初值取的是函数默认参数 0xFFFF。文档与代码冲突时以代码为准，这条要显式标出，属待现场确认项。
 
 CRC 字段本身是小端：接收侧用 `reinterpret_cast` 直接读 packed 结构体的 `crc16` 成员，等价于 `data[27] | (data[28] << 8)`。
 
@@ -95,11 +109,22 @@ CRC 字段本身是小端：接收侧用 `reinterpret_cast` 直接读 packed 结
 
 ## 4. 固件发送侧的组帧与清零
 
-`USBProtocol::buildFrame`（`Communication/Src/usb_protocol.cpp:11-50`）先填头部、模式、四元数、角度、弹速与计数，清零 `crc16` 后对前 41 字节算 CRC，再写回 `crc16`，返回 `GIMBAL_TO_VISION_LEN`。清零这一步对结果没有影响，因为 CRC 的覆盖范围本来就不含最后两字节，保留它是为了让结构体内容确定。
+`USBProtocol::buildFrame`（`Communication/Src/usb_protocol.cpp`）先填头部、模式、四元数、角度、弹速与计数，清零 `crc16` 后对前 41 字节算 CRC，再写回 `crc16`，返回 `GIMBAL_TO_VISION_LEN`。清零这一步对结果没有影响，因为 CRC 的覆盖范围本来就不含最后两字节，保留它是为了让结构体内容确定。
 
-长度常量定义在 `Communication/Inc/usb_protocol.h`：`VISION_TO_GIMBAL_LEN = 29`、`GIMBAL_TO_VISION_LEN = 43`。`Task/Inc/UsbConnectTask.h:22` 的宏注释写着「修正：原 41 字节错误」，说明协议长度曾经被记成 41，43 才是当前值。`云台串口协议.md` 里的 43 字节与代码一致。
+组帧顺序写成代码：
 
-组帧的调用点在任务里，每轮发送前构造一次（`Task/Src/UsbConnectTask.cpp:129-140`）。传入的 `tx_pkt` 是全局变量，`buildFrame` 直接就地修改它，因此不存在额外拷贝；代价是同一块内存被写两次，先填数据再回填 CRC。若把清零 `crc16` 那一行删掉，在覆盖长度不变的前提下结果仍然正确，但一旦有人把长度改成 `sizeof(pkt)`，CRC 就会把上一帧的残值算进去。
+```cpp
+/* 简化：USBProtocol::buildFrame 的组帧与回填 */
+pkt.head0 = 0x53; pkt.head1 = 0x50;
+pkt.mode  = mode;  /* 之后依次填四元数、角度、弹速与计数 */
+pkt.crc16 = 0;     /* 先清零，避免残值参与运算 */
+pkt.crc16 = crc16(reinterpret_cast<uint8_t*>(&pkt), GIMBAL_TO_VISION_LEN - 2);
+return GIMBAL_TO_VISION_LEN;   /* 43 */
+```
+
+长度常量定义在 `Communication/Inc/usb_protocol.h`：`VISION_TO_GIMBAL_LEN = 29`、`GIMBAL_TO_VISION_LEN = 43`。`Task/Inc/UsbConnectTask.h` 的宏注释写着「修正：原 41 字节错误」，说明协议长度曾经被记成 41，43 才是当前值。`云台串口协议.md` 里的 43 字节与代码一致。
+
+组帧的调用点在任务里，每轮发送前构造一次（`Task/Src/UsbConnectTask.cpp`）。传入的 `tx_pkt` 是全局变量，`buildFrame` 直接就地修改它，因此不存在额外拷贝；代价是同一块内存被写两次，先填数据再回填 CRC。若把清零 `crc16` 那一行删掉，在覆盖长度不变的前提下结果仍然正确，但一旦有人把长度改成 `sizeof(pkt)`，CRC 就会把上一帧的残值算进去。
 
 ## 5. 固件接收侧与上位机脚本的对齐
 
@@ -193,9 +218,9 @@ sequenceDiagram
 | 路径 | 用途 |
 | --- | --- |
 | `2026OmniSentryGimbal/Communication/Inc/usb_protocol.h` | 帧头、两个长度常量、两个枚举、两个 packed 结构体 |
-| `2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp` | `buildFrame` 组装与 CRC 计算（:11-50） |
-| `2026OmniSentryGimbal/Communication/Src/usb_decode.cpp` | 接收侧解帧与 CRC 校验（:45-108） |
-| `2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp` | 256 项表与查表算法（:7-41） |
-| `2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h` | 打包结构体与长度宏（:22、:44-77） |
-| `2026OmniSentryGimbal/generate_gimbal_packet.py` | 上位机封包脚本与 CRC 表（:10-98） |
+| `2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp` | `buildFrame` 组装与 CRC 计算 |
+| `2026OmniSentryGimbal/Communication/Src/usb_decode.cpp` | 接收侧解帧与 CRC 校验 |
+| `2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp` | 256 项表与查表算法 |
+| `2026OmniSentryGimbal/Task/Inc/UsbConnectTask.h` | 打包结构体与长度宏 |
+| `2026OmniSentryGimbal/generate_gimbal_packet.py` | 上位机封包脚本与 CRC 表 |
 | `2026OmniSentryGimbal/云台串口协议.md` | 协议字段表与错误处理约定 |

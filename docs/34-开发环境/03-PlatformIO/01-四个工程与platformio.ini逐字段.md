@@ -9,7 +9,7 @@ updated: 2026-10-07
 
 PlatformIO 把「板子、框架、依赖」写进工程根目录的 `platformio.ini`，一条命令就能编译下载。要看懂一个工程能不能构建，先看这个文件的 `[env:*]` 段：段名是环境名，段内的 `board` 决定目标芯片，`framework` 决定用哪套库。
 
-这台机器上所有工程都在 `/mnt/d/Documents/PlatformIO/Projects` 下，共四个目录。它们的配置文件长短差别很大，从 9 行到 32 行不等，恰好覆盖了「最小配置」「多环境」「空模板」三种形态。下面按文件逐个说明。
+配置文件的长短直接反映工程走到哪一步：只剩模板注释说明还没选板子，三行环境段说明只定了一个目标，并列多组环境说明要在多块板上验证。本机四个工程都在 `/mnt/d/Documents/PlatformIO/Projects` 下，配置从 9 行到 32 行不等，恰好覆盖这三种形态，下面用它们举例。
 
 ## 1. 工程目录的共同布局
 
@@ -28,7 +28,7 @@ PlatformIO 把「板子、框架、依赖」写进工程根目录的 `platformio
 
 ## 2. 一个环境最少要写三行
 
-两个工程给出了最小形态。`111/platformio.ini` 与 `Test/platformio.ini` 之外的样例是 `ESP32S3CAMfirst`：
+`Test` 与 `ESP32S3CAMfirst` 两个工程给出了最小形态，先看后者：
 
 ```ini
 [env:esp32s3camlcd]
@@ -39,11 +39,29 @@ framework = arduino
 
 `platform` 选平台（这里是乐鑫的 ESP32 平台），`board` 选具体开发板（`esp32s3camlcd`），`framework` 选 Arduino 框架。三行之外没有别的配置，说明这个工程只需要默认可选项。
 
+这三行构成一个环境（env）：一段配置对应一个编译目标，`pio run` 不带参数会构建全部环境，`pio run -e esp32s3camlcd` 只构建这一个。`platform` 背后是厂商维护的平台包，提供工具链与板级定义；`framework` 决定用哪套库，`arduino` 即 Arduino 核心库。
+
 `Test` 工程的结构完全相同，只是把板子换成 `esp32s3usbotg`：`[env:esp32s3usbotg]`、`board = esp32s3usbotg`。两个工程都用 Arduino 框架。
 
 ## 3. wifiscan 的四组环境
 
-`260116-140012-arduino-wifiscan` 有 32 行，包含四组环境：`esp32dev`、`esp-wrover-kit`、`espea32`、`esp320`。每组的 `platform` 与 `framework` 相同，差别在 `board`，并且每组都写了 `monitor_speed = 115200`。
+同一份代码要在多块板子上验证时，做法是在一个 `platformio.ini` 里并列多组 `[env:*]`：每组换 `board`，`platform` 与 `framework` 保持一致，代码只维护一份。`260116-140012-arduino-wifiscan` 就写了四组环境（`esp32dev`、`esp-wrover-kit`、`espea32`、`esp320`），每组都带 `monitor_speed = 115200`，共 32 行。
+
+```ini
+[env:esp32dev]
+platform = espressif32
+framework = arduino
+board = esp32dev
+monitor_speed = 115200
+
+[env:esp-wrover-kit]
+platform = espressif32
+framework = arduino
+board = esp-wrover-kit
+monitor_speed = 115200
+
+; 其余两组（espea32、esp320）结构相同，只换 board
+```
 
 `monitor_speed` 是串口监视器的波特率。写进配置后，`pio device monitor` 一启动就按这个速率打开，不必每次手输。四组环境都写同一数值，说明这个工程期望四个目标板共用同一套串口参数。
 
@@ -70,9 +88,17 @@ flowchart TD
 
 当前文件没有这么做。两种写法都能工作，区别只在维护：重复写法在环境数量少时更直观，上提写法在环境多、公共项多时更省事。本仓库未见对该文件的后续修改记录，因此保持现状即可。
 
-## 5. 没有环境段的工程
+## 5. 没有环境段：还没选板子
 
-`111/platformio.ini` 只有 9 行，全部是模板注释，没有任何 `[env:*]` 段，也没有 `platform`、`board`、`framework`。`pio run` 在这种状态下没有可构建的目标。
+判断工程有没有开工，看两处：`platformio.ini` 里有没有 `[env:*]` 段，`src` 里有没有源码；只看目录结构会误判，因为模板会预先建好 `src`、`include`、`lib`。`111/platformio.ini` 只有 9 行模板注释，没有环境段，也没有 `platform`、`board`、`framework`，`pio run` 在这种状态下没有可构建的目标。
+
+```ini
+; PlatformIO Project Configuration File
+;
+;   Build options: build flags, source filter
+;   Upload options: custom upload port, speed and extra flags
+; ...（9 行全部是注释）
+```
 
 这通常意味着工程只创建了骨架、还没选板子。它同时缺少可判定的目标芯片，所以本节无法确认它是为哪块板准备的。
 

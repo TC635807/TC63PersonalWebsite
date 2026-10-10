@@ -68,19 +68,19 @@ flowchart TD
 
 | 区域 | 位置 | 内容 |
 | --- | --- | --- |
-| `Includes` | `Core/Src/main.c:33-39` | `bsp_dwt.h`、`bsp_can.h`、`usart_dma.h`、`dbus.h` |
-| `0` | `Core/Src/main.c:70-78` | 遥控器回调 `MyUartCallbackFun()`，内部调用 `DBUS_Decode()` |
-| `Init` | `Core/Src/main.c:97-99` | 空，且结束标记名被写坏，见第 5 节 |
-| `SysInit` | `Core/Src/main.c:104-107` | 空 |
-| `2` | `Core/Src/main.c:121-128` | `MX_USB_DEVICE_Init()`、`BSP_CAN_Init()`、`BSP_DWT_Init()`、`Uart_Init(&huart3, MyUartCallbackFun)` |
-| `3` | `Core/Src/main.c:144-146` | 空，位于 `while (1)` 内 |
-| `Error_Handler_Debug` | `Core/Src/main.c:226-232` | 关中断加死循环 |
+| `Includes` | `Core/Src/main.c` | `bsp_dwt.h`、`bsp_can.h`、`usart_dma.h`、`dbus.h` |
+| `0` | `Core/Src/main.c` | 遥控器回调 `MyUartCallbackFun()`，内部调用 `DBUS_Decode()` |
+| `Init` | `Core/Src/main.c` | 空，且结束标记名被写坏，见第 5 节 |
+| `SysInit` | `Core/Src/main.c` | 空 |
+| `2` | `Core/Src/main.c` | `MX_USB_DEVICE_Init()`、`BSP_CAN_Init()`、`BSP_DWT_Init()`、`Uart_Init(&huart3, MyUartCallbackFun)` |
+| `3` | `Core/Src/main.c` | 空，位于 `while (1)` 内 |
+| `Error_Handler_Debug` | `Core/Src/main.c` | 关中断加死循环 |
 
 `Init` 与 `2` 两个区域的位置不同：`Init` 在 `HAL_Init()` 之后、`SystemClock_Config()` 之前，`2` 在所有 `MX_xxx_Init()` 之后。把 BSP 初始化写进 `Init` 会拿到一个时钟还没配好的系统，本工程把它放在 `2`。
 
 ### 3.2 stm32f4xx_it.c
 
-唯一一处手写代码在 USART3 中断入口（`Core/Src/stm32f4xx_it.c:249-251`）：
+唯一一处手写代码在 USART3 中断入口（`Core/Src/stm32f4xx_it.c`）：
 
 ```c
 void USART3_IRQHandler(void)
@@ -110,11 +110,11 @@ extern QueueHandle_t usbRxQueue;
 /* USER CODE END PV */
 ```
 
-这里用的是相对路径 `../../Task/Inc/...`（`USB_DEVICE/App/usbd_cdc_if.c:25`），因为生成的 `stm32cubemx` 接口库只提供 HAL 与 FreeRTOS 一侧的头文件路径，`Task/Inc` 来自根 `CMakeLists.txt`。放在标记区内的这条 include 可以跨生成保留，但依赖目录层级，移动文件时要一起改。
+这里用的是相对路径 `../../Task/Inc/...`（`USB_DEVICE/App/usbd_cdc_if.c`），因为生成的 `stm32cubemx` 接口库只提供 HAL 与 FreeRTOS 一侧的头文件路径，`Task/Inc` 来自根 `CMakeLists.txt`。放在标记区内的这条 include 可以跨生成保留，但依赖目录层级，移动文件时要一起改。
 
 ### 3.4 FreeRTOSConfig.h
 
-五个区域里只有一个填了内容（`Core/Inc/FreeRTOSConfig.h:121-123`）：
+五个区域里只有一个填了内容（`Core/Inc/FreeRTOSConfig.h`）：
 
 ```c
 /* USER CODE BEGIN 1 */
@@ -122,7 +122,7 @@ extern QueueHandle_t usbRxQueue;
 /* USER CODE END 1 */
 ```
 
-内核配置数值本身由 `.ioc` 的 `FREERTOS.*` 键生成，例如 `configTICK_RATE_HZ=1000`（`2026sentriomeni.ioc:127`）对应 `Core/Inc/FreeRTOSConfig.h:64` 的宏；而 `configASSERT` 不在 CubeMX 的配置面板里，只能写在标记区。两块板的这份文件逐行相同，只差 `configMINIMAL_STACK_SIZE`（云台 256、底盘 512）。
+内核配置数值本身由 `.ioc` 的 `FREERTOS.*` 键生成，例如 `configTICK_RATE_HZ=1000`（`2026sentriomeni.ioc`）对应 `Core/Inc/FreeRTOSConfig.h` 的宏；而 `configASSERT` 不在 CubeMX 的配置面板里，只能写在标记区。两块板的这份文件逐行相同，只差 `configMINIMAL_STACK_SIZE`（云台 256、底盘 512）。
 
 ```mermaid
 sequenceDiagram
@@ -157,7 +157,7 @@ sequenceDiagram
 
 ### 5.1 结束标记名被写坏
 
-云台 `Core/Src/main.c` 的 `Init` 区结束标记写成了 `/* USER CODE _angleEND Init */`（`Core/Src/main.c:99`），正确的写法是 `/* USER CODE END Init */`。结果是全文件 `USER CODE BEGIN` 出现 19 次、`USER CODE END` 出现 18 次，`Init` 这一对无法配对。底盘板同一位置是正确的（`Core/Src/main.c:102`）。
+云台 `Core/Src/main.c` 的 `Init` 区结束标记写成了 `/* USER CODE _angleEND Init */`（`Core/Src/main.c`），正确的写法是 `/* USER CODE END Init */`。结果是全文件 `USER CODE BEGIN` 出现 19 次、`USER CODE END` 出现 18 次，`Init` 这一对无法配对。底盘板同一位置是正确的（`Core/Src/main.c`）。
 
 这行是人工编辑留下的，git 历史里最早出现在提交 `88f2774`（自喵修复，尝试解决usb断连中）。当前 `Init` 区内没有内容，所以没有造成损失；一旦往里写代码，就会落在生成器的标记表之外，重新生成时被覆盖。生成器对这种不成对标记的具体回退行为没有从生成器源码验证。
 
@@ -171,7 +171,7 @@ sequenceDiagram
 
 ### 5.4 三个没有保护的源文件
 
-`Core/Src/syscalls.c`、`Core/Src/sysmem.c`、`Core/Src/system_stm32f4xx.c` 里连 `Header` 区都没有，整个文件由模板决定。`syscalls.c` 里带了 `#if defined(__PICOLIBC__)` 的分支（`Core/Src/syscalls.c:180-245`），这是生成器为 STARM 工具链准备的，不要在这三个文件里加自己的实现。
+`Core/Src/syscalls.c`、`Core/Src/sysmem.c`、`Core/Src/system_stm32f4xx.c` 里连 `Header` 区都没有，整个文件由模板决定。`syscalls.c` 里带了 `#if defined(__PICOLIBC__)` 的分支（`Core/Src/syscalls.c`），这是生成器为 STARM 工具链准备的，不要在这三个文件里加自己的实现。
 
 ## 6. 小结
 
@@ -181,7 +181,7 @@ sequenceDiagram
 - 标记数量与手写内容无关：`usart.c` 有 24 对全空，`main.c` 有 19 对承载了全部 BSP 初始化。
 - 区域的位置有语义：`Init` 在时钟配置之前，`2` 在所有外设初始化之后，`stm32f4xx_it.c` 的区域 0 在 HAL 处理之前。
 - 三个文件完全没有标记，整文件重写。
-- 标记名写错不会报错，只会静默失去保护。云台 `main.c:99` 是一处现存实例。
+- 标记名写错不会报错，只会静默失去保护。云台 `main.c` 是一处现存实例。
 
 ### 设计权衡
 
@@ -202,6 +202,6 @@ sequenceDiagram
 
 挑战题
 
-4. 把 `Core/Src/main.c:99` 的 `_angleEND` 改回 `END`，再在 `Init` 区内加一行 `volatile uint32_t probe = 0;`，说明为什么这一行放在 `Init` 区而不是 `2` 区。
-5. 设计一个检查脚本思路：用 `USER CODE BEGIN` 与 `USER CODE END` 的出现次数与名称配对情况，找出所有写坏标记的文件。写出判定规则，并说明它对 `main.c:144-146` 这种 BEGIN 与 END 顺序颠倒的写法是否成立。
+4. 把 `Core/Src/main.c` 的 `_angleEND` 改回 `END`，再在 `Init` 区内加一行 `volatile uint32_t probe = 0;`，说明为什么这一行放在 `Init` 区而不是 `2` 区。
+5. 设计一个检查脚本思路：用 `USER CODE BEGIN` 与 `USER CODE END` 的出现次数与名称配对情况，找出所有写坏标记的文件。写出判定规则，并说明它对 `main.c` 这种 BEGIN 与 END 顺序颠倒的写法是否成立。
 6. 假设要把云台的自定义回调 `MyUartCallbackFun()` 移到 `Communication/Src/dbus.cpp` 里，列出需要改动的生成文件区域与手写文件，并说明为什么这样改能让 `main.c` 的 `0` 区变空。

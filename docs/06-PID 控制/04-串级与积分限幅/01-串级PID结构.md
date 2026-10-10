@@ -72,25 +72,25 @@ $$ f_{s,i} \ge (10 \sim 20)\, f_{b,i} $$
 
 ```mermaid
 flowchart TD
-  A["目标角度 θ*"] --> B["角度外环 Calculate"]
-  C["IMU 角度反馈 θ"] --> B
-  B -->|"外环输出作为速度目标 ω*"| D["速度内环 Calculate"]
-  E["IMU 角速度反馈 ω"] --> D
-  D --> F["电流限幅 clamp"]
-  F --> G["CAN 下发电机"]
+ A["目标角度 θ*"] --> B["角度外环 Calculate"]
+ C["IMU 角度反馈 θ"] --> B
+ B -->|"外环输出作为速度目标 ω*"| D["速度内环 Calculate"]
+ E["IMU 角速度反馈 ω"] --> D
+ D --> F["电流限幅 clamp"]
+ F --> G["CAN 下发电机"]
 ```
 
 ```mermaid
 sequenceDiagram
-  participant I as ImuTask
-  participant G as GimbalTask
-  participant M as 电机
-  I->>G: 更新 imu_data 角度与角速度
-  G->>G: 角度外环 Calculate(目标角, 反馈角, dt)
-  G->>G: 速度内环 Calculate(外环输出, 反馈角速度, dt)
-  G->>G: clamp 电流到限幅
-  G->>M: 打包 CAN 帧下发
-  G->>G: osDelay(2) 等待下个周期
+ participant I as ImuTask
+ participant G as GimbalTask
+ participant M as 电机
+ I->>G: 更新 imu_data 角度与角速度
+ G->>G: 角度外环 Calculate(目标角, 反馈角, dt)
+ G->>G: 速度内环 Calculate(外环输出, 反馈角速度, dt)
+ G->>G: clamp 电流到限幅
+ G->>M: 打包 CAN 帧下发
+ G->>G: osDelay(2) 等待下个周期
 ```
 
 ## 一个带宽数字的例子
@@ -113,7 +113,7 @@ sequenceDiagram
 
 ## 角度外环先把跨零误差摊平
 
-角度反馈是 0 到 360 度的循环量，目标与反馈靠近零点两侧时，直接相减会得到接近 360 度的误差，控制器会命令反方向转一整圈。`AnglePID` 在调用基类之前先把两者归到同一圈内（`PID/Inc/angle_pid.h:12-21`），误差绝对值因此不超过 180 度。
+角度反馈是 0 到 360 度的循环量，目标与反馈靠近零点两侧时，直接相减会得到接近 360 度的误差，控制器会命令反方向转一整圈。`AnglePID` 在调用基类之前先把两者归到同一圈内（`PID/Inc/angle_pid.h`），误差绝对值因此不超过 180 度。
 
 | 情形 | 目标 | 反馈 | 直接相减 | 跨零处理后 |
 | --- | --- | --- | --- | --- |
@@ -129,22 +129,22 @@ sequenceDiagram
 
 ## 本工程两轴四级控制器
 
-`Task/Src/GimbalTask.cpp` 的 `run()` 在栈上创建四个控制器（`:27-34`），随后每次循环依次调用：
+`Task/Src/GimbalTask.cpp` 的 `run()` 在栈上创建四个控制器，随后每次循环依次调用：
 
 | 环路 | 控制器 | 反馈量 | 输出去向 | 源码位置 |
 | --- | --- | --- | --- | --- |
-| 偏航角度外环 | `YawAnglePID` | `imu_data.gimbal_yaw_total_angle` | 速度目标 | `GimbalTask.cpp:61-65` |
-| 偏航速度内环 | `YawSpeedPID` | `imu_data.gyro[2]` | 电流 | `GimbalTask.cpp:72-76` |
-| 俯仰角度外环 | `PitchAnglePID` | `imu_data.roll` | 速度目标 | `GimbalTask.cpp:85-89` |
-| 俯仰速度内环 | `PitchSpeedPID` | `imu_data.gyro[0]` | 电流 | `GimbalTask.cpp:92-96` |
+| 偏航角度外环 | `YawAnglePID` | `imu_data.gimbal_yaw_total_angle` | 速度目标 | `GimbalTask.cpp` |
+| 偏航速度内环 | `YawSpeedPID` | `imu_data.gyro[2]` | 电流 | `GimbalTask.cpp` |
+| 俯仰角度外环 | `PitchAnglePID` | `imu_data.roll` | 速度目标 | `GimbalTask.cpp` |
+| 俯仰速度内环 | `PitchSpeedPID` | `imu_data.gyro[0]` | 电流 | `GimbalTask.cpp` |
 
-偏航外环的输出直接接到内环的目标端，中间没有单位换算，见 `:61-65` 与 `:72-76`。这要求外环输出与陀螺仪角速度同量纲；工程里两者都按度制理解。俯仰侧同样如此，区别在俯仰外环用的是 `Calculate_with`，积分无条件累加，偏航外环用 `Calculate`，积分有条件累加，这一差别在《积分饱和与抗饱和策略》里展开。
+偏航外环的输出直接接到内环的目标端，中间没有单位换算，见源码里的两处。这要求外环输出与陀螺仪角速度同量纲；工程里两者都按度制理解。俯仰侧同样如此，区别在俯仰外环用的是 `Calculate_with`，积分无条件累加，偏航外环用 `Calculate`，积分有条件累加，这一差别在《积分饱和与抗饱和策略》里展开。
 
 调用顺序是先外环后内环。反过来先跑内环，内环就会用上一周期的外环输出，等效多出一拍延迟，而这一拍在串级里直接削减相位裕度。
 
 ## 声明周期与实际调度周期的偏差
 
-`:37` 把 `dt` 写成 `0.001f`，注释记为 1 ms；循环末尾却是 `osDelay(2)`（`:100`），注释仍写 1 ms。声明周期与实际调度周期不一致，属真实缺陷。积分项按 `dt` 线性缩放，实际周期翻倍会让积分累积速度减半；微分项除以 `dt`，同一个偏差会让它翻倍。定量影响见 `05-易错点与调试.md`。
+源码里的把 `dt` 写成 `0.001f`，注释记为 1 ms；循环末尾却是 `osDelay(2)`，注释仍写 1 ms。声明周期与实际调度周期不一致，属真实缺陷。积分项按 `dt` 线性缩放，实际周期翻倍会让积分累积速度减半；微分项除以 `dt`，同一个偏差会让它翻倍。定量影响见 `05-易错点与调试.md`。
 
 两环共用 `dt`，带宽分离全部落在增益上。偏航侧 `YawAnglePID` 的比例增益 60、`YawSpeedPID` 的比例增益 20，二者量纲不同，不能直接比较数值大小。判断带宽是否分开，要看角速度环的闭环响应时间是否远小于角度环的响应时间，这需要阶跃实测，本工程没有留下实测记录。
 
@@ -152,12 +152,12 @@ sequenceDiagram
 
 | # | 易错点 | 表现 | 位置 |
 | --- | --- | --- | --- |
-| 1 | 内外环 `dt` 混用 | 两环用同一个 `dt`，实际调度周期与声明值不符 | `GimbalTask.cpp:37`、`:100` |
-| 2 | 外环输出量纲与内环目标量纲不一致 | 未做单位换算，靠增益掩盖比例错误 | `:61-65`、`:72-76` |
-| 3 | 内外环调用顺序颠倒 | 内环先用上一周期的外环输出，等效多一拍延迟 | `:61-96` |
+| 1 | 内外环 `dt` 混用 | 两环用同一个 `dt`，实际调度周期与声明值不符 | `GimbalTask.cpp` |
+| 2 | 外环输出量纲与内环目标量纲不一致 | 未做单位换算，靠增益掩盖比例错误 |—|
+| 3 | 内外环调用顺序颠倒 | 内环先用上一周期的外环输出，等效多一拍延迟 |—|
 | 4 | 认为带宽比越大越好 | 内环增益受陀螺仪噪声限制，过高会抖动 | 属经验约束，待实测 |
-| 5 | 外环没有输出限幅 | 外环输出被内环误当大速度目标，饱和后积分累积 | `GimbalTask.cpp:27-34` |
-| 6 | 把两环的 Kp 数值直接比大小 | 两者量纲不同，数值不可比 | `:27`、`:29` |
+| 5 | 外环没有输出限幅 | 外环输出被内环误当大速度目标，饱和后积分累积 | `GimbalTask.cpp` |
+| 6 | 把两环的 Kp 数值直接比大小 | 两者量纲不同，数值不可比 |—|
 
 ## 小结
 
@@ -198,7 +198,7 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp` | 两轴四级控制器的创建与调用（`:27-100`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/PidBase.h` | 角度外环与速度内环共用的基类实现（`:29-91`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/angle_pid.h` | `AnglePID` 与跨零处理接口（`:12-21`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/speed_pid.h` | `SpeedPID` 声明与误差限幅接口（`:12-36`） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/GimbalTask.cpp` | 两轴四级控制器的创建与调用 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/PidBase.h` | 角度外环与速度内环共用的基类实现 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/angle_pid.h` | `AnglePID` 与跨零处理接口 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/speed_pid.h` | `SpeedPID` 声明与误差限幅接口 |

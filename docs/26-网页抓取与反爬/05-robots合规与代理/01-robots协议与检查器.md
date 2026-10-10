@@ -40,7 +40,7 @@ Crawl-delay: 2
 | `can_fetch(url, domain)` | 异步 | 主入口，返回是否允许 |
 | `can_fetch_sync(url)` | 同步 | 从 URL 解析域名后调用异步版本 |
 
-异步版本接收两个参数，域名不一定要与 URL 一致，调用方负责传对。抓取器实际调用时用 `urlparse(url).netloc` 取值（`backend/scraper/fetcher.py:196`）。
+异步版本接收两个参数，域名不一定要与 URL 一致，调用方负责传对。抓取器实际调用时用 `urlparse(url).netloc` 取值（`backend/scraper/fetcher.py`）。
 
 ```mermaid
 flowchart TD
@@ -59,7 +59,7 @@ flowchart TD
 
 ## 3. 下载路径
 
-下载固定用 https，域名拼在后面（`robots.py:34`）：
+下载固定用 https，域名拼在后面（`robots.py`）：
 
 ```python
 url = f"https://{domain}/robots.txt"
@@ -77,7 +77,23 @@ if proxy:
 
 ## 4. 解析实现
 
-`_parse_robots` 先把文本按行去空，然后顺序扫描（`robots.py:51-77`）：
+`_parse_robots` 先把文本按行去空，然后顺序扫描。示意如下（省略大小写与空值细节）：
+
+```python
+# 逐行扫描 robots.txt，遇到 User-agent 就切组，组内收集 Disallow
+for raw in text.splitlines():
+    line = raw.strip()
+    if line.lower().startswith('user-agent:'):
+        current_group = line.split(':', 1)[1].strip()   # 只记组名，不比对自身 UA
+    elif line.lower().startswith('disallow:'):
+        path = line.split(':', 1)[1].strip()
+        if path:
+            disallow.append(path)                       # 所有组的路径合并进同一个列表
+    elif line.lower().startswith('crawl-delay:'):
+        crawl_delay = float(line.split(':', 1)[1])      # 解析并缓存，但后续未被使用
+```
+
+实现要点（`robots.py`）：
 
 | 遇到的行 | 处理 |
 | --- | --- |
@@ -92,14 +108,14 @@ if proxy:
 
 ## 5. 缓存与淘汰
 
-缓存挂在类上（`robots.py:26`），所有实例共享同一个字典：
+缓存挂在类上（`robots.py`），所有实例共享同一个字典：
 
 ```python
 _cache: dict[str, dict] = {}
 _MAX_CACHE_SIZE = 1000
 ```
 
-写入时若已满 1000 条，按 `fetched_at` 排序删掉最旧的一半（`robots.py:104-107`）。条目里的 `fetched_at` 只在写入时记录，读取时不比较：`can_fetch` 命中缓存就直接用，没有过期判断。模块开头导入了 `timedelta`，但代码里没有用到。
+写入时若已满 1000 条，按 `fetched_at` 排序删掉最旧的一半（`robots.py`）。条目里的 `fetched_at` 只在写入时记录，读取时不比较：`can_fetch` 命中缓存就直接用，没有过期判断。模块开头导入了 `timedelta`，但代码里没有用到。
 
 ```mermaid
 sequenceDiagram
@@ -124,7 +140,7 @@ sequenceDiagram
 
 ## 6. 判定与失败语义
 
-判定只做一件事：把 URL 的路径取出，逐个 `Disallow` 前缀比较（`robots.py:109-114`）：
+判定只做一件事：把 URL 的路径取出，逐个 `Disallow` 前缀比较（`robots.py`）：
 
 ```python
 parsed = urlparse(url)
@@ -150,12 +166,12 @@ return True
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
-| 以为会区分 User-agent | 所有组的规则合并生效 | `robots.py:51-77` |
-| 以为 Crawl-delay 会限速 | 只解析保存，未执行 | `robots.py:69-73` 与 `:79-114` |
-| 以为缓存会过期 | 只按容量淘汰 | `robots.py:92-108` |
-| 以为下载失败会拦人 | 失败一律放行 | `robots.py:45-49` |
-| 在事件循环里用同步入口 | `run_until_complete` 会报错 | `robots.py:116-118` |
-| 把 Disallow 当精确路径 | 前缀匹配会连带禁用兄弟路径 | `robots.py:111-113` |
+| 以为会区分 User-agent | 所有组的规则合并生效 | `robots.py` |
+| 以为 Crawl-delay 会限速 | 只解析保存，未执行 | `robots.py` 与  |
+| 以为缓存会过期 | 只按容量淘汰 | `robots.py` |
+| 以为下载失败会拦人 | 失败一律放行 | `robots.py` |
+| 在事件循环里用同步入口 | `run_until_complete` 会报错 | `robots.py` |
+| 把 Disallow 当精确路径 | 前缀匹配会连带禁用兄弟路径 | `robots.py` |
 
 ## 小结
 

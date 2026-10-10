@@ -9,7 +9,7 @@ updated: 2026-10-07
 
 下面把结论收拢成可核对的清单：每一个中断服务函数的来源、优先级、回调落点，以及它是否真的会触发。
 
-一条中断从产生到产生效果要经过六段，清单按这六段组织；末尾给出中断不进来时的排查顺序，与工作记录里的 CAN 故障报告对应。
+一条中断从产生到产生效果要经过六段，清单按这六段组织；末尾给出一张从硬件配置到代码逻辑的排查顺序表。
 
 
 ## 1. 清单怎么读
@@ -31,21 +31,21 @@ updated: 2026-10-07
 
 | 中断源 | 向量 | 优先级 | 位置 | 处理函数内容 | 会触发吗 | 回调落点 |
 | --- | --- | --- | --- | --- | --- | --- |
-| USART3 空闲检测 | `USART3_IRQn` | 5 | `:247-256` | `Uart_IRQHandler(&huart3)` 再 `HAL_UART_IRQHandler(&huart3)` | 会 | `UsartDma::uartRxIdleCallback()` → `DBUS_Decode()` |
-| USART6 空闲检测 | `USART6_IRQn` | 5 | `:359-368` | 云台板只有 `HAL_UART_IRQHandler(&huart6)`；底盘板前面还有 `Uart_IRQHandler(&huart6)` | 底盘板会 | 底盘板 `RefereeCallback()` |
-| CAN1 收 FIFO0 | `CAN1_RX0_IRQn` | 5 | `:191-200` | `HAL_CAN_IRQHandler(&hcan1)` | 会 | `HAL_CAN_RxFifo0MsgPendingCallback()` |
-| CAN1 收 FIFO1 | `CAN1_RX1_IRQn` | 5 | `:205-214` | `HAL_CAN_IRQHandler(&hcan1)` | 不会 | 未激活 FIFO1 通知 |
-| CAN2 收 FIFO0 | `CAN2_RX0_IRQn` | 5 | `:303-312` | `HAL_CAN_IRQHandler(&hcan2)` | 会 | `HAL_CAN_RxFifo0MsgPendingCallback()` |
-| CAN2 收 FIFO1 | `CAN2_RX1_IRQn` | 5 | `:317-326` | `HAL_CAN_IRQHandler(&hcan2)` | 不会 | 未激活 FIFO1 通知 |
-| USART3 接收 DMA | `DMA1_Stream1_IRQn` | 5 | `:177-186` | `HAL_DMA_IRQHandler(&hdma_usart3_rx)` | 不会 | 自写启动函数没有打开任何流中断 |
-| USART6 接收 DMA | `DMA2_Stream1_IRQn` | 5 | `:261-270` | `HAL_DMA_IRQHandler(&hdma_usart6_rx)` | 不会 | 同上 |
-| SPI1 接收 DMA | `DMA2_Stream2_IRQn` | 5 | `:275-284` | `HAL_DMA_IRQHandler(&hdma_spi1_rx)` | 会 | `SPI_DMAReceiveCplt()` → `HAL_SPI_TxRxCpltCallback()` |
-| SPI1 发送 DMA | `DMA2_Stream3_IRQn` | 5 | `:289-298` | `HAL_DMA_IRQHandler(&hdma_spi1_tx)` | 会 | `SPI_DMATransmitCplt()` → `HAL_SPI_TxRxCpltCallback()` |
-| USART6 发送 DMA | `DMA2_Stream6_IRQn` | 5 | `:345-354` | `HAL_DMA_IRQHandler(&hdma_usart6_tx)` | 不会 | `Uart_Transmit_DMA()` 全工程无人调用 |
-| USB 端点事件 | `OTG_FS_IRQn` | 5 | `:331-340` | `HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS)` | 会 | `CDC_Receive_FS()` |
-| TIM2 时基 | `TIM2_IRQn` | 15 | `:233-242` | `HAL_TIM_IRQHandler(&htim2)` | 会 | `HAL_TIM_PeriodElapsedCallback()` → `HAL_IncTick()` |
-| TIM10 更新 | `TIM1_UP_TIM10_IRQn` | 5 | `:219-228` | `HAL_TIM_IRQHandler(&htim10)` | 不会 | 计数未启动，更新中断使能位为 0 |
-| 内核异常 | `NMI`、`HardFault`、`MemManage`、`BusFault`、`UsageFault`、`DebugMon` | 由硬件固定 | `:82-165` | 死循环 | 只在故障时 | 无 |
+| USART3 空闲检测 | `USART3_IRQn` | 5 | `stm32f4xx_it.c` | `Uart_IRQHandler(&huart3)` 再 `HAL_UART_IRQHandler(&huart3)` | 会 | `UsartDma::uartRxIdleCallback()` → `DBUS_Decode()` |
+| USART6 空闲检测 | `USART6_IRQn` | 5 | `stm32f4xx_it.c` | 云台板只有 `HAL_UART_IRQHandler(&huart6)`；底盘板前面还有 `Uart_IRQHandler(&huart6)` | 底盘板会 | 底盘板 `RefereeCallback()` |
+| CAN1 收 FIFO0 | `CAN1_RX0_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_CAN_IRQHandler(&hcan1)` | 会 | `HAL_CAN_RxFifo0MsgPendingCallback()` |
+| CAN1 收 FIFO1 | `CAN1_RX1_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_CAN_IRQHandler(&hcan1)` | 不会 | 未激活 FIFO1 通知 |
+| CAN2 收 FIFO0 | `CAN2_RX0_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_CAN_IRQHandler(&hcan2)` | 会 | `HAL_CAN_RxFifo0MsgPendingCallback()` |
+| CAN2 收 FIFO1 | `CAN2_RX1_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_CAN_IRQHandler(&hcan2)` | 不会 | 未激活 FIFO1 通知 |
+| USART3 接收 DMA | `DMA1_Stream1_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_DMA_IRQHandler(&hdma_usart3_rx)` | 不会 | 自写启动函数没有打开任何流中断 |
+| USART6 接收 DMA | `DMA2_Stream1_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_DMA_IRQHandler(&hdma_usart6_rx)` | 不会 | 同上 |
+| SPI1 接收 DMA | `DMA2_Stream2_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_DMA_IRQHandler(&hdma_spi1_rx)` | 会 | `SPI_DMAReceiveCplt()` → `HAL_SPI_TxRxCpltCallback()` |
+| SPI1 发送 DMA | `DMA2_Stream3_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_DMA_IRQHandler(&hdma_spi1_tx)` | 会 | `SPI_DMATransmitCplt()` → `HAL_SPI_TxRxCpltCallback()` |
+| USART6 发送 DMA | `DMA2_Stream6_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_DMA_IRQHandler(&hdma_usart6_tx)` | 不会 | `Uart_Transmit_DMA()` 全工程无人调用 |
+| USB 端点事件 | `OTG_FS_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS)` | 会 | `CDC_Receive_FS()` |
+| TIM2 时基 | `TIM2_IRQn` | 15 | `stm32f4xx_it.c` | `HAL_TIM_IRQHandler(&htim2)` | 会 | `HAL_TIM_PeriodElapsedCallback()` → `HAL_IncTick()` |
+| TIM10 更新 | `TIM1_UP_TIM10_IRQn` | 5 | `stm32f4xx_it.c` | `HAL_TIM_IRQHandler(&htim10)` | 不会 | 计数未启动，更新中断使能位为 0 |
+| 内核异常 | `NMI`、`HardFault`、`MemManage`、`BusFault`、`UsageFault`、`DebugMon` | 由硬件固定 | `stm32f4xx_it.c` | 死循环 | 只在故障时 | 无 |
 | 上下文切换 | `PendSV_IRQn` | 15 | 不在 `it.c` | `xPortPendSVHandler` | 会 | 内核 |
 | 系统滴答 | `SysTick_IRQn` | 15 | 不在 `it.c` | `xPortSysTickHandler` | 会 | 内核 |
 
@@ -55,7 +55,7 @@ updated: 2026-10-07
 
 `NMI_Handler`、`HardFault_Handler`、`MemManage_Handler`、`BusFault_Handler`、`UsageFault_Handler` 的函数体都是 `while (1) {}`，`DebugMon_Handler` 是空函数。这五个死循环没有打印、没有保存现场，命中时唯一的线索是调试器里读出的故障寄存器（`CFSR`、`HFSR`、`BFAR`）。
 
-`HardFault_Handler` 在 `:97-107` 有一处 `USER CODE` 空位，可以在那里插入现场保存代码。
+`HardFault_Handler` 在  有一处 `USER CODE` 空位，可以在那里插入现场保存代码。
 
 ### 2.2 两份板子的差异
 
@@ -132,14 +132,14 @@ sequenceDiagram
   CT->>G: 任务侧直接读 1 ms 周期
 ```
 
-两条路径的差别在 01-FreeRTOS 单元里核算过：队列路径有同步、有缓冲、有唤醒；CAN 路径三样都没有，靠"单字段天然原子"和"周期任务定时读"维持。本单元只确认调用链的落点：CAN 的回调在 `BSP/Src/bsp_can.cpp:590` 开始，USB 的回调在 `USB_DEVICE/App/usbd_cdc_if.c:261` 开始。
+两条路径的差别在 01-FreeRTOS 单元里核算过：队列路径有同步、有缓冲、有唤醒；CAN 路径三样都没有，靠"单字段天然原子"和"周期任务定时读"维持。本单元只确认调用链的落点：CAN 的回调在 `BSP/Src/bsp_can.cpp` 开始，USB 的回调在 `USB_DEVICE/App/usbd_cdc_if.c` 开始。
 
 ### 3.3 唯一一处 FromISR
 
 全工程应用代码里调用 `FromISR` 版本 API 的位置只有一处：
 
 ```c
-/* USB_DEVICE/App/usbd_cdc_if.c:261-283（节选） */
+/* USB_DEVICE/App/usbd_cdc_if.c（节选） */
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -157,16 +157,16 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 
 ### 3.4 SPI 路径上的中断密度
 
-`BMI088::readRawData()` 在一次读操作里发起三次 DMA 传输：加速度计 6 字节、陀螺仪 8 字节、温度 2 字节（`BMI088/Src/BMI088.cpp:123-142`）。`HAL_SPI_TransmitReceive_DMA()` 会在收发两条流上都打开 TC 中断（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c:479` 的 `DMA_IT_TC`），所以每次传输最多产生两次 DMA 中断，用户回调落在其中一条流的完成处理里。
+`BMI088::readRawData()` 在一次读操作里发起三次 DMA 传输：加速度计 6 字节、陀螺仪 8 字节、温度 2 字节（`BMI088/Src/BMI088.cpp`）。`HAL_SPI_TransmitReceive_DMA()` 会在收发两条流上都打开 TC 中断（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` 的 `DMA_IT_TC`），所以每次传输最多产生两次 DMA 中断，用户回调落在其中一条流的完成处理里。
 
-`ImuTask` 的循环是 1 ms 一次（`Task/Src/ImuTask.cpp:111` 的 `DWT_Delay_ms(1)`），每次循环调用 `BMI088_Read()` 一遍。按三次传输、每次两条流计算，SPI 的 DMA 中断密度在每秒六千次量级。这是本工程中断密度最高的一条路径，也是把 DMA 流优先级设为"最高"与"高"的原因。
+`ImuTask` 的循环是 1 ms 一次（`Task/Src/ImuTask.cpp` 的 `DWT_Delay_ms(1)`），每次循环调用 `BMI088_Read()` 一遍。按三次传输、每次两条流计算，SPI 的 DMA 中断密度在每秒六千次量级。这是本工程中断密度最高的一条路径，也是把 DMA 流优先级设为"最高"与"高"的原因。
 
 ### 3.5 TIM2 的时基链
 
 `TIM2_IRQHandler` 调用 `HAL_TIM_IRQHandler(&htim2)`，后者在更新事件上调用弱回调 `HAL_TIM_PeriodElapsedCallback()`，本工程的实现只做一件事：
 
 ```c
-/* Core/Src/main.c:206-218（节选） */
+/* Core/Src/main.c（节选） */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM2)
@@ -180,9 +180,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 ## 4. 中断不进来时的排查顺序
 
-工作记录里的 CAN 故障报告给出过一次完整的排查过程。现象是两块 CAN 都无法进入回调、无法发送，代码层面逐项核对都正常。最终定位到时钟树被改动，波特率计算随之出错。排查顺序可以固化成下面这张表，它按"从硬件配置到代码逻辑"排列，前面几项便宜且容易漏。
+一次典型的 CAN 故障能说明这个顺序：两块 CAN 都无法进入回调、无法发送，而代码层面逐项核对都正常，最后定位到时钟树被改动、波特率计算随之出错。排查顺序可以固化成下面这张表，它按"从硬件配置到代码逻辑"排列，前面几项便宜且容易漏。
 
-| 顺序 | 检查项 | 用什么确认 | 本次故障 |
+| 顺序 | 检查项 | 用什么确认 | 该案例 |
 | --- | --- | --- | --- |
 | 1 | 外设与总线时钟 | `.ioc` 与 `RCC` 相关寄存器，确认 APB 频率 | 根因：APB1 频率与原计算不符 |
 | 2 | GPIO 复用配置 | 引脚是否在 MspInit 里配成对应复用功能 | 正常 |
@@ -253,16 +253,16 @@ $$f_{\text{CAN}} = \frac{42\ \text{MHz}}{2 \times (1 + 15 + 5)} = 1\ \text{Mbps}
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 全部服务函数（:82-165 内核异常、:177-368 外设中断） |
-| `2026OmniSentryGimbal/Core/Src/main.c` | 时基回调（:206-218）、实例注册（:126） |
-| `2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量（:48-61） |
-| `2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个向量（:125-128、:158-161） |
-| `2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 配置与向量（:42-84） |
-| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 通知激活（:36-59）、FIFO0 回调（:590 起） |
-| `2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 三次 DMA 读（:123-142）、完成回调（:355-369） |
-| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 1 ms 循环（:34-104） |
-| `2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | `CDC_Receive_FS` 与 `FromISR`（:261-283） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `HAL_DMA_Start_IT()` 打开的流中断（:479-484）、中止说明（:506-510） |
-| `2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理（:359-368） |
-| `2026OmniSentryChassis/Core/Src/main.c` | 两个实例注册与 `HAL_Delay(50)`（:126-127、:123-131） |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 内核异常与外设中断的全部服务函数 |
+| `2026OmniSentryGimbal/Core/Src/main.c` | 时基回调、实例注册 |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量 |
+| `2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个向量 |
+| `2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 配置与向量 |
+| `2026OmniSentryGimbal/BSP/Src/bsp_can.cpp` | 通知激活与 FIFO0 回调 |
+| `2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 三次 DMA 读、完成回调 |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 1 ms 循环 |
+| `2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | `CDC_Receive_FS` 与 `FromISR` |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `HAL_DMA_Start_IT()` 打开的流中断、中止说明 |
+| `2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理 |
+| `2026OmniSentryChassis/Core/Src/main.c` | 两个实例注册与 `HAL_Delay(50)` |
 | `can通信波特率问题.md` | CAN 故障的排查过程与排查顺序 |

@@ -31,7 +31,7 @@ IDLE 的硬件语义是"接收线在最后一个停止位之后保持空闲的�
 ### 2.1 初始化：五步
 
 ```cpp
-/* Communication/Src/usart_dma.cpp:33-48 */
+/* Communication/Src/usart_dma.cpp */
 void UsartDma::Init()
 {
     /* ========= 接收 DMA 初始化 ========= */
@@ -50,7 +50,7 @@ void UsartDma::Init()
 }
 ```
 
-五步依次是：清掉上电时可能残留的 IDLE 标志、打开 IDLE 中断、置 `CR3.DMAR` 让接收数据寄存器产生 DMA 请求、以双缓冲方式启动接收流、置 `CR3.DMAT` 允许发送 DMA。`UART_RX_BUF_LEN` 在 `Communication/Inc/usart_dma.h:8-10` 定义为 256。
+五步依次是：清掉上电时可能残留的 IDLE 标志、打开 IDLE 中断、置 `CR3.DMAR` 让接收数据寄存器产生 DMA 请求、以双缓冲方式启动接收流、置 `CR3.DMAT` 允许发送 DMA。`UART_RX_BUF_LEN` 在 `Communication/Inc/usart_dma.h` 定义为 256。
 
 第二步与第三步的顺序不能反。若先开 DMA 再清 IDLE，清标志时读 `DR` 有可能把刚搬进来的字节读走。代码里先清标志、后开中断使能、最后置 `DMAR`，三个动作都在 DMA 启动之前完成，这个顺序是正确的。
 
@@ -59,7 +59,7 @@ void UsartDma::Init()
 `DMAEx_MultiBufferStart_NoIT()` 是自写函数，没有走 HAL 的 `HAL_DMAEx_MultiBufferStart_IT()`，主要差别在于它不打开任何中断：
 
 ```cpp
-/* Communication/Src/usart_dma.cpp:144-177（节选） */
+/* Communication/Src/usart_dma.cpp（节选） */
     // 设置 DMA 状态
     hdma->State = HAL_DMA_STATE_BUSY;
     hdma->ErrorCode = HAL_DMA_ERROR_NONE;
@@ -94,7 +94,7 @@ void UsartDma::Init()
 ### 2.3 中断入口：实例查找与两个标志
 
 ```cpp
-/* Communication/Src/usart_dma.cpp:50-72 */
+/* Communication/Src/usart_dma.cpp */
 void UsartDma::IRQHandler(UART_HandleTypeDef* huart)
 {
     UsartDma* inst = findInstance(huart);
@@ -118,14 +118,14 @@ void UsartDma::IRQHandler(UART_HandleTypeDef* huart)
 }
 ```
 
-`findInstance()` 在最多 3 个实例的静态数组里按 `huart` 指针线性匹配（`usart_dma.cpp:13-31`，上限由 `DT7DMA_MAX_INSTANCES` 决定，`usart_dma.h:12-14`）。用线性查找换掉了容器，中断路径上没有动态分配。
+`findInstance()` 在最多 3 个实例的静态数组里按 `huart` 指针线性匹配（`usart_dma.cpp`，上限由 `DT7DMA_MAX_INSTANCES` 决定，`usart_dma.h`）。用线性查找换掉了容器，中断路径上没有动态分配。
 
 每个条件都同时检查"标志置起"与"中断源使能"，这是 HAL 的通用写法：标志可能因为别的原因置起，只有使能位才说明这次挂起与本中断有关系。
 
 ### 2.4 IDLE 回调：一次中断完成一次收帧
 
 ```cpp
-/* Communication/Src/usart_dma.cpp:81-99 */
+/* Communication/Src/usart_dma.cpp */
 void UsartDma::uartRxIdleCallback()
 {
     callback_busy_ = 1;
@@ -152,7 +152,7 @@ void UsartDma::uartRxIdleCallback()
 缓冲区切换由两个回调完成，它们各自改写 `CT` 并调用解码：
 
 ```cpp
-/* Communication/Src/usart_dma.cpp:106-116 */
+/* Communication/Src/usart_dma.cpp */
 void UsartDma::dmaM0RxCpltCallback()
 {
     huart_->hdmarx->Instance->CR |= (uint32_t)(DMA_SxCR_CT);
@@ -177,7 +177,7 @@ void UsartDma::dmaM1RxCpltCallback()
 ### 2.6 中断服务函数里的调用顺序
 
 ```c
-/* Core/Src/stm32f4xx_it.c:247-256 */
+/* Core/Src/stm32f4xx_it.c */
 void USART3_IRQHandler(void)
 {
   /* USER CODE BEGIN USART3_IRQn 0 */
@@ -192,8 +192,8 @@ void USART3_IRQHandler(void)
 
 自定义处理在 HAL 之前执行，先清掉了 IDLE 标志，HAL 再进去时这个标志已经不在了。这里需要确认 HAL 是否可能"帮倒忙"，两条路径都不成立：
 
-- HAL 的 IDLE 分支要求 `huart->ReceptionType == HAL_UART_RECEPTION_TOIDLE`（`stm32f4xx_hal_uart.c:2484-2486`）。这个字段只有 `HAL_UARTEx_ReceiveToIdle_DMA()` 会设置，本工程没有调用它，字段保持默认的标准模式，所以分支不进入。
-- HAL 的错误分支要求 `CR3.EIE` 或 `CR1.RXNEIE` 与 `PEIE` 有置位（`:2376-2377`）。这两个使能位由 `HAL_UART_Receive_IT()` 与 `HAL_UART_Receive_DMA()` 设置（`:1524-1526`），本工程两个都没调用，所以错误分支也不进入。
+- HAL 的 IDLE 分支要求 `huart->ReceptionType == HAL_UART_RECEPTION_TOIDLE`（`stm32f4xx_hal_uart.c`）。这个字段只有 `HAL_UARTEx_ReceiveToIdle_DMA()` 会设置，本工程没有调用它，字段保持默认的标准模式，所以分支不进入。
+- HAL 的错误分支要求 `CR3.EIE` 或 `CR1.RXNEIE` 与 `PEIE` 有置位。这两个使能位由 `HAL_UART_Receive_IT()` 与 `HAL_UART_Receive_DMA()` 设置，本工程两个都没调用，所以错误分支也不进入。
 
 结论是 `HAL_UART_IRQHandler(&huart3)` 在本工程里对这两个串口不产生任何副作用，包括不会中止自写的 DMA 流。这条结论依赖"不使用 HAL 的接收启动函数"这个前提，一旦有人在别处调用 `HAL_UART_Receive_DMA(&huart3, ...)`，HAL 就会在错误分支里对同一条流执行 `HAL_DMA_Abort_IT()`，自写的双缓冲接收会被拆掉。
 
@@ -259,10 +259,10 @@ flowchart TD
 实例注册在 `main()` 里完成：
 
 ```c
-/* 云台板 Core/Src/main.c:126 */
+/* 云台板 Core/Src/main.c */
 Uart_Init(&huart3, MyUartCallbackFun); // huart3是连接遥控器的UART实例
 
-/* 底盘板 Core/Src/main.c:126-127 */
+/* 底盘板 Core/Src/main.c */
 Uart_Init(&huart3, MyUartCallbackFun); // huart3是连接遥控器的UART实例
 Uart_Init(&huart6, RefereeUartCallback); // huart6是裁判系统
 ```
@@ -270,7 +270,7 @@ Uart_Init(&huart6, RefereeUartCallback); // huart6是裁判系统
 云台板只注册一个实例，底盘板注册两个，正好在 `DT7DMA_MAX_INSTANCES` 为 3 的范围内。底盘板的 `USART6_IRQHandler` 也在 HAL 之前插入了同一个自定义处理：
 
 ```c
-/* 底盘板 Core/Src/stm32f4xx_it.c:359-368 */
+/* 底盘板 Core/Src/stm32f4xx_it.c */
 void USART6_IRQHandler(void)
 {
   /* USER CODE BEGIN USART6_IRQn 0 */
@@ -286,7 +286,7 @@ void USART6_IRQHandler(void)
 ### 3.2 解码回调在中断上下文里执行
 
 ```c
-/* 云台板 Core/Src/main.c:72-76 */
+/* 云台板 Core/Src/main.c */
 void MyUartCallbackFun(volatile uint8_t* buf, int len) {
   // 调用DBUS解码
   DBUS_Decode(buf, len);
@@ -295,7 +295,7 @@ void MyUartCallbackFun(volatile uint8_t* buf, int len) {
 ```
 
 ```cpp
-/* Communication/Src/dbus.cpp:11-34（节选） */
+/* Communication/Src/dbus.cpp（节选） */
 void dbus_decode(volatile uint8_t* buf, int len)
 {
     if (len != 18) return; // DBUS 一帧固定 18 字节
@@ -349,10 +349,10 @@ IDLE 的判定本身需要一个帧时间的空闲，也就是 110 μs。整个�
 
 ### 4.7 循环模式下的发送路径
 
-`USART6_TX` 的 DMA 流配的是 `DMA_CIRCULAR`（`Core/Src/usart.c:251`），而 `UsartDma::Transmit_DMA()` 走的是 `HAL_UART_Transmit_DMA()`。HAL 在传输完成回调里按模式分流：
+`USART6_TX` 的 DMA 流配的是 `DMA_CIRCULAR`（`Core/Src/usart.c`），而 `UsartDma::Transmit_DMA()` 走的是 `HAL_UART_Transmit_DMA()`。HAL 在传输完成回调里按模式分流：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c:3015-3041（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c（节选） */
 static void UART_DMATransmitCplt(DMA_HandleTypeDef *hdma)
 {
   /* DMA Normal mode*/
@@ -376,7 +376,7 @@ static void UART_DMATransmitCplt(DMA_HandleTypeDef *hdma)
 
 ### 4.8 实例表溢出
 
-`registerInstance()` 在表满时返回 -1，构造函数把这个返回值丢弃（`usart_dma.cpp:7-8`）。之后 `findInstance()` 找不到该串口，中断进来直接返回，接收静默失效。新增第三个串口时要把 `DT7DMA_MAX_INSTANCES` 一起调大。
+`registerInstance()` 在表满时返回 -1，构造函数把这个返回值丢弃（`usart_dma.cpp`）。之后 `findInstance()` 找不到该串口，中断进来直接返回，接收静默失效。新增第三个串口时要把 `DT7DMA_MAX_INSTANCES` 一起调大。
 
 ### 4.9 在解码回调里做重活
 
@@ -424,13 +424,13 @@ static void UART_DMATransmitCplt(DMA_HandleTypeDef *hdma)
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 初始化（:33-48）、中断入口（:50-72）、发送（:74-79）、IDLE 回调（:81-99）、缓冲区切换（:106-116）、双缓冲启动（:118-178）、C 接口（:180-202） |
-| `2026OmniSentryGimbal/Communication/Inc/usart_dma.h` | 缓冲长度与实例上限（:8-14）、类成员与静态实例表（:35-63）、C 接口声明（:66-85） |
-| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 参数与接收流（:75-90、:178-199）、USART6 参数与收发送流（:104-119、:224-263） |
-| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | `USART3_IRQHandler` 的自定义调用（:247-256）、`USART6_IRQHandler`（:359-368） |
-| `2026OmniSentryGimbal/Core/Src/main.c` | 实例注册（:126）、解码回调（:72-76） |
-| `2026OmniSentryGimbal/Communication/Src/dbus.cpp` | DBUS 解码与长度检查（:11-34） |
-| `2026OmniSentryChassis/Core/Src/main.c` | 两个实例的注册（:126-127） |
-| `2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理（:359-368） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c` | IDLE 分支的进入条件（:2484-2486）、错误分支条件（:2376-2377、:1524-1526）、发送完成分流（:3015-3041） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | 双缓冲回调选择（:878-898）、中止等待（:924-945） |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 初始化、中断入口、发送、IDLE 回调、缓冲区切换、双缓冲启动、C 接口 |
+| `2026OmniSentryGimbal/Communication/Inc/usart_dma.h` | 缓冲长度与实例上限、类成员与静态实例表、C 接口声明 |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 参数与接收流、USART6 参数与收发送流 |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | `USART3_IRQHandler` 的自定义调用、`USART6_IRQHandler` |
+| `2026OmniSentryGimbal/Core/Src/main.c` | 实例注册、解码回调 |
+| `2026OmniSentryGimbal/Communication/Src/dbus.cpp` | DBUS 解码与长度检查 |
+| `2026OmniSentryChassis/Core/Src/main.c` | 两个实例的注册 |
+| `2026OmniSentryChassis/Core/Src/stm32f4xx_it.c` | `USART6_IRQHandler` 接入自定义处理 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c` | IDLE 分支的进入条件、错误分支条件、发送完成分流 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | 双缓冲回调选择、中止等待 |

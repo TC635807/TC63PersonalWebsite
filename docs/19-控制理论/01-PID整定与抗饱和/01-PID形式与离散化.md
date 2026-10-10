@@ -11,7 +11,7 @@ updated: 2026-10-07
 
 这三项在两种形式下的职责与量纲必须逐项固定，ISA 与独立增益的互算、三种离散化逼近对稳定域的影响、位置式与增量式的递推结构都建立在这一步之上。素材仓库 `01_control_theory/pid_control/README.md` 的第 1 节与第 5 节给出两套可运行实现，云台固件里同时存在 `PidBase` 与 `PID` 两个类，两处实现的口径需要对齐。
 
-> 本页对照 `01_control_theory/pid_control/README.md` 第 1 节（`:47-155`）。运行期实现落在云台固件 `PID/PidBase.h` 与 `PID/PID.cpp`，固件侧逐行分析见本站 `06-PID 控制`。
+> 本页对照 `01_control_theory/pid_control/README.md` 第 1 节。运行期实现落在云台固件 `PID/PidBase.h` 与 `PID/PID.cpp`，固件侧逐行分析见本站 `06-PID 控制`。
 
 ## 三项各自的职责与量纲
 
@@ -53,7 +53,7 @@ $$
 | 微分强度 | $K_d$ | $T_d = K_d / K_p$ |
 | 微分高频限制 | 无对应项 | $N = 8 \sim 20$ |
 
-换算是除法，所以方向性要记住：$K_i$ 与 $T_i$ 成反比，增大 $T_i$ 等于把积分作用调弱。$K_p$ 同时出现在两处，改 $K_p$ 会连带改变 $T_i$ 与 $T_d$ 对应的实际增益，这一点在按整定表套参数时经常被忽略。微分项多了 $N$ 这个限制：ISA 形式的微分写成一阶环节 $T_d s/(1 + T_d s/N)$，并非纯 $T_d s$ 的写法被收进了这个环节，频率高于 $N/T_d$ 之后增益封顶在 $N$，纯微分的高频放大被削掉。素材 `README.md:86-89` 只给出换算关系，$N$ 的取值范围见 `README.md:489`。
+换算是除法，所以方向性要记住：$K_i$ 与 $T_i$ 成反比，增大 $T_i$ 等于把积分作用调弱。$K_p$ 同时出现在两处，改 $K_p$ 会连带改变 $T_i$ 与 $T_d$ 对应的实际增益，这一点在按整定表套参数时经常被忽略。微分项多了 $N$ 这个限制：ISA 形式的微分写成一阶环节 $T_d s/(1 + T_d s/N)$，并非纯 $T_d s$ 的写法被收进了这个环节，频率高于 $N/T_d$ 之后增益封顶在 $N$，纯微分的高频放大被削掉。素材 `README.md` 只给出换算关系，$N$ 的取值范围见 `README.md`。
 
 ## 从 s 域到 z 域的三种逼近
 
@@ -71,12 +71,12 @@ $$
 
 ```mermaid
 flowchart TD
-  A["连续控制器 C of s"] --> B["选择逼近方式"]
-  B -->|"后向差分"| C["误差历史压进一个累加器"]
-  B -->|"Tustin"| D["频率刻度更准，多存历史"]
-  C --> E["需要独立抗饱和与无扰切换"]
-  D --> E
-  E --> F["进入每周期递推"]
+ A["连续控制器 C of s"] --> B["选择逼近方式"]
+ B -->|"后向差分"| C["误差历史压进一个累加器"]
+ B -->|"Tustin"| D["频率刻度更准，多存历史"]
+ C --> E["需要独立抗饱和与无扰切换"]
+ D --> E
+ E --> F["进入每周期递推"]
 ```
 
 ## 位置式的递推与两个附带负担
@@ -94,18 +94,18 @@ $$
 
 ```mermaid
 flowchart LR
-  R["r k"] --> E["误差 e k"]
-  E --> P["P 项"]
-  E --> I["I 项累加器"]
-  E --> D["D 项差分"]
-  P --> S["求和得到 u_raw"]
-  I --> S
-  D --> S
-  S --> SAT["输出限幅"]
-  SAT --> OUT["下发"]
-  OUT --> Y["测量 y k"]
-  Y --> E
-  I -.->|"饱和时停止累加"| I
+ R["r k"] --> E["误差 e k"]
+ E --> P["P 项"]
+ E --> I["I 项累加器"]
+ E --> D["D 项差分"]
+ P --> S["求和得到 u_raw"]
+ I --> S
+ D --> S
+ S --> SAT["输出限幅"]
+ SAT --> OUT["下发"]
+ OUT --> Y["测量 y k"]
+ Y --> E
+ I -.->|"饱和时停止累加"| I
 ```
 
 ## 增量式只依赖最近三个样本
@@ -133,34 +133,34 @@ $$
 
 ## 素材与固件里的两套实现
 
-素材仓库把两类实现并列给出。`README.md:110-122` 是位置式，`README.md:124-155` 是增量式，后者明确列出增量式无积分饱和、切换冲击小的结论。第 5 节 `README.md:648-788` 的结构体实现采用位置式加条件积分，`README.md:790-894` 的 SimpleFOC 风格实现改用 Tustin 积分。
+素材仓库把两类实现并列给出。`README.md` 是位置式，`README.md` 是增量式，后者明确列出增量式无积分饱和、切换冲击小的结论。第 5 节 `README.md` 的结构体实现采用位置式加条件积分，`README.md` 的 SimpleFOC 风格实现改用 Tustin 积分。
 
 云台固件里有两套并行的类：
 
 | 实现 | 位置 | 结构 |
 | --- | --- | --- |
-| `PidBase` | `PID/PidBase.h:29-91` | 位置式，`Calculate` 条件积分、`Calculate_with` 无条件积分 |
-| `PID` | `PID/PID.cpp:92-169` | 同时支持位置式与增量式，按 `mode_` 分支 |
+| `PidBase` | `PID/PidBase.h` | 位置式，`Calculate` 条件积分、`Calculate_with` 无条件积分 |
+| `PID` | `PID/PID.cpp` | 同时支持位置式与增量式，按 `mode_` 分支 |
 
-`PID::PIDMode` 在 `PID/PID.h:12-15` 定义 `PID_MODE_POSITION` 与 `PID_MODE_INCREMENTAL` 两个枚举值。位置式在 `PID/PID.cpp:119-135`，积分项每周期无条件累加后钳位；增量式在 `PID/PID.cpp:137-169`，输出由 `prev_output_` 加 `delta_output` 得到。增量式里那段抗饱和代码（`PID/PID.cpp:163-166`）只有一个空的条件分支和注释，判断写出来了但分支体是空的，没有实际动作。
+`PID::PIDMode` 在 `PID/PID.h` 定义 `PID_MODE_POSITION` 与 `PID_MODE_INCREMENTAL` 两个枚举值。位置式在 `PID/PID.cpp`，积分项每周期无条件累加后钳位；增量式在 `PID/PID.cpp`，输出由 `prev_output_` 加 `delta_output` 得到。增量式里那段抗饱和代码（`PID/PID.cpp`）只有一个空的条件分支和注释，判断写出来了但分支体是空的，没有实际动作。
 
-`PidBase` 与 `PID` 还有一个容易忽略的差别：`PidBase` 在目标符号翻转时清积分（`PID/PidBase.h:33-35`），`PID` 的位置式没有这个动作。`PID::setSampleTime` 提供了一个换算（`PID/PID.cpp:81-90`）：改动 `dt_` 时按新旧周期之比缩放 `integral_`，保持积分效果不变。这个处理在 `PidBase` 中不存在，它的周期由调用方每次传入。
+`PidBase` 与 `PID` 还有一个容易忽略的差别：`PidBase` 在目标符号翻转时清积分（`PID/PidBase.h`），`PID` 的位置式没有这个动作。`PID::setSampleTime` 提供了一个换算（`PID/PID.cpp`）：改动 `dt_` 时按新旧周期之比缩放 `integral_`，保持积分效果不变。这个处理在 `PidBase` 中不存在，它的周期由调用方每次传入。
 
-固件运行期实际调用的是 `PidBase` 体系的派生类，构造函数分布在 `Task/Src/GimbalTask.cpp:27-34` 与 `Task/Src/FireTask.cpp:31-38`。`PID` 类只被 `PID/PID.cpp` 自身包含，当前源码里没有调用点，属于备选实现。角度环、速度环、温度环的逐行分析见 `06-PID 控制`。
+固件运行期实际调用的是 `PidBase` 体系的派生类，构造函数分布在 `Task/Src/GimbalTask.cpp` 与 `Task/Src/FireTask.cpp`。`PID` 类只被 `PID/PID.cpp` 自身包含，当前源码里没有调用点，属于备选实现。角度环、速度环、温度环的逐行分析见 `06-PID 控制`。
 
 ## 边界情况与常见误用
 
 | # | 现象 | 成因 | 位置 |
 | --- | --- | --- | --- |
-| 1 | 照搬整定表后积分方向相反 | 把 $T_i$ 当成积分增益 | `README.md:86-89` |
-| 2 | 采样率不足时稳定系统算出发散 | 用前向差分离散化 | `README.md:104` |
-| 3 | 长时间运行出现静差 | 认为增量式完全没有饱和风险，忽略累加器漂移 | `README.md:143-145` |
-| 4 | 手动转自动时输出跳变 | 位置式不加无扰切换 | `README.md:122` |
-| 5 | 增量式阻尼不足 | 微分项用简化写法，注释承认需要 $e[k-2]$ | `PID/PID.cpp:150-153` |
-| 6 | 认为两套固件类等价 | `PID` 类在运行期无调用点 | `PID/PID.cpp:92-169` |
-| 7 | 改 `dt` 后积分效果突变 | 不知道 `PID::setSampleTime` 会缩放累加器 | `PID/PID.cpp:83-88` |
+| 1 | 照搬整定表后积分方向相反 | 把 $T_i$ 当成积分增益 | `README.md` |
+| 2 | 采样率不足时稳定系统算出发散 | 用前向差分离散化 | `README.md` |
+| 3 | 长时间运行出现静差 | 认为增量式完全没有饱和风险，忽略累加器漂移 | `README.md` |
+| 4 | 手动转自动时输出跳变 | 位置式不加无扰切换 | `README.md` |
+| 5 | 增量式阻尼不足 | 微分项用简化写法，注释承认需要 $e[k-2]$ | `PID/PID.cpp` |
+| 6 | 认为两套固件类等价 | `PID` 类在运行期无调用点 | `PID/PID.cpp` |
+| 7 | 改 `dt` 后积分效果突变 | 不知道 `PID::setSampleTime` 会缩放累加器 | `PID/PID.cpp` |
 
-还有一处属于实现细节：`PID::calculate` 在死区判据内把误差直接置零（`PID/PID.cpp:97-99`），死区内的误差既不进比例项也不进积分累加器，等效于把小于阈值的稳态偏差主动放弃。这个行为在 `PidBase` 中没有，两个类的稳态精度因此不同。
+还有一处属于实现细节：`PID::calculate` 在死区判据内把误差直接置零（`PID/PID.cpp`），死区内的误差既不进比例项也不进积分累加器，等效于把小于阈值的稳态偏差主动放弃。这个行为在 `PidBase` 中没有，两个类的稳态精度因此不同。
 
 ## 小结
 
@@ -194,18 +194,18 @@ $$
 挑战题
 
 4. `PID::setSampleTime` 用 `integral_ *= dt / dt_` 保持积分效果。说明这个换算在积分已被钳位到上限时是否仍然成立，并给出一个会失真的场景。
-5. 增量式的空抗饱和分支（`PID/PID.cpp:163-166`）如果要补全，判据应当取输出饱和还是增量饱和？写出补充逻辑，并说明与位置式的条件积分有什么区别。
+5. 增量式的空抗饱和分支（`PID/PID.cpp`）如果要补全，判据应当取输出饱和还是增量饱和？写出补充逻辑，并说明与位置式的条件积分有什么区别。
 6. 素材第 5 节的 SimpleFOC 风格实现用 Tustin 积分。在同一组参数下，说明它与后向差分的静态积分值是否一致，以及动态响应差异出现在哪个频段。
 
 ## 附：本页引用的路径
 
 | 路径 | 用途 |
 | --- | --- |
-| `~/robot_control_simulation/01_control_theory/pid_control/README.md` | 素材仓库根，第 1 节（`:47-155`）与第 5 节（`:648-894`） |
-| `PID/PID.cpp` | 位置式与增量式实现（`:92-169`） |
-| `PID/PID.h` | 模式枚举与状态成员（`:12-15`、`:63-87`） |
-| `PID/PidBase.h` | 位置式基类与两种积分入口（`:29-91`） |
-| `Task/Src/GimbalTask.cpp`、`Task/Src/FireTask.cpp` | 派生类构造与参数（`:27-34`、`:31-38`） |
+| `~/robot_control_simulation/01_control_theory/pid_control/README.md` | 素材仓库根，第 1 节与第 5 节 |
+| `PID/PID.cpp` | 位置式与增量式实现 |
+| `PID/PID.h` | 模式枚举与状态成员 |
+| `PID/PidBase.h` | 位置式基类与两种积分入口 |
+| `Task/Src/GimbalTask.cpp`、`Task/Src/FireTask.cpp` | 派生类构造与参数 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal` | 云台固件仓库根，正文路径相对该根 |
 
 

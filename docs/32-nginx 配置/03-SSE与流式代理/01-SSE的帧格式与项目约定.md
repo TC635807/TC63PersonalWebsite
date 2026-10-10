@@ -7,17 +7,17 @@ updated: 2026-10-07
 
 # SSE 的帧格式与项目约定
 
-KnowledgeDiver 的两类长任务都用事件流把进度推给浏览器：流水线收集与扩展、Agent 聊天。它们走同一种协议，服务端在一个不结束的 HTTP 响应里持续写文本帧，浏览器边收边处理。
+KnowledgeDiver 的两类长任务都用事件流把进度推给浏览器：流水线收集与扩展、Agent 聊天。它们走同一种协议，服务端在一个不结束的 HTTP 响应里持续写文本帧，浏览器边收边处理。SSE（Server-Sent Events，服务器发送事件）正是为这种「只推不收」的场景设计的：它跑在一条普通 HTTP 响应上，浏览器用内置的 `EventSource` 或 `fetch` 读数，不需要 WebSocket 那样的握手与双向通道。如果改用定时轮询，前端要反复发请求并自行比对状态，进度更新会滞后一个轮询周期；事件流让服务端在事件发生时直接推送，这也是两类长任务都选它的原因。
 
 协议与工程约定要落到四件事上：帧怎么写、客户端怎么解析、心跳行起什么作用、响应头里哪两条与 nginx 有关。代理层的缓冲与超时在 `02-代理层的缓冲与超时`，断线重连的解耦设计在 `03-断线重连与后台循环解耦`。KD 仓库的路径以服务器上的 `~/KnowledgeDiver` 为根。
 
 | 端点 | 方法 | 用途 | 出处 |
 | --- | --- | --- | --- |
-| `/api/agent/chat` | POST | 聊天，或对运行中的循环追加订阅 | `backend/agent/routes/agent.py:27-66` |
-| `/api/agent/stream` | GET | 刷新页面后重连当前循环 | `backend/agent/routes/agent.py:69-89` |
-| `/api/pipeline/collect` | GET | 采集流水线的进度流 | `backend/routes/pipeline.py:65-117` |
-| `/api/pipeline/expand` | GET | 扩展流水线的进度流 | `backend/routes/pipeline.py:120-189` |
-| `/api/tasks/{task_id}/stream` | GET | 任务重连，回放后继续推送 | `backend/routes/pipeline.py:423-445` |
+| `/api/agent/chat` | POST | 聊天，或对运行中的循环追加订阅 | `backend/agent/routes/agent.py` |
+| `/api/agent/stream` | GET | 刷新页面后重连当前循环 | `backend/agent/routes/agent.py` |
+| `/api/pipeline/collect` | GET | 采集流水线的进度流 | `backend/routes/pipeline.py` |
+| `/api/pipeline/expand` | GET | 扩展流水线的进度流 | `backend/routes/pipeline.py` |
+| `/api/tasks/{task_id}/stream` | GET | 任务重连，回放后继续推送 | `backend/routes/pipeline.py` |
 
 ## 一条连接上的事件序列
 
@@ -60,7 +60,7 @@ sequenceDiagram
 
 ## 本工程的帧格式：data 加 JSON
 
-服务端把事件类型和负载一起塞进一个 JSON 对象，再作为单行 `data` 写出（`backend/agent/manager.py:21-23`）：
+服务端把事件类型和负载一起塞进一个 JSON 对象，再作为单行 `data` 写出（`backend/agent/manager.py` 里的帧构造函数）：
 
 ```python
 def _sse(event_type: str, data: dict) -> str:
@@ -68,7 +68,7 @@ def _sse(event_type: str, data: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 ```
 
-`type` 在负载里而不是 `event:` 字段里，客户端解析时取的是 `event.data` 再 `JSON.parse`（`frontend/src/api/stream.ts:12-25`）。事件类型由服务端定义，流水线侧出现的是 `progress`、`card`、`complete`、`error`（`backend/routes/pipeline.py:42-59`），Agent 侧另有一条 `complete` 收尾（`backend/agent/manager.py:66`）。
+`type` 在负载里而不是 `event:` 字段里，客户端解析时取的是 `event.data` 再 `JSON.parse`（`frontend/src/api/stream.ts` 的解析函数）。事件类型由服务端定义，流水线侧出现的是 `progress`、`card`、`complete`、`error`（`backend/routes/pipeline.py` 的事件类型定义），Agent 侧另有一条 `complete` 收尾（`backend/agent/manager.py`）。
 
 ```mermaid
 flowchart TD
@@ -82,17 +82,31 @@ flowchart TD
     EV --> NEXT
 ```
 
-（解析过程见 `frontend/src/hooks/useSSE.ts:44-97`。）
+解析在 `frontend/src/hooks/useSSE.ts` 里完成，核心只有两步：按 `\n` 切分，把最后一段不完整的行留回缓冲区。
+
+```ts
+buffer += decoder.decode(value, { stream: true })
+const lines = buffer.split('\n')
+buffer = lines.pop() || ''
+
+for (const line of lines) {
+  if (line.startsWith('data: ')) {
+    onMessageRef.current(JSON.parse(line.slice(6)))
+  }
+}
+```
+
+`decoder.decode(value, { stream: true })` 里的 `stream: true` 表示一个多字节汉字可能被 TCP 分片截成两半，解码器要先把半个字符留在内部；`buffer = lines.pop()` 是同一思路——最后一行可能还没写完，等下一段到达再拼。省掉这两步，一条事件被拆开就会解析失败。
 
 ## 为什么帧里不会出现换行
 
 `json.dumps` 会把字符串里的换行转义成两个字符 `\n`，序列化结果因此始终是单行。这一点是客户端按行切分的前提：如果负载里带真实换行，一条 `data` 会被拆成多行，客户端的 `JSON.parse` 就会失败。
 
-客户端的处理方式与此对应：每次从连接读到一段文本先追加到缓冲区，按 `\n` 切分后把最后一段留回缓冲区，等下一段到达再拼接（`frontend/src/hooks/useSSE.ts:84-85`）。这样即使一个事件被拆到两个 TCP 段里，也不会被切开解析。
+客户端的处理方式与此对应：每次从连接读到一段文本先追加到缓冲区，按 `\n` 切分后把最后一段留回缓冲区，等下一段到达再拼接（`frontend/src/hooks/useSSE.ts` 的缓冲处理）。这样即使一个事件被拆到两个 TCP 段里，也不会被切开解析。
 
 ## 响应头里的两条约定
 
-Agent 路由的每个流式响应都带两个头（`backend/agent/routes/agent.py:44-48`）：
+Agent 路由的每个流式响应都带两个头（`backend/agent/routes/agent.py` 的响应构造）：
 
 ```python
 return StreamingResponse(
@@ -105,13 +119,13 @@ return StreamingResponse(
 )
 ```
 
-`media_type` 决定 `Content-Type`，客户端据此判断这是事件流（`frontend/src/api/agent.ts:57` 用这个头决定走流式分支）。`Cache-Control: no-cache` 避免中间层把响应缓存起来。`X-Accel-Buffering` 是给 nginx 看的逐响应开关，含义与生效范围在 `02-代理层的缓冲与超时` 里说明。
+`media_type` 决定 `Content-Type`，客户端据此判断这是事件流（`frontend/src/api/agent.ts` 用这个头决定走流式分支）。`Cache-Control: no-cache` 避免中间层把响应缓存起来。`X-Accel-Buffering` 是给 nginx 看的逐响应开关，含义与生效范围在 `02-代理层的缓冲与超时` 里说明。
 
-流水线侧的三个流式响应只设了 `media_type`，没有带这两个头（`backend/routes/pipeline.py:87-90`、`:114-117`、`:436-445`）。它们能流起来靠的是 nginx 配置里的 `proxy_buffering off`，与 Agent 路由的双保险不同。
+流水线侧的三个流式响应只设了 `media_type`，没有带这两个头（这三个端点都在 `backend/routes/pipeline.py`）。它们能流起来靠的是 nginx 配置里的 `proxy_buffering off`，与 Agent 路由的双保险不同。
 
 ## 心跳行与空闲连接
 
-Agent 的订阅循环在队列上等待事件，超时时间设为 15 秒；超时且后台循环仍在运行时，写一行注释作为心跳（`backend/agent/manager.py:80-89`）：
+Agent 的订阅循环在队列上等待事件，超时时间设为 15 秒；超时且后台循环仍在运行时，写一行注释作为心跳（`backend/agent/manager.py` 的订阅循环）：
 
 ```python
 event = await asyncio.wait_for(q.get(), timeout=15.0)
@@ -176,9 +190,9 @@ except asyncio.TimeoutError:
 
 | 路径 | 用途 |
 | --- | --- |
-| KD 仓库 `backend/agent/manager.py` | 帧构造函数、订阅循环与心跳（`:21-23`、`:66`、`:80-89`） |
-| KD 仓库 `backend/agent/routes/agent.py` | 三个流式端点的响应头（`:27-66`、`:69-89`） |
-| KD 仓库 `backend/routes/pipeline.py` | 流水线事件类型与端点（`:42-59`、`:65-117`、`:423-445`） |
-| KD 仓库 `frontend/src/api/stream.ts` | 客户端解析事件负载（`:5-25`） |
-| KD 仓库 `frontend/src/hooks/useSSE.ts` | 增量读取与按行解析（`:29-32`、`:44-97`、`:108-112`） |
-| KD 仓库 `frontend/src/api/agent.ts` | 按 `content-type` 判断流式分支（`:57`） |
+| KD 仓库 `backend/agent/manager.py` | 帧构造函数、订阅循环与心跳 |
+| KD 仓库 `backend/agent/routes/agent.py` | 三个流式端点的响应头与运行状态判断 |
+| KD 仓库 `backend/routes/pipeline.py` | 流水线事件类型与三个流式端点 |
+| KD 仓库 `frontend/src/api/stream.ts` | 客户端解析事件负载 |
+| KD 仓库 `frontend/src/hooks/useSSE.ts` | 增量读取、按行解析与中止清理 |
+| KD 仓库 `frontend/src/api/agent.ts` | 按 `content-type` 判断流式分支 |

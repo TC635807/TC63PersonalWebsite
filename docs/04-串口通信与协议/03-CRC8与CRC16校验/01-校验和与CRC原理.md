@@ -26,7 +26,7 @@ updated: 2026-10-07
 
 ## 2. 奇偶校验：每字节一位的廉价保险
 
-奇偶校验在每个字节后加 1 位，使 1 的个数保持奇数或偶数。接收方重算这一位，不符就置 USART 的 PE 标志。STM32 的 `UART_InitTypeDef.Parity` 就是这一位。本项目 USART3 用偶校验（`Core/Src/usart.c:79` 的 `UART_PARITY_EVEN`），与 DBUS 遥控器一致；USART1 与 USART6 都是 `UART_PARITY_NONE`（`usart.c:50`、`usart.c:108`）。
+奇偶校验在每个字节后加 1 位，使 1 的个数保持奇数或偶数。接收方重算这一位，不符就置 USART 的 PE 标志。STM32 的 `UART_InitTypeDef.Parity` 就是这一位。本项目 USART3 用偶校验（`Core/Src/usart.c` 的 `UART_PARITY_EVEN`），与 DBUS 遥控器一致；USART1 与 USART6 都是 `UART_PARITY_NONE`（`usart.c`、`usart.c`）。
 
 | 能力 | 结论 |
 | --- | --- |
@@ -41,7 +41,7 @@ updated: 2026-10-07
 
 累加和把参与校验的字节按无符号整数相加，取低位作为校验值。本工程有两处。
 
-一是 `UartProtocol` 的 8 位和（`Communication/Src/usart_protocol.cpp:47-57`）：
+一是 `UartProtocol` 的 8 位和（`Communication/Src/usart_protocol.cpp`）：
 
 ```cpp
 uint8_t sum = frame_type_;
@@ -50,9 +50,9 @@ sum &= 0xFF;
 if (sum == byte && cb_) cb_(frame_type_, recv_buf_, data_len_);
 ```
 
-发送侧用同一算式（`usart_protocol.cpp:82-84`）。覆盖范围是 `type` 与 `payload`，不含帧头与长度字节。另有静态函数 `calcChecksum`（`usart_protocol.cpp:61-66`），本页未查到调用点。
+发送侧用同一算式（`usart_protocol.cpp`）。覆盖范围是 `type` 与 `payload`，不含帧头与长度字节。另有静态函数 `calcChecksum`（`usart_protocol.cpp`），本页未查到调用点。
 
-二是底盘板 USB 链路的 16 位和（`Task/Src/UsbConnectTask.cpp:50-57`），它按 `unsigned short` 累加后返回。该函数同样没有调用点，属未接线实现。
+二是底盘板 USB 链路的 16 位和（`Task/Src/UsbConnectTask.cpp`），它按 `unsigned short` 累加后返回。该函数同样没有调用点，属未接线实现。
 
 累加和的盲区可以用一组具体字节说明。参与校验的字节若是 `0x10 0x20`，和是 `0x30`；改成 `0x20 0x10`，和仍是 `0x30`。同理 `0x10 0x21` 与 `0x11 0x20` 的和也相同。任何一对 +k 与 -k 的改动都会互相抵消，进位溢出又会让高位错误丢失。
 
@@ -144,14 +144,14 @@ flowchart TD
 
 | 实现 | 位置 | 校验量 | 初值 | 调用点 |
 | --- | --- | --- | --- | --- |
-| `crc8_calc` | `Algorithm/Src/CRC8.cpp:26-33` | CRC8，256 项表 | 由调用方给 | `Communication/Src/referee_protocol.cpp:68`；底盘 `Task/Src/UsbConnectTask.cpp:41`、`:244` |
-| `crc16_calc` | `Algorithm/Src/CRC16.cpp:31-41` | CRC16，256 项表 | 由调用方给 | `referee_protocol.cpp:119`、`Communication/Src/usb_protocol.cpp:41`、`usb_decode.cpp:79`；底盘 `UsbConnectTask.cpp:255` |
-| 累加和 | `Communication/Src/usart_protocol.cpp:47-57` | 8 位和 | 无 | 本页未查到调用点 |
-| 硬件 CRC | `Core/Src/crc.c:30-49` | 仅初始化 | 无 | 全工程没有 `HAL_CRC_Calculate` 调用 |
+| `crc8_calc` | `Algorithm/Src/CRC8.cpp` | CRC8，256 项表 | 由调用方给 | `Communication/Src/referee_protocol.cpp`；底盘 `Task/Src/UsbConnectTask.cpp` |
+| `crc16_calc` | `Algorithm/Src/CRC16.cpp` | CRC16，256 项表 | 由调用方给 | `referee_protocol.cpp`、`Communication/Src/usb_protocol.cpp`、`usb_decode.cpp`；底盘 `UsbConnectTask.cpp` |
+| 累加和 | `Communication/Src/usart_protocol.cpp` | 8 位和 | 无 | 本页未查到调用点 |
+| 硬件 CRC | `Core/Src/crc.c` | 仅初始化 | 无 | 全工程没有 `HAL_CRC_Calculate` 调用 |
 
 ## 8. 硬件 CRC 外设闲置的原因
 
-`MX_CRC_Init()` 在云台板 `Core/Src/main.c:119` 与底盘板 `Core/Src/main.c:123` 都被调用，`HAL_CRC_Init` 只登记 instance 并打开时钟（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c:95-119`）。这块外设在 F407 上只有 `DR`、`IDR`、`CR` 三个寄存器（`Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h:279-286`），`CR` 只有一位复位（同文件 `:5439-5441`），没有多项式、初值与反射的配置位。按手册，F407 的 CRC 多项式固定为 0x04C11DB7、初值 0xFFFFFFFF、无输入输出反射，因此它只能算固定的 32 位 CRC，不能直接产出本工程用的 CRC8 与 CRC16。
+`MX_CRC_Init` 在云台板 `Core/Src/main.c` 与底盘板 `Core/Src/main.c` 都被调用，`HAL_CRC_Init` 只登记 instance 并打开时钟（`Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c`）。这块外设在 F407 上只有 `DR`、`IDR`、`CR` 三个寄存器（`Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h`），`CR` 只有一位复位（同文件 ），没有多项式、初值与反射的配置位。按手册，F407 的 CRC 多项式固定为 0x04C11DB7、初值 0xFFFFFFFF、无输入输出反射，因此它只能算固定的 32 位 CRC，不能直接产出本工程用的 CRC8 与 CRC16。
 
 本工程未使用该外设。若要使用，写法是：
 
@@ -168,11 +168,11 @@ uint32_t crc = HAL_CRC_Calculate(&hcrc, words, 8);
 
 | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- |
-| 用偶校验替代整帧校验 | 双比特翻转静默通过 | `usart.c:79` 只保护单字节 |
-| 把累加和当 CRC | 两套校验的盲区不同，混用时误判 | `usart_protocol.cpp:47-57` 与 `CRC8.cpp` 是两套 |
+| 用偶校验替代整帧校验 | 双比特翻转静默通过 | `usart.c` 只保护单字节 |
+| 把累加和当 CRC | 两套校验的盲区不同，混用时误判 | `usart_protocol.cpp` 与 `CRC8.cpp` 是两套 |
 | 认为累加和能查字节顺序 | 交换两个字节后和不变 | 第 3 节的抵消例子 |
 | 只看注释不看表 | 按 0x8005 生成表却对不上固件 | 见 03 篇的注释冲突 |
-| 认为硬件 CRC 能省软件开销 | 需要 32 位字对齐，且多项式不可配 | `crc.c:30-49` |
+| 认为硬件 CRC 能省软件开销 | 需要 32 位字对齐，且多项式不可配 | `crc.c` |
 
 ## 10. 小结
 
@@ -206,7 +206,7 @@ uint32_t crc = HAL_CRC_Calculate(&hcrc, words, 8);
 
 ### 挑战题
 
-5. 用第 6 节的循环生成 CRC8 表的第 0、1、2 项，与 `Algorithm/Src/CRC8.cpp:8` 逐项对照。
+5. 用第 6 节的循环生成 CRC8 表的第 0、1、2 项，与 `Algorithm/Src/CRC8.cpp` 逐项对照。
 6. 若要给 `UartProtocol` 的板间帧换成 CRC16，需要改动哪些函数，覆盖范围应取 `type` 到 `payload` 还是包含帧头与长度字节，说明理由。
 7. F407 的硬件 CRC 多项式固定为 0x04C11DB7。若把本工程一帧数据交给它计算，说明为什么读回的低 16 位与 `crc16_calc` 的结果不同，并列出至少两个原因。
 
@@ -216,16 +216,16 @@ uint32_t crc = HAL_CRC_Calculate(&hcrc, words, 8);
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Algorithm/Src/CRC8.cpp` | CRC8 表与 `crc8_calc`（:7-33） |
-| `2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp` | CRC16 表与 `crc16_calc`（:7-41） |
-| `2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp` | 8 位累加和（:47-57）、发送侧校验（:82-84） |
-| `2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp` | 帧头 CRC8（:68）与整包 CRC16（:114-121） |
-| `2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp` | 视觉发送帧 CRC16（:38-45） |
-| `2026OmniSentryGimbal/Communication/Src/usb_decode.cpp` | 视觉接收帧 CRC16（:79-83） |
-| `2026OmniSentryGimbal/Core/Src/crc.c` | 硬件 CRC 初始化（:30-49） |
-| `2026OmniSentryGimbal/Core/Src/main.c` | `MX_CRC_Init` 调用（:119） |
-| `2026OmniSentryChassis/2026OmniSentryChassis/Core/Src/main.c` | 硬件 CRC 初始化（:123）、huart6 注册（:132） |
-| `2026OmniSentryChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp` | 16 位累加和（:50-57）、CRC8（:41、:244）、CRC16（:255） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c` | `HAL_CRC_Init`（:95-119）、`HAL_CRC_Calculate`（:257-281） |
-| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | CRC 寄存器块（:279-286）与 `CRC_CR_RESET`（:5439-5441） |
-| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 偶校验（:79）、USART1 与 USART6 无校验（:50、:108） |
+| `2026OmniSentryGimbal/Algorithm/Src/CRC8.cpp` | CRC8 表与 `crc8_calc` |
+| `2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp` | CRC16 表与 `crc16_calc` |
+| `2026OmniSentryGimbal/Communication/Src/usart_protocol.cpp` | 8 位累加和、发送侧校验 |
+| `2026OmniSentryGimbal/Communication/Src/referee_protocol.cpp` | 帧头 CRC8与整包 CRC16 |
+| `2026OmniSentryGimbal/Communication/Src/usb_protocol.cpp` | 视觉发送帧 CRC16 |
+| `2026OmniSentryGimbal/Communication/Src/usb_decode.cpp` | 视觉接收帧 CRC16 |
+| `2026OmniSentryGimbal/Core/Src/crc.c` | 硬件 CRC 初始化 |
+| `2026OmniSentryGimbal/Core/Src/main.c` | `MX_CRC_Init` 调用 |
+| `2026OmniSentryChassis/2026OmniSentryChassis/Core/Src/main.c` | 硬件 CRC 初始化、huart6 注册 |
+| `2026OmniSentryChassis/2026OmniSentryChassis/Task/Src/UsbConnectTask.cpp` | 16 位累加和、CRC8、CRC16 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c` | `HAL_CRC_Init`、`HAL_CRC_Calculate` |
+| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | CRC 寄存器块与 `CRC_CR_RESET` |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3 偶校验、USART1 与 USART6 无校验 |

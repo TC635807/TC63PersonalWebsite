@@ -7,7 +7,7 @@ updated: 2026-10-07
 
 # Pages 发布与站点联动
 
-推送 `main` 之后，页面并不会自动出现在 GitHub Pages 上。仓库里放好了 workflow，但还有一个只在网页设置里存在的开关：Pages 的 Source 必须选成 GitHub Actions（`README.md:185-188`）。这个开关不在版本库里，克隆仓库看不到它，因此换账号或新建仓库时最容易漏掉，现象是 workflow 跑成功了、站点地址却还是 404。
+GitHub Pages 是 GitHub 附带的静态站点托管，把仓库里的构建产物发布成一个公开网址，不需要自己准备服务器或证书。本站点同时发布到自有服务器与 Pages，两者共用同一份源码，Pages 这条线提供一个不依赖服务器环境的备份与演示地址。推送 `main` 之后，页面并不会自动出现在 GitHub Pages 上。仓库里放好了 workflow，但还有一个只在网页设置里存在的开关：Pages 的 Source 必须选成 GitHub Actions（`README.md`）。这个开关不在版本库里，克隆仓库看不到它，因此换账号或新建仓库时最容易漏掉，现象是 workflow 跑成功了、站点地址却还是 404。
 
 链路上每一段的失败表现都不一样：从 workflow 是否运行，到页面资源是否加载，可以逐段定位。
 
@@ -15,7 +15,7 @@ updated: 2026-10-07
 
 链路可以分成四段：推送触发 workflow、build job 构建并上传产物、deploy job 交给 Pages、Pages 在站点地址上提供服务。前两段由仓库里的配置文件决定，后两段由仓库设置与平台决定。
 
-workflow 只在 push 到 `main` 或手动触发时运行（`.github/workflows/deploy.yml:3-6`），构建时传入 `SITE_BASE=/TC63PersonalWebsite`（`.github/workflows/deploy.yml:29-31`），这与服务器部署默认的 `/tc63` 前缀正好相反。README 里把两条路的切换点写得很清楚：默认发服务器，传入该变量则发 Pages（`README.md:166-167`）。
+workflow 只在 push 到 `main` 或手动触发时运行（`.github/workflows/deploy.yml`），构建时传入 `SITE_BASE=/TC63PersonalWebsite`（`.github/workflows/deploy.yml`），这与服务器部署默认的 `/tc63` 前缀正好相反。README 里把两条路的切换点写得很清楚：默认发服务器，传入该变量则发 Pages（`README.md`）。
 
 ```mermaid
 flowchart LR
@@ -29,9 +29,31 @@ flowchart LR
 
 ## workflow 的权限与并发约束
 
-Actions 默认拿到的令牌权限有限，部署到 Pages 需要显式声明三项（`.github/workflows/deploy.yml:8-11`）：`contents: read` 读取仓库、`pages: write` 写入 Pages、`id-token: write` 换取部署身份令牌。缺任何一项，deploy job 会在授权阶段失败，而 build job 可能已经成功，现象就是「构建绿、部署红」。
+Actions 默认拿到的令牌权限有限，部署到 Pages 需要显式声明三项（`.github/workflows/deploy.yml`）：`contents: read` 读取仓库、`pages: write` 写入 Pages、`id-token: write` 换取部署身份令牌。缺任何一项，deploy job 会在授权阶段失败，而 build job 可能已经成功，现象就是「构建绿、部署红」。
 
-并发控制写在同一文件（`deploy.yml:14-16`）：分组固定为 `pages`，且 `cancel-in-progress: false`，同一时间只允许一个 Pages 部署，新触发不会取消进行中的那次。这条设置保证生产部署能跑完，代价是连续推送时后一次需要排队等待。
+并发控制写在同一文件（`deploy.yml`）：分组固定为 `pages`，且 `cancel-in-progress: false`，同一时间只允许一个 Pages 部署，新触发不会取消进行中的那次。这条设置保证生产部署能跑完，代价是连续推送时后一次需要排队等待。
+
+把这份 workflow 里与部署有关的部分整段摘出来是这样：
+
+```yaml
+# .github/workflows/deploy.yml（节选）
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个 pages 部署，但不取消进行中的部署（保证生产部署能跑完）
+concurrency:
+  group: pages
+  cancel-in-progress: false
+```
+
+`on` 决定什么时候运行，其中 `workflow_dispatch` 提供网页上的手动触发入口；`permissions` 声明这次运行能拿到哪些令牌权限，不写就没有；`concurrency` 让同一 `group` 的运行排队，而不是同时跑两个。
 
 | 配置 | 值 | 作用 |
 | --- | --- | --- |
@@ -43,7 +65,7 @@ Actions 默认拿到的令牌权限有限，部署到 Pages 需要显式声明�
 
 ## 两条发布路径的关系
 
-站点有两套发布方式：GitHub Pages 与自己的服务器，两者共用一份源码，各自独立触发。服务器那条路依赖 `dist/` 已经提交进 `main`（`README.md:162-164`，`personal-homepage-research/15-deploy-tc63.md:115-117`），本地执行 `deploy.sh` 推送，再由服务器拉取；Pages 那条路由 CI 在云端重新构建，不使用仓库里的 `dist/`。
+站点有两套发布方式：GitHub Pages 与自己的服务器，两者共用一份源码，各自独立触发。服务器那条路依赖 `dist/` 已经提交进 `main`（`README.md`，`personal-homepage-research/15-deploy-tc63.md`），本地执行 `deploy.sh` 推送，再由服务器拉取；Pages 那条路由 CI 在云端重新构建，不使用仓库里的 `dist/`。
 
 | 项 | 服务器 | GitHub Pages |
 | --- | --- | --- |
@@ -66,15 +88,25 @@ flowchart TB
 
 ## 为什么设置开关容易漏
 
-Pages 的 Source 有三个常见选项：从分支发布、从 GitHub Actions 发布、以及关闭。本仓库的 workflow 走的是第二种，因为它自己完成构建并上传产物，不需要平台再构建一次。如果 Source 还停留在"从分支发布"，平台会去找指定分支的根目录或 `docs/` 目录下的静态文件，而本仓库的产物在 `dist/`，两边对不上，页面就会是 404 或停留在旧版本。
+Pages 的 Source 有三个常见选项：从分支发布、从 GitHub Actions 发布、以及关闭。如果构建产物由自己的 workflow 生成并上传，就应当选第二种：平台直接用现成产物，不再构建一次。选「从分支发布」时平台会去指定分支的根目录或 `docs/` 目录找静态文件，一旦产物的实际目录（例如 `dist/`）与它找的位置对不上，页面就是 404 或停留在旧版本。
 
 判断顺序是：workflow 是否成功、Source 是否为 Actions、部署环境是否产生了页面地址。三项依次排除，基本能定位到是哪一段断了。
 
-另一个容易忽略的选项是「从分支发布」：平台会自己去找指定分支里的静态文件并构建，与本仓库 workflow 的构建重复。即使它能跑通，产物来源也与本仓库的配置预期不一致，排查时会把问题引到错误的方向。
+另一个容易忽略的选项是「从分支发布」：平台会自己去找指定分支里的静态文件并构建，与自己的 workflow 构建重复。即使它能跑通，产物来源也与配置预期不一致，排查时会把问题引到错误的方向。
 
 ## 新开源的仓库怎样出现在作品集页面上
 
-站点首页的项目区由一个配置与一个页面组成：链接写在身份配置里（`src/config/site.ts:32-33`），项目页顶部显示"共几个、其中几个已开源"（`src/pages/projects/index.astro:23`）。RM 两个仓库公开之后，站点同步做了两处更新：把这两个项目从"进行中 · 仓库暂未公开"改为"已开源"并接上链接；把原来写死的"有 N 个仓库目前是私有的"提示改成条件渲染，全部公开时提示不再出现（`11-github-publish-record.md:55-58`）。
+站点首页的项目区由一个配置与一个页面组成：链接写在身份配置里（`src/config/site.ts`），项目页顶部显示"共几个、其中几个已开源"（`src/pages/projects/index.astro`）。
+
+```ts
+// src/config/site.ts（节选）
+socials: [
+  { label: 'GitHub', href: 'https://github.com/TC635807' },
+  { label: 'GitHub · QianLi2027', href: 'https://github.com/QianLi2027' },
+],
+```
+
+`site.ts` 是站点的身份配置：社交入口、导航与站点描述都集中在这一处，页面组件从这里读，因此补一条链接只改一个文件。两条 GitHub 链接并存，是为了让账号改名之前的旧地址继续可达。开源动作通常要连带改两处：把项目状态从「未公开」改为「已开源」并接上链接；把写死的「有 N 个仓库是私有的」提示改成由数据决定，全部公开后提示自动消失（`11-github-publish-record.md`）。
 
 这段联动说明了一件事：开源动作不只是代码层面的操作，作品集页面的数据与文案需要跟着改。改动的判断标准是页面上是否存在与仓库可见性相关的写死文案，有就要改成由数据决定。
 
@@ -84,11 +116,11 @@ Pages 的 Source 有三个常见选项：从分支发布、从 GitHub Actions �
 | `src/pages/projects/index.astro` | 已开源计数与条件提示 | 计数由数据推导，不写死 |
 | 项目条目 | 状态与链接从"未公开"改为"已开源" | 与仓库实际可见性一致 |
 
-配置里的社交入口目前保留了两条 GitHub 链接（`src/config/site.ts:31-33`），分别指向主账号与改名后的账号，两处并存是为了让旧链接仍然可达。
+配置里的社交入口目前保留了两条 GitHub 链接（`src/config/site.ts`），分别指向主账号与改名后的账号，两处并存是为了让旧链接仍然可达。
 
 ## 发布后怎么验证
 
-验证分三层。第一层看构建：Actions 最近一次运行是否成功、耗时多少。第二层看站点：项目站点地址能否打开、页面里的资源是否加载（前缀错误会表现为样式丢失）。第三层看渲染结果：README 与页面里的表格、图片在浏览器里是否正常，当时两个 RM 仓库的 README 就是用浏览器抓取工具复核渲染的（`11-github-publish-record.md:16`）。
+验证分三层。第一层看构建：最近的 workflow 运行是否成功、耗时多少。第二层看站点：站点地址能否打开、页面里的资源是否加载（前缀错误会表现为样式丢失）。第三层看渲染结果：README 与页面里的表格、图片在浏览器里是否正常——用浏览器复核一遍是最快的方式（`11-github-publish-record.md`）。
 
 对文档类仓库还有一层内容校验：页面里的链接是否指向存在的路径、构建后的搜索结果是否包含新内容。这些检查在本地 `preview` 里做一遍，比在线上反复刷新更快。
 
@@ -116,7 +148,7 @@ Pages 的 Source 有三个常见选项：从分支发布、从 GitHub Actions �
 
 ### 设计权衡
 
-| 权衡点 | 本工程的选择 | 收益与代价 |
+| 权衡点 | 常见选择 | 收益与代价 |
 | --- | --- | --- |
 | Pages 构建方式 | 由 Actions 构建并发布 | 产物可控、无分支约定；代价是多一个设置开关 |
 | 与服务器关系 | 两条路独立 | 互不影响；代价是可能只更新一边 |

@@ -41,27 +41,27 @@ stateDiagram-v2
 
 ### 2.1 全局对象与构造
 
-`Communication/Src/usb_decode.cpp:36` 定义一个全局实例：
+`Communication/Src/usb_decode.cpp` 定义一个全局实例：
 
 ```cpp
 USBDecode usb_decoder;
 ```
 
-`Task/Src/UsbConnectTask.cpp:48` 通过 `extern USBDecode usb_decoder;` 引用它。构造函数（`usb_decode.cpp:38-43`）把状态置为 `WAIT_HEAD_0`，`index_` 与 `error_count_` 清零。缓冲区长度就是帧长常量：
+`Task/Src/UsbConnectTask.cpp` 通过 `extern USBDecode usb_decoder;` 引用它。构造函数（`usb_decode.cpp`）把状态置为 `WAIT_HEAD_0`，`index_` 与 `error_count_` 清零。缓冲区长度就是帧长常量：
 
 ```cpp
-uint8_t buffer_[USBProtocol::VISION_TO_GIMBAL_LEN];   // usb_decode.h:36
+uint8_t buffer_[USBProtocol::VISION_TO_GIMBAL_LEN];   // usb_decode.h
 ```
 
 feed 的返回值被任务用来决定是否读取 packet()，因此它在「收满且合法」与「未收满」之外还要区分「收满但不合法」。三者都返回 false，任务只会在 true 时更新 vision_data。
 
 ### 2.2 前两个分支只搬一个字节
 
-`feed(uint8_t byte)` 返回 `bool`，表示这一字节之后是否解析到完整合法帧。前两个分支各只搬一个字节：`WAIT_HEAD_0` 命中 0x53 后写入 `buffer_[0]` 并转到 `WAIT_HEAD_1`；`WAIT_HEAD_1` 命中 0x50 后写入 `buffer_[1]`，把 `index_` 置 2 并转入 `COLLECT`（`usb_decode.cpp:48-64`）。
+`feed(uint8_t byte)` 返回 `bool`，表示这一字节之后是否解析到完整合法帧。前两个分支各只搬一个字节：`WAIT_HEAD_0` 命中 0x53 后写入 `buffer_[0]` 并转到 `WAIT_HEAD_1`；`WAIT_HEAD_1` 命中 0x50 后写入 `buffer_[1]`，把 `index_` 置 2 并转入 `COLLECT`（`usb_decode.cpp`）。
 
 帧头不匹配时退回 `WAIT_HEAD_0` 并把 `error_count_` 加一。退回时不再用当前字节重新判断是否为 0x53。字节序列 `0x53 0x53 0x50` 里的第二个 0x53 会被丢掉，这一帧要到下一帧才能重新同步。
 
-`COLLECT` 分支只做累加与判满（`usb_decode.cpp:66-69`）：
+`COLLECT` 分支只做累加与判满（`usb_decode.cpp`）：
 
 ```cpp
 case State::COLLECT:
@@ -78,7 +78,7 @@ case State::COLLECT:
 
 ## 3. 收满之后的 CRC16 与 mode 双重把关
 
-第一条是 CRC16（`usb_decode.cpp:79-85`）：
+第一条是 CRC16（`usb_decode.cpp`）：
 
 ```cpp
 uint16_t calc = crc16_calc(buffer_, USBProtocol::VISION_TO_GIMBAL_LEN - 2, 0xFFFF);
@@ -87,7 +87,7 @@ if (calc == pkt.crc16) { ... }
 
 覆盖长度 27 字节，初值 0xFFFF，用的是 `Algorithm/Src/CRC16.cpp` 的反射式查表（标准多项式 0x1021，反射形式 0x8408）。`pkt.crc16` 由 packed 结构体直接读出，按小端解释，等价于 `buffer_[27] | (buffer_[28] << 8)`。
 
-第二条是模式范围（`usb_decode.cpp:87-97`）：`pkt.mode <= 2` 才接受。协议里 0、1、2 分别是不控制、控制不开火、控制且开火，其他取值视为错误。这一条挡住的是 CRC 正确但语义非法的帧。
+第二条是模式范围（`usb_decode.cpp`）：`pkt.mode <= 2` 才接受。协议里 0、1、2 分别是不控制、控制不开火、控制且开火，其他取值视为错误。这一条挡住的是 CRC 正确但语义非法的帧。
 
 | 检查 | 条件 | 失败后果 |
 | --- | --- | --- |
@@ -111,19 +111,19 @@ mode 的合法范围写在解析器里，而不是写成一张枚举表。如果
 
 ## 4. error_count 只反映近期质量
 
-`error_count_` 的用法是累计错误、成功清零：帧头失配、CRC 失败、mode 非法各自加一（`usb_decode.cpp:62、95、101`），一次成功解析把它清零（`usb_decode.cpp:91`）。
+`error_count_` 的用法是累计错误、成功清零：帧头失配、CRC 失败、mode 非法各自加一（`usb_decode.cpp、95、101`），一次成功解析把它清零（`usb_decode.cpp`）。
 
 解析失败有两种来源：字节在链路上被破坏，或字节根本没到齐。前者 CRC 会失败，后者会在收集阶段凑出错误的字节组合，同样以 CRC 失败收场。要区分它们，只能把队列水位与错误计数放在一起看：水位顶到 128 的是后一种，水位正常而错误计数增长的是前一种。
 
 清零发生在解析成功之后，而不是失败之后，因此一次成功就能把之前的连续错误全部抹掉。
 
-这个字段回答的是最近一串字节里有没有持续出错，不适合当累计计数器用。接口上的 `errorCount()` 与 `resetErrorCount()`（`usb_decode.h:23-24`）全工程没有调用点，属于留给调试的接口。
+这个字段回答的是最近一串字节里有没有持续出错，不适合当累计计数器用。接口上的 `errorCount()` 与 `resetErrorCount()`（`usb_decode.h`）全工程没有调用点，属于留给调试的接口。
 
 要观察链路质量，`error_count_` 只提供连续性的信息。想统计历史错误率，需要在解析成功与失败两处各加一个单调递增的计数，两者相除才是有意义的比例；只在失败处累加、成功处清零的写法无法累计。
 
 ## 5. packed 结构体直接映射的前提
 
-`usb_decode.cpp:76-77` 用一次 `reinterpret_cast` 把 29 字节缓冲区当成 `USBProtocol::VisionToGimbal`：
+`usb_decode.cpp` 用一次 `reinterpret_cast` 把 29 字节缓冲区当成 `USBProtocol::VisionToGimbal`：
 
 ```cpp
 const auto& pkt = *reinterpret_cast<const USBProtocol::VisionToGimbal*>(buffer_);
@@ -133,7 +133,7 @@ const auto& pkt = *reinterpret_cast<const USBProtocol::VisionToGimbal*>(buffer_)
 
 这样做的前提是结构体定义里有 `__attribute__((packed))`（`Communication/Inc/usb_protocol.h`），否则编译器插入填充字节，偏移与协议表不再对应。缓冲区长度与结构体大小都由 `VISION_TO_GIMBAL_LEN` 决定，两边不会脱节。
 
-文件里保留了另一种写法，被注释掉的手动解析函数 `parse_vision_to_gimbal_manual`（`usb_decode.cpp:13-34`）。它逐字段 `memcpy`，本可以避开对齐问题，但把 CRC 读成 `(data[27] << 8) | data[28]`，即大端，与协议不符；紧随其后的注释又写出了小端写法并留下需要确认的字样。该函数没有调用点，生效的是 `reinterpret_cast` 那条路径。
+文件里保留了另一种写法，被注释掉的手动解析函数 `parse_vision_to_gimbal_manual`（`usb_decode.cpp`）。它逐字段 `memcpy`，本可以避开对齐问题，但把 CRC 读成 `(data[27] << 8) | data[28]`，即大端，与协议不符；紧随其后的注释又写出了小端写法并留下需要确认的字样。该函数没有调用点，生效的是 `reinterpret_cast` 那条路径。
 
 换一个角度看这三态设计：它把「同步」与「收集」分成两段，同步阶段的输入是一个字节，收集阶段的输入是一帧。改动重同步策略时只需要动前两个状态，收集与校验不受影响；反过来，如果想增加第二种帧长，收集阶段的判据就要带上帧类型，三个状态也要相应扩展。
 
@@ -141,13 +141,13 @@ const auto& pkt = *reinterpret_cast<const USBProtocol::VisionToGimbal*>(buffer_)
 
 | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- |
-| 帧头失配后不重判当前字节 | 连续两个 0x53 时跳过该帧的帧头 | `usb_decode.cpp:60-63` |
+| 帧头失配后不重判当前字节 | 连续两个 0x53 时跳过该帧的帧头 | `usb_decode.cpp` |
 | 把 CRC 覆盖长度写成 29 | 校验永远不过 | 覆盖长度是 27 |
 | CRC 初值传 0 | 校验值与上位机对不上 | 两侧都是 0xFFFF |
 | 相信被注释的手动解析 | 按大端复核 CRC，结论矛盾 | 以 packed 映射为准 |
 | 结构体去掉 packed | 偏移错位，浮点全乱 | `usb_protocol.h` |
 | 把 error_count 当累计错误率 | 数字总在 0 附近，看不出历史 | 成功即清零 |
-| 认为 mode 检查多余 | 放行非法模式，上层分支落到默认值 | `usb_decode.cpp:88` |
+| 认为 mode 检查多余 | 放行非法模式，上层分支落到默认值 | `usb_decode.cpp` |
 
 以上七条里，前四条都会让帧被拒收，后三条只是观测方式不当。改动解析器时先确认自己动的是哪一类，避免把观测问题当成协议问题来改参数。
 
@@ -186,7 +186,7 @@ const auto& pkt = *reinterpret_cast<const USBProtocol::VisionToGimbal*>(buffer_)
 
 5. 若把 `WAIT_HEAD_1` 失败分支改成用当前字节重新判断是否为 0x53，说明对连续帧头场景的影响。
 6. 给定一帧字节，说明如何用 `crc16_calc` 与上位机脚本交叉验证校验值，并指出两边初值必须一致的原因。
-7. `packet()` 又做了一次 `reinterpret_cast`（`usb_decode.cpp:110-113`），与 `feed` 里那次相比，有没有额外风险？
+7. `packet()` 又做了一次 `reinterpret_cast`（`usb_decode.cpp`），与 `feed` 里那次相比，有没有额外风险？
 
 ---
 
@@ -194,8 +194,8 @@ const auto& pkt = *reinterpret_cast<const USBProtocol::VisionToGimbal*>(buffer_)
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Communication/Inc/usb_decode.h` | 状态枚举、缓冲区长度、错误计数接口（:27-39） |
-| `2026OmniSentryGimbal/Communication/Src/usb_decode.cpp` | 状态机、校验与映射（:13-123） |
+| `2026OmniSentryGimbal/Communication/Inc/usb_decode.h` | 状态枚举、缓冲区长度、错误计数接口 |
+| `2026OmniSentryGimbal/Communication/Src/usb_decode.cpp` | 状态机、校验与映射 |
 | `2026OmniSentryGimbal/Communication/Inc/usb_protocol.h` | 帧头常量与 packed 结构体 |
-| `2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp` | 反射式查表算法（:31-41） |
-| `2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp` | 解析器调用点与结果使用（:48、:86-99） |
+| `2026OmniSentryGimbal/Algorithm/Src/CRC16.cpp` | 反射式查表算法 |
+| `2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp` | 解析器调用点与结果使用 |

@@ -43,14 +43,14 @@ $$D = \frac{CCR}{ARR+1}$$
 
 ## 时钟树把 84 MHz 变成 168 MHz
 
-定时器的输入时钟由总线时钟与 APB 预分频共同决定。APB 预分频不为 1 时，定时器时钟是总线时钟的两倍。本工程的时钟链（`Core/Src/main.c:169-185`）：
+定时器的输入时钟由总线时钟与 APB 预分频共同决定。APB 预分频不为 1 时，定时器时钟是总线时钟的两倍。本工程的时钟链（`Core/Src/main.c`）：
 
 | 节点 | 值 | 来源 |
 | --- | --- | --- |
 | HSE | 12 MHz | 外部晶振 |
-| PLLM、PLLN、PLLP | 6、168、2 | `main.c:169-171` |
+| PLLM、PLLN、PLLP | 6、168、2 | `main.c` |
 | SYSCLK 与 HCLK | 168 MHz | 12/6 乘 168/2 |
-| APB1、APB2 分频 | 4、2 | `main.c:184-185` |
+| APB1、APB2 分频 | 4、2 | `main.c` |
 | PCLK1、PCLK2 | 42 MHz、84 MHz | HCLK 分频 |
 | APB2 定时器时钟 | 168 MHz | 两倍 PCLK2 |
 
@@ -66,11 +66,11 @@ $$f_{PWM} = \frac{168 \times 10^6}{5000} = 33.6\ \text{kHz}, \qquad T_{PWM} = 29
 
 ## 正确的换算式应当先归一化
 
-PID 输出 $u$ 的取值范围是 $[0, u_{max}]$，其中 $u_{max} = 4500$，对应 `TempPID` 构造参数的第四个实参（`PID/Src/temp_pid.cpp:41`）。把 $u$ 线性映射到 $[0, ARR+1]$：
+PID 输出 $u$ 的取值范围是 $[0, u_{max}]$，其中 $u_{max} = 4500$，对应 `TempPID` 构造参数的第四个实参（`PID/Src/temp_pid.cpp`）。把 $u$ 线性映射到 $[0, ARR+1]$：
 
 $$CCR = (ARR+1) \cdot \frac{u}{u_{max}} = 5000 \cdot \frac{u}{4500}$$
 
-代码里实际写的是 $CCR = ARR \cdot u = 4999 u$（`BMI088/Src/ImuTempControl.cpp:18`）。两式的量纲不同：正确式先归一化再乘满量程，得到计数；代码式把两个纯数直接相乘，得到的量同时含有计数与 PID 码值两种单位。
+代码里实际写的是 $CCR = ARR \cdot u = 4999 u$（`BMI088/Src/ImuTempControl.cpp`）。两式的量纲不同：正确式先归一化再乘满量程，得到计数；代码式把两个纯数直接相乘，得到的量同时含有计数与 PID 码值两种单位。
 
 从量纲上看，正确式里 $u/u_{max}$ 是无量纲比值，乘上计数得到计数；代码式左边是计数，右边是计数乘码值，等式本身不成立。这类错误在编译期不会报错，两个操作数都是整数时照常相乘。
 
@@ -91,16 +91,16 @@ $$CCR = (ARR+1) \cdot \frac{u}{u_{max}} = 5000 \cdot \frac{u}{4500}$$
 
 ```mermaid
 flowchart TD
-    A["PID 输出 duty 范围 0 到 4500"] --> B["乘 Period 4999"]
-    B --> C["写 CCR1 比较值"]
-    C --> D{"CCR 与 ARR 加 1 比较"}
-    D -- "CCR 为 0" --> E["输出恒低 占空比 0"]
-    D -- "CCR 等于 4999" --> F["占空比 99.98"]
-    D -- "CCR 大于等于 5000" --> G["输出恒高 占空比 100"]
-    E --> H["加热器全关"]
-    F --> I["加热器接近全开"]
-    G --> I
-    I --> J["温控退化为开关控制"]
+ A["PID 输出 duty 范围 0 到 4500"] --> B["乘 Period 4999"]
+ B --> C["写 CCR1 比较值"]
+ C --> D{"CCR 与 ARR 加 1 比较"}
+ D -- "CCR 为 0" --> E["输出恒低 占空比 0"]
+ D -- "CCR 等于 4999" --> F["占空比 99.98"]
+ D -- "CCR 大于等于 5000" --> G["输出恒高 占空比 100"]
+ E --> H["加热器全关"]
+ F --> I["加热器接近全开"]
+ G --> I
+ I --> J["温控退化为开关控制"]
 ```
 
 ## 修正写法与替代方案
@@ -110,11 +110,11 @@ flowchart TD
 ```cpp
 // 建议写法，尚未合入仓库
 void ImuTempControl::update(float targetTemp, float currentTemp, float dt) {
-    int16_t duty = temp_pid_calculate(targetTemp, currentTemp, dt);
-    const uint32_t counts = htim_->Init.Period + 1;   // 5000，满量程计数
-    const uint32_t umax = 4500;                       // 与 TempPID 的 maxOutput 一致
-    uint32_t compare = counts * static_cast<uint32_t>(duty) / umax;
-    __HAL_TIM_SET_COMPARE(htim_, channel_, compare);
+ int16_t duty = temp_pid_calculate(targetTemp, currentTemp, dt);
+ const uint32_t counts = htim_->Init.Period + 1; // 5000，满量程计数
+ const uint32_t umax = 4500; // 与 TempPID 的 maxOutput 一致
+ uint32_t compare = counts * static_cast<uint32_t>(duty) / umax;
+ __HAL_TIM_SET_COMPARE(htim_, channel_, compare);
 }
 ```
 
@@ -124,33 +124,33 @@ void ImuTempControl::update(float targetTemp, float currentTemp, float dt) {
 
 ```mermaid
 sequenceDiagram
-    participant I as ImuTask 1 kHz
-    participant C as ImuTempControl update
-    participant R as CCR1 预装载
-    participant T as TIM10 计数器
-    participant P as PF6
-    I->>C: 传入目标 45 温度 dt
-    C->>C: temp_pid_calculate 得到 duty
-    C->>R: compare 等于 Period 乘 duty
-    Note over R: 数值未按满量程归一化
-    R->>T: 下一 UEV 装入影子寄存器
-    T->>P: CCR 大于等于 ARR 加 1 时恒为高
-    T-->>I: 占空比实际为 0 或 100
+ participant I as ImuTask 1 kHz
+ participant C as ImuTempControl update
+ participant R as CCR1 预装载
+ participant T as TIM10 计数器
+ participant P as PF6
+ I->>C: 传入目标 45 温度 dt
+ C->>C: temp_pid_calculate 得到 duty
+ C->>R: compare 等于 Period 乘 duty
+ Note over R: 数值未按满量程归一化
+ R->>T: 下一 UEV 装入影子寄存器
+ T->>P: CCR 大于等于 ARR 加 1 时恒为高
+ T-->>I: 占空比实际为 0 或 100
 ```
 
 ## 本工程 CCR1 的写法与量纲
 
 | 项 | 位置 | 内容 |
 | --- | --- | --- |
-| TIM10 时钟与周期 | `Core/Src/tim.c:43-45` | `Prescaler = 0`、`Period = 4999` |
-| PWM 模式 | `Core/Src/tim.c:56-58` | `TIM_OCMODE_PWM1`、`Pulse = 0`、高电平有效 |
-| 引脚 | `Core/Src/tim.c:101-108` | PF6 复用 `GPIO_AF3_TIM10` |
-| 占空比换算 | `BMI088/Src/ImuTempControl.cpp:18` | `compare = static_cast<uint32_t>(htim_->Init.Period * duty)` |
-| 写寄存器 | `BMI088/Src/ImuTempControl.cpp:20` | `__HAL_TIM_SET_COMPARE(htim_, channel_, compare)` |
-| 输出满量程 | `PID/Src/temp_pid.cpp:41` | `maxOutput = 4500.0f` |
-| 时钟树 | `Core/Src/main.c:169-185` | PLL 与 APB2 分频 |
+| TIM10 时钟与周期 | `Core/Src/tim.c` | `Prescaler = 0`、`Period = 4999` |
+| PWM 模式 | `Core/Src/tim.c` | `TIM_OCMODE_PWM1`、`Pulse = 0`、高电平有效 |
+| 引脚 | `Core/Src/tim.c` | PF6 复用 `GPIO_AF3_TIM10` |
+| 占空比换算 | `BMI088/Src/ImuTempControl.cpp` | `compare = static_cast<uint32_t>(htim_->Init.Period * duty)` |
+| 写寄存器 | `BMI088/Src/ImuTempControl.cpp` | `__HAL_TIM_SET_COMPARE(htim_, channel_, compare)` |
+| 输出满量程 | `PID/Src/temp_pid.cpp` | `maxOutput = 4500.0f` |
+| 时钟树 | `Core/Src/main.c` | PLL 与 APB2 分频 |
 
-两处实现细节需要单独记下。第一，`duty` 的声明是 `uint32_t`，来源是返回 `int16_t` 的 `temp_pid_calculate`（`BMI088/Src/ImuTempControl.cpp:16`）；当前 PID 保证输出非负，一旦输出为负，转成无符号会得到一个很大的数。第二，`compare` 读的是 `htim_->Init.Period`，这是初始化结构体里的值；如果运行期用 `__HAL_TIM_SET_AUTORELOAD` 改了 ARR，`Init.Period` 不会同步更新，换算仍按旧值。要读实时 ARR 应当用 `__HAL_TIM_GET_AUTORELOAD`。（按 HAL 宏的实现推导。）
+两处实现细节需要单独记下。第一，`duty` 的声明是 `uint32_t`，来源是返回 `int16_t` 的 `temp_pid_calculate`（`BMI088/Src/ImuTempControl.cpp`）；当前 PID 保证输出非负，一旦输出为负，转成无符号会得到一个很大的数。第二，`compare` 读的是 `htim_->Init.Period`，这是初始化结构体里的值；如果运行期用 `__HAL_TIM_SET_AUTORELOAD` 改了 ARR，`Init.Period` 不会同步更新，换算仍按旧值。要读实时 ARR 应当用 `__HAL_TIM_GET_AUTORELOAD`。（按 HAL 宏的实现推导。）
 
 ## 三条验证方法
 
@@ -168,13 +168,13 @@ sequenceDiagram
 
 | # | 易错点 | 表现 | 位置 |
 | --- | --- | --- | --- |
-| 1 | 把 84 MHz 当成定时器时钟 | 频率算成 16.8 kHz | `Core/Src/main.c:184-185` |
-| 2 | 用 `Period` 而不是 `Period + 1` | 满量程少一个计数，偏差 0.02% | `BMI088/Src/ImuTempControl.cpp:18` |
-| 3 | 忘记除以 PID 满量程 | 比较值超 ARR，占空比饱和 | `BMI088/Src/ImuTempControl.cpp:18` |
+| 1 | 把 84 MHz 当成定时器时钟 | 频率算成 16.8 kHz | `Core/Src/main.c` |
+| 2 | 用 `Period` 而不是 `Period + 1` | 满量程少一个计数，偏差 0.02% | `BMI088/Src/ImuTempControl.cpp` |
+| 3 | 忘记除以 PID 满量程 | 比较值超 ARR，占空比饱和 | `BMI088/Src/ImuTempControl.cpp` |
 | 4 | 认为 `duty = 4500` 才饱和 | 实际 `duty 大于等于 2` 就饱和 | 量纲错误一节 |
-| 5 | 用 `Init.Period` 读实时 ARR | 改 ARR 后换算用旧值 | `BMI088/Src/ImuTempControl.cpp:18` |
-| 6 | 无符号承接可能为负的输出 | 负值回绕成很大的比较值 | `BMI088/Src/ImuTempControl.cpp:16` |
-| 7 | 只改 `maxOutput` 不改换算 | 满量程常数与 PID 输出范围脱钩 | `PID/Src/temp_pid.cpp:41` |
+| 5 | 用 `Init.Period` 读实时 ARR | 改 ARR 后换算用旧值 | `BMI088/Src/ImuTempControl.cpp` |
+| 6 | 无符号承接可能为负的输出 | 负值回绕成很大的比较值 | `BMI088/Src/ImuTempControl.cpp` |
+| 7 | 只改 `maxOutput` 不改换算 | 满量程常数与 PID 输出范围脱钩 | `PID/Src/temp_pid.cpp` |
 
 ## 小结
 
@@ -215,10 +215,10 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp` | 占空比换算的错误位置（:11-21） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp` | 占空比换算的错误位置 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Inc/ImuTempControl.h` | 温控类接口 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/temp_pid.cpp` | 输出满量程 4500（:41） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/temp_pid.cpp` | 输出满量程 4500 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/temp_pid.h` | C 接口返回类型 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 的 PSC、ARR 与通道配置（:43-108） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 时钟树与 APB2 分频（:169-185） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 1 kHz 调用点（:46） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 的 PSC、ARR 与通道配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 时钟树与 APB2 分频 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 1 kHz 调用点 |

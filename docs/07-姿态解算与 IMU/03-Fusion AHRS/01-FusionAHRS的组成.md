@@ -7,25 +7,25 @@ updated: 2026-10-07
 
 # FusionAHRS 的组成
 
-云台板要在一个 1 kHz 的循环里给出三轴姿态，可用的传感器只有 BMI088 的陀螺与加速度计。陀螺积分能跟上快速转动，零偏却会随时间累积成角度误差；加速度计长期不漂，又会把车体平动的加速度混进重力方向。`Algorithm/Src/FusionAHRS.cpp`里的 FusionAHRS 把这两路信息合成一个四元数，另用一个只在静止时工作的卡尔曼滤波估计 Z 轴陀螺零偏。
+云台板要在一个 1 kHz 的循环里给出三轴姿态，可用的传感器只有 BMI088 的陀螺与加速度计。陀螺积分能跟上快速转动，零偏却会随时间累积成角度误差；加速度计长期不漂，又会把车体平动的加速度混进重力方向。`Algorithm/Src/FusionAHRS.cpp` 里的 FusionAHRS 把这两路信息合成一个四元数，另用一个只在静止时工作的卡尔曼滤波（用预测与测量两步递推，在噪声下估计状态）估计 Z 轴陀螺零偏。
 
 FusionAHRS 与 GyroBiasEKF 各自负责什么，头文件里的成员哪些在源文件中有读写点，运行入口以什么采样率构造它、与云台板未启用的 MahonyAHRS.c 差在哪里——这三组问题是理解后面四篇的前提。
 
-下文行号都相对固件仓库根目录，例如`Algorithm/Src/FusionAHRS.cpp:82`指该文件第 82 行。
+下文引用的文件都相对固件仓库根目录。
 
 > 源码索引（本单元引用的固件路径都相对于固件仓库根目录）
 
 | 文件 | 作用 |
 | --- | --- |
 | `Algorithm/Inc/FusionAHRS.h` | 两个类的声明与全部数据成员 |
-| `Algorithm/Src/FusionAHRS.cpp` | 融合与零偏估计实现，末行`}`在`:141` |
+| `Algorithm/Src/FusionAHRS.cpp` | 融合与零偏估计实现 |
 | `Algorithm/Src/MahonyAHRS.c` | 云台板未启用的参考实现，该板无调用点 |
 | `Task/Src/ImuTask.cpp` | 运行入口、采样率实参与欧拉角换算 |
 | `Task/Src/UsbConnectTask.cpp` | 额外的头文件引用点，未构造对象 |
 
 ## 两个类各自负责什么
 
-六轴 IMU 没有磁力计，重力参考只能约束倾斜方向。加速度计静止时测的是重力反作用力，把读数归一化后就是机体系下的重力单位向量；把它与四元数推算出的重力方向做叉乘，叉乘结果指向姿态误差绕哪根轴、往哪个方向修正。绕 Z 轴转动不改变重力在机体系下的方向，误差向量的 Z 分量恒接近零，因此偏航在这套观测量下不可观测，只能靠陀螺积分维持。这一条决定了融合必须分成两件事：倾斜方向由加速度计长期拉住，偏航方向的常值误差只能靠估计陀螺零偏来压。
+六轴 IMU 没有磁力计，重力参考只能约束倾斜方向。加速度计静止时测的是重力反作用力，把读数归一化后就是机体系下的重力单位向量；把它与四元数推算出的重力方向做叉乘（叉乘给出两向量之间的旋转轴，大小与偏差成正比），叉乘结果指向姿态误差绕哪根轴、往哪个方向修正。绕 Z 轴转动不改变重力在机体系下的方向，误差向量的 Z 分量恒接近零，因此偏航在这套观测量下不可观测，只能靠陀螺积分维持。这一条决定了融合必须分成两件事：倾斜方向由加速度计长期拉住，偏航方向的常值误差只能靠估计陀螺零偏来压。
 
 两个类正好对应这两件事。FusionAHRS 负责重力校正与四元数传播，GyroBiasEKF 负责 Z 轴零偏。把零偏单独成类的好处是状态维度降到一，没有矩阵运算，每次更新的乘除次数是个位数。
 
@@ -39,9 +39,9 @@ FusionAHRS 与 GyroBiasEKF 各自负责什么，头文件里的成员哪些在�
 
 ## GyroBiasEKF 只维护一个状态
 
-零偏估计器一共四个私有成员（`Algorithm/Inc/FusionAHRS.h:20-23`）：状态 `x_`、协方差 `P_`、过程噪声 `Q_`、观测噪声 `R_`。状态量纲是 rad/s，协方差的量纲是 (rad/s)²，两个噪声参数都是方差而不是标准差，这一点在后两篇的量级讨论里会反复用到。
+零偏估计器一共四个私有成员（`Algorithm/Inc/FusionAHRS.h`）：状态 `x_`、协方差 `P_`、过程噪声 `Q_`、观测噪声 `R_`。状态量纲是 rad/s，协方差的量纲是 (rad/s)²，两个噪声参数都是方差而不是标准差，这一点在后两篇的量级讨论里会反复用到。
 
-`Algorithm/Inc/FusionAHRS.h:10-24`的类定义：
+`Algorithm/Inc/FusionAHRS.h`的类定义：
 
 ```cpp
 class GyroBiasEKF
@@ -61,24 +61,36 @@ private:
 };
 ```
 
-公开接口只有三个：构造、带静止门控的 `update`、只读的 `getBias`。没有 setter，也没有重置接口，四个参数在构造时写死（`FusionAHRS.cpp:22-28`）。预测步每拍无条件执行 `P_ += Q_`，更新步放在 `if(isStatic)` 里面，因此运动期间状态冻结、协方差继续增长。这套门控的后果和自锁条件留到第二篇推。
+公开接口只有三个：构造、带静止门控的 `update`、只读的 `getBias`。没有 setter，也没有重置接口，四个参数在构造时写死（`FusionAHRS.cpp`）。预测步每拍无条件执行 `P_ += Q_`，更新步放在 `if(isStatic)` 里面，因此运动期间状态冻结、协方差继续增长。这套门控的后果和自锁条件留到第二篇推。
+
+```cpp
+/* 摘录：Algorithm/Src/FusionAHRS.cpp 的 GyroBiasEKF::update */
+void GyroBiasEKF::update(float gyroZ, bool isStatic) {
+    P_ += Q_;                       /* 预测：每拍无条件执行，协方差增长 */
+    if (isStatic) {                 /* 只有静止时才做测量更新 */
+        float K = P_ / (P_ + R_);   /* 标量卡尔曼增益 */
+        x_ += K * (gyroZ - x_);
+        P_ = (1 - K) * P_;
+    }
+}
+```
 
 ## FusionAHRS 的成员与初始化顺序
 
-融合类的声明在 `Algorithm/Inc/FusionAHRS.h:26-57`，公开接口只有构造、`update`、`getQuaternion` 三个。私有成员分三组：采样率 `sampleFreq_`、四元数 `q_[4]`、Mahony 参数与积分残项。其中 `twoKi_` 与三个 `integralFB*` 在头文件里声明，在源文件里只出现在构造函数的初始化列表中，此后没有任何读写点。
+融合类的声明在 `Algorithm/Inc/FusionAHRS.h`，公开接口只有构造、`update`、`getQuaternion` 三个。私有成员分三组：采样率 `sampleFreq_`、四元数 `q_[4]`、Mahony 参数与积分残项。其中 `twoKi_` 与三个 `integralFB*` 在头文件里声明，在源文件里只出现在构造函数的初始化列表中，此后没有任何读写点。
 
-| 成员 | 声明位置 | 作用 | 实际使用情况 |
-| --- | --- | --- | --- |
-| `sampleFreq_` | `FusionAHRS.h:44` | 四元数积分的步长分母 | `mahonyUpdate` 中读两次 |
-| `q_[4]` | `FusionAHRS.h:47` | 姿态四元数，顺序 w,x,y,z | 每步读写并归一化 |
-| `twoKp_` | `FusionAHRS.h:50` | 比例增益，构造为 1.0f | `mahonyUpdate` 中乘三轴误差 |
-| `twoKi_` | `FusionAHRS.h:51` | 积分增益，构造为 0.0f | 源文件无读取点 |
-| `integralFBx_` | `FusionAHRS.h:52` | X 轴积分残项 | 源文件无读取点 |
-| `integralFBy_` | `FusionAHRS.h:53` | Y 轴积分残项 | 源文件无读取点 |
-| `integralFBz_` | `FusionAHRS.h:54` | Z 轴积分残项 | 源文件无读取点 |
-| `biasEKF_` | `FusionAHRS.h:56` | Z 轴零偏估计器 | `update` 中调用 |
+| 成员 | 作用 | 实际使用情况 |
+| --- | --- | --- |
+| `sampleFreq_` | 四元数积分的步长分母 | `mahonyUpdate` 中读两次 |
+| `q_[4]` | 姿态四元数，顺序 w,x,y,z | 每步读写并归一化 |
+| `twoKp_` | 比例增益，构造为 1.0f | `mahonyUpdate` 中乘三轴误差 |
+| `twoKi_` | 积分增益，构造为 0.0f | 源文件无读取点 |
+| `integralFBx_` | X 轴积分残项 | 源文件无读取点 |
+| `integralFBy_` | Y 轴积分残项 | 源文件无读取点 |
+| `integralFBz_` | Z 轴积分残项 | 源文件无读取点 |
+| `biasEKF_` | Z 轴零偏估计器 | `update` 中调用 |
 
-构造函数的初始化列表顺序与成员声明顺序一致（`FusionAHRS.cpp:49-55`），这样在 `-Wreorder` 下不会告警；`q_` 放在函数体里赋值：
+构造函数的初始化列表顺序与成员声明顺序一致（`FusionAHRS.cpp`），这样在 `-Wreorder` 下不会告警；`q_` 放在函数体里赋值：
 
 ```cpp
 FusionAHRS::FusionAHRS(float sampleFreq)
@@ -96,20 +108,20 @@ FusionAHRS::FusionAHRS(float sampleFreq)
 }
 ```
 
-`q_` 的初值 `{1,0,0,0}` 就是单位四元数，四个分量按 w、x、y、z 排列。这个顺序在运行入口换算欧拉角时会再用到，写错顺序会让 roll 与 yaw 互换。 `biasEKF_` 是值成员而不是指针（`FusionAHRS.h:56`），FusionAHRS 构造时一并构造 EKF，因此没有独立的初始化步骤。
+`q_` 的初值 `{1,0,0,0}` 就是单位四元数，四个分量按 w、x、y、z 排列。这个顺序在运行入口换算欧拉角时会再用到，写错顺序会让 roll 与 yaw 互换。`biasEKF_` 是值成员而不是指针（`FusionAHRS.h`），FusionAHRS 构造时一并构造 EKF，因此没有独立的初始化步骤。
 
-源文件的实现按区段分布如下，行号可以用来交叉验证：
+源文件的实现按区段分布如下：
 
-| 区段 | 行号 | 内容 |
-| --- | --- | --- |
-| 常量 | `FusionAHRS.cpp:14-16` | `GRAVITY`、`GYRO_STATIC_THRESH`、`ACC_STATIC_THRESH` |
-| EKF 构造 | `:22-28` | `x_=0`、`P_=0.1`、`Q_=1e-6`、`R_=1e-4` |
-| EKF 更新 | `:30-41` | 预测 `P_+=Q_`，静止时标量卡尔曼更新 |
-| 融合构造 | `:49-62` | 增益与四元数初值 |
-| 静态检测 | `:63-71` | 陀螺模长与重力模长双条件 |
-| 融合更新 | `:73-86` | 检测、EKF、去偏、调用 Mahony |
-| Mahony 更新 | `:88-136` | 归一化、重力误差、比例校正、积分、归一化 |
-| 取四元数 | `:138-141` | 返回 `{q_[0],q_[1],q_[2],q_[3]}`，`:141` 是末行 |
+| 区段 | 内容 |
+| --- | --- |
+| 常量 | `GRAVITY`、`GYRO_STATIC_THRESH`、`ACC_STATIC_THRESH` |
+| EKF 构造 | `x_=0`、`P_=0.1`、`Q_=1e-6`、`R_=1e-4` |
+| EKF 更新 | 预测 `P_+=Q_`，静止时标量卡尔曼更新 |
+| 融合构造 | 增益与四元数初值 |
+| 静态检测 | 陀螺模长与重力模长双条件 |
+| 融合更新 | 检测、EKF、去偏、调用 Mahony |
+| Mahony 更新 | 归一化、重力误差、比例校正、积分、归一化 |
+| 取四元数 | 返回 `{q_[0],q_[1],q_[2],q_[3]}` |
 
 ## 一次 update 里两个类的先后
 
@@ -128,6 +140,16 @@ flowchart TD
 ```
 
 从对象视角看，FusionAHRS 只做转发：它调用成员 `biasEKF_` 的 `update` 与 `getBias`，自己不做零偏运算。EKF 的观测量是原始陀螺读数，状态是零偏绝对值，两者同为 rad/s，做减法时才不需要额外换算。
+
+```cpp
+/* 摘录：Algorithm/Src/FusionAHRS.cpp 的 update，两类在这里衔接 */
+void FusionAHRS::update(float gx, float gy, float gz, float ax, float ay, float az) {
+    bool isStatic = detectStatic(gx, gy, gz, ax, ay, az);  /* 1. 静态检测 */
+    biasEKF_.update(gz, isStatic);                         /* 2. EKF 更新 */
+    gz -= biasEKF_.getBias();                              /* 3. 去 Z 轴偏置 */
+    mahonyUpdate(gx, gy, gz, ax, ay, az);                  /* 4. Mahony 校正与积分 */
+}
+```
 
 ```mermaid
 sequenceDiagram
@@ -149,15 +171,15 @@ sequenceDiagram
 
 ## 运行入口在 ImuTask 主循环
 
-`Task/Src/ImuTask.cpp:19` 定义了一个全局静态实例，采样率按 1 kHz 传入：
+`Task/Src/ImuTask.cpp` 定义了一个全局静态实例，采样率按 1 kHz 传入：
 
 ```cpp
 static FusionAHRS ahrs(1000.0f);   // 1kHz
 ```
 
-主循环里 `BMI088_Read` 取回陀螺与加速度（`:43`），`ahrs.update` 消费这两组三轴量（`:49-56`），`ahrs.getQuaternion` 取回四元数（`:59`），随后按 `q[0]` 为标量部计算欧拉角（`:62-64`）。融合类不参与量纲转换，输入必须是 rad/s 与 m/s²，换算在驱动侧完成。
+主循环里 `BMI088_Read` 取回陀螺与加速度，`ahrs.update` 消费这两组三轴量，`ahrs.getQuaternion` 取回四元数，随后按 `q[0]` 为标量部计算欧拉角。融合类不参与量纲转换，输入必须是 rad/s 与 m/s²，换算在驱动侧完成。
 
-`Task/Src/UsbConnectTask.cpp:14` 也包含了该头文件，但全文件没有构造 FusionAHRS 对象，也不调用 `update`。读代码时如果只按 include 统计使用点，会把这个文件算进去。
+`Task/Src/UsbConnectTask.cpp` 也包含了该头文件，但全文件没有构造 FusionAHRS 对象，也不调用 `update`。读代码时如果只按 include 统计使用点，会把这个文件算进去。
 
 ## 与 MahonyAHRS.c 的五处差别
 
@@ -170,24 +192,24 @@ static FusionAHRS ahrs(1000.0f);   // 1kHz
 | 磁力计 | 无，6 轴 | 有 `MahonyAHRSupdate` 九轴版 |
 | 积分支路 | 成员声明，源文件无实现 | 有，受 `twoKi` 控制 |
 | 静态检测 | `detectStatic`，阈值 0.02 rad/s | 阈值 `0.015f` 定义后未使用 |
-| 工程引用 | 云台板 `Task/Src/ImuTask.cpp:10` 引用 | 云台板无调用点；底盘板 `Task/Src/ImuTask.cpp:40`、`:59` 调用 `MahonyAHRSupdateIMU` |
+| 工程引用 | 云台板 `Task/Src/ImuTask.cpp` 引用 | 云台板无调用点；底盘板 `Task/Src/ImuTask.cpp` 调用 `MahonyAHRSupdateIMU` |
 
-参考实现里还有两处只声明不使用的痕迹：`Algorithm/Src/MahonyAHRS.c:38-39` 定义了全局变量 `gyroZ_bias` 与 `imu_static`，文件里没有任何函数读写它们；`:28` 的 `GYRO_STATIC_THRESH` 取 0.015f，注释写 1.1 deg/s，同样没有使用点；0.015 rad/s 换算过来是 0.86 deg/s，与注释的 1.1 deg/s 对不上，两处数值只有一处是对的，以值还是以注释为准需另行确认。本工程实际生效的阈值是 `FusionAHRS.cpp:15` 的 0.02f，对应 1.146 deg/s。零偏与静止判定在参考实现里停在了声明阶段。
+参考实现里还有两处只声明不使用的痕迹：`Algorithm/Src/MahonyAHRS.c` 定义了全局变量 `gyroZ_bias` 与 `imu_static`，文件里没有任何函数读写它们； 的 `GYRO_STATIC_THRESH` 取 0.015f，注释写 1.1 deg/s，同样没有使用点；0.015 rad/s 换算过来是 0.86 deg/s，与注释的 1.1 deg/s 对不上，两处数值只有一处是对的，以值还是以注释为准需另行确认。本工程实际生效的阈值是 `FusionAHRS.cpp` 的 0.02f，对应 1.146 deg/s。零偏与静止判定在参考实现里停在了声明阶段。
 
-另一个实现层面的差别是反平方根。`FusionAHRS.cpp` 的归一化用 `1.0f / std::sqrt(...)`（`:98`、`:129-130`），参考实现用 `invSqrt` 的位运算初值加一次牛顿迭代（`MahonyAHRS.c:228-236`）。两者精度不同，数值差异属待实测比较。
+另一个实现层面的差别是反平方根。`FusionAHRS.cpp` 的归一化用 `1.0f / std::sqrt(...)`，参考实现用 `invSqrt` 的位运算初值加一次牛顿迭代（`MahonyAHRS.c`）。两者精度不同，数值差异属待实测比较。
 
 ## 读这份代码时容易数错的地方
 
 | 容易读错的地方 | 现象 | 对应位置 |
 | --- | --- | --- |
 | 把 `FusionAHRS` 与 `MahonyAHRS.c` 当同一实现 | 调参数时改了本板无调用点的文件 | `Algorithm/Src/MahonyAHRS.c` 全文件；`FusionAHRS.cpp` |
-| 以为 `twoKi_` 与积分项在生效 | 改 `twoKi_` 无任何响应 | `FusionAHRS.h:51-54`，`FusionAHRS.cpp:88-136` |
-| 按 `wc -l` 认为末行是 140 | 逐行引用错位 | 末行 `}` 在 `:141`，文件无行尾换行，`wc -l` 计 140 |
-| 把重复 `#include` 当作两个实现 | 读代码时数错构造次数 | `FusionAHRS.cpp:5` 与 `:10` 两次包含同一头文件 |
-| 静态检测阈值与采样率耦合 | 改采样率后静止判定行为变化 | `FusionAHRS.cpp:15`，`ImuTask.cpp:19` |
-| 只看 `getQuaternion` 就断言姿态可用 | 忽略了 yaw 没有绝对参考 | `FusionAHRS.cpp:138-141`，`ImuTask.cpp:15` 的 `mag` 未使用 |
+| 以为 `twoKi_` 与积分项在生效 | 改 `twoKi_` 无任何响应 | `FusionAHRS.h`，`FusionAHRS.cpp` |
+| 按 `wc -l` 数行数 | 与编辑器行号差一行 | 文件末行没有换行，`wc -l` 会少算一行 |
+| 把重复 `#include` 当作两个实现 | 读代码时数错构造次数 | `FusionAHRS.cpp` 两次包含同一头文件 |
+| 静态检测阈值与采样率耦合 | 改采样率后静止判定行为变化 | `FusionAHRS.cpp`，`ImuTask.cpp` |
+| 只看 `getQuaternion` 就断言姿态可用 | 忽略了 yaw 没有绝对参考 | `FusionAHRS.cpp`，`ImuTask.cpp` 的 `mag` 未使用 |
 
-头文件里的类共有 59 行（含末行 `#endif`），源文件末行 `}` 在 `:141`。两者都没有行尾换行，按编辑器的行号引用是准的，按 `wc -l` 的结果会各差一行。
+头文件里的类共有 59 行（含末行 `#endif`），源文件末行是 `}`。两者都没有行尾换行，按编辑器的行号是准的，按 `wc -l` 的结果会各差一行。
 
 ## 小结
 
@@ -196,8 +218,8 @@ static FusionAHRS ahrs(1000.0f);   // 1kHz
 - `FusionAHRS` 以值成员持有一个 `GyroBiasEKF`，一次 `update` 顺序执行检测、EKF、去偏、Mahony。
 - `GyroBiasEKF` 只有一个状态 `x_`，估计 Z 轴陀螺零偏，只在 `isStatic` 为真时更新。
 - Mahony 部分只用加速度计，是六轴算法，`twoKi_` 与三个积分残项在源文件中没有实现。
-- 头文件两个类共 59 行，源文件末行 `}` 在 `:141`，公开接口只有构造、`update`、`getQuaternion`。
-- 云台板引用 `FusionAHRS` 的是 `ImuTask.cpp`；`MahonyAHRS.c` 在云台板无调用点，其中的 `gyroZ_bias` 与 `imu_static` 也没有读写点。底盘板走另一条路径，`Task/Src/ImuTask.cpp:40`、`:59` 调用 `MahonyAHRSupdateIMU`。
+- 头文件两个类共 59 行，源文件末行是 `}`，公开接口只有构造、`update`、`getQuaternion`。
+- 云台板引用 `FusionAHRS` 的是 `ImuTask.cpp`；`MahonyAHRS.c` 在云台板无调用点，其中的 `gyroZ_bias` 与 `imu_static` 也没有读写点。底盘板走另一条路径，`Task/Src/ImuTask.cpp` 调用 `MahonyAHRSupdateIMU`。
 - 运行实例采样率写死为 1000 Hz，与主循环的实际周期无关。
 
 ### 设计权衡
@@ -229,8 +251,8 @@ static FusionAHRS ahrs(1000.0f);   // 1kHz
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Algorithm/Inc/FusionAHRS.h` | 两个类的声明与成员 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 融合与零偏估计实现 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Algorithm/Src/MahonyAHRS.c` | 未启用的参考实现 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 运行入口与调用顺序 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/UsbConnectTask.cpp` | 额外的头文件引用点 |
+| `Algorithm/Inc/FusionAHRS.h` | 两个类的声明与成员 |
+| `Algorithm/Src/FusionAHRS.cpp` | 融合与零偏估计实现 |
+| `Algorithm/Src/MahonyAHRS.c` | 未启用的参考实现 |
+| `Task/Src/ImuTask.cpp` | 运行入口与调用顺序 |
+| `Task/Src/UsbConnectTask.cpp` | 额外的头文件引用点 |

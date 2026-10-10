@@ -15,6 +15,13 @@ updated: 2026-10-07
 
 WSL 启动时会把 Windows 盘按固定规则挂到 `/mnt/<盘符>`，不需要手工写 `/etc/fstab`。这台机器上仓库位于 `/mnt/d/TC63PersonalWebsite`，因此在发行版里对仓库的所有读写实际都发生在 Windows 的 NTFS 分区上。
 
+```bash
+$ mount | grep '/mnt/d'
+D:\ on /mnt/d type 9p (rw,noatime,aname=drvfs;path=D:\;uid=1000;gid=1000;...)
+```
+
+WSL2 通过 9p 协议把盘挂进来，`aname=drvfs` 保留了旧版 drvfs 的标识，`uid=1000;gid=1000` 是挂载时统一指定的属主，这也说明权限位由挂载层给出，不来自文件本身。
+
 挂载点与选项由 WSL 默认提供，本仓库未见对 `[automount]` 段的自定义配置（见 01-发行版启动与systemd 的说明）。也就是说，挂载行为完全跟随 WSL 版本的默认值。
 
 ## 2. 权限位为什么是 777
@@ -54,7 +61,17 @@ NTFS 默认不区分大小写，ext4 区分。仓库在 `/mnt/d` 下时，`Foo.t
 
 ## 5. GPU 通路
 
-WSL2 的 GPU 由 Windows 侧的驱动直接提供，发行版里不需要安装 Linux 版 NVIDIA 驱动。设备与库通过 `/usr/lib/wsl/lib` 暴露，目录下能看到 `libcuda.so`、`libcuda.so.1` 与 `libd3d12.so` 等文件（`/usr/lib/wsl/lib`）。
+WSL2 的 GPU 走 GPU 直通：Windows 侧的驱动把设备暴露成 `/dev/dxg`，发行版里的程序通过这个设备把图形与计算调用交回主机驱动，不用在发行版里再装一份 Linux 版 NVIDIA 驱动。用户态库集中在 `/usr/lib/wsl/lib`，`libcuda.so` 对应 CUDA 运行时，`libd3d12.so` 是 Direct3D 12 的转发层。
+
+```bash
+$ ls /usr/lib/wsl/lib
+libcuda.so
+libcuda.so.1
+libd3d12.so
+...
+$ nvidia-smi -L
+GPU 0: NVIDIA GeForce RTX 5060 Laptop GPU (UUID: ...)
+```
 
 这套安排的好处是驱动版本只在 Windows 侧维护一份；代价是发行版内的 CUDA Toolkit 版本仍要自己装，并且必须与 Windows 驱动支持的版本匹配。CUDA 驱动与 WSL 的装配关系、渲染后端在 WSL 下的额外通路，本仓库已有两篇文档写过，见本页末尾的引用表。
 

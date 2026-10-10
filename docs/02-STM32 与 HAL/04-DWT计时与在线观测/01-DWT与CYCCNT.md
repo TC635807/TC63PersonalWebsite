@@ -18,7 +18,7 @@ updated: 2026-10-07
 DWT（Data Watchpoint and Trace）是 Cortex-M 调试子系统的一部分，与 ITM、FPB、TPIU 同属 CoreSight 组件。CMSIS 把它封装成结构体指针，基地址固定在私有外设总线上：
 
 ```c
-/* Drivers/CMSIS/Include/core_cm4.h:1552,1564 与 :907 */
+/* Drivers/CMSIS/Include/core_cm4.h,1564 与  */
 #define DWT_BASE            (0xE0001000UL)                            /*!< DWT Base Address */
 #define DWT                 ((DWT_Type       *)     DWT_BASE      )   /*!< DWT configuration struct */
 
@@ -51,7 +51,7 @@ flowchart TD
 
 ## 2. 168 MHz 下一个计数是 5.952 ns
 
-`CYCCNT` 数的是内核时钟周期。本工程 AHB 分频为 1（`Core/Src/main.c:184` 的 `AHBCLKDivider = RCC_SYSCLK_DIV1`），HCLK 与内核时钟同为 168 MHz，一个计数就是 $1/168\,\text{MHz} = 5.952\ \text{ns}$。
+`CYCCNT` 数的是内核时钟周期。本工程 AHB 分频为 1（`Core/Src/main.c` 的 `AHBCLKDivider = RCC_SYSCLK_DIV1`），HCLK 与内核时钟同为 168 MHz，一个计数就是 $1/168\,\text{MHz} = 5.952\ \text{ns}$。
 
 $$\Delta t = \frac{1}{168 \times 10^6}\ \text{s} = 5.952\ \text{ns}$$
 
@@ -64,7 +64,7 @@ $$\Delta t = \frac{1}{168 \times 10^6}\ \text{s} = 5.952\ \text{ns}$$
 初始化只有三步，顺序不能换，第四步是自检：
 
 ```c
-/* BSP/Src/bsp_dwt.cpp:7-22 */
+/* BSP/Src/bsp_dwt.cpp */
 uint8_t BSP_DWT_Init(void)
 {
     // 1. 使能 DWT
@@ -107,15 +107,15 @@ flowchart TD
   B --> C["MX_GPIO_Init 到 MX_CRC_Init"]
   C --> D["MX_USB_DEVICE_Init"]
   D --> E["BSP_CAN_Init"]
-  E --> F["BSP_DWT_Init main.c:124"]
+  E --> F["BSP_DWT_Init main.c"]
   F --> G["Uart_Init 注册遥控器回调"]
   G --> H["MX_FREERTOS_Init 创建任务"]
   H --> I["osKernelStart 启动调度器"]
 ```
 
-云台板 `BSP_DWT_Init()` 位于 `Core/Src/main.c:124`，在 `SystemClock_Config()`（同文件 :102）之后。这个位置保证 `HAL_RCC_GetHCLKFreq()` 已经返回 168 000 000，延时函数里的频率换算才有正确的基数。底盘板的调用点在 `Core/Src/main.c:129`，相对位置相同。
+云台板 `BSP_DWT_Init()` 位于 `Core/Src/main.c`，在 `SystemClock_Config()`（同文件 ）之后。这个位置保证 `HAL_RCC_GetHCLKFreq()` 已经返回 168 000 000，延时函数里的频率换算才有正确的基数。底盘板的调用点在 `Core/Src/main.c`，相对位置相同。
 
-调用顺序在 `Core/Src/main.c:110-124` 这一段里排在外设初始化之后。若把 `BSP_DWT_Init` 提前到 `SystemClock_Config` 之前，计数器本身仍然能跑（它不看 PLL），但任何在时钟配置完成前发生的延时都会按 HSI 频率换算，等待长度偏离预期。
+调用顺序在 `Core/Src/main.c` 这一段里排在外设初始化之后。若把 `BSP_DWT_Init` 提前到 `SystemClock_Config` 之前，计数器本身仍然能跑（它不看 PLL），但任何在时钟配置完成前发生的延时都会按 HSI 频率换算，等待长度偏离预期。
 
 ## 5. 三套时基的分工
 
@@ -125,7 +125,7 @@ flowchart TD
 | TIM2 | 32 位，计数器 1 MHz | 1 ms | 计数器 71.6 min | 15 | HAL 时基 `uwTick` |
 | SysTick | 24 位，168 MHz | 1 ms | 99.86 ms | 15 | FreeRTOS 的 1 kHz 节拍 |
 
-TIM2 的优先级来自 `Core/Inc/stm32f4xx_hal_conf.h:151` 的 `TICK_INT_PRIORITY = 15`，在 `Core/Src/stm32f4xx_hal_timebase_tim.c:100` 写入 NVIC。SysTick 的优先级取 `configKERNEL_INTERRUPT_PRIORITY`（`Core/Inc/FreeRTOSConfig.h:114`，由 `configLIBRARY_LOWEST_INTERRUPT_PRIORITY = 15` 左移得到），在 `portable/GCC/ARM_CM4F/port.c:363` 写入。其余外设中断（CAN、DMA、USART、TIM10）的数值都是 5，与 `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5`（同文件 :110）相接。
+TIM2 的优先级来自 `Core/Inc/stm32f4xx_hal_conf.h` 的 `TICK_INT_PRIORITY = 15`，在 `Core/Src/stm32f4xx_hal_timebase_tim.c` 写入 NVIC。SysTick 的优先级取 `configKERNEL_INTERRUPT_PRIORITY`（`Core/Inc/FreeRTOSConfig.h`，由 `configLIBRARY_LOWEST_INTERRUPT_PRIORITY = 15` 左移得到），在 `portable/GCC/ARM_CM4F/port.c` 写入。其余外设中断（CAN、DMA、USART、TIM10）的数值都是 5，与 `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5`（同文件 ）相接。
 
 优先级数值 15 低于 5，HAL 的 tick 中断不会打断 CAN 接收，也不会在 FreeRTOS 临界区里抢占。三条时基互不依赖，DWT 这一条完全不经过中断向量表。
 
@@ -150,13 +150,13 @@ $ arm-none-eabi-nm -S build/Debug/sentriomeni2026.elf | grep -i dwt
 080103ec 00000054 T BSP_DWT_Init
 ```
 
-三个符号在，说明 `DWT_Delay_us` 与 `DWT_Delay_ms` 都有调用点（`Task/Src/ImuTask.cpp:37`、`:100` 与 `BMI088/Src/BMI088.cpp:53` 等）。没有出现的两个读取函数（`DWT_GetCycleCount`、`DWT_GetMicroseconds`）没有调用点，被 `--gc-sections` 回收。`objdump` 里 `DWT_Delay_us` 的地址是 0x08010440，与符号表一致。
+三个符号在，说明 `DWT_Delay_us` 与 `DWT_Delay_ms` 都有调用点（`Task/Src/ImuTask.cpp`、 与 `BMI088/Src/BMI088.cpp` 等）。没有出现的两个读取函数（`DWT_GetCycleCount`、`DWT_GetMicroseconds`）没有调用点，被 `--gc-sections` 回收。`objdump` 里 `DWT_Delay_us` 的地址是 0x08010440，与符号表一致。
 
 回收的判据是符号表而不是源码。源码里有定义、链接后没有符号，就说明没有引用；这两个函数因此属于“可用但当前不可调用”的设施。
 
 ## 8. 两块板的二进制一致性
 
-两块板的 `bsp_dwt.cpp` 逐字节一致，初始化顺序与换算公式相同，差别只在调用点的行号和时钟前提。云台板在 `main.c:124`，底盘板在 `main.c:129`，两块板的 HCLK 都是 168 MHz，因此 1 µs 都是 168 个周期。
+两块板的 `bsp_dwt.cpp` 逐字节一致，初始化顺序与换算公式相同，差别只在调用点的位置和时钟前提。两板都在各自的 `main.c` 里初始化，两块板的 HCLK 都是 168 MHz，因此 1 µs 都是 168 个周期。
 
 一致性带来一个好处：延时与测量的结论在两块板之间可以直接搬用，不需要分板核对换算系数。代价是若某一板的时钟配置被改动，另一板的结论会失效，排查时要先确认当前板的主频。
 
@@ -170,7 +170,7 @@ $ arm-none-eabi-nm -S build/Debug/sentriomeni2026.elf | grep -i dwt
 
 | # | 现象或写法 | 后果 | 处理 |
 | --- | --- | --- | --- |
-| 1 | 在 `BSP_DWT_Init` 之前调用延时 | 函数不返回 | 保证调用顺序，本工程在 `main.c:124` |
+| 1 | 在 `BSP_DWT_Init` 之前调用延时 | 函数不返回 | 保证调用顺序，本工程在 `main.c` |
 | 2 | 忽略 `BSP_DWT_Init` 的返回值 | 计数器没起来也照常运行 | 用全局变量承接返回值 |
 | 3 | 认为 `CYCCNT` 计数与主频无关 | 时间换算整体偏移 | 先确认 `HAL_RCC_GetHCLKFreq()` 的值 |
 | 4 | 用有符号变量存读数差值 | 跨回绕时得到负数 | 统一用 `uint32_t` |
@@ -189,7 +189,7 @@ $ arm-none-eabi-nm -S build/Debug/sentriomeni2026.elf | grep -i dwt
 | 使能 | `DEMCR.TRCENA` 是总开关，`CTRL.CYCCNTENA` 启动计数 |
 | 分辨率 | 168 MHz 下 5.952 ns 一个计数 |
 | 量程 | 32 位向上计数，25.565 s 回绕，差值法跨回绕仍正确 |
-| 调用点 | 云台板 `main.c:124`、底盘板 `main.c:129`，都在时钟配置之后 |
+| 调用点 | 云台板 `main.c`、底盘板 `main.c`，都在时钟配置之后 |
 | 链接结果 | 三个函数有符号，两个读取函数被回收 |
 | 内核前提 | `NOCYCCNT` 为 0 才有周期计数器 |
 
@@ -221,14 +221,14 @@ $ arm-none-eabi-nm -S build/Debug/sentriomeni2026.elf | grep -i dwt
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp` | 初始化与自检（:7-22） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 调用点与 AHB 分频（:110-124、:124、:184） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h` | `DWT_BASE` 与 `CYCCNT` 声明（:907、:1552、:1564） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY`（:151） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基的 NVIC 设置（:100） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | 内核中断优先级（:110、:114） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c` | SysTick 优先级（:363） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 延时调用点（:37） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 初始化期的短延时（:53） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BSP/Src/bsp_dwt.cpp` | 初始化与自检 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | 调用点与 AHB 分频 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h` | `DWT_BASE` 与 `CYCCNT` 声明 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY` |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基的 NVIC 设置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | 内核中断优先级 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c` | SysTick 优先级 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 延时调用点 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 初始化期的短延时 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/build/Debug/sentriomeni2026.elf` | `nm -S` 实测符号 |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c` | 底盘板调用点（:129） |
+| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/main.c` | 底盘板调用点 |

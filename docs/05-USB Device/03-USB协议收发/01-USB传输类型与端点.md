@@ -45,9 +45,9 @@ flowchart TD
 | --- | --- | --- |
 | 帧周期 | 1 ms | USB 2.0 规范（手册值） |
 | 控制端点 0 包上限 | 64 字节 | `USB_MAX_EP0_SIZE` |
-| CDC 数据端点包上限 | 64 字节 | `usbd_cdc.h:67` |
-| CDC 命令端点包上限 | 8 字节 | `usbd_cdc.h:62` |
-| 命令端点轮询间隔 | 0x10，即 16 个帧 | `usbd_cdc.h:58` |
+| CDC 数据端点包上限 | 64 字节 | `usbd_cdc.h` |
+| CDC 命令端点包上限 | 8 字节 | `usbd_cdc.h` |
+| 命令端点轮询间隔 | 0x10，即 16 个帧 | `usbd_cdc.h` |
 
 43 字节的反馈帧装得进一个 64 字节包，传输一次就发完。29 字节的接收帧同理。两边的帧都小于包上限，所以链路里不存在「一帧被拆成多个事务」的情况，帧边界与事务边界重合。
 
@@ -84,20 +84,20 @@ IN 与 OUT 都以主机为参照：IN 是设备到主机，OUT 是主机到设�
 | 端点 1 | 0x81 | IN | 批量 | 发送 43 字节反馈帧 |
 | 端点 2 | 0x82 | IN | 中断 | CDC 命令通知 |
 
-三个端点的定义在库文件里，不在应用代码里：`CDC_IN_EP = 0x81U`、`CDC_OUT_EP = 0x01U`、`CDC_CMD_EP = 0x82U`，见 `Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h:43-51`。
+三个端点的定义在库文件里，不在应用代码里：`CDC_IN_EP = 0x81U`、`CDC_OUT_EP = 0x01U`、`CDC_CMD_EP = 0x82U`，见 `Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h`。
 
 方向位与端点号共同决定 PCD 层操作哪一个寄存器组，也决定回调参数的含义：类层的 `DataOut` 与 `DataIn` 拿到的是端点号，方向由回调本身区分。把 0x81 与 0x01 理解成两条独立通道就够了，它们在硬件上是同一个端点号的两个方向，收发缓冲也各自独立。
 
 ## 4. OTG FS 的引脚、FIFO 与初始化顺序
 
-USB 外设是 OTG FS，工作在设备模式，全速 12 Mbps。引脚复用见 `USB_DEVICE/Target/usbd_conf.c:79-91`：
+USB 外设是 OTG FS，工作在设备模式，全速 12 Mbps。引脚复用见 `USB_DEVICE/Target/usbd_conf.c`：
 
 | 信号 | 引脚 |
 | --- | --- |
 | USB_OTG_FS_DM | PA11 |
 | USB_OTG_FS_DP | PA12 |
 
-复用功能是 `GPIO_AF10_OTG_FS`，时钟在 `usbd_conf.c:91` 通过 `__HAL_RCC_USB_OTG_FS_CLK_ENABLE()` 打开。中断 `OTG_FS_IRQn` 的抢占优先级是 5（`usbd_conf.c:94-95`），与 CAN、串口、定时器中断同级；服务函数在 `Core/Src/stm32f4xx_it.c:331-337`：
+复用功能是 `GPIO_AF10_OTG_FS`，时钟在 `usbd_conf.c` 通过 `__HAL_RCC_USB_OTG_FS_CLK_ENABLE()` 打开。中断 `OTG_FS_IRQn` 的抢占优先级是 5（`usbd_conf.c`），与 CAN、串口、定时器中断同级；服务函数在 `Core/Src/stm32f4xx_it.c`：
 
 ```c
 void OTG_FS_IRQHandler(void)
@@ -108,7 +108,7 @@ void OTG_FS_IRQHandler(void)
 
 优先级 5 与 FreeRTOS 的门槛一致。已完成文档里已经核实 `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5`，所以 USB 中断里调用 `xQueueSendFromISR` 是合法的。
 
-设备模式下的收发 FIFO 从同一块 320 word 的 RAM 里切分，配置在 `usbd_conf.c:365-367`：
+设备模式下的收发 FIFO 从同一块 320 word 的 RAM 里切分，配置在 `usbd_conf.c`：
 
 | FIFO | 大小 | 对应端点 |
 | --- | --- | --- |
@@ -118,13 +118,13 @@ void OTG_FS_IRQHandler(void)
 
 三个数相加 0x140 = 320 word，正好等于 OTG FS 的总容量（按 STM32F4 参考手册，属手册值）。命令端点 0x82 没有单独分配发送 FIFO，它每次只发 8 字节的类通知，共用端点 0 的空间。
 
-初始化顺序上，`main.c:121` 调用 `MX_USB_DEVICE_Init()`，内部依次是 `USBD_Init`、`USBD_RegisterClass(&hUsbDeviceFS, &USBD_CDC)`、`USBD_CDC_RegisterInterface(&hUsbDeviceFS, &USBD_Interface_fops_FS)`、`USBD_Start`（`USB_DEVICE/App/usb_device.c:64-91`）。`main.c:121` 是第一次调用，`Core/Src/freertos.c:149` 在 `StartDefaultTask` 里还有第二次调用，即调度器启动之后又初始化了一次设备库。接收队列在 `MX_FREERTOS_Init()` 里创建（`freertos.c:114`），早于第二次初始化，所以 `CDC_Receive_FS` 判空的分支只在第一次初始化到队列创建之间的窗口里起作用（见 `05-USB Device/01-CDC虚拟串口` 单元）。
+初始化顺序上，`main.c` 调用 `MX_USB_DEVICE_Init()`，内部依次是 `USBD_Init`、`USBD_RegisterClass(&hUsbDeviceFS, &USBD_CDC)`、`USBD_CDC_RegisterInterface(&hUsbDeviceFS, &USBD_Interface_fops_FS)`、`USBD_Start`（`USB_DEVICE/App/usb_device.c`）。`main.c` 是第一次调用，`Core/Src/freertos.c` 在 `StartDefaultTask` 里还有第二次调用，即调度器启动之后又初始化了一次设备库。接收队列在 `MX_FREERTOS_Init()` 里创建（`freertos.c`），早于第二次初始化，所以 `CDC_Receive_FS` 判空的分支只在第一次初始化到队列创建之间的窗口里起作用（见 `05-USB Device/01-CDC虚拟串口` 单元）。
 
 ## 5. 批量端点的 NAK 与重新挂载
 
-批量 OUT 端点在没有缓冲可收时返回 NAK。库里的做法是：`CDC_Receive_FS` 处理完这一包后，重新调用 `USBD_CDC_SetRxBuffer` 与 `USBD_CDC_ReceivePacket`，把端点重新挂上（`USB_DEVICE/App/usbd_cdc_if.c:276-278`）。少了这两行，主机下一包会一直收到 NAK。
+批量 OUT 端点在没有缓冲可收时返回 NAK。库里的做法是：`CDC_Receive_FS` 处理完这一包后，重新调用 `USBD_CDC_SetRxBuffer` 与 `USBD_CDC_ReceivePacket`，把端点重新挂上（`USB_DEVICE/App/usbd_cdc_if.c`）。少了这两行，主机下一包会一直收到 NAK。
 
-同样的机制在发送方向是 `TxState`：`CDC_Transmit_FS` 检查 `hcdc->TxState`，非零说明上一包还没走完，直接返回 `USBD_BUSY`（`usbd_cdc_if.c:304-307`）。任务侧对返回值的处理是忙等加重试，见 `04-收发频率与任务模型.md`。
+同样的机制在发送方向是 `TxState`：`CDC_Transmit_FS` 检查 `hcdc->TxState`，非零说明上一包还没走完，直接返回 `USBD_BUSY`（`usbd_cdc_if.c`）。任务侧对返回值的处理是忙等加重试，见 `04-收发频率与任务模型.md`。
 
 ```mermaid
 stateDiagram-v2
@@ -144,7 +144,7 @@ NAK 与错误状态要分开看。NAK 是流控信号，主机收到后会重试
 | 易错点 | 现象 | 对应位置 |
 | --- | --- | --- |
 | 把 IN 当成设备发送 | 端点方向判断反，收发代码互串 | `CDC_IN_EP = 0x81` 是设备到主机 |
-| 忘记重新挂 OUT 端点 | 第一包之后的接收全部 NAK | `usbd_cdc_if.c:276-278` |
+| 忘记重新挂 OUT 端点 | 第一包之后的接收全部 NAK | `usbd_cdc_if.c` |
 | 把 43 字节帧拆成多包理解 | 误以为有短包结束标志 | 两帧都小于 64 字节，一包发完 |
 | 认为中断优先级可以随便设 | 在 USB 中断里调 FreeRTOS API 触发断言 | 优先级 5，等于门槛值 |
 | 忽略主机不取数据的情况 | 以为 `CDC_Transmit_FS` 总能成功 | 忙时返回 `USBD_BUSY` |
@@ -178,13 +178,13 @@ NAK 与错误状态要分开看。NAK 是流控信号，主机收到后会重试
 
 1. 说明 0x81 与 0x01 两个端点地址的差别，以及它们各自的数据方向。
 2. 全速 USB 一个帧内最多能传多少个 43 字节的反馈帧？结合批量传输的调度给出结论。
-3. 计算 `usbd_conf.c:365-367` 三块 FIFO 的总 word 数，与 OTG FS 的总容量比较。
+3. 计算 `usbd_conf.c` 三块 FIFO 的总 word 数，与 OTG FS 的总容量比较。
 4. `CDC_Transmit_FS` 返回 `USBD_BUSY` 时，`TxState` 处于什么状态？数据被丢弃了吗？
 
 挑战题：
 
 5. 若把反馈帧从 43 字节扩到 100 字节，链路上会出现什么变化？端点包上限需要调整吗？
-6. `CDC_Receive_FS` 注释里提到，如果函数过早返回，会出现上一包还没发完就收下一包的情况。结合 `usbd_cdc_if.c:261-284` 说明本工程为什么不存在这个问题。
+6. `CDC_Receive_FS` 注释里提到，如果函数过早返回，会出现上一包还没发完就收下一包的情况。结合 `usbd_cdc_if.c` 说明本工程为什么不存在这个问题。
 7. 命令端点的 bInterval 是 0x10，换算成时间是多少？如果把它改成 0x01，对总线负载有什么影响？
 
 ---
@@ -193,8 +193,8 @@ NAK 与错误状态要分开看。NAK 是流控信号，主机收到后会重试
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | OTG FS 引脚、时钟、NVIC 优先级（:79-95）、FIFO 分配（:365-367） |
-| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | `OTG_FS_IRQHandler`（:331-337） |
-| `2026OmniSentryGimbal/USB_DEVICE/App/usb_device.c` | 设备库初始化链（:64-91） |
-| `2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | 接收回调与重挂端点（:261-284）、发送与忙标志（:297-313） |
-| `2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h` | 端点地址与包大小定义（:43-74） |
+| `2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | OTG FS 引脚、时钟、NVIC 优先级、FIFO 分配 |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | `OTG_FS_IRQHandler` |
+| `2026OmniSentryGimbal/USB_DEVICE/App/usb_device.c` | 设备库初始化链 |
+| `2026OmniSentryGimbal/USB_DEVICE/App/usbd_cdc_if.c` | 接收回调与重挂端点、发送与忙标志 |
+| `2026OmniSentryGimbal/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc/usbd_cdc.h` | 端点地址与包大小定义 |

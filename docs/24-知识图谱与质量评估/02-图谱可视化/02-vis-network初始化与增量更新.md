@@ -13,22 +13,22 @@ updated: 2026-10-08
 
 ## 首次挂载做了什么
 
-组件的首次渲染走一条固定路径（`frontend/src/components/GraphView.tsx:41-154`）：
+组件的首次渲染走一条固定路径（`frontend/src/components/GraphView.tsx`）：
 
-| 顺序 | 动作 | 位置 |
+| 顺序 | 动作 | 实现要点 |
 | --- | --- | --- |
-| 1 | 取容器元素，为空直接返回 | `:42-43` |
-| 2 | 卡片为空则销毁旧实例并清空引用 | `:45-54` |
-| 3 | 调 `cardsToGraph` 生成节点与边 | `:56` |
-| 4 | 节点为空则返回 | `:57` |
-| 5 | 清容器、建两个 `DataSet` | `:60-63` |
-| 6 | 从 CSS 变量取主题色 | `:70-76` |
-| 7 | 组装 `options` | `:78-151` |
-| 8 | `new Network(container, data, options)` | `:153` |
+| 1 | 取容器元素，为空直接返回 | 提前返回 |
+| 2 | 卡片为空则销毁旧实例并清空引用 | 空数据分支 |
+| 3 | 调 `cardsToGraph` 生成节点与边 | 生成渲染数据 |
+| 4 | 节点为空则返回 | 提前返回 |
+| 5 | 清容器、建两个 `DataSet` | 初始化数据容器 |
+| 6 | 从 CSS 变量取主题色 | 读计算样式 |
+| 7 | 组装 `options` | 组装渲染参数 |
+| 8 | `new Network(container, data, options)` | 实例化画布 |
 
-实例与两个集合分别存在 `useRef` 里（`:17-19`），因此后续的增量更新与卸载清理都能拿到同一个对象。回调函数也放进 ref（`:21-22`、`:27-28`），避免因为父组件重新创建函数而触发重挂载。
+实例与两个集合分别存在 `useRef` 里（React 提供的跨渲染引用容器，改它不会触发重渲染），因此后续的增量更新与卸载清理都能拿到同一个对象。回调函数也放进 ref，避免因为父组件重新创建函数而触发重挂载。
 
-依赖项是一个由排序后的卡片 ID 拼成的字符串（`:31-33`）：
+依赖项是一个由排序后的卡片 ID 拼成的字符串：
 
 ```ts
 const cardIdsKey = useMemo(() => cards.map(c => c.id).sort().join(','), [cards]);
@@ -38,9 +38,9 @@ const cardIdsKey = useMemo(() => cards.map(c => c.id).sort().join(','), [cards])
 
 ## 颜色与物理参数
 
-颜色不写死在组件里，而是从文档根节点的 CSS 变量读取（`:70-76`）：主色、浅主色、悬停色、正文色、背景色、弱化文本色各有变量名与兜底值。因此换主题时图谱会跟着变，代价是每次初始化都要读一次计算样式。
+颜色不写死在组件里，而是从文档根节点的 CSS 变量读取：主色、浅主色、悬停色、正文色、背景色、弱化文本色各有变量名与兜底值。因此换主题时图谱会跟着变，代价是每次初始化都要读一次计算样式。
 
-布局用 forceAtlas2Based 求解器（`:82-98`），关键参数：
+布局用 forceAtlas2Based 求解器（一种力导向布局：节点间互相排斥、边像弹簧把两端拉近，反复迭代出稳定位置），关键参数：
 
 | 参数 | 取值 | 作用 |
 | --- | --- | --- |
@@ -51,7 +51,25 @@ const cardIdsKey = useMemo(() => cards.map(c => c.id).sort().join(','), [cards])
 | `springConstant` | 0.04 | 边的弹簧刚度 |
 | `damping` | 0.7 | 运动阻尼，越大越稳 |
 
-节点是圆点、字号 12、带阴影（`:105-137`）；边宽 1.5、连续曲线、圆度 0.5（`:138-150`）。交互开启悬停、导航按钮、缩放与拖拽（`:99-104`）。这些数值没有在代码里解释来源，属于调参结果。
+节点是圆点、字号 12、带阴影；边宽 1.5、连续曲线、圆度 0.5。交互开启悬停、导航按钮、缩放与拖拽。这些数值没有在代码里解释来源，属于调参结果。
+
+`options` 的骨架简化后如下（示意，配色来自 CSS 变量）：
+
+```ts
+const options = {
+  physics: {
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: {
+      gravitationalConstant: -80, centralGravity: 0.001,
+      springLength: 180, springConstant: 0.04, damping: 0.7,
+    },
+    stabilization: { iterations: 800 },
+  },
+  nodes: { shape: 'dot', font: { size: 12 }, shadow: true },
+  edges: { width: 1.5, smooth: { type: 'continuous', roundness: 0.5 } },
+  interaction: { hover: true },
+};
+```
 
 ```mermaid
 flowchart TD
@@ -69,7 +87,7 @@ flowchart TD
 
 ## 卡片集合变化时的增量更新
 
-第二次起走 `:198-228` 分支，全部按 ID 做差集：
+第二次起走  分支，全部按 ID 做差集：
 
 | 变化 | 计算方式 | 调用 |
 | --- | --- | --- |
@@ -78,7 +96,7 @@ flowchart TD
 | 新增边 | 边的 ID 不在旧集合里 | `edges.add` |
 | 删除边 | 旧边 ID 不在新集合里 | `edges.remove` |
 
-删节点时，vis-network 会连带处理挂在它上面的边。边的 ID 在生成时就设计成跨渲染稳定（`frontend/src/utils/graph.ts:29`、`:35`），因此这里的比对可靠。
+删节点时，vis-network 会连带处理挂在它上面的边。边的 ID 在生成时就设计成跨渲染稳定（`frontend/src/utils/graph.ts`），因此这里的比对可靠。
 
 ```mermaid
 sequenceDiagram
@@ -98,26 +116,26 @@ sequenceDiagram
 
 ## 标题变化为何不会刷新标签
 
-`cardIdsKey` 只由 ID 组成（`:31-33`），改标题不改变这个键，effect 不重跑；即使重跑，增量分支也只处理增删，不处理已有节点的属性更新。因此已存在的节点标签保持旧值，直到组件重挂载或该节点被删除后重新加入。
+`cardIdsKey` 只由 ID 组成，改标题不改变这个键，effect 不重跑；即使重跑，增量分支也只处理增删，不处理已有节点的属性更新。因此已存在的节点标签保持旧值，直到组件重挂载或该节点被删除后重新加入。
 
 这是一个可复现的观感问题：改名后在列表里看到新标题，图谱上还是旧标题。修复方向有两类，一是让键包含标题并在增量分支里对已有节点调用 `update`，二是节点标签从别处按需读取。当前实现没有处理，按代码事实记录。
 
 ## 卸载与空数据清理
 
-组件卸载时销毁实例、清空容器内容、重置交互标记（`:233-251`）。卡片变空时走的是同一个销毁逻辑（`:45-54`），但不清空容器内容——空数组时组件返回的是空状态占位（`:316-324`），容器本身已经不在渲染树里。
+组件卸载时销毁实例、清空容器内容、重置交互标记。卡片变空时走的是同一个销毁逻辑，但不清空容器内容——空数组时组件返回的是空状态占位，容器本身已经不在渲染树里。
 
-清理里还取消了挂起的单击定时器（`:235-237`），避免组件卸载后回调仍然触发。这一条在交互页展开。
+清理里还取消了挂起的单击定时器，避免组件卸载后回调仍然触发。这一条在交互页展开。
 
 ## 两个宿主页面的挂载方式
 
 图谱被两个页面复用，挂载方式不同：
 
-| 宿主 | 做法 | 位置 |
+| 宿主 | 做法 | 所在文件 |
 | --- | --- | --- |
-| Hub 页面 | 常挂载，用 CSS 的 `display` 控制显隐 | `frontend/src/components/HubPage.tsx:339-342` |
-| 移动端页面 | 按条件渲染 `GraphView` | `frontend/src/components/mobile/MobileGraphPage.tsx:31-40` |
+| Hub 页面 | 常挂载，用 CSS 的 `display` 控制显隐 | `frontend/src/components/HubPage.tsx` |
+| 移动端页面 | 按条件渲染 `GraphView` | `frontend/src/components/mobile/MobileGraphPage.tsx` |
 
-Hub 页面的注释解释了常挂载的原因：避免 vis-network 重新初始化（`HubPage.tsx:339`）。移动端页面没有这层处理，切走再切回会重建实例、重新跑一遍布局。这是同一个组件的两种使用取舍，不是缺陷，但排查“切页后布局跳一次”时要想到这个差别。
+Hub 页面的注释解释了常挂载的原因：避免 vis-network 重新初始化（`HubPage.tsx`）。移动端页面没有这层处理，切走再切回会重建实例、重新跑一遍布局。这是同一个组件的两种使用取舍，不是缺陷，但排查“切页后布局跳一次”时要想到这个差别。
 
 ## 易错点
 
@@ -134,14 +152,14 @@ Hub 页面的注释解释了常挂载的原因：避免 vis-network 重新初始
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| 绘图库 | `vis-network/standalone` 9.x | `frontend/package.json:23`、`GraphView.tsx:2` |
-| 数据容器 | 节点与边各一个 `DataSet` | `GraphView.tsx:62-63` |
-| 实例引用 | `useRef` 保存 Network 与 DataSet | `:17-19` |
-| 触发键 | 排序后的卡片 ID 字符串 | `:31-33` |
-| 样式来源 | 文档根节点的 CSS 变量 | `:70-76` |
-| 布局 | forceAtlas2Based，稳定迭代 800 | `:82-98` |
-| 增量更新 | 按 ID 差集增删节点与边 | `:198-228` |
-| 清理 | 卸载时销毁实例与定时器 | `:233-251` |
+| 绘图库 | `vis-network/standalone` 9.x | `frontend/package.json`、`GraphView.tsx` |
+| 数据容器 | 节点与边各一个 `DataSet` | `GraphView.tsx` |
+| 实例引用 | `useRef` 保存 Network 与 DataSet | `GraphView.tsx` |
+| 触发键 | 排序后的卡片 ID 字符串 | `GraphView.tsx` |
+| 样式来源 | 文档根节点的 CSS 变量 | `GraphView.tsx` |
+| 布局 | forceAtlas2Based，稳定迭代 800 | `GraphView.tsx` |
+| 增量更新 | 按 ID 差集增删节点与边 | `GraphView.tsx` |
+| 清理 | 卸载时销毁实例与定时器 | `GraphView.tsx` |
 
 ### 设计权衡
 
@@ -171,8 +189,8 @@ Hub 页面的注释解释了常挂载的原因：避免 vis-network 重新初始
 
 | 路径 | 用途 |
 | --- | --- |
-| `frontend/src/components/GraphView.tsx` | 初始化、增量更新与清理（:17-251、:316-324） |
-| `frontend/src/utils/graph.ts` | 稳定的边 ID（:29-35） |
-| `frontend/src/components/HubPage.tsx` | 常挂载与显隐控制（:339-342） |
-| `frontend/src/components/mobile/MobileGraphPage.tsx` | 移动端按条件渲染（:31-40） |
-| `frontend/package.json` | 依赖版本（:23） |
+| `frontend/src/components/GraphView.tsx` | 初始化、增量更新与清理 |
+| `frontend/src/utils/graph.ts` | 稳定的边 ID |
+| `frontend/src/components/HubPage.tsx` | 常挂载与显隐控制 |
+| `frontend/src/components/mobile/MobileGraphPage.tsx` | 移动端按条件渲染 |
+| `frontend/package.json` | 依赖版本 |

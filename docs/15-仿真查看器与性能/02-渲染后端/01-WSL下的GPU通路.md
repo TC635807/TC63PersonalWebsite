@@ -13,7 +13,7 @@ WSL2 里的图形栈有一层容易误判的间接：容器内看不到常规的
 
 ## 从 /dev/dri 得到的错误结论
 
-WSL2 下 `ls /dev/dri` 确实是空的，于是很容易顺着推出「只能 llvmpipe 软件渲染」，再去调 `LP_NUM_THREADS` 给软件渲染限流（`viewer-guide.md:158-161`）。限流本身不是错，但它只解决了一半：还要先问能不能换一条路。
+WSL2 下 `ls /dev/dri` 确实是空的，于是很容易顺着推出「只能 llvmpipe 软件渲染」，再去调 `LP_NUM_THREADS` 给软件渲染限流（`viewer-guide.md`）。限流本身不是错，但它只解决了一半：还要先问能不能换一条路。
 
 ```mermaid
 flowchart TD
@@ -28,7 +28,7 @@ flowchart TD
 
 ## 本机的两条通路
 
-本机同时具备 `/dev/dxg` 与 Mesa 的 `d3d12_dri.so`，也就是说能把 OpenGL 调用转成 Direct3D 12 交给宿主机的显卡驱动（`viewer-guide.md:163`）。这条通路的开关是一个 Gallium 驱动变量，而不是常规的 `MESA_*` 变量。
+本机同时具备 `/dev/dxg` 与 Mesa 的 `d3d12_dri.so`，也就是说能把 OpenGL 调用转成 Direct3D 12 交给宿主机的显卡驱动（`viewer-guide.md`）。这条通路的开关是一个 Gallium 驱动变量，而不是常规的 `MESA_*` 变量。
 
 | 通路 | 依赖 | 结果 |
 | --- | --- | --- |
@@ -36,11 +36,23 @@ flowchart TD
 | D3D12（dxg） | `/dev/dxg` 加 `d3d12_dri.so` | 可用，硬件渲染 |
 | llvmpipe | 纯 CPU 的 Mesa 软件光栅化 | 默认回退，可用但很慢 |
 
-另有一处记录提到本机在 WSL 里走 WSLg 的 d3d12 路径时 `MESA_LOADER_DRIVER_OVERRIDE=d3d12` 反而更慢，达到 647 ms（`experiment-log.md:1050-1051`）。这与下一节的实测一致：起作用的变量不是它。
+另有一处记录提到本机在 WSL 里走 WSLg 的 d3d12 路径时 `MESA_LOADER_DRIVER_OVERRIDE=d3d12` 反而更慢，达到 647 ms（`experiment-log.md`）。这与下一节的实测一致：起作用的变量不是它。
+
+两条通路的开关写法是这样（都是标准环境变量，取自查看器诊断与出图脚本）：
+
+```bash
+# 硬件通路（默认）：不设任何后端变量，走 WSL 的 D3D12
+
+# 强制回退到软件渲染，并给光栅化限流：
+export GALLIUM_DRIVER=          # 空串 = 强制 llvmpipe
+export LP_NUM_THREADS=4         # 限制软件光栅化线程数，把 CPU 留给仿真与策略
+```
+
+`GALLIUM_DRIVER` 是 Mesa 的驱动选择变量，把它设成空串等于强制走软件光栅化；`LP_NUM_THREADS` 限制的是软件光栅化本身的线程数——只有在回退到软件渲染时才有意义，硬件通路下设它不起作用。
 
 ## 三种后端配置的实测对比
 
-在同样的离屏渲染 640x480 条件下，三种配置的差距接近两个数量级（`viewer-guide.md:165-169`）。
+在同样的离屏渲染 640x480 条件下，三种配置的差距接近两个数量级（`viewer-guide.md`）。
 
 | 配置 | 每帧耗时 | 相对默认 |
 | --- | --- | --- |
@@ -48,7 +60,7 @@ flowchart TD
 | `MESA_LOADER_DRIVER_OVERRIDE=d3d12` | 458.9 ms | 几乎无变化 |
 | `GALLIUM_DRIVER=d3d12` | 15.3 ms | 约 32 倍 |
 
-结论有两条：关键变量是 `GALLIUM_DRIVER`；`MESA_LOADER_DRIVER_OVERRIDE` 在本机实测无效（`viewer-guide.md:176`）。把希望寄托在后者上，会得到「改了没用」的结论。
+结论有两条：关键变量是 `GALLIUM_DRIVER`；`MESA_LOADER_DRIVER_OVERRIDE` 在本机实测无效（`viewer-guide.md`）。把希望寄托在后者上，会得到「改了没用」的结论。
 
 ```mermaid
 flowchart LR
@@ -60,7 +72,7 @@ flowchart LR
 
 ## 窗口与离屏走的是同一套选择
 
-这条设置不限于离屏渲染：窗口路径（GLFW）下同样生效，并不只是离屏 EGL 才受益（`viewer-guide.md:177`）。因此查看器、离屏出图脚本、渲染基准脚本应当共用同一套环境变量设置。
+这条设置不限于离屏渲染：窗口路径（GLFW）下同样生效，并不只是离屏 EGL 才受益（`viewer-guide.md`）。因此查看器、离屏出图脚本、渲染基准脚本应当共用同一套环境变量设置。
 
 | 路径 | 典型入口 | 是否受 `GALLIUM_DRIVER` 影响 |
 | --- | --- | --- |
@@ -69,7 +81,7 @@ flowchart LR
 
 ## 硬件渲染为什么连带影响物理步
 
-换到硬件渲染的价值不只是画面帧率。软件渲染会把十几个 CPU 核吃满，而 JAX 与 warp 的内核分发是在 CPU 侧完成的，两边抢核的直接后果是物理步（`step`）耗时暴涨（`viewer-guide.md:178-180`）。走硬件后端之后，软件光栅化不再占 CPU，这条因果链从源头消失。
+换到硬件渲染的价值不只是画面帧率。软件渲染会把十几个 CPU 核吃满，而 JAX 与 warp 的内核分发是在 CPU 侧完成的，两边抢核的直接后果是物理步（`step`）耗时暴涨（`viewer-guide.md`）。走硬件后端之后，软件光栅化不再占 CPU，这条因果链从源头消失。
 
 ```mermaid
 flowchart TD
@@ -85,9 +97,9 @@ flowchart TD
 
 ## 回退到软件渲染时的限流
 
-回退路径要留：把 `GALLIUM_DRIVER` 设成空串可强制 llvmpipe，此时才需要给软件渲染限流，例如 `LP_NUM_THREADS=4`（`viewer-guide.md:181-182`）。实测在策略已经 jit 的前提下，llvmpipe 加限流也能跑到 50 到 61 fps。
+回退路径要留：把 `GALLIUM_DRIVER` 设成空串可强制 llvmpipe，此时才需要给软件渲染限流，例如 `LP_NUM_THREADS=4`（`viewer-guide.md`）。实测在策略已经 jit 的前提下，llvmpipe 加限流也能跑到 50 到 61 fps。
 
-本机脚本里能看到这条回退的痕迹：并排出图的脚本在文件开头就设了 `LP_NUM_THREADS=4`（`render_compare.py:18`）。它的含义是主动限制软件光栅化线程数，把 CPU 留给仿真与策略。
+本机脚本里能看到这条回退的痕迹：并排出图的脚本在文件开头就设了 `LP_NUM_THREADS=4`（`render_compare.py`）。它的含义是主动限制软件光栅化线程数，把 CPU 留给仿真与策略。
 
 | 场景 | 后端 | 限流参数 |
 | --- | --- | --- |
@@ -96,7 +108,7 @@ flowchart TD
 
 ## 诊断脚本怎么看
 
-本机有一个现成的后端诊断脚本，它先打印相关环境变量与设备节点，再测离屏渲染耗时（`diag_render_cost.py:37-47`、`:49-79`）：
+本机有一个现成的后端诊断脚本，它先打印相关环境变量与设备节点，再测离屏渲染耗时（`diag_render_cost.py`）：
 
 | 输出项 | 用途 |
 | --- | --- |
@@ -105,7 +117,7 @@ flowchart TD
 | `/dev/dri 存在` | 设备节点是否可见 |
 | 多个分辨率的渲染中位耗时 | 判断是否落在软件渲染的量级 |
 
-离屏渲染的另一种写法是手工建上下文，脚本里对此有一条注释：离屏必须先建 GL 上下文，且 `GLContext` 不是上下文管理器，用完要 `free()` 释放（`render_terrain_preview.py:38-40`、`:49-50`）。
+离屏渲染的另一种写法是手工建上下文，脚本里对此有一条注释：离屏必须先建 GL 上下文，且 `GLContext` 不是上下文管理器，用完要 `free()` 释放（`render_terrain_preview.py`）。
 
 ## 易错点
 
@@ -156,10 +168,10 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `mjx-go1-getup/docs/viewer-guide.md` | 后端实测表、抢核链条与回退方式（`:158-182`、`:196-205`） |
-| `mjx-go1-getup/docs/experiment-log.md` | WSL 渲染路径的历史记录（`:1050-1051`） |
-| `RLcontroller_go1/sim/diag_render_cost.py` | 后端环境变量与渲染耗时诊断（`:37-79`） |
-| `RLcontroller_go1/sim/render_terrain_preview.py` | 离屏上下文的手工管理（`:38-50`） |
-| `RLcontroller_go1_moreinformation/sim/render_compare.py` | 软件渲染限流的实际设置（`:18`） |
+| `mjx-go1-getup/docs/viewer-guide.md` | 后端实测表、抢核链条与回退方式（） |
+| `mjx-go1-getup/docs/experiment-log.md` | WSL 渲染路径的历史记录（） |
+| `RLcontroller_go1/sim/diag_render_cost.py` | 后端环境变量与渲染耗时诊断（） |
+| `RLcontroller_go1/sim/render_terrain_preview.py` | 离屏上下文的手工管理（） |
+| `RLcontroller_go1_moreinformation/sim/render_compare.py` | 软件渲染限流的实际设置（） |
 
 （引用的文件以 /home/tc63/mujoco 为根。）

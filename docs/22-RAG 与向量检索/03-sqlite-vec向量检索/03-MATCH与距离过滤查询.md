@@ -7,15 +7,15 @@ updated: 2026-10-08
 
 # MATCH、k 与距离过滤的查询路径
 
-检索的入口是 `vector_search`，输入一条查询向量、返回条数上限与距离阈值，输出若干 `(card_id, distance)`（`backend/storage/sqlite_card_store.py:436-454`）。函数体不长，但一条 SQL 里叠了三层约束：向量匹配、候选条数、距离过滤。三者顺序与含义不同，混在一起看容易把 `k` 当成返回条数上限。
+检索的入口是 `vector_search`，输入一条查询向量、返回条数上限与距离阈值，输出若干 `(card_id, distance)`（`backend/storage/sqlite_card_store.py`）。函数体不长，但一条 SQL 里叠了三层约束：向量匹配、候选条数、距离过滤。三者顺序与含义不同，混在一起看容易把 `k` 当成返回条数上限。
 
-返回结果拿到的是距离，不是卡片。调用方要用卡片 ID 再读一次卡片表，把不存在的 ID 过滤掉（`backend/routes/cards.py:76-80`、`backend/pipeline/api.py:451-455`）。向量表与卡片表在同一个 SQLite 文件里，这个重组是一次本地查询，成本很低。
+返回结果拿到的是距离，不是卡片。调用方要用卡片 ID 再读一次卡片表，把不存在的 ID 过滤掉（`backend/routes/cards.py`、`backend/pipeline/api.py`）。向量表与卡片表在同一个 SQLite 文件里，这个重组是一次本地查询，成本很低。
 
-文中 `k` 的候选语义按 sqlite-vec 的 KNN 查询约定说明，仓库代码只给出用法。
+`k` 的语义按 sqlite-vec 的 KNN 约定解释：它决定这次搜索取多少条最近邻候选，而不是最终返回条数——后面还有阈值过滤。
 
 ## 一条查询语句的三层结构
 
-完整语句如下（`backend/storage/sqlite_card_store.py:443-449`）：
+完整语句如下（`backend/storage/sqlite_card_store.py`）：
 
 ```sql
 SELECT m.card_id, v.distance
@@ -23,6 +23,20 @@ FROM card_vec_map m JOIN cards_vec v ON m.vec_rowid = v.rowid
 WHERE v.embedding MATCH ? AND k = ? AND v.distance < ?
 ORDER BY v.distance
 ```
+
+调用时三个参数按位置绑定：
+
+```python
+rows = self.db.conn.execute(
+    "SELECT m.card_id, v.distance "
+    "FROM card_vec_map m JOIN cards_vec v ON m.vec_rowid = v.rowid "
+    "WHERE v.embedding MATCH ? AND k = ? AND v.distance < ? "
+    "ORDER BY v.distance",
+    [blob, limit, threshold],
+).fetchall()
+```
+
+`[blob, limit, threshold]` 依次对应查询向量字节、`k` 候选数与距离阈值——三个 `?` 的顺序就是语句里出现的顺序。
 
 | 子句 | 作用 | 参数 |
 | --- | --- | --- |
@@ -32,7 +46,7 @@ ORDER BY v.distance
 | `v.distance < ?` | 距离过滤 | `threshold` |
 | `ORDER BY v.distance` | 最近优先 | 无 |
 
-连接键是 `m.vec_rowid = v.rowid`，不是 `m.rowid`。映射表的隐藏 `rowid` 与 `vec_rowid` 是两个独立列，写入代码记录的是 `vec_rowid`（`:430`、`:481`）；用错列会在部分会话上取到别的向量或取不到向量。
+连接键是 `m.vec_rowid = v.rowid`，不是 `m.rowid`。映射表的隐藏 `rowid` 与 `vec_rowid` 是两个独立列，写入代码记录的是 `vec_rowid`；用错列会在部分会话上取到别的向量或取不到向量。
 
 ```mermaid
 flowchart TD
@@ -48,7 +62,7 @@ flowchart TD
 
 ## MATCH 与 k 的分工
 
-`MATCH` 是 vec0 虚拟表的查询运算符，后面跟的是查询向量本身，而不是文本或 ID。传给它的必须是字节形式的浮点数组，长度与建表维度一致；用字符串或长度不符的字节会让扩展报错。
+`MATCH` 是 vec0 虚拟表的查询运算符，后面跟的是查询向量本身，而不是文本或 ID。传给它的必须是字节形式的浮点数组，长度与建表维度一致；用字符串或长度不符的字节会让扩展报错。`_encode_blob` 做的就是 `struct.pack(f'{len(embedding)}f', *embedding)`——把 512 个 float 打成 2048 字节，扩展按这份二进制解析。
 
 `k = ?` 限定这次 KNN 搜索取多少条候选。按 sqlite-vec 的查询约定，`k` 是最近邻候选数，作用于距离排序的截取；它不是最终返回条数，因为后面还有阈值过滤。当阈值很严时，实际返回可能远少于 `k` 条。查询里把 `k` 与阈值写在一起，读代码时要按“先取 k 条、再过阈值、最后排序”理解。
 
@@ -56,27 +70,27 @@ flowchart TD
 
 ## 距离过滤与度量
 
-`distance_metric=cosine` 写在建表语句里（`backend/storage/session_database.py:150`），因此 `v.distance` 是余弦距离，取值 0 到 2，越小越像。过滤条件是 `v.distance < threshold`，是严格小于，距离恰好等于阈值的结果不返回。
+`distance_metric=cosine` 写在建表语句里（`backend/storage/session_database.py`），因此 `v.distance` 是余弦距离，取值 0 到 2，越小越像。过滤条件是 `v.distance < threshold`，是严格小于，距离恰好等于阈值的结果不返回。
 
-阈值默认 0.7（`backend/storage/sqlite_card_store.py:436`），但真实取值由调用方传入：语义搜索接口用自身参数（`backend/pipeline/api.py:450`），卡片搜索路由传 2.0 相当于不过滤（`backend/routes/cards.py:75`），主题合并预检传 0.40（`backend/pipeline/pipeline.py:422`）。查询函数只负责执行，不在内部改写阈值。
+阈值默认 0.7（`backend/storage/sqlite_card_store.py`），但真实取值由调用方传入：语义搜索接口用自身参数（`backend/pipeline/api.py`），卡片搜索路由传 2.0 相当于不过滤（`backend/routes/cards.py`），主题合并预检传 0.40（`backend/pipeline/pipeline.py`）。查询函数只负责执行，不在内部改写阈值。
 
-向量与阈值都是调用方给的，函数不校验二者是否匹配业务含义。给一个未归一化的查询向量，余弦距离仍能算，但数值口径与库存向量不一致；库存向量在编码时已归一化（`backend/ai/embedder.py:67`），查询侧走同一个编码入口，这一点由调用链保证。
+向量与阈值都是调用方给的，函数不校验二者是否匹配业务含义。给一个未归一化的查询向量，余弦距离仍能算，但数值口径与库存向量不一致；库存向量在编码时已归一化（`backend/ai/embedder.py`），查询侧走同一个编码入口，这一点由调用链保证。
 
 ## 结果重组与卡片读取
 
-查询返回的是 `[(card_id, distance)]`，构造在 `return [(r[0], r[1]) for r in rows]`（`backend/storage/sqlite_card_store.py:454`）。之后各调用方做同一件事：按 ID 读卡片，跳过读不到的：
+查询返回的是 `[(card_id, distance)]`，构造在 `return [(r[0], r[1]) for r in rows]`（`backend/storage/sqlite_card_store.py`）。之后各调用方做同一件事：按 ID 读卡片，跳过读不到的：
 
 | 调用方 | 读卡后的处理 | 位置 |
 | --- | --- | --- |
-| 卡片搜索路由 | 转成字典，得分取 `1 - dist` | `backend/routes/cards.py:76-81` |
-| 语义搜索接口 | 组装卡片与相似度 | `backend/pipeline/api.py:451-455` |
-| 主题合并预检 | 比较源卡 ID 后判定是否覆盖 | `backend/pipeline/pipeline.py:423-425` |
+| 卡片搜索路由 | 转成字典，得分取 `1 - dist` | `backend/routes/cards.py` |
+| 语义搜索接口 | 组装卡片与相似度 | `backend/pipeline/api.py` |
+| 主题合并预检 | 比较源卡 ID 后判定是否覆盖 | `backend/pipeline/pipeline.py` |
 
-读不到的卡片通常来自删除不彻底：卡片已删、映射表还有行。查询结果里出现这类 ID 不算异常，调用方按空结果跳过即可；若日志里频繁出现，要去查 `delete_vector` 是否被调用（`backend/storage/sqlite_card_store.py:478-486`）。
+读不到的卡片通常来自删除不彻底：卡片已删、映射表还有行。查询结果里出现这类 ID 不算异常，调用方按空结果跳过即可；若日志里频繁出现，要去查 `delete_vector` 是否被调用（`backend/storage/sqlite_card_store.py`）。
 
 ## 就绪探测与锁
 
-每次查询先探测向量表（`backend/storage/sqlite_card_store.py:437-439`）。探测失败直接返回空列表并记一条调试日志，不抛异常。探测成功后在 `_vec_lock` 内执行查询（`:441-449`），与写入共用同一把锁，因此查询不会读到正在替换的中间状态。
+每次查询先探测向量表（`backend/storage/sqlite_card_store.py`）。探测失败直接返回空列表并记一条调试日志，不抛异常。探测成功后在 `_vec_lock` 内执行查询，与写入共用同一把锁，因此查询不会读到正在替换的中间状态。
 
 用锁串行化读写在 WAL 模式下不是必需的：SQLite 本身允许读写并发。这把锁保护的是另一半状态，即映射表与向量表的成对更新。若写入侧删了向量尚未更新映射，查询会看到不一致；锁把这段时间屏蔽掉。代价是一次查询要等一次写入完成，长批次索引会拖慢查询，这一点与编码锁的排队效应叠加。
 
@@ -100,7 +114,7 @@ sequenceDiagram
 
 ## 失败模式与降级
 
-查询把所有异常压成一个分支：记警告 `向量搜索失败` 并返回空列表（`backend/storage/sqlite_card_store.py:450-452`）。可能的触发原因有：
+查询把所有异常压成一个分支：记警告 `向量搜索失败` 并返回空列表（`backend/storage/sqlite_card_store.py`）。可能的触发原因有：
 
 | 原因 | 表现 | 判别办法 |
 | --- | --- | --- |
@@ -127,14 +141,14 @@ sequenceDiagram
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| 查询入口 | `vector_search(embedding, limit, threshold)` | `backend/storage/sqlite_card_store.py:436` |
-| 匹配运算符 | `v.embedding MATCH ?`，参数是字节 | `:446` |
-| 候选条数 | `k = ?` 取 `limit` | `:446` |
-| 距离过滤 | `v.distance < ?`，度量 cosine | `:446`、`backend/storage/session_database.py:150` |
-| 排序 | `ORDER BY v.distance` 升序 | `:447` |
-| 连接键 | `m.vec_rowid = v.rowid` | `:445` |
-| 返回值 | `(card_id, distance)` 列表 | `:454` |
-| 失败行为 | 记警告并返回空列表 | `:450-452` |
+| 查询入口 | `vector_search(embedding, limit, threshold)` | `backend/storage/sqlite_card_store.py` |
+| 匹配运算符 | `v.embedding MATCH ?`，参数是字节 | `backend/storage/sqlite_card_store.py` |
+| 候选条数 | `k = ?` 取 `limit` | `backend/storage/sqlite_card_store.py` |
+| 距离过滤 | `v.distance < ?`，度量 cosine | `backend/storage/sqlite_card_store.py`、`backend/storage/session_database.py` |
+| 排序 | `ORDER BY v.distance` 升序 | `backend/storage/sqlite_card_store.py` |
+| 连接键 | `m.vec_rowid = v.rowid` | `backend/storage/sqlite_card_store.py` |
+| 返回值 | `(card_id, distance)` 列表 | `backend/storage/sqlite_card_store.py` |
+| 失败行为 | 记警告并返回空列表 | `backend/storage/sqlite_card_store.py` |
 
 ### 设计权衡
 
@@ -164,9 +178,9 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/storage/sqlite_card_store.py` | 查询实现与失败降级（:33-34、:405-410、:436-454、:478-486） |
-| `backend/storage/session_database.py` | 建表维度与度量（:143-156） |
-| `backend/routes/cards.py` | 路由侧查询与重组（:65-81） |
-| `backend/pipeline/api.py` | 搜索接口的查询与重组（:436-455） |
-| `backend/pipeline/pipeline.py` | 合并预检的查询（:416-425） |
-| `backend/ai/embedder.py` | 查询向量编码（:65-70、:83-85） |
+| `backend/storage/sqlite_card_store.py` | 查询实现与失败降级 |
+| `backend/storage/session_database.py` | 建表维度与度量 |
+| `backend/routes/cards.py` | 路由侧查询与重组 |
+| `backend/pipeline/api.py` | 搜索接口的查询与重组 |
+| `backend/pipeline/pipeline.py` | 合并预检的查询 |
+| `backend/ai/embedder.py` | 查询向量编码 |

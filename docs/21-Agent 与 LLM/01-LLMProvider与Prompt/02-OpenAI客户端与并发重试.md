@@ -13,7 +13,7 @@ updated: 2026-10-08
 
 ## 客户端是延迟创建的
 
-构造函数只保存配置，不创建网络客户端（`backend/ai/openai_provider.py:123-140`）。实际创建发生在第一次调用：
+构造函数只保存配置，不创建网络客户端（`backend/ai/openai_provider.py`）。实际创建发生在第一次调用：
 
 ```python
 if self._http_client is not None:
@@ -26,13 +26,31 @@ return AsyncOpenAI(
 )
 ```
 
-允许注入外部客户端（`http_client` 参数），这是测试替换的入口。URL 会先经过规范化：去掉末尾的 `/chat/completions` 或 `/responses` 后缀，但保留 `/v1`（`:54-68`）。注释解释了两个方向的原因——SDK 会在 base_url 后追加 endpoint，所以 base_url 不能再带 endpoint；而 `/v1` 是 base_url 的一部分，必须保留。
+允许注入外部客户端（`http_client` 参数），这是测试替换的入口。URL 会先经过规范化：去掉末尾的 `/chat/completions` 或 `/responses` 后缀，但保留 `/v1`。注释解释了两个方向的原因——SDK 会在 base_url 后追加 endpoint，所以 base_url 不能再带 endpoint；而 `/v1` 是 base_url 的一部分，必须保留。
 
-请求超时默认 180 秒（`:123-127`）。参数注释给出了取值理由：它约束首片段等待时间，长输入时服务端排队可能超过 30 秒，10 秒会误杀。`max_retries=0` 把 SDK 的内部重试关掉。
+请求超时默认 180 秒。参数注释给出了取值理由：它约束首片段等待时间，长输入时服务端排队可能超过 30 秒，10 秒会误杀。`max_retries=0` 把 SDK 的内部重试关掉。
 
 ## 类级信号量
 
-限流器写在类属性上，所有实例共享（`openai_provider.py:117-129`）：
+限流用信号量实现，示意如下：
+
+```python
+# 示意：信号量 + 指数退避重试
+sem = asyncio.Semaphore(MAX_INFLIGHT)      # 同时在飞的请求数上限
+
+async def call(payload):
+    async with sem:                          # 拿不到槽位就在此排队
+        for attempt in range(MAX_RETRY):
+            try:
+                return await raw_call(payload)
+            except RETRYABLE as e:
+                await asyncio.sleep(BASE * 2 ** attempt + jitter())  # 退避
+        raise
+```
+
+"信号量"是一个计数锁：容量为 N 时最多允许 N 个协程同时进入临界区，多出来的排队等待。它是类级别的，因此同一个进程里的所有 Provider 实例共享同一个上限。指数退避指第 k 次重试等待$	ext{base}	imes 2^k$，再加一点随机抖动，避免多个请求在同一时刻同时重发、形成新的尖峰。
+
+限流器写在类属性上，所有实例共享（`openai_provider.py`）：
 
 ```python
 class OpenAIProvider(AIProvider):
@@ -45,7 +63,7 @@ class OpenAIProvider(AIProvider):
             OpenAIProvider._api_semaphore = asyncio.Semaphore(config.api_concurrency)
 ```
 
-共享的目的是让多个流水线实例共用同一池槽位，避免每个实例各自放大并发。这里有一个从代码读出的取舍：信号量只在第一次构造时按当时的 `config.api_concurrency` 创建，之后构造的实例即使传入不同并发数也不会生效。流式方法里还有一段兜底，如果信号量仍为空就用类默认的 10 创建（`:174-177`）。因此实际并发由“第一个构造者”决定。
+共享的目的是让多个流水线实例共用同一池槽位，避免每个实例各自放大并发。这里有一个从代码读出的取舍：信号量只在第一次构造时按当时的 `config.api_concurrency` 创建，之后构造的实例即使传入不同并发数也不会生效。流式方法里还有一段兜底，如果信号量仍为空就用类默认的 10 创建。因此实际并发由“第一个构造者”决定。
 
 | 场景 | 并发值 |
 | --- | --- |
@@ -66,9 +84,9 @@ flowchart TD
 
 ## 一次调用经过哪些阶段
 
-`generate` 是非流式的门面：它内部调用流式方法，把片段拼成完整字符串（`:161-166`）。这样只有一套请求逻辑，非流式路径自动获得重试与限流。
+`generate` 是非流式的门面：它内部调用流式方法，把片段拼成完整字符串。这样只有一套请求逻辑，非流式路径自动获得重试与限流。
 
-`generate_stream` 的结构是“获取信号量，再进重试循环”（`:168-198`）：
+`generate_stream` 的结构是“获取信号量，再进重试循环”：
 
 | 阶段 | 行为 |
 | --- | --- |
@@ -78,7 +96,7 @@ flowchart TD
 | 成功 | 逐片段产出后返回 |
 | 失败 | 未超过重试上限则等待后重试，否则抛错 |
 
-重试等待按 `5 乘以 2 的 retries 次方` 计算（`:191`），默认重试上限 3，因此等待序列是 5 秒、10 秒、20 秒。信号量的持有范围覆盖整个重试过程，注释写明这样做的理由：重试时不释放槽位，避免加重服务端拥塞（`:171-172`）。代价是一个卡在重试里的请求会长时间占用一个槽位。
+重试等待按 `5 乘以 2 的 retries 次方` 计算，默认重试上限 3，因此等待序列是 5 秒、10 秒、20 秒。信号量的持有范围覆盖整个重试过程，注释写明这样做的理由：重试时不释放槽位，避免加重服务端拥塞。代价是一个卡在重试里的请求会长时间占用一个槽位。
 
 ```mermaid
 sequenceDiagram
@@ -104,11 +122,11 @@ sequenceDiagram
   end
 ```
 
-流式请求本身很简单：`stream=True`，遍历返回对象，只取每个片段的增量内容，增量为空时跳过（`:200-211`）。这层过滤保证调用方拿到的都是非空字符串。
+流式请求本身很简单：`stream=True`，遍历返回对象，只取每个片段的增量内容，增量为空时跳过。这层过滤保证调用方拿到的都是非空字符串。
 
 ## 连通性测试
 
-`test_connection` 发一条 “Hello”，限制最多一个 token，非流式（`:147-159`）。返回值是“choices 是否非空”，任何异常都被吞掉并返回假：
+`test_connection` 发一条 “Hello”，限制最多一个 token，非流式。返回值是“choices 是否非空”，任何异常都被吞掉并返回假：
 
 ```python
 try:
@@ -122,7 +140,7 @@ except Exception:
 
 ## 从回答里抠 JSON
 
-模型经常会多说两句，返回内容里夹着解释、思考标签或 Markdown 代码块。解析器按这个顺序处理（`openai_provider.py:71-108`）：
+模型经常会多说两句，返回内容里夹着解释、思考标签或 Markdown 代码块。解析器按这个顺序处理（`openai_provider.py`）：
 
 1. 去掉 `think` 标签包裹的推理过程；
 2. 找 Markdown 代码块，块内是合法 JSON 就直接返回；
@@ -154,15 +172,15 @@ except Exception:
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| 客户端创建 | 延迟，可注入 | `backend/ai/openai_provider.py:131-140` |
-| URL 规范化 | 去 endpoint 后缀，保留 `/v1` | `:54-68` |
-| 超时 | 默认 180 秒 | `:123-127` |
-| SDK 重试 | 关闭 | `:139` |
-| 限流 | 类级信号量，首构造者决定 | `:117-129` |
-| 退避 | 5 秒乘 2 的 n 次方，上限 3 次 | `:188-198` |
-| 流式产出 | 只取非空增量 | `:200-211` |
-| 连通测试 | 一个 token，异常返回假 | `:147-159` |
-| JSON 提取 | 四层兼容 | `:71-108` |
+| 客户端创建 | 延迟，可注入 | `backend/ai/openai_provider.py` |
+| URL 规范化 | 去 endpoint 后缀，保留 `/v1` | `backend/ai/openai_provider.py` |
+| 超时 | 默认 180 秒 | `backend/ai/openai_provider.py` |
+| SDK 重试 | 关闭 | `backend/ai/openai_provider.py` |
+| 限流 | 类级信号量，首构造者决定 | `backend/ai/openai_provider.py` |
+| 退避 | 5 秒乘 2 的 n 次方，上限 3 次 | `backend/ai/openai_provider.py` |
+| 流式产出 | 只取非空增量 | `backend/ai/openai_provider.py` |
+| 连通测试 | 一个 token，异常返回假 | `backend/ai/openai_provider.py` |
+| JSON 提取 | 四层兼容 | `backend/ai/openai_provider.py` |
 
 ### 设计权衡
 

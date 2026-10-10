@@ -19,7 +19,7 @@ Cortex-M4 把手头发生的事情统称为异常（Exception）。异常分两�
 异常发生时，硬件自动把当前寄存器压栈，跳到向量表里对应的入口。向量表在启动文件里：
 
 ```asm
-/* startup_stm32f407xx.s:127-131 */
+/* startup_stm32f407xx.s */
 g_pfnVectors:
   .word  _estack
   .word  Reset_Handler
@@ -32,7 +32,7 @@ g_pfnVectors:
 NVIC（Nested Vectored Interrupt Controller，嵌套向量中断控制器）对外提供四件事：使能与失能某一号中断、设置它的优先级、查询挂起状态、清除挂起状态。HAL 只把最常用的两件包成了函数：
 
 ```c
-/* Core/Src/dma.c:48-49 */
+/* Core/Src/dma.c */
 HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 5, 0);
 HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
 ```
@@ -46,14 +46,14 @@ HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
 STM32F407 的每号中断有一个 8 位的优先级寄存器 `NVIC_IPRx`，芯片只实现了高 4 位：
 
 ```c
-/* Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h:49 */
+/* Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h */
 #define __NVIC_PRIO_BITS          4U       /*!< STM32F4XX uses 4 Bits for the Priority Levels */
 ```
 
 CMSIS 的写函数因此做了一次左移：
 
 ```c
-/* Drivers/CMSIS/Include/core_cm4.h:1814-1822（节选） */
+/* Drivers/CMSIS/Include/core_cm4.h（节选） */
 __STATIC_INLINE void __NVIC_SetPriority(IRQn_Type IRQn, uint32_t priority)
 {
   if ((int32_t)(IRQn) >= 0)
@@ -78,10 +78,10 @@ __STATIC_INLINE void __NVIC_SetPriority(IRQn_Type IRQn, uint32_t priority)
 | `NVIC_PRIORITYGROUP_3` | 4 | 3 | 1 | 8 | 2 |
 | `NVIC_PRIORITYGROUP_4` | 3 | 4 | 0 | 16 | 1 |
 
-常量定义见 `stm32f4xx_hal_cortex.h:88-96`，切法计算见 `core_cm4.h:1861-1868` 的 `NVIC_EncodePriority()`：
+常量定义见 `stm32f4xx_hal_cortex.h`，切法计算见 `core_cm4.h` 的 `NVIC_EncodePriority()`：
 
 ```c
-/* Drivers/CMSIS/Include/core_cm4.h:1861-1870（节选） */
+/* Drivers/CMSIS/Include/core_cm4.h（节选） */
 __STATIC_INLINE uint32_t NVIC_EncodePriority (uint32_t PriorityGroup, uint32_t PreemptPriority, uint32_t SubPriority)
 {
   uint32_t PriorityGroupTmp = (PriorityGroup & (uint32_t)0x07UL);
@@ -146,7 +146,7 @@ sequenceDiagram
 ### 3.1 分组在 HAL_Init 里设定，早于任何外设初始化
 
 ```c
-/* Core/Src/main.c:95-111（节选） */
+/* Core/Src/main.c（节选） */
 HAL_Init();
 SystemClock_Config();
 MX_GPIO_Init();
@@ -154,7 +154,7 @@ MX_DMA_Init();
 MX_CAN1_Init();
 ...
 
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c:157-179（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c（节选） */
 HAL_StatusTypeDef HAL_Init(void)
 {
   ...
@@ -165,10 +165,10 @@ HAL_StatusTypeDef HAL_Init(void)
 }
 ```
 
-分组在 `HAL_Init()` 内部第 173 行写入，而 `MX_DMA_Init()` 等外设初始化在它之后执行，顺序上不会出现先设优先级、后改分组导致已写好的抢占位被重新解释的问题。
+分组由 `HAL_Init()` 内部写入，而 `MX_DMA_Init()` 等外设初始化在它之后执行，顺序上不会出现先设优先级、后改分组导致已写好的抢占位被重新解释的问题。
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c:718-722 */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c */
 SystemCoreClock = HAL_RCC_GetSysClockFreq() >> AHBPrescTable[(RCC->CFGR & RCC_CFGR_HPRE) >> RCC_CFGR_HPRE_Pos];
 
 /* Configure the source of time base considering new system clocks settings */
@@ -180,14 +180,14 @@ HAL_InitTick(uwTickPrio);
 ### 3.2 FreeRTOS 侧必须对齐位数
 
 ```c
-/* Core/Inc/FreeRTOSConfig.h:95-100 */
+/* Core/Inc/FreeRTOSConfig.h */
 #ifdef __NVIC_PRIO_BITS
  #define configPRIO_BITS         __NVIC_PRIO_BITS
 #else
  #define configPRIO_BITS         4
 #endif
 
-/* Core/Inc/FreeRTOSConfig.h:104-117（节选） */
+/* Core/Inc/FreeRTOSConfig.h（节选） */
 #define configLIBRARY_LOWEST_INTERRUPT_PRIORITY       15
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY  5
 #define configKERNEL_INTERRUPT_PRIORITY \
@@ -208,27 +208,27 @@ FreeRTOS 的 port 直接写 `BASEPRI` 寄存器，不做 CMSIS 那次左移，�
 
 | 中断 | HAL_NVIC_SetPriority 位置 | 数值 | 触发来源 |
 | --- | --- | --- | --- |
-| `DMA1_Stream1_IRQn` | `Core/Src/dma.c:48` | 5 | USART3 接收 DMA 的 HT/TC/TE |
-| `DMA2_Stream1_IRQn` | `Core/Src/dma.c:51` | 5 | USART6 接收 DMA |
-| `DMA2_Stream2_IRQn` | `Core/Src/dma.c:54` | 5 | SPI1 接收 DMA |
-| `DMA2_Stream3_IRQn` | `Core/Src/dma.c:57` | 5 | SPI1 发送 DMA |
-| `DMA2_Stream6_IRQn` | `Core/Src/dma.c:60` | 5 | USART6 发送 DMA |
-| `CAN1_RX0_IRQn` | `Core/Src/can.c:125` | 5 | CAN1 FIFO0 收到报文 |
-| `CAN1_RX1_IRQn` | `Core/Src/can.c:127` | 5 | CAN1 FIFO1 收到报文 |
-| `CAN2_RX0_IRQn` | `Core/Src/can.c:158` | 5 | CAN2 FIFO0 收到报文 |
-| `CAN2_RX1_IRQn` | `Core/Src/can.c:160` | 5 | CAN2 FIFO1 收到报文 |
-| `TIM1_UP_TIM10_IRQn` | `Core/Src/tim.c:83` | 5 | TIM10 更新中断（本工程未启动计数） |
-| `USART3_IRQn` | `Core/Src/usart.c:198` | 5 | USART3 空闲检测 |
-| `USART6_IRQn` | `Core/Src/usart.c:262` | 5 | USART6 空闲检测 |
-| `OTG_FS_IRQn` | `USB_DEVICE/Target/usbd_conf.c:94` | 5 | USB 端点事件 |
-| `PendSV_IRQn` | `Core/Src/stm32f4xx_hal_msp.c:75` | 15 | 内核上下文切换 |
-| `TIM2_IRQn` | `Core/Src/stm32f4xx_hal_timebase_tim.c:100` | `TICK_INT_PRIORITY` 为 15 | HAL 时基，1 ms |
+| `DMA1_Stream1_IRQn` | `Core/Src/dma.c` | 5 | USART3 接收 DMA 的 HT/TC/TE |
+| `DMA2_Stream1_IRQn` | `Core/Src/dma.c` | 5 | USART6 接收 DMA |
+| `DMA2_Stream2_IRQn` | `Core/Src/dma.c` | 5 | SPI1 接收 DMA |
+| `DMA2_Stream3_IRQn` | `Core/Src/dma.c` | 5 | SPI1 发送 DMA |
+| `DMA2_Stream6_IRQn` | `Core/Src/dma.c` | 5 | USART6 发送 DMA |
+| `CAN1_RX0_IRQn` | `Core/Src/can.c` | 5 | CAN1 FIFO0 收到报文 |
+| `CAN1_RX1_IRQn` | `Core/Src/can.c` | 5 | CAN1 FIFO1 收到报文 |
+| `CAN2_RX0_IRQn` | `Core/Src/can.c` | 5 | CAN2 FIFO0 收到报文 |
+| `CAN2_RX1_IRQn` | `Core/Src/can.c` | 5 | CAN2 FIFO1 收到报文 |
+| `TIM1_UP_TIM10_IRQn` | `Core/Src/tim.c` | 5 | TIM10 更新中断（本工程未启动计数） |
+| `USART3_IRQn` | `Core/Src/usart.c` | 5 | USART3 空闲检测 |
+| `USART6_IRQn` | `Core/Src/usart.c` | 5 | USART6 空闲检测 |
+| `OTG_FS_IRQn` | `USB_DEVICE/Target/usbd_conf.c` | 5 | USB 端点事件 |
+| `PendSV_IRQn` | `Core/Src/stm32f4xx_hal_msp.c` | 15 | 内核上下文切换 |
+| `TIM2_IRQn` | `Core/Src/stm32f4xx_hal_timebase_tim.c` | `TICK_INT_PRIORITY` 为 15 | HAL 时基，1 ms |
 | `SysTick_IRQn` | 由 `xPortSysTickHandler` 接管 | 15 | FreeRTOS 滴答 |
 
-`SysTick_Handler` 与 `PendSV_Handler` 这两个名字在 `FreeRTOSConfig.h:127-133` 被重定向到了 port 自己的实现：
+`SysTick_Handler` 与 `PendSV_Handler` 这两个名字在 `FreeRTOSConfig.h` 被重定向到了 port 自己的实现：
 
 ```c
-/* Core/Inc/FreeRTOSConfig.h:127-133（节选） */
+/* Core/Inc/FreeRTOSConfig.h（节选） */
 #define vPortSVCHandler    SVC_Handler
 #define xPortPendSVHandler PendSV_Handler
 /* ... to prevent overwriting SysTick_Handler defined within STM32Cube HAL */
@@ -268,7 +268,7 @@ NVIC 里 0 最高、15 最低。写成 `HAL_NVIC_SetPriority(USART3_IRQn, 15, 0)
 
 ### 4.5 只使能 NVIC 就以为中断会来
 
-`HAL_NVIC_EnableIRQ()` 只打开 NVIC 这一级的闸门。外设侧的中断使能位（例如 CAN 的 `CAN_IER_FMPIE0`、UART 的 `IDLEIE`、DMA 流的 `TCIE`）由各自的驱动打开。本工程 TIM10 是一个例子：`Core/Src/tim.c:83-84` 使能了 `TIM1_UP_TIM10_IRQn`，但全工程没有任何一处调用 `HAL_TIM_PWM_Start()` 或 `HAL_TIM_Base_Start_IT()` 去启动 `htim10`，计数器没有运行，更新中断使能位也一直没置起，这个向量实际从未进入过。
+`HAL_NVIC_EnableIRQ()` 只打开 NVIC 这一级的闸门。外设侧的中断使能位（例如 CAN 的 `CAN_IER_FMPIE0`、UART 的 `IDLEIE`、DMA 流的 `TCIE`）由各自的驱动打开。本工程 TIM10 是一个例子：`Core/Src/tim.c` 使能了 `TIM1_UP_TIM10_IRQn`，但全工程没有任何一处调用 `HAL_TIM_PWM_Start()` 或 `HAL_TIM_Base_Start_IT()` 去启动 `htim10`，计数器没有运行，更新中断使能位也一直没置起，这个向量实际从未进入过。
 
 ### 4.6 改 PRIO 位宽后没有重设阈值
 
@@ -279,7 +279,7 @@ NVIC 里 0 最高、15 最低。写成 `HAL_NVIC_SetPriority(USART3_IRQn, 15, 0)
 启动文件对每个向量都提供了弱符号：
 
 ```asm
-/* startup_stm32f407xx.s:285-295（节选） */
+/* startup_stm32f407xx.s（节选） */
   .weak      EXTI0_IRQHandler
   .thumb_set EXTI0_IRQHandler,Default_Handler
   .thumb_set EXTI1_IRQHandler,Default_Handler
@@ -288,7 +288,7 @@ NVIC 里 0 最高、15 最低。写成 `HAL_NVIC_SetPriority(USART3_IRQn, 15, 0)
   .thumb_set EXTI3_IRQHandler,Default_Handler
 ```
 
-`Default_Handler` 是死循环（`startup_stm32f407xx.s:111-115`）。没有自写 `EXTI0_IRQHandler` 时，使能了 EXTI0 的结果是第一次触发就停在里面。这是能编译、能下载、一上电就静止这类现象的一种成因。
+`Default_Handler` 是死循环（`startup_stm32f407xx.s`）。没有自写 `EXTI0_IRQHandler` 时，使能了 EXTI0 的结果是第一次触发就停在里面。这是能编译、能下载、一上电就静止这类现象的一种成因。
 
 ## 5. 小结
 
@@ -331,20 +331,20 @@ NVIC 里 0 最高、15 最低。写成 `HAL_NVIC_SetPriority(USART3_IRQn, 15, 0)
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/startup_stm32f407xx.s` | 向量表（:127-158）、`Default_Handler` 死循环（:111-115）、弱符号别名（:285-295） |
-| `2026OmniSentryGimbal/Core/Src/main.c` | `HAL_Init()` 与初始化顺序（:95-131） |
-| `2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | `configPRIO_BITS`（:95-100）、阈值与内核优先级（:104-117）、异常处理函数重定向（:127-133） |
-| `2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量的优先级与使能（:48-61） |
-| `2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个接收向量（:125-128、:158-161） |
-| `2026OmniSentryGimbal/Core/Src/tim.c` | `TIM1_UP_TIM10_IRQn` 使能（:83-84）、TIM10 参数（:42-63） |
-| `2026OmniSentryGimbal/Core/Src/usart.c` | `USART3_IRQn` 与 `USART6_IRQn`（:198-199、:262-263） |
-| `2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_msp.c` | `PendSV_IRQn` 取 15（:75） |
-| `2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基与优先级（:41-112） |
-| `2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY` 为 15（:151） |
-| `2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | `OTG_FS_IRQn` 优先级（:94-95） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | 分组设置（:173） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c` | `HAL_NVIC_SetPriority()` 转 CMSIS（:163-174） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h` | 五个分组常量（:88-96） |
-| `2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h` | `__NVIC_SetPriority()`（:1814-1822）、`NVIC_EncodePriority()`（:1861-1870） |
-| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | `__NVIC_PRIO_BITS` 为 4（:49） |
+| `2026OmniSentryGimbal/startup_stm32f407xx.s` | 向量表、`Default_Handler` 死循环、弱符号别名 |
+| `2026OmniSentryGimbal/Core/Src/main.c` | `HAL_Init()` 与初始化顺序 |
+| `2026OmniSentryGimbal/Core/Inc/FreeRTOSConfig.h` | `configPRIO_BITS`、阈值与内核优先级、异常处理函数重定向 |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | 五个 DMA 向量的优先级与使能 |
+| `2026OmniSentryGimbal/Core/Src/can.c` | CAN 四个接收向量 |
+| `2026OmniSentryGimbal/Core/Src/tim.c` | `TIM1_UP_TIM10_IRQn` 使能、TIM10 参数 |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | `USART3_IRQn` 与 `USART6_IRQn` |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_msp.c` | `PendSV_IRQn` 取 15 |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_hal_timebase_tim.c` | TIM2 时基与优先级 |
+| `2026OmniSentryGimbal/Core/Inc/stm32f4xx_hal_conf.h` | `TICK_INT_PRIORITY` 为 15 |
+| `2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | `OTG_FS_IRQn` 优先级 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c` | 分组设置 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c` | `HAL_NVIC_SetPriority()` 转 CMSIS |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_cortex.h` | 五个分组常量 |
+| `2026OmniSentryGimbal/Drivers/CMSIS/Include/core_cm4.h` | `__NVIC_SetPriority()`、`NVIC_EncodePriority()` |
+| `2026OmniSentryGimbal/Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f407xx.h` | `__NVIC_PRIO_BITS` 为 4 |
 | `2026OmniSentryGimbal/Chassis/`（同仓库对比） | 两份板的外设优先级设置一致 |

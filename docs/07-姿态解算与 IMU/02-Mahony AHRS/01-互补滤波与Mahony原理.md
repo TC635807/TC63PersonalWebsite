@@ -29,7 +29,7 @@ $$\theta_g(t) = \int_0^t \omega_g(\tau)\,d\tau = \theta(t) + b t + \int_0^t n_g(
 
 零偏项 $bt$ 随时间线性增长，这是漂移的来源。
 
-加速度计在静止时测得比力方向，倾角为
+加速度计在静止时测得比力方向（比力是传感器感受到的非引力加速度与重力的合力，静止时恰好等于重力），倾角为
 
 $$\theta_a = \operatorname{atan2}(a_y, a_z)$$
 
@@ -60,9 +60,9 @@ flowchart TD
 
 ## 3. Mahony 的重力叉积 PI 校正
 
-互补滤波需要在欧拉角上做加减，接近万向锁时三角函数会退化。Mahony 把互补关系搬进四元数：用当前四元数预测重力方向，用加速度计给出观测重力方向，两者的叉积作为姿态误差，再把误差当作角速度的反馈项。
+互补滤波需要在欧拉角上做加减，接近万向锁时三角函数会退化。万向锁指俯仰角接近 ±90 度时两个旋转轴退化成同一方向，欧拉角表示不再唯一。Mahony 把互补关系搬进四元数：四元数用四个数表示三维旋转，不会出现这种退化。它用当前四元数预测重力方向，用加速度计给出观测重力方向，两者的叉积作为姿态误差，再把误差当作角速度的反馈项。
 
-单位四元数记作 $q = [q_0, q_1, q_2, q_3]^T$，标量部分是 $q_0$。本工程里 $q_0$ 对应 $w$ 分量，欧拉角公式以 $q_0$ 为实部（`Task/Src/ImuTask.cpp:62-64`）。
+单位四元数记作 $q = [q_0, q_1, q_2, q_3]^T$，标量部分是 $q_0$。本工程里 $q_0$ 对应 $w$ 分量，欧拉角公式以 $q_0$ 为实部（`Task/Src/ImuTask.cpp`）。
 
 由四元数预测的重力方向（本体系）为
 
@@ -72,7 +72,7 @@ $$v(q) = \begin{bmatrix} 2(q_1 q_3 - q_0 q_2) \\ 2(q_0 q_1 + q_2 q_3) \\ 2(q_0^2
 
 $$v/2 = \begin{bmatrix} q_1 q_3 - q_0 q_2 \\ q_0 q_1 + q_2 q_3 \\ q_0^2 - 0.5 + q_3^2 \end{bmatrix}$$
 
-加速度计归一化后记作 $a$。误差取叉积
+加速度计归一化后记作 $a$。误差取叉积（叉积方向是两向量之间的旋转轴，大小与偏差角成正比）：
 
 $$e = a \times v = \begin{bmatrix} a_y v_z - a_z v_y \\ a_z v_x - a_x v_z \\ a_x v_y - a_y v_x \end{bmatrix}$$
 
@@ -87,6 +87,28 @@ $$\dot q = \frac12\, q \otimes \begin{bmatrix} 0 \\ \omega_{corr} \end{bmatrix}$
 更新，$\otimes$ 是四元数乘法。展开与离散化在《四元数微分方程与梯度下降》里给出。
 
 静止时 $a$ 与 $v$ 平行，$e = 0$，反馈项为零，姿态只由陀螺积分维持。姿态有偏差时叉积不为零，反馈把 $v$ 拉向 $a$。纯航向旋转对重力方向没有影响，$v$ 不变，$e$ 为零，六轴条件下 yaw 得不到校正。
+
+一次校正的完整顺序如下：
+
+```c
+/* 简化：Mahony 六轴更新，FusionAHRS::mahonyUpdate 与 MahonyAHRSupdateIMU 同构 */
+recipNorm = 1.0f / sqrtf(ax*ax + ay*ay + az*az);   /* 1. 加速度计归一化 */
+ax *= recipNorm; ay *= recipNorm; az *= recipNorm;
+
+halfvx = q1*q3 - q0*q2;                            /* 2. 预测重力方向的一半 */
+halfvy = q0*q1 + q2*q3;
+halfvz = q0*q0 - 0.5f + q3*q3;
+
+halfex = ay*halfvz - az*halfvy;                    /* 3. 叉积误差 */
+halfey = az*halfvx - ax*halfvz;
+halfez = ax*halfvy - ay*halfvx;
+
+gx += twoKp * halfex;                              /* 4. 比例反馈并入角速度 */
+gy += twoKp * halfey;
+gz += twoKp * halfez;
+
+q0 += (-q1*gx - q2*gy - q3*gz) * (0.5f / sampleFreq);  /* 5. 积分并归一化 */
+```
 
 ```mermaid
 sequenceDiagram
@@ -105,32 +127,42 @@ sequenceDiagram
 
 ## 4. 两板各自的调用路径
 
-云台板生效路径是 `FusionAHRS`，`MahonyAHRS.c` 有完整实现但云台板仓库内没有调用点；底盘板没有 `FusionAHRS`，直接在 `Task/Src/ImuTask.cpp:40`、`:59` 调用 `MahonyAHRSupdateIMU`。两板差异在《两板调用差异与增益》里列表说明。
+云台板生效路径是 `FusionAHRS`，`MahonyAHRS.c` 有完整实现但云台板仓库内没有调用点；底盘板没有 `FusionAHRS`，直接在 `Task/Src/ImuTask.cpp` 里调用 `MahonyAHRSupdateIMU`。两板差异在《两板调用差异与增益》里列表说明。
 
-实例与调用：
+实例与调用都在 `Task/Src/ImuTask.cpp` 里：
 
-| 位置 | 内容 |
+| 环节 | 内容 |
 | --- | --- |
-| `Task/Src/ImuTask.cpp:19` | `static FusionAHRS ahrs(1000.0f);` 采样频率按 1 kHz 传入 |
-| `Task/Src/ImuTask.cpp:43` | 每轮读一次 BMI088 |
-| `Task/Src/ImuTask.cpp:49-56` | 用 `gyro[0..2]` 与 `accel[0..2]` 调 `ahrs.update` |
-| `Task/Src/ImuTask.cpp:59` | `q = ahrs.getQuaternion()` |
-| `Task/Src/ImuTask.cpp:62-64` | 四元数转 roll / pitch / yaw |
+| 实例定义 | 采样频率按 1 kHz 传入：`static FusionAHRS ahrs(1000.0f);` |
+| 数据读取 | 每轮读一次 BMI088 |
+| 姿态更新 | 用 `gyro[0..2]` 与 `accel[0..2]` 调 `ahrs.update` |
+| 结果取出 | `q = ahrs.getQuaternion()` |
+| 角度换算 | 四元数转 roll / pitch / yaw |
 
-`FusionAHRS::update`（`Algorithm/Src/FusionAHRS.cpp:73-86`）的顺序是静态检测、Z 轴偏置 EKF、去偏、调 `mahonyUpdate`。偏置 EKF 只在静止时更新（`:30-41`、`:79`），去偏只作用于 Z 轴。
+`FusionAHRS::update`（`Algorithm/Src/FusionAHRS.cpp`）的顺序是静态检测、Z 轴偏置 EKF、去偏、调 `mahonyUpdate`。偏置 EKF 只在静止时更新，去偏只作用于 Z 轴。
 
-`FusionAHRS::mahonyUpdate`（`Algorithm/Src/FusionAHRS.cpp:88-136`）的结构与上文一致：
+```cpp
+/* 简化：FusionAHRS::update 的三步 */
+void FusionAHRS::update(float gx, float gy, float gz, float ax, float ay, float az) {
+    bool isStatic = detectStatic(gx, gy, gz, ax, ay, az);  // 陀螺接近零且加速度模长接近 9.81
+    biasEKF_.update(gz, isStatic);                          // 只在静止时更新 Z 轴偏置
+    gz -= biasEKF_.getBias();                               // 去偏，只作用于 Z 轴
+    mahonyUpdate(gx, gy, gz, ax, ay, az);                   // 比例校正与四元数积分
+}
+```
 
-- `:96-101` 加速度计零向量检查与归一化；
-- `:103-105` 计算 `halfvx/halfvy/halfvz`；
-- `:107-109` 计算 `halfex/halfey/halfez`；
-- `:111-113` 比例校正，比例增益是成员 `twoKp_`；
-- `:116-127` 缩放并积分四元数；
-- `:129-135` 归一化。
+`FusionAHRS::mahonyUpdate`（`Algorithm/Src/FusionAHRS.cpp`）的结构与上文一致：
 
-本工程没有积分通道：`twoKi_` 构造为 `0.0f`（`Algorithm/Src/FusionAHRS.cpp:52`），`mahonyUpdate` 里也没有积分分支，成员 `integralFBx_/integralFBy_/integralFBz_` 只在构造函数里清零（`:53-55`）。
+- 加速度计零向量检查与归一化；
+- 计算 `halfvx/halfvy/halfvz`；
+- 计算 `halfex/halfey/halfez`；
+- 比例校正，比例增益是成员 `twoKp_`；
+- 缩放并积分四元数；
+- 归一化。
 
-参考实现 `Algorithm/Src/MahonyAHRS.c` 里，比例与积分增益写作 `twoKp = 2.0f * 0.5f`、`twoKi = 2.0f * 0.0f`（`:25-26`、`:33-34`），比例校正 `:128-130`，积分与限幅 `:113-125`。这套代码在云台板没有进入执行路径，在底盘板则是生效入口。
+本工程没有积分通道：`twoKi_` 构造为 `0.0f`（`Algorithm/Src/FusionAHRS.cpp`），`mahonyUpdate` 里也没有积分分支，成员 `integralFBx_/integralFBy_/integralFBz_` 只在构造函数里清零。
+
+参考实现 `Algorithm/Src/MahonyAHRS.c` 里，比例与积分增益写作 `twoKp = 2.0f * 0.5f`、`twoKi = 2.0f * 0.0f`，随后是比例校正与带限幅的积分通道。这套代码在云台板没有进入执行路径，在底盘板则是生效入口。
 
 ## 5. 易错点
 
@@ -179,8 +211,8 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 实例、调用与欧拉角输出（`:19`、`:41-64`） |
-| `2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 生效的 Mahony 变体（`:73-136`） |
-| `2026OmniSentryGimbal/Algorithm/Inc/FusionAHRS.h` | 类成员与接口（`:26-57`） |
-| `2026OmniSentryGimbal/Algorithm/Src/MahonyAHRS.c` | 云台板无调用点，底盘板在 Task/Src/ImuTask.cpp:40/59 调用（`:24-150`） |
-| `2026OmniSentryGimbal/Algorithm/Inc/MahonyAHRS.h` | 参考实现的接口声明（`:19-31`） |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 实例、调用与欧拉角输出 |
+| `2026OmniSentryGimbal/Algorithm/Src/FusionAHRS.cpp` | 生效的 Mahony 变体 |
+| `2026OmniSentryGimbal/Algorithm/Inc/FusionAHRS.h` | 类成员与接口 |
+| `2026OmniSentryGimbal/Algorithm/Src/MahonyAHRS.c` | 云台板无调用点，底盘板在 `Task/Src/ImuTask.cpp` 调用 |
+| `2026OmniSentryGimbal/Algorithm/Inc/MahonyAHRS.h` | 参考实现的接口声明 |

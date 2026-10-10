@@ -36,16 +36,27 @@ updated: 2026-10-07
 
 ## HAL_GPIO_Init 的写入顺序
 
-`HAL_GPIO_Init()` 从 `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c:164` 开始，按固定顺序写寄存器：
+`HAL_GPIO_Init()` 从 `Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` 开始，按固定顺序写寄存器：
 
-1. 速度。读 `OSPEEDR` 的 2 bit，按 `GPIO_InitStruct.Speed` 写入（第 194 至 197 行）。
-2. 输出类型。读 `OTYPER` 的 1 bit，按 `Mode` 是否含 `GPIO_MODE_OUTPUT_OD` 或 `GPIO_MODE_AF_OD` 决定推挽还是开漏（第 200 至 203 行）。
-3. 上下拉。读 `PUPDR` 的 2 bit，写入 `GPIO_NOPULL`、`GPIO_PULLUP` 或 `GPIO_PULLDOWN`（第 212 至 215 行）。
-4. 复用编号。写 `AFR[position >> 3]`，位置由引脚号决定，值取 `GPIO_InitStruct.Alternate` 的低 4 bit（第 224 至 227 行）。
-5. 方向。最后写 `MODER` 的 2 bit（第 231 至 234 行）。输入对应 `0b00`，输出对应 `0b01`，复用对应 `0b10`，模拟对应 `0b11`。
-6. 中断线。若 `Mode` 含 `EXTI_MODE`，先使能 SYSCFG 时钟，再写 `SYSCFG->EXTICR` 选择端口（第 240 至 246 行），然后按触发方向写 `EXTI->RTSR` 与 `EXTI->FTSR`，最后写 `EXTI->IMR` 开放该线的中断请求（第 249 至 280 行）。
+1. 速度。读 `OSPEEDR` 的 2 bit，按 `GPIO_InitStruct.Speed` 写入。
+2. 输出类型。读 `OTYPER` 的 1 bit，按 `Mode` 是否含 `GPIO_MODE_OUTPUT_OD` 或 `GPIO_MODE_AF_OD` 决定推挽还是开漏。
+3. 上下拉。读 `PUPDR` 的 2 bit，写入 `GPIO_NOPULL`、`GPIO_PULLUP` 或 `GPIO_PULLDOWN`。
+4. 复用编号。写 `AFR[position >> 3]`，位置由引脚号决定，值取 `GPIO_InitStruct.Alternate` 的低 4 bit。
+5. 方向。最后写 `MODER` 的 2 bit。输入对应 `0b00`，输出对应 `0b01`，复用对应 `0b10`，模拟对应 `0b11`。
+6. 中断线。若 `Mode` 含 `EXTI_MODE`，先使能 SYSCFG 时钟，再写 `SYSCFG->EXTICR` 选择端口，然后按触发方向写 `EXTI->RTSR` 与 `EXTI->FTSR`，最后写 `EXTI->IMR` 开放该线的中断请求。
 
 方向放在复用编号之后写，是为了让引脚在速度与上下拉就位之前不切到复用输出，避免配置期间输出一段无效波形。中断线只配到 SYSCFG 与 EXTI 两级，NVIC 的使能必须另外调用 `HAL_NVIC_EnableIRQ(EXTIx_IRQn)`。
+
+下面是这个顺序的简化写法（示意，掩码与移位细节从略）：
+
+```c
+MODIFY_REG(GPIOx->OSPEEDR, mask2, speed << (2 * pin));       // 1 速度
+MODIFY_REG(GPIOx->OTYPER,  mask1, od    << pin);             // 2 推挽 / 开漏
+MODIFY_REG(GPIOx->PUPDR,   mask2, pull  << (2 * pin));       // 3 上拉 / 下拉
+if (复用) MODIFY_REG(GPIOx->AFR[pin >> 3], 0xF << (4 * (pin & 7)), alternate);  // 4 复用编号
+MODIFY_REG(GPIOx->MODER,   mask2, mode  << (2 * pin));       // 5 最后写方向
+if (中断模式) { SYSCFG->EXTICR[pin >> 2] = port; EXTI->RTSR |= bit; EXTI->IMR |= bit; }  // 6 中断线
+```
 
 ```mermaid
 flowchart TD
@@ -91,19 +102,19 @@ stateDiagram-v2
 
 | 引脚 | 模式 | 输出类型 | 速度 | 上下拉 | 复用编号 | 配置位置 |
 | --- | --- | --- | --- | --- | --- | --- |
-| PD0、PD1 | 复用 | 推挽 | 很高 | 无 | AF9 | `Core/Src/can.c:117-122` |
-| PB5、PB6 | 复用 | 推挽 | 很高 | 无 | AF9 | `Core/Src/can.c:150-155` |
-| PC11、PC10 | 复用 | 推挽 | 很高 | 无 | AF7 | `Core/Src/usart.c:171-176` |
-| PA9、PB7 | 复用 | 推挽 | 很高 | 无 | AF7 | `Core/Src/usart.c:140-152` |
-| PG14、PG9 | 复用 | 推挽 | 很高 | 无 | AF8 | `Core/Src/usart.c:217-222` |
-| PB4、PB3、PA7 | 复用 | 推挽 | 很高 | 无 | AF5 | `Core/Src/spi.c:83-95` |
-| PC9、PH7 | 复用 | 开漏 | 很高 | 无 | AF4 | `Core/Src/i2c.c:75-87` |
-| PA11、PA12 | 复用 | 推挽 | 很高 | 无 | AF10 | `USB_DEVICE/Target/usbd_conf.c:83-88` |
-| PF6 | 复用 | 推挽 | 低 | 无 | AF3 | `Core/Src/tim.c:104-109` |
-| PA4、PB0 | 输出 | 推挽 | 低 | 无 | 未使用 | `Core/Src/gpio.c:94-106` |
-| PG6、PH11 | 输出 | 推挽 | 低 | 无 | 未使用 | `Core/Src/gpio.c:68-86` |
-| PG3 | 中断 | 未使用 | 未设置 | 上拉 | 未使用 | `Core/Src/gpio.c:75-79` |
-| PA0 | 中断 | 未使用 | 未设置 | 上拉 | 未使用 | `Core/Src/gpio.c:88-92` |
+| PD0、PD1 | 复用 | 推挽 | 很高 | 无 | AF9 | `Core/Src/can.c` |
+| PB5、PB6 | 复用 | 推挽 | 很高 | 无 | AF9 | `Core/Src/can.c` |
+| PC11、PC10 | 复用 | 推挽 | 很高 | 无 | AF7 | `Core/Src/usart.c` |
+| PA9、PB7 | 复用 | 推挽 | 很高 | 无 | AF7 | `Core/Src/usart.c` |
+| PG14、PG9 | 复用 | 推挽 | 很高 | 无 | AF8 | `Core/Src/usart.c` |
+| PB4、PB3、PA7 | 复用 | 推挽 | 很高 | 无 | AF5 | `Core/Src/spi.c` |
+| PC9、PH7 | 复用 | 开漏 | 很高 | 无 | AF4 | `Core/Src/i2c.c` |
+| PA11、PA12 | 复用 | 推挽 | 很高 | 无 | AF10 | `USB_DEVICE/Target/usbd_conf.c` |
+| PF6 | 复用 | 推挽 | 低 | 无 | AF3 | `Core/Src/tim.c` |
+| PA4、PB0 | 输出 | 推挽 | 低 | 无 | 未使用 | `Core/Src/gpio.c` |
+| PG6、PH11 | 输出 | 推挽 | 低 | 无 | 未使用 | `Core/Src/gpio.c` |
+| PG3 | 中断 | 未使用 | 未设置 | 上拉 | 未使用 | `Core/Src/gpio.c` |
+| PA0 | 中断 | 未使用 | 未设置 | 上拉 | 未使用 | `Core/Src/gpio.c` |
 | PH0、PH1 | 复位默认 | 代码不配置 | 代码不配置 | 代码不配置 | 未使用 | HSE 使能后由振荡器电路使用 |
 | PA13、PA14 | 复用 | 推挽 | 很高 | 上拉 | AF0 | 由调试端口默认配置 |
 
@@ -111,11 +122,11 @@ stateDiagram-v2
 
 ## 片选、定时器通道与开漏三处细节
 
-片选引脚由 GPIO 层配置，不由驱动配置。`Core/Src/gpio.c:63` 与 `:66` 在配置成输出之前先把 ODR 写成高电平，保证 SPI 通信开始前 PA4 与 PB0 已经是高电平的空闲状态。驱动只负责拉低与拉高，配置见 `BMI088/Src/BMI088.cpp:181-193`，引脚编号在 `:343-345` 传入构造函数。把 `HAL_GPIO_WritePin()` 移到 `HAL_GPIO_Init()` 之后，片选会先出现一段低电平。
+片选引脚由 GPIO 层配置，不由驱动配置。`Core/Src/gpio.c` 与  在配置成输出之前先把 ODR 写成高电平，保证 SPI 通信开始前 PA4 与 PB0 已经是高电平的空闲状态。驱动只负责拉低与拉高，配置见 `BMI088/Src/BMI088.cpp`，引脚编号在  传入构造函数。把 `HAL_GPIO_WritePin()` 移到 `HAL_GPIO_Init()` 之后，片选会先出现一段低电平。
 
-PF6 的配置不在 `gpio.c` 里，而在 `HAL_TIM_MspPostInit()`（`Core/Src/tim.c:90-116`）。CubeMX 把带引脚的定时器通道单独生成到 post-init 函数，由 `MX_TIM10_Init()` 末尾第 67 行调用。查找定时器通道引脚时，只看 `gpio.c` 会漏掉它。
+PF6 的配置不在 `gpio.c` 里，而在 `HAL_TIM_MspPostInit()`（`Core/Src/tim.c`）。CubeMX 把带引脚的定时器通道单独生成到 post-init 函数，由 `MX_TIM10_Init()` 末尾调用。查找定时器通道引脚时，只看 `gpio.c` 会漏掉它。
 
-I2C3 用开漏加外部上拉。`Core/Src/i2c.c:77` 与 `:84` 都写 `GPIO_NOPULL`，片内上下拉不使能，400 kHz 总线的上拉电阻在板上。把这里改成 `GPIO_PULLUP` 不会提高总线质量，只会叠加一组弱上拉。
+I2C3 用开漏加外部上拉。`Core/Src/i2c.c` 与  都写 `GPIO_NOPULL`，片内上下拉不使能，400 kHz 总线的上拉电阻在板上。把这里改成 `GPIO_PULLUP` 不会提高总线质量，只会叠加一组弱上拉。
 
 速度分两档。所有复用引脚用 `GPIO_SPEED_FREQ_VERY_HIGH`，纯输出与 TIM10 通道用 `GPIO_SPEED_FREQ_LOW`。加热 PWM 的边沿速率不影响控制精度，低速档可以少一些开关噪声。
 
@@ -125,15 +136,15 @@ I2C3 用开漏加外部上拉。`Core/Src/i2c.c:77` 与 `:84` 都写 `GPIO_NOPUL
 
 | # | 判断偏差 | 表现 | 依据 |
 | --- | --- | --- | --- |
-| 1 | 认为端口时钟未开会报错 | `HAL_GPIO_Init()` 返回 `void` | `stm32f4xx_hal_gpio.c:164` |
-| 2 | 复用编号按引脚号顺序排 | `AFRH` 管 8 至 15 号，`AFRL` 管 0 至 7 号 | `:224-227` |
-| 3 | 认为方向在复用编号之前写 | 顺序相反，先写编号后写方向 | `:231-234` |
-| 4 | 认为 `HAL_GPIO_Init()` 会开 NVIC | 需单独调用 `HAL_NVIC_EnableIRQ()` | `:249-280` |
-| 5 | 同一引脚被两处配置 | 后写覆盖先写，`main.c:110` 之后各 MspInit 依次执行 | 调用顺序 |
+| 1 | 认为端口时钟未开会报错 | `HAL_GPIO_Init()` 返回 `void` | `stm32f4xx_hal_gpio.c` |
+| 2 | 复用编号按引脚号顺序排 | `AFRH` 管 8 至 15 号，`AFRL` 管 0 至 7 号 | 参考手册 |
+| 3 | 认为方向在复用编号之前写 | 顺序相反，先写编号后写方向 | `stm32f4xx_hal_gpio.c` |
+| 4 | 认为 `HAL_GPIO_Init()` 会开 NVIC | 需单独调用 `HAL_NVIC_EnableIRQ()` | `stm32f4xx_hal_gpio.c` |
+| 5 | 同一引脚被两处配置 | 后写覆盖先写，`main.c` 之后各 MspInit 依次执行 | 调用顺序 |
 | 6 | 认为 EXTI 配了就会触发 | PA0 与 PG3 未使能 NVIC，也无服务函数与回调 | 工程内无实现 |
-| 7 | 片选初值写在 `HAL_GPIO_Init()` 之后 | 首次 SPI 事务偶发读回全零 | `gpio.c:63`、`:66` |
-| 8 | 给 I2C 加片内上拉 | 与板上电阻并联，边沿变缓 | `i2c.c:77`、`:84` |
-| 9 | 在 `gpio.c` 里找 PF6 | 它在 `HAL_TIM_MspPostInit()` | `tim.c:90-116` |
+| 7 | 片选初值写在 `HAL_GPIO_Init()` 之后 | 首次 SPI 事务偶发读回全零 | `gpio.c` |
+| 8 | 给 I2C 加片内上拉 | 与板上电阻并联，边沿变缓 | `i2c.c` |
+| 9 | 在 `gpio.c` 里找 PF6 | 它在 `HAL_TIM_MspPostInit()` | `tim.c` |
 
 第三行与第五行合起来说明同一件事：配置结果取决于最后一次写入，而写入顺序由调用顺序决定。查找引脚冲突时应当按调用顺序核对，而不是只看一个文件。
 
@@ -194,13 +205,13 @@ I2C3 用开漏加外部上拉。`Core/Src/i2c.c:77` 与 `:84` 都写 `GPIO_NOPUL
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c` | 片选初值（:63、:66）、输出引脚（:68-86、:94-106）、中断引脚（:75-79、:88-92） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c` | CAN1 与 CAN2 复用配置（:117-122、:150-155） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | USART1、USART3、USART6 复用配置（:140-152、:171-176、:217-222） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 复用配置（:83-95） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/i2c.c` | I2C3 开漏与上下拉（:75-87、:77、:84） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 通道引脚（:67、:90-116）与配置（:104-109） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | USB OTG FS 引脚（:83-88） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 片选使用（:181-193）与引脚编号传入（:343-345） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | `MX_GPIO_Init()` 调用顺序（:110） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` | `HAL_GPIO_Init()` 全部写入（:164、:194-197、:200-203、:212-215、:224-227、:231-234、:240-246、:249-280） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c` | 片选初值、输出引脚、中断引脚 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/can.c` | CAN1 与 CAN2 复用配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/usart.c` | USART1、USART3、USART6 复用配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 复用配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/i2c.c` | I2C3 开漏与上下拉 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/tim.c` | TIM10 通道引脚与配置 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/USB_DEVICE/Target/usbd_conf.c` | USB OTG FS 引脚 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 片选使用与引脚编号传入 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | `MX_GPIO_Init()` 调用顺序 |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c` | `HAL_GPIO_Init()` 全部写入 |

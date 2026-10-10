@@ -62,16 +62,16 @@ $$\theta(t) = \int_0^t \omega_{meas}\,d\tau = \int_0^t \omega_{true}\,d\tau + \i
 
 ```mermaid
 flowchart TD
-    A["环境温度与自发热变化"] --> B["硅结构杨氏模量与谐振频率变化"]
-    A --> C["封装与粘接层热应力变化"]
-    A --> D["驱动环增益与正交耦合变化"]
-    B --> E["零偏与标度因数漂移"]
-    C --> E
-    D --> E
-    E --> F["陀螺输出叠加缓变偏置"]
-    F --> G["姿态解算对陀螺积分"]
-    G --> H["yaw 与水平角随时间漂移"]
-    H --> I["云台瞄准与底盘航向产生偏差"]
+ A["环境温度与自发热变化"] --> B["硅结构杨氏模量与谐振频率变化"]
+ A --> C["封装与粘接层热应力变化"]
+ A --> D["驱动环增益与正交耦合变化"]
+ B --> E["零偏与标度因数漂移"]
+ C --> E
+ D --> E
+ E --> F["陀螺输出叠加缓变偏置"]
+ F --> G["姿态解算对陀螺积分"]
+ G --> H["yaw 与水平角随时间漂移"]
+ H --> I["云台瞄准与底盘航向产生偏差"]
 ```
 
 ## 目标温度 45 °C 的取舍
@@ -90,12 +90,12 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> 冷启动
-    冷启动 --> 升温: 上电时温度远低于目标
-    升温 --> 接近目标: 高占空比持续供热
-    接近目标 --> 热平衡: 温度进入目标附近
-    热平衡 --> 接近目标: 环境散热增大 温度回落
-    热平衡 --> 热平衡: 零偏漂移被压缩到很小的范围
+ [*] --> 冷启动
+ 冷启动 --> 升温: 上电时温度远低于目标
+ 升温 --> 接近目标: 高占空比持续供热
+ 接近目标 --> 热平衡: 温度进入目标附近
+ 热平衡 --> 接近目标: 环境散热增大 温度回落
+ 热平衡 --> 热平衡: 零偏漂移被压缩到很小的范围
 ```
 
 ## 恒温把漂移压到什么量级
@@ -115,23 +115,23 @@ stateDiagram-v2
 
 | 项目 | 位置 | 说明 |
 | --- | --- | --- |
-| 目标温度默认值 | `PID/Inc/temp_pid.h:20` | 成员 `target_temp` 初始值 45.0 |
-| 运行期目标 | `Task/Src/ImuTask.cpp:46` | `ImuTempControl_Update(45, temp, 0.001f)`，字面量 45 |
-| 温度读取 | `BMI088/Src/BMI088.cpp:141-148` | 读 `BMI088_TEMP_M` 与 `BMI088_TEMP_L` 并做 11 位补码扩展 |
-| 温度换算 | `BMI088/Src/BMI088.cpp:162` | `real_.temp = raw * 0.125 + 23.0` |
-| 换算常数 | `BMI088/BMI088config.h:193-194` | `BMI088_TEMP_FACTOR 0.125f` 与 `BMI088_TEMP_OFFSET 23.0f` |
-| 温度上传 | `Task/Src/ImuTask.cpp:107` | `imu_data.temperature = temp` |
-| PWM 初始化 | `Task/Src/ImuTask.cpp:36` | `ImuTempControl_Init()`，内部启动 TIM10 通道 1 |
-| TIM10 参数 | `Core/Src/tim.c:43-45` | `Prescaler = 0`、`Period = 4999`，PWM1 模式 |
-| 温控更新 | `BMI088/Src/ImuTempControl.cpp:15-21` | 每个周期算 PID 并写比较值 |
+| 目标温度默认值 | `PID/Inc/temp_pid.h` | 成员 `target_temp` 初始值 45.0 |
+| 运行期目标 | `Task/Src/ImuTask.cpp` | `ImuTempControl_Update(45, temp, 0.001f)`，字面量 45 |
+| 温度读取 | `BMI088/Src/BMI088.cpp` | 读 `BMI088_TEMP_M` 与 `BMI088_TEMP_L` 并做 11 位补码扩展 |
+| 温度换算 | `BMI088/Src/BMI088.cpp` | `real_.temp = raw * 0.125 + 23.0` |
+| 换算常数 | `BMI088/BMI088config.h` | `BMI088_TEMP_FACTOR 0.125f` 与 `BMI088_TEMP_OFFSET 23.0f` |
+| 温度上传 | `Task/Src/ImuTask.cpp` | `imu_data.temperature = temp` |
+| PWM 初始化 | `Task/Src/ImuTask.cpp` | `ImuTempControl_Init()`，内部启动 TIM10 通道 1 |
+| TIM10 参数 | `Core/Src/tim.c` | `Prescaler = 0`、`Period = 4999`，PWM1 模式 |
+| 温控更新 | `BMI088/Src/ImuTempControl.cpp` | 每个周期算 PID 并写比较值 |
 
-IMU 任务的循环末尾是 `DWT_Delay_ms(1)`（`Task/Src/ImuTask.cpp:111`），循环体还要完成 SPI 读取与姿态解算，实际周期略大于 1 ms，而传给温控的 `dt` 固定为 0.001f（`:46`）。温度环的时间常数在秒级，这一偏差的影响小于速度环，但积分项的数值仍会随之偏移。
+IMU 任务的循环末尾是 `DWT_Delay_ms(1)`（`Task/Src/ImuTask.cpp`），循环体还要完成 SPI 读取与姿态解算，实际周期略大于 1 ms，而传给温控的 `dt` 固定为 0.001f。温度环的时间常数在秒级，这一偏差的影响小于速度环，但积分项的数值仍会随之偏移。
 
-关于定时器的既有结论：`Core/Src/tim.c:43-45` 的 `PSC=0`、`ARR=4999`，配 APB2 定时器时钟 168 MHz，得到 33.6 kHz 的 PWM；`Core/Src/main.c:183-185` 的 APB2 分频为 2，PCLK2 为 84 MHz，定时器时钟是它的两倍。这一路 PWM 的推导在文档 `02-STM32 与 HAL/02-定时器与PWM/02-PWM原理与配置.md` 里已经给出，本单元第 4 篇只讨论占空比换算。
+关于定时器的既有结论：`Core/Src/tim.c` 的 `PSC=0`、`ARR=4999`，配 APB2 定时器时钟 168 MHz，得到 33.6 kHz 的 PWM；`Core/Src/main.c` 的 APB2 分频为 2，PCLK2 为 84 MHz，定时器时钟是它的两倍。这一路 PWM 的推导在文档 `02-STM32 与 HAL/02-定时器与PWM/02-PWM原理与配置.md` 里已经给出，本单元第 4 篇只讨论占空比换算。
 
 ## 温度读数经过了哪些换算
 
-原始温度是 11 位有符号值，从两个寄存器字节拼出来，再做补码扩展，最后按线性关系换成摄氏度。换算常数在 `BMI088/BMI088config.h:193-194`，代码里的表达式在 `BMI088/Src/BMI088.cpp:162`。
+原始温度是 11 位有符号值，从两个寄存器字节拼出来，再做补码扩展，最后按线性关系换成摄氏度。换算常数在 `BMI088/BMI088config.h`，代码里的表达式在 `BMI088/Src/BMI088.cpp`。
 
 $$T = 0.125 \times R + 23.0$$
 
@@ -152,8 +152,8 @@ $R = 0$ 时温度等于偏移量 23.0 °C，这是这条线性关系的零点。
 | # | 易错点 | 表现 | 依据 |
 | --- | --- | --- | --- |
 | 1 | 认为温控能消除随机噪声 | 温控后 yaw 仍会抖动 | 噪声项与零偏项来源不同 |
-| 2 | 把 45 当成寄存器配置 | 45 只是 PID 目标字面量 | `Task/Src/ImuTask.cpp:46` |
-| 3 | 忽略温度读数的单位 | 原始值要乘 0.125 再偏移 23 | `BMI088/Src/BMI088.cpp:162` |
+| 2 | 把 45 当成寄存器配置 | 45 只是 PID 目标字面量 | `Task/Src/ImuTask.cpp` |
+| 3 | 忽略温度读数的单位 | 原始值要乘 0.125 再偏移 23 | `BMI088/Src/BMI088.cpp` |
 | 4 | 认为目标温度越高越好 | 加热功率与热应力上升 | 第 3 节的取舍 |
 | 5 | 用环境温度代替芯片温度 | 稳定的是加热电阻附近 | 热梯度，未实测 |
 

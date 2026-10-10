@@ -64,11 +64,11 @@ flowchart TD
   CS2 --> GYR
 ```
 
-片选由软件控制，所以 `Core/Src/spi.c:48` 把 NSS 设为 `SPI_NSS_SOFT`。SPI 外设不会自动翻转任何一根片选线。
+片选也叫 NSS（从设备选择），低电平有效。本工程把它交给软件控制，所以 `Core/Src/spi.c` 把 NSS 设为 `SPI_NSS_SOFT`，SPI 外设不会自动翻转任何一根片选线。
 
 ## SPI 模式 3 的选择依据
 
-STM32 的 SPI 有四种模式，由时钟极性 CPOL 与时钟相位 CPHA 决定。BMI088 支持模式 0 与模式 3。本工程取模式 3：空闲时 SCK 为高，数据在第二个边沿采样，对应 `Core/Src/spi.c:46-47` 的 `SPI_POLARITY_HIGH` 与 `SPI_PHASE_2EDGE`。
+STM32 的 SPI 有四种模式，由时钟极性 CPOL 与时钟相位 CPHA 决定：CPOL 给出空闲时 SCK 的电平，CPHA 决定在第一个还是第二个边沿采样。BMI088 支持模式 0 与模式 3，本工程取模式 3：空闲时 SCK 为高，数据在第二个边沿采样，对应 `Core/Src/spi.c` 的 `SPI_POLARITY_HIGH` 与 `SPI_PHASE_2EDGE`。
 
 选模式 3 而不是模式 0，实际效果相同，因为两种模式都在 SCK 的同一类边沿上采样数据稳定区。需要避免的是把 CPHA 配成第一边沿采样，那会整体错位一位。
 
@@ -76,11 +76,11 @@ STM32 的 SPI 有四种模式，由时钟极性 CPOL 与时钟相位 CPHA 决定
 
 ## 时钟链把 84 MHz 分频成 1.3125 MHz
 
-SPI1 挂在 APB2 总线上。系统时钟配置里 APB2 为 HCLK 二分频，HCLK 为 168 MHz，所以 APB2 为 84 MHz（`Core/Src/main.c:182-185`）。SPI1 的波特率预分频在 `Core/Src/spi.c:49` 取 `SPI_BAUDRATEPRESCALER_64`，于是
+SPI1 挂在 APB2 总线上。系统时钟配置里 APB2 为 HCLK 二分频，HCLK 为 168 MHz，所以 APB2 为 84 MHz（`Core/Src/main.c`）。SPI1 的波特率预分频在 `Core/Src/spi.c` 取 `SPI_BAUDRATEPRESCALER_64`，于是
 
 $$f_{\text{SCK}} = \frac{f_{\text{APB2}}}{64} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
-该数值与 `2026sentriomeni.ioc:405` 的 `SPI1.CalculateBaudRate=1.3125 MBits/s` 一致。BMI088 手册给出的 SPI 时钟上限为 10 MHz，1.3125 MHz 留有很大余量。一次读 8 字节需要 $8 \times 8 / 1.3125\ \text{MHz} \approx 48.8\ \mu\text{s}$；只有初始化路径有两次 150 µs 等待（`BMI088/BMI088config.h:207`），数据读取路径不含等待，单次读取仍在百微秒量级。
+该数值与 `2026sentriomeni.ioc` 的 `SPI1.CalculateBaudRate=1.3125 MBits/s` 一致。BMI088 手册给出的 SPI 时钟上限为 10 MHz，1.3125 MHz 留有很大余量。一次读 8 字节需要 $8 \times 8 / 1.3125\ \text{MHz} \approx 48.8\ \mu\text{s}$；只有初始化路径有两次 150 µs 等待（`BMI088/BMI088config.h`），数据读取路径不含等待，单次读取仍在百微秒量级。
 
 ```mermaid
 sequenceDiagram
@@ -106,33 +106,53 @@ sequenceDiagram
 
 分开片选后，同一时刻只有一块传感芯片响应，另一块的 MISO 保持高阻。软复位、配置写入、数据读取也都可以独立进行。
 
-读命令把寄存器地址的最高位置 1，最低位七位保留地址，见 `BMI088/Src/BMI088.cpp:207` 与 `:239`。加速度计的单寄存器读在地址与数据之间需要一个哑字节，陀螺仪不需要。Linux 内核的 `bmi088-accel-spi.c` 在读函数里明确写了 `addr[1] = 0; /* Read requires a dummy byte transfer */`，把地址与哑字节一起发送后再读数据。驱动代码遵循了这一差异。
+读命令把寄存器地址的最高位置 1，最低位七位保留地址，见 `BMI088/Src/BMI088.cpp`。加速度计的单寄存器读在地址与数据之间需要一个哑字节，陀螺仪不需要。Linux 内核的 `bmi088-accel-spi.c` 在读函数里明确写了 `addr[1] = 0; /* Read requires a dummy byte transfer */`，把地址与哑字节一起发送后再读数据。驱动代码遵循了这一差异。
+
+哑字节是一次不携带有效数据的占位传输，它给出芯片把寄存器值搬进输出寄存器的时钟周期。简化后的两种读命令如下：
+
+```c
+/* 简化自 BMI088/Src/BMI088.cpp 的读寄存器实现 */
+#define BMI088_READ_BIT 0x80   /* 读命令：地址最高位置 1 */
+
+/* 加速度计：地址 + 哑字节 + 数据 */
+spi_cs_low(ACC_CS);
+spi_tx(reg | BMI088_READ_BIT);
+spi_tx_dummy();            /* 哑字节 */
+val = spi_rx();
+spi_cs_high(ACC_CS);
+
+/* 陀螺仪：地址 + 数据，没有哑字节 */
+spi_cs_low(GYRO_CS);
+spi_tx(reg | BMI088_READ_BIT);
+val = spi_rx();
+spi_cs_high(GYRO_CS);
+```
 
 ## 引脚分配与实例构造
 
 | 信号 | 引脚 | 配置 | 源码位置 |
 | --- | --- | --- | --- |
-| SPI1_SCK | PB3 | 复用推挽，AF5 | `Core/Src/spi.c:83-88` |
-| SPI1_MISO | PB4 | 复用推挽，AF5 | `Core/Src/spi.c:83-88` |
-| SPI1_MOSI | PA7 | 复用推挽，AF5 | `Core/Src/spi.c:90-95` |
-| 加速度计片选 | PA4 | 通用推挽输出 | `Core/Src/gpio.c:94-99` |
-| 陀螺仪片选 | PB0 | 通用推挽输出 | `Core/Src/gpio.c:101-106` |
+| SPI1_SCK | PB3 | 复用推挽，AF5 | `Core/Src/spi.c` |
+| SPI1_MISO | PB4 | 复用推挽，AF5 | `Core/Src/spi.c` |
+| SPI1_MOSI | PA7 | 复用推挽，AF5 | `Core/Src/spi.c` |
+| 加速度计片选 | PA4 | 通用推挽输出 | `Core/Src/gpio.c` |
+| 陀螺仪片选 | PB0 | 通用推挽输出 | `Core/Src/gpio.c` |
 
-两条片选在上电时被置为高电平（`Core/Src/gpio.c:63` 与 `:66`），保证 SPI 外设初始化期间没有传感芯片被选中。
+两条片选在上电时被置为高电平（`Core/Src/gpio.c`），保证 SPI 外设初始化期间没有传感芯片被选中。
 
 实例在文件末尾构造，把两个片选引脚作为构造参数传入：
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:343-345 */
+/* BMI088/Src/BMI088.cpp */
 static BMI088 bmi088_instance(&hspi1,
                               GPIOA, GPIO_PIN_4,
                               GPIOB, GPIO_PIN_0);
 ```
 
-SPI1 的参数块（`Core/Src/spi.c:42-53`）固定了主模式、双线全双工、8 位、模式 3、软件 NSS、预分频 64 与高位在先：
+SPI1 的参数块（`Core/Src/spi.c`）固定了主模式、双线全双工、8 位、模式 3、软件 NSS、预分频 64 与高位在先：
 
 ```c
-/* Core/Src/spi.c:42-53 */
+/* Core/Src/spi.c */
 hspi1.Instance = SPI1;
 hspi1.Init.Mode = SPI_MODE_MASTER;
 hspi1.Init.Direction = SPI_DIRECTION_2LINES;
@@ -148,15 +168,29 @@ hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
 
 构造函数把 `hspi_` 保存为成员，但实际收发函数直接引用全局 `extern SPI_HandleTypeDef hspi1;`，没有使用该成员：
 
-- `BMI088/Src/BMI088.cpp:8` 声明 `hspi1`。
-- `:263` 的 `BMI088_readandwrite_byte()` 调用 `HAL_SPI_TransmitReceive(&hspi1, ...)`。
-- `:295` 的 DMA 路径调用 `HAL_SPI_TransmitReceive_DMA(&hspi1, ...)`。
+- `BMI088/Src/BMI088.cpp` 声明 `hspi1`。
+- `BMI088_readandwrite_byte()` 调用 `HAL_SPI_TransmitReceive(&hspi1, ...)`。
+- DMA 路径调用 `HAL_SPI_TransmitReceive_DMA(&hspi1, ...)`。
 
 因此这个类在同一个工程里只能挂一路 SPI。若要迁移到别的 SPI 外设，需要把这两处换成 `hspi_`。
 
+简化后的字节收发函数：
+
+```c
+/* 简化自 BMI088/Src/BMI088.cpp，外设句柄写死为全局 hspi1 */
+extern SPI_HandleTypeDef hspi1;
+
+uint8_t BMI088_readandwrite_byte(uint8_t tx) {          /* 非 DMA 路径 */
+  uint8_t rx;
+  HAL_SPI_TransmitReceive(&hspi1, &tx, &rx, 1, 100);
+  return rx;
+}
+/* DMA 路径同样直接传 &hspi1，而不是构造时保存的成员 */
+```
+
 ## 唯一调用点
 
-`BMI088_Init()` 与 `BMI088_Read()` 由 C 接口导出（`BMI088/Src/BMI088.cpp:347-353`），在应用层只有 `Task/Src/ImuTask.cpp` 使用：初始化在 `:35`，读取在 `:40` 与 `:43`。云台板与底盘板的调用位置相同，行号相差在个位数以内。
+`BMI088_Init()` 与 `BMI088_Read()` 由 C 接口导出（`BMI088/Src/BMI088.cpp`），在应用层只有 `Task/Src/ImuTask.cpp` 使用：初始化与数据读取都由它调用。云台板与底盘板的调用位置相同，逻辑一致。
 
 ## 接口层面的易错点
 
@@ -170,11 +204,11 @@ NSS 若设为硬件输入模式，SPI 在片选被拉低时会误判为从机被
 
 ### 模式配错
 
-BMI088 只支持模式 0 与模式 3。若 CPHA 配成第一边沿采样，读回的数据会整体错位一位。现象是芯片 ID 偶尔正确、偶尔错误，且随温度与走线变化。核对 `Core/Src/spi.c:46-47` 的两行为高电平空闲与第二边沿采样。
+BMI088 只支持模式 0 与模式 3。若 CPHA 配成第一边沿采样，读回的数据会整体错位一位。现象是芯片 ID 偶尔正确、偶尔错误，且随温度与走线变化。核对 `Core/Src/spi.c` 的两行为高电平空闲与第二边沿采样。
 
 ### 片选空闲电平
 
-片选上电默认电平由 `Core/Src/gpio.c:63` 与 `:66` 设置。若被改成低电平，两颗传感芯片在 SPI 初始化阶段就被选中，可能误进入某种命令序列。空闲态保持高电平。
+片选上电默认电平由 `Core/Src/gpio.c` 设置。若被改成低电平，两颗传感芯片在 SPI 初始化阶段就被选中，可能误进入某种命令序列。空闲态保持高电平。
 
 ### 时钟按总线频率估算
 
@@ -219,13 +253,13 @@ BMI088 只支持模式 0 与模式 3。若 CPHA 配成第一边沿采样，读�
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Inc/BMI088.h` | 类定义与 C 接口（:54-56、:119-120） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 实例与片选引脚（:343-345）、读命令置位（:207、:239）、写死的外设（:263、:295） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 参数（:42-53）、引脚复用（:83-95）、DMA 流（:99-132） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/gpio.c` | 片选输出电平与模式（:63、:66、:94-106） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Core/Src/main.c` | APB2 分频（:182-185） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/2026sentriomeni.ioc` | 计算波特率（:405） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 唯一调用点（:35、:40、:43） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Core/Src/spi.c` | 底盘板 SPI1 参数一致（:42-53） |
+| `BMI088/Inc/BMI088.h` | 类定义与 C 接口 |
+| `BMI088/Src/BMI088.cpp` | 实例与片选引脚、读命令置位、写死的外设 |
+| `Core/Src/spi.c` | SPI1 参数、引脚复用、DMA 流 |
+| `Core/Src/gpio.c` | 片选输出电平与模式 |
+| `Core/Src/main.c` | APB2 分频 |
+| `2026sentriomeni.ioc` | 计算波特率 |
+| `Task/Src/ImuTask.cpp` | 唯一调用点 |
+| `底盘板 Core/Src/spi.c` | 底盘板 SPI1 参数一致 |
 
 > 云台板与底盘板在上面这几个文件上内容一致，差异集中在灵敏度系数，见《寄存器与量程配置》。

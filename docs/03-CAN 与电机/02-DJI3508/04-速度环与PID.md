@@ -21,7 +21,7 @@ updated: 2026-10-07
 
 ## 2. SpeedPID 的算法
 
-基类实现在 `PID/PidBase.h:29-61`：
+基类实现在 `PID/PidBase.h`：
 
 ```c
 virtual float Calculate(float target, float actual, float dt) {
@@ -62,10 +62,10 @@ $$I_k = \mathrm{clamp}\left(I_{k-1} + K_i e_k \, dt,\ -I_{\max},\ I_{\max}\right
 
 | 特性 | 代码 | 作用 |
 | --- | --- | --- |
-| 目标方向穿越清积分 | `PidBase.h:33-35` | 目标从正变负时清掉历史积分，避免换向时先被旧积分拖住 |
-| 输出限幅 | `PidBase.h:52` | 每周期输出都夹在正负 `maxOutput` 内 |
+| 目标方向穿越清积分 | `PidBase.h` | 目标从正变负时清掉历史积分，避免换向时先被旧积分拖住 |
+| 输出限幅 | `PidBase.h` | 每周期输出都夹在正负 `maxOutput` 内 |
 
-`SpeedPID` 在派生类里覆写了 `Calculate`（`PID/Src/speed_pid.cpp:59-110`），在基类逻辑前加了一层误差限幅：
+`SpeedPID` 在派生类里覆写了 `Calculate`（`PID/Src/speed_pid.cpp`），在基类逻辑前加了一层误差限幅：
 
 ```c
 float error = target - actual;
@@ -106,11 +106,11 @@ flowchart TD
 
 `SpeedPID` 的 `dt` 由调用方在每次计算时显式传入，类内部不维护采样时间。三处调用点的传参与任务周期如下：
 
-| 使用处 | 传入的 dt | 任务周期 | 行号 |
-| --- | --- | --- | --- |
-| 底盘四轮 | `0.01`，来自全局变量 `dt` | `osDelay(1)`，即 1 ms | `ChassisTask.cpp:20`、`:89-92`、`:94` |
-| 云台摩擦轮 | `0.01f` | `osDelay(1)`，即 1 ms | `FireTask.cpp:91-106`、`:207` |
-| 云台拨弹盘 | `0.01f` | `osDelay(1)`，即 1 ms | `FireTask.cpp:153-195`、`:207` |
+| 使用处 | 传入的 dt | 任务周期 |
+| --- | --- | --- |
+| 底盘四轮 | `0.01`，来自全局变量 `dt` | `osDelay(1)`，即 1 ms |
+| 云台摩擦轮 | `0.01f` | `osDelay(1)`，即 1 ms |
+| 云台拨弹盘 | `0.01f` | `osDelay(1)`，即 1 ms |
 
 传参 10 ms 与实际 1 ms 不一致，积分与微分两个环节各偏一个方向：
 
@@ -125,7 +125,7 @@ $$\Delta I_{\text{每秒}} = \frac{K_i e \cdot dt_{\text{参数}}}{T_{\text{实�
 
 ## 4. 底盘四轮速度环
 
-底盘四轮的增益与限幅（`Task/Src/ChassisTask.cpp:38-42`）：
+底盘四轮的增益与限幅（`Task/Src/ChassisTask.cpp`）：
 
 | 参数 | 值 | 含义 |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ $$\Delta I_{\text{每秒}} = \frac{K_i e \cdot dt_{\text{参数}}}{T_{\text{实�
 | `ERR_BOUNDARY` | `25000.0f` | 误差限幅 |
 | `ramp_rate` | `350.0f` | 每周期最大减速量 |
 
-四个实例用同一组参数创建（`:46-52`），反馈取四轮结构体的 `rotor_speed`（`:89-92`）：
+四个实例用同一组参数创建，反馈取四轮结构体的 `rotor_speed`：
 
 ```c
 chassis_output_motor_1 = motor_1_PID.Calculate(motor_1_target, chassis_motor_1.rotor_speed, dt);
@@ -145,7 +145,7 @@ chassis_output_motor_3 = motor_3_PID.Calculate(motor_3_target, chassis_motor_3.r
 chassis_output_motor_4 = motor_4_PID.Calculate(motor_4_target, chassis_motor_4.rotor_speed, dt);
 ```
 
-目标值先经过一个斜坡函数（`:70-79`）：
+目标值先经过一个斜坡函数：
 
 ```c
 auto ramp = [](float current, float target, float rate) {
@@ -158,16 +158,16 @@ auto ramp = [](float current, float target, float rate) {
 };
 ```
 
-加速方向直接返回目标，减速方向每周期最多减 `350`。这个函数只限制减速斜率，不限制加速斜率，与"斜坡"这个名字给人的印象不同。四轮目标全为 0 时对四个实例调用 `Clear()`（`:63-68`），其余情况不清积分。
+加速方向直接返回目标，减速方向每周期最多减 `350`。这个函数只限制减速斜率，不限制加速斜率，与"斜坡"这个名字给人的印象不同。四轮目标全为 0 时对四个实例调用 `Clear()`，其余情况不清积分。
 
 两处实现差异要留意：
 
 | 项目 | 底盘板 `PID/Src/speed_pid.cpp` | 云台板 `PID/Src/speed_pid.cpp` |
 | --- | --- | --- |
-| 积分限幅 | `:86-90` 被注释掉 | `:87-91` 生效 |
+| 积分限幅 |  被注释掉 |  生效 |
 | 效果 | 积分只受条件积分约束，没有硬上限 | 积分被夹到 `maxIntegral` |
 
-目标量纲是一个隐性约定。四轮目标在 `Task/Src/ControlCenterTask.cpp:119-128` 由运动学算出，输入来自遥控器通道乘 `5.3f`（`:93-97`）或上位机速度乘 `2000.0f`（`:87-90`），算出的值与 `rotor_speed`（单位 rpm）直接比较。也就是说这套目标值经过了一轮手工标定，数值上接近 rpm 但没有物理单位定义，改动减速比或通道系数时要整体重新标定。
+目标量纲是一个隐性约定。四轮目标在 `Task/Src/ControlCenterTask.cpp` 由运动学算出，输入来自遥控器通道乘 `5.3f`或上位机速度乘 `2000.0f`，算出的值与 `rotor_speed`（单位 rpm）直接比较。也就是说这套目标值经过了一轮手工标定，数值上接近 rpm 但没有物理单位定义，改动减速比或通道系数时要整体重新标定。
 
 ```mermaid
 flowchart TD
@@ -185,32 +185,32 @@ flowchart TD
 
 ## 5. 云台摩擦轮与拨弹盘
 
-云台的摩擦轮是双轮对转：右轮目标 5800 rpm，左轮目标 -5800 rpm（`Task/Src/FireTask.cpp:105-106`）：
+云台的摩擦轮是双轮对转：右轮目标 5800 rpm，左轮目标 -5800 rpm（`Task/Src/FireTask.cpp`）：
 
 | 参数 | 值 | 位置 |
 | --- | --- | --- |
-| 摩擦轮增益 | `20.0f`、`0.11f`、`0.09f` | `FireTask.cpp:32-33` |
-| 摩擦轮输出限幅 | ±8000 | `FireTask.cpp:32-33` |
-| 摩擦轮误差限幅 | ±250 | `FireTask.cpp:32-33` |
-| 前馈 | 左 500、右 -500 | `FireTask.cpp:27-28` |
-| 差值环增益 | `15.0f`、`0.5f`、`0.05f` | `FireTask.cpp:79` |
-| 差值环输出限幅 | ±300 | `FireTask.cpp:79` |
+| 摩擦轮增益 | `20.0f`、`0.11f`、`0.09f` | `FireTask.cpp` |
+| 摩擦轮输出限幅 | ±8000 | `FireTask.cpp` |
+| 摩擦轮误差限幅 | ±250 | `FireTask.cpp` |
+| 前馈 | 左 500、右 -500 | `FireTask.cpp` |
+| 差值环增益 | `15.0f`、`0.5f`、`0.05f` | `FireTask.cpp` |
+| 差值环输出限幅 | ±300 | `FireTask.cpp` |
 
-差值环的作用是把两个轮子的转速和压到 0：因为两轮反向转，转速和的理想值是 0，实测和不为 0 就说明两轮受力不一致。送入差值环之前先做一阶低通（`:100-103`）：
+差值环的作用是把两个轮子的转速和压到 0：因为两轮反向转，转速和的理想值是 0，实测和不为 0 就说明两轮受力不一致。送入差值环之前先做一阶低通：
 
 $$y_k = 0.2\,x_k + 0.8\,y_{k-1}$$
 
-堵转判定基于时间窗（`:85-96`）：右轮转速连续 1 s 低于 5000 rpm 就进入反转分支，反转持续到误差时间超过 2 s 再恢复。这套判据依赖 `HAL_GetTick()`，与电机自身状态无关。
+堵转判定基于时间窗：右轮转速连续 1 s 低于 5000 rpm 就进入反转分支，反转持续到误差时间超过 2 s 再恢复。这套判据依赖 `HAL_GetTick()`，与电机自身状态无关。
 
-拨弹盘是串级结构：角度环输出速度目标，速度环跟踪该目标（`:142` 与 `:153`）：
+拨弹盘是串级结构：角度环输出速度目标，速度环跟踪该目标：
 
 | 环节 | 参数 | 位置 |
 | --- | --- | --- |
-| 角度环 `AnglePID` | `5.0f`、`0.5f`、`0.0f`，输出限幅 5000，积分限幅 3000 | `FireTask.cpp:36` |
-| 速度环 `SpeedPID` | `30.0f`、`0.5f`、`0.0f`，输出限幅 ±30000，误差限幅 ±2500 | `FireTask.cpp:39` |
-| 每周期目标增量 | 4000 计数 | `FireTask.cpp:45` |
+| 角度环 `AnglePID` | `5.0f`、`0.5f`、`0.0f`，输出限幅 5000，积分限幅 3000 | `FireTask.cpp` |
+| 速度环 `SpeedPID` | `30.0f`、`0.5f`、`0.0f`，输出限幅 ±30000，误差限幅 ±2500 | `FireTask.cpp` |
+| 每周期目标增量 | 4000 计数 | `FireTask.cpp` |
 
-拨弹盘的四阶段状态机（`:112-196`）：
+拨弹盘的四阶段状态机：
 
 ```mermaid
 stateDiagram-v2
@@ -235,16 +235,16 @@ stateDiagram-v2
 
 | # | 易错点 | 表现 | 源码位置 |
 | --- | --- | --- | --- |
-| 1 | dt 传 0.01 而任务周期是 1 ms | 积分每秒多累积 10 倍，微分偏小同样倍数 | `ChassisTask.cpp:20`、`:94` |
-| 2 | 底盘版积分限幅被注释 | 积分只受条件积分约束，没有硬上限 | 底盘板 `speed_pid.cpp:86-90` |
-| 3 | 把条件积分当成输出饱和检测 | 判断对象是比例加微分，总输出饱和后积分仍可能增长 | `PidBase.h:44` |
-| 4 | 把斜坡函数当成双向限速 | 只有减速被限制，加速分支直接给目标 | `ChassisTask.cpp:72-78` |
-| 5 | 误差限幅掩盖真实误差 | err 被截断后，比例项与积分项看到的都不是真实值 | `speed_pid.cpp:63-67` |
-| 6 | 只在四轮目标全 0 时清积分 | 三轮停车而一轮仍在动时不清积分 | `ChassisTask.cpp:57-68` |
-| 7 | 把目标量纲当作物理 rpm | 目标由标定系数得来，没有单位定义 | `ControlCenterTask.cpp:93-97` |
-| 8 | 拨弹盘输出限幅 30000 超过编码上限 | 电机电流环饱和，积分继续累积 | `FireTask.cpp:39` |
-| 9 | 方向穿越判据用乘积比较 | prevTarget 为 0 时乘积为 0，条件不成立 | `PidBase.h:33` |
-| 10 | 微分项取自误差差分 | 目标阶跃时会得到一个冲激型微分量 | `PidBase.h:38` |
+| 1 | dt 传 0.01 而任务周期是 1 ms | 积分每秒多累积 10 倍，微分偏小同样倍数 | `ChassisTask.cpp` |
+| 2 | 底盘版积分限幅被注释 | 积分只受条件积分约束，没有硬上限 | 底盘板 `speed_pid.cpp` |
+| 3 | 把条件积分当成输出饱和检测 | 判断对象是比例加微分，总输出饱和后积分仍可能增长 | `PidBase.h` |
+| 4 | 把斜坡函数当成双向限速 | 只有减速被限制，加速分支直接给目标 | `ChassisTask.cpp` |
+| 5 | 误差限幅掩盖真实误差 | err 被截断后，比例项与积分项看到的都不是真实值 | `speed_pid.cpp` |
+| 6 | 只在四轮目标全 0 时清积分 | 三轮停车而一轮仍在动时不清积分 | `ChassisTask.cpp` |
+| 7 | 把目标量纲当作物理 rpm | 目标由标定系数得来，没有单位定义 | `ControlCenterTask.cpp` |
+| 8 | 拨弹盘输出限幅 30000 超过编码上限 | 电机电流环饱和，积分继续累积 | `FireTask.cpp` |
+| 9 | 方向穿越判据用乘积比较 | prevTarget 为 0 时乘积为 0，条件不成立 | `PidBase.h` |
+| 10 | 微分项取自误差差分 | 目标阶跃时会得到一个冲激型微分量 | `PidBase.h` |
 
 ## 7. 小结
 
@@ -273,7 +273,7 @@ stateDiagram-v2
 ### 基础题
 
 1. 计算底盘四轮在实际周期 1 ms 条件下，等效积分增益与等效微分增益分别是标称值的多少倍。
-2. 某周期底盘四轮误差为 500、积分项为 300，按 `PidBase.h:44` 的条件判断该周期积分是否累加，并给出累加后的值，取 $K_i = 0.001$、$dt = 0.01$。
+2. 某周期底盘四轮误差为 500、积分项为 300，按 `PidBase.h` 的条件判断该周期积分是否累加，并给出累加后的值，取 $K_i = 0.001$、$dt = 0.01$。
 3. 说明摩擦轮差值环的目标为什么取 0，以及两轮转速和不为 0 的两种可能原因。
 
 ### 挑战题
@@ -286,11 +286,11 @@ stateDiagram-v2
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/PidBase.h` | `Calculate` 基类实现（`:29-61`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/speed_pid.cpp` | `SpeedPID::Calculate` 与 C 接口（`:59-123`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/speed_pid.h` | `SpeedPID` 声明（`:12-48`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/Task/Src/FireTask.cpp` | 摩擦轮与拨弹盘速度环（`:27-207`） |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/angle_pid.cpp` | 角度环与过零处理（`:7-30`） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ChassisTask.cpp` | 底盘四轮速度环（`:26-96`） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/Task/Src/ControlCenterTask.cpp` | 四轮目标生成与下发（`:85-154`） |
-| `/home/wyx/rm/2026SentriOmeniChassis/2026OmniSentryChassis/PID/Src/speed_pid.cpp` | 底盘版积分限幅被注释（`:83-91`） |
+| `PID/PidBase.h` | `Calculate` 基类实现 |
+| `PID/Src/speed_pid.cpp` | `SpeedPID::Calculate` 与 C 接口 |
+| `PID/Inc/speed_pid.h` | `SpeedPID` 声明 |
+| `Task/Src/FireTask.cpp` | 摩擦轮与拨弹盘速度环 |
+| `PID/Src/angle_pid.cpp` | 角度环与过零处理 |
+| `底盘板 Task/Src/ChassisTask.cpp` | 底盘四轮速度环 |
+| `底盘板 Task/Src/ControlCenterTask.cpp` | 四轮目标生成与下发 |
+| `底盘板 PID/Src/speed_pid.cpp` | 底盘版积分限幅被注释 |

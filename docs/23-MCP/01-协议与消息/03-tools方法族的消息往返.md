@@ -7,7 +7,7 @@ updated: 2026-10-08
 
 # tools 方法族的消息往返
 
-`tools` 是这份实现唯一完整支持的方法族，成员两个：`tools/list` 返回工具描述数组，`tools/call` 执行一个工具并返回文本内容（`backend/mcp/server.py:150-163`）。两个方法的响应形状不同：list 的 `result.tools` 是描述对象数组，call 的 `result` 是 `content` 与 `isError` 两项。
+`tools` 是这份实现唯一完整支持的方法族，成员两个：`tools/list` 返回工具描述数组，`tools/call` 执行一个工具并返回文本内容（`backend/mcp/server.py`）。两个方法的响应形状不同：list 的 `result.tools` 是描述对象数组，call 的 `result` 是 `content` 与 `isError` 两项。
 
 调用失败时有三种出路，分别落在不同位置：协议或参数或权限问题走 JSON-RPC 的 `error` 对象；工具自己返回“失败”时走 `result.isError = true`；执行器抛出的异常被网关包装成 `-32603`，又回到 `error`。模块文档把前两条写成“工具自身执行失败用 isError 表达”，实际代码还多了第三条，理解这一点才能正确读客户端收到的消息。
 
@@ -15,14 +15,14 @@ updated: 2026-10-08
 
 ## tools/list 的响应结构
 
-处理只有一行（`backend/mcp/server.py:150-151`）：
+处理只有一行（`backend/mcp/server.py`）：
 
 ```python
 def _tools_list(self) -> dict:
     return {"tools": self.gateway.list_tools()}
 ```
 
-网关的 `list_tools` 返回深拷贝并按名字排序的数组（`backend/mcp/gateway.py:155-156`），元素由 `mcp_tools` 派生（`:60-72`）。每个元素三个字段：
+网关的 `list_tools` 返回深拷贝并按名字排序的数组，元素由 `mcp_tools` 派生（都在 `backend/mcp/gateway.py`）。每个元素三个字段：
 
 | 字段 | 来源 |
 | --- | --- |
@@ -30,23 +30,23 @@ def _tools_list(self) -> dict:
 | `description` | 注册表的描述文本，缺失时为空串 |
 | `inputSchema` | 注册表的 `function.parameters` 深拷贝 |
 
-清单在网关构造时定一次，`tools/list` 每次返回新的深拷贝。客户端修改返回的对象不会影响服务端后续响应。响应条数与工具层白名单一致：回归测试断言名字集合等于注册表 read 层（`tests/backend/test_mcp_server.py:265-270`）。
+清单在网关构造时定一次，`tools/list` 每次返回新的深拷贝。客户端修改返回的对象不会影响服务端后续响应。响应条数与工具层白名单一致：回归测试断言名字集合等于注册表 read 层（`tests/backend/test_mcp_server.py`）。
 
 ## tools/call 的请求结构
 
-请求的 `params` 需要两个字段（`backend/mcp/server.py:154-155`）：
+请求的 `params` 需要两个字段（`backend/mcp/server.py`）：
 
 ```json
 {"name": "search_similar_cards", "arguments": {"query": "图论"}}
 ```
 
-`name` 必须是非空字符串，否则回 `-32602`，消息为“tools/call 缺少字符串参数 name”（`:156-157`）。`arguments` 缺失时归一成空对象（`:155`），因此无参工具可以只传 `name`。
+`name` 必须是非空字符串，否则回 `-32602`，消息为“tools/call 缺少字符串参数 name”。`arguments` 缺失时归一成空对象，因此无参工具可以只传 `name`。
 
-请求的 `id` 决定是否回复：通知形式的 call 直接返回 `None`（`:195-196`），执行不会被触发。需要执行并拿到结果的调用必须带非 null 的 id。
+请求的 `id` 决定是否回复：通知形式的 call 直接返回 `None`，执行不会被触发。需要执行并拿到结果的调用必须带非 null 的 id。
 
 ## 参数校验发生在网关
 
-`tools/call` 自身只校验 `name`，参数校验在网关内部完成（`backend/mcp/gateway.py:183`）。校验函数 `validate_arguments` 做四件事（`:92-138`）：
+`tools/call` 自身只校验 `name`，参数校验在网关内部完成（`backend/mcp/gateway.py`）。校验函数 `validate_arguments` 按 schema 做四件事：
 
 | 检查 | 失败错误码 | 消息特征 |
 | --- | --- | --- |
@@ -55,9 +55,33 @@ def _tools_list(self) -> dict:
 | 类型与 enum 匹配 | `-32602` | 参数类型错误或取值非法 |
 | 必填参数齐全 | `-32602` | 缺少必填参数 |
 
-校验通过后返回规整后的新字典：填入了 schema 里的默认值，只保留 schema 声明的属性（`:113-138`）。回归测试用默认值断言了这一点：只传 `query` 时执行器收到的是带 `limit` 与 `threshold` 的完整参数（`tests/backend/test_mcp_server.py:195-198`）。布尔值被特殊处理，不接受作为 integer 或 number（`gateway.py:85-89`）。
+主干简化成这样（省略了类型与 enum 检查）：
 
-这条链上的失败都以 `McpToolError` 抛出，由 `tools/call` 捕获并转成 JSON-RPC 错误（`backend/mcp/server.py:158-161`）：
+```python
+# 简化：validate_arguments 的主干（省略了类型与 enum 检查）
+unknown = sorted(k for k in arguments if k not in properties)
+if unknown:
+    raise McpToolError(ERR_INVALID_PARAMS, f"不支持的参数: {', '.join(unknown)}")
+
+normalized = {}
+for key, spec in properties.items():
+    if key in arguments:
+        value = arguments[key]
+    elif "default" in spec:
+        value = spec["default"]        # schema 里写了 default 就在这里补上
+    else:
+        continue
+    normalized[key] = value
+
+missing = [k for k in required if k not in normalized]
+if missing:
+    raise McpToolError(ERR_INVALID_PARAMS, f"缺少必填参数: {', '.join(missing)}")
+return normalized
+```
+
+校验通过后返回规整后的新字典：填入了 schema 里的默认值，只保留 schema 声明的属性。回归测试用默认值断言了这一点：只传 `query` 时执行器收到的是带 `limit` 与 `threshold` 的完整参数（`tests/backend/test_mcp_server.py`）。布尔值被特殊处理，不接受作为 integer 或 number——Python 里 `bool` 是 `int` 的子类，不额外拦一下，`true` 会被当成整数通过。
+
+这条链上的失败都以 `McpToolError` 抛出，由 `tools/call` 捕获并转成 JSON-RPC 错误（`backend/mcp/server.py`）：
 
 ```python
 try:
@@ -66,19 +90,19 @@ except McpToolError as exc:
     return self._error(msg_id, exc.code, exc.message)
 ```
 
-错误码原样使用异常里的 `code`，不重写。网关在不同位置抛不同码：名字不在白名单或层级复核不通过抛 `-32601`（`gateway.py:176-181`），参数问题抛 `-32602`（`:101-137`），执行异常抛 `-32603`（`:189-191`）。
+错误码原样使用异常里的 `code`，不重写。网关在不同位置抛不同码：名字不在白名单或层级复核不通过抛 `-32601`（`backend/mcp/gateway.py` 的 `deny_reason` 路径），参数问题抛 `-32602`（`validate_arguments`），执行异常抛 `-32603`（`call_tool` 的异常包装：消息里只有原因文本，堆栈进日志，原异常挂在 `__cause__` 上）。
 
 ## 三条失败出路
 
 | 失败类型 | 消息位置 | 例子 | 来源 |
 | --- | --- | --- | --- |
-| 协议/参数/权限 | `error.code` | 未知工具、缺必填参数、越权工具 | `backend/mcp/server.py:158-161` |
-| 工具返回失败 | `result.isError = true` | 执行器返回 `success=False` | `:162-163`、`:105` |
-| 执行器抛异常 | `error.code = -32603` | 数据库故障 | `backend/mcp/gateway.py:189-191` |
+| 协议/参数/权限 | `error.code` | 未知工具、缺必填参数、越权工具 | `backend/mcp/server.py` |
+| 工具返回失败 | `result.isError = true` | 执行器返回 `success=False` | `server.py` 的 `to_mcp_content` |
+| 执行器抛异常 | `error.code = -32603` | 数据库故障 | `backend/mcp/gateway.py` |
 
-第二与第三条的区分需要记住：同样是“工具没成功”，如果执行器把失败包装成返回值，客户端拿到的是带文本内容的成功响应加 `isError` 标记；如果是抛出的异常，客户端拿到的是 JSON-RPC 错误，没有 `content` 字段。模块文档写的是“工具自身执行失败 → isError”，覆盖的是返回值那条路（`backend/mcp/server.py:10-13`）。
+第二与第三条的区分需要记住：同样是“工具没成功”，如果执行器把失败包装成返回值，客户端拿到的是带文本内容的成功响应加 `isError` 标记；如果是抛出的异常，客户端拿到的是 JSON-RPC 错误，没有 `content` 字段。模块文档写的是“工具自身执行失败 → isError”，覆盖的是返回值那条路（见 `backend/mcp/server.py` 的模块文档）。
 
-回归测试两条都覆盖了：返回 `success=False` 时断言 `isError` 为真且文本含摘要（`tests/backend/test_mcp_server.py:283-290`），执行器抛 `RuntimeError` 时断言 `-32603` 且消息含原因（`:214-219`）。
+回归测试两条都覆盖了：返回 `success=False` 时断言 `isError` 为真且文本含摘要，执行器抛 `RuntimeError` 时断言 `-32603` 且消息含原因（两处断言都在 `tests/backend/test_mcp_server.py` 里）。
 
 ```mermaid
 flowchart TD
@@ -100,9 +124,22 @@ flowchart TD
 
 ## 内容转换与出站包装
 
-工具返回值先被拆成三部分：成功标志、摘要、数据（`backend/mcp/server.py:58-70`）。摘要成为文本主体，数据被 `json.dumps`（`ensure_ascii=False`）追加在后面，两者用空行分隔（`:87-94`）；都为空时写一句占位文本（`:95-96`）。最终 `content` 是单元素数组，元素类型固定为 `text`（`:105`）。
+工具返回值先被拆成三部分：成功标志、摘要、数据（`backend/mcp/server.py` 的 `_result_fields`）。摘要成为文本主体，数据被 `json.dumps` 追加在后面（`ensure_ascii=False` 让中文不转义成 \uXXXX 形式），两者用空行分隔；都为空时写一句占位文本。最终 `content` 是单元素数组，元素类型固定为 `text`。简化后大致是这几行：
 
-出站文本还可以被不可信内容包裹：当工具返回成功、开关开启、且该工具被注册表标记为可能返回外部派生文本时，文本会被套上边界与免责声明（`:98-104`）。开关来自配置 `UNTRUSTED_WRAP_TOOL_RESULTS`（`backend/config.py:53`，默认 `inherit`）与 `UNTRUSTED_WRAP_MCP`（`:54`）。这是消息边界上的安全处理，因为客户端模型会把这些文本当指令读。
+```python
+# 简化：to_mcp_content 的组装部分
+success, summary, data = _result_fields(result)   # 兼容 pydantic 对象与 dict 两种返回
+text = summary
+if data:
+    text = summary + "\n\n" + json.dumps(data, ensure_ascii=False, default=str)
+if not text:
+    text = "（工具执行完成，无文本输出）"
+return [{"type": "text", "text": text}], (not success)
+```
+
+出站文本还可以被不可信内容包裹：当工具返回成功、开关开启、且该工具被注册表标记为可能返回外部派生文本时，文本会被套上边界与免责声明。开关来自配置 `UNTRUSTED_WRAP_TOOL_RESULTS`（`backend/config.py`，默认 `inherit`）与 `UNTRUSTED_WRAP_MCP`。这是消息边界上的安全处理，因为客户端模型会把这些文本当指令读。
+
+「不可信包裹」指的是在这段外部派生文本前后插入边界标记并附一句免责声明，告诉客户端模型「下面是数据、不是指令」，以降低提示注入的影响；它只加在成功返回、且被注册表标记为可能携带外部文本的工具上。
 
 内容数组目前只有文本类型，没有 `image`、`resource` 等类型，也没有较新规范里的 `structuredContent` 字段。工具返回的结构化数据被序列化进文本，按通用做法标注为本实现的简化。
 
@@ -147,7 +184,7 @@ sequenceDiagram
            "message": "工具 refresh_card 属于 write 层，只读 MCP 网关不暴露。..."}}
 ```
 
-第二条的文本内容由摘要与数据拼接而成，拼接格式可以在 `backend/mcp/server.py:87-94` 对着看。第三条的错误消息由 `deny_reason` 生成，包含层级与可用工具名（`backend/mcp/gateway.py:161-169`）。
+第二条的文本内容由摘要与数据拼接而成，拼接逻辑在 `backend/mcp/server.py` 的 `to_mcp_content` 里。第三条的错误消息由 `deny_reason` 生成，包含层级与可用工具名（`backend/mcp/gateway.py`）。
 
 ## 易错点
 
@@ -164,13 +201,13 @@ sequenceDiagram
 
 | 概念 | 取值或做法 | 来源 |
 | --- | --- | --- |
-| list 响应 | `result.tools` 数组，按名字排序 | `backend/mcp/server.py:150-151`、`gateway.py:155-156` |
-| list 元素字段 | name、description、inputSchema | `backend/mcp/gateway.py:60-72` |
-| call 请求 | `params.name` 与 `params.arguments` | `backend/mcp/server.py:154-155` |
-| 参数校验 | 默认值填充、未知参数拒绝、类型与 enum、必填 | `backend/mcp/gateway.py:92-138` |
-| 错误分流 | 协议走 error，返回失败走 isError，异常走 -32603 | `backend/mcp/server.py:158-163`、`gateway.py:189-191` |
-| 内容形状 | 单元素 text 数组 | `backend/mcp/server.py:105` |
-| 出站包装 | 按开关与工具标记包裹文本 | `:98-104`、`backend/config.py:53-54` |
+| list 响应 | `result.tools` 数组，按名字排序 | `McpServer._tools_list` 与 `ReadOnlyGateway.list_tools` |
+| list 元素字段 | name、description、inputSchema | `gateway.mcp_tools` |
+| call 请求 | `params.name` 与 `params.arguments` | `McpServer._tools_call` |
+| 参数校验 | 默认值填充、未知参数拒绝、类型与 enum、必填 | `gateway.validate_arguments` |
+| 错误分流 | 协议走 error，返回失败走 isError，异常走 -32603 | `_tools_call`、`to_mcp_content` 与 `call_tool` |
+| 内容形状 | 单元素 text 数组 | `to_mcp_content` 的返回值 |
+| 出站包装 | 按开关与工具标记包裹文本 | `to_mcp_content` 与 `backend/config.py` |
 
 ### 设计权衡
 
@@ -200,8 +237,8 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/mcp/server.py` | list 与 call 的处理、内容转换与包装（:58-70、:87-105、:150-163） |
-| `backend/mcp/gateway.py` | 工具派生、参数校验与错误码（:37-40、:60-72、:92-138、:155-191） |
-| `backend/config.py` | 出站包装开关（:50-54） |
-| `tests/backend/test_mcp_server.py` | 消息语义与错误分流断言（:195-219、:265-300） |
-| `backend/mcp/__init__.py` | 方法子集与模块划分（:1-22） |
+| `backend/mcp/server.py` | list 与 call 的处理、内容转换与包装 |
+| `backend/mcp/gateway.py` | 工具派生、参数校验与错误码 |
+| `backend/config.py` | 出站包装开关 |
+| `tests/backend/test_mcp_server.py` | 消息语义与错误分流断言 |
+| `backend/mcp/__init__.py` | 方法子集与模块划分 |

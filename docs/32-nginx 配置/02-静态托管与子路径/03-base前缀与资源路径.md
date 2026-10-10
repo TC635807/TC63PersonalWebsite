@@ -2,7 +2,7 @@
 title: base 前缀与资源路径
 summary: site 与 base 决定的三类引用、url() 统一出口与尾斜杠处理、构建产物的目录形式与带哈希资源命名、同一份源码的两套前缀，以及推送前的本地先验。
 tags: [Astro, base, 子路径, url, 构建]
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 # base 前缀与资源路径
@@ -13,7 +13,15 @@ updated: 2026-10-07
 
 ## base 决定三类引用
 
-配置里 `site` 与 `base` 各管一半（`astro.config.mjs:16-17`）：`site` 给出域名，`base` 给出路径前缀。前者影响 `canonical`、`og:url` 一类绝对地址，后者影响所有静态资源的相对前缀。
+配置里 `site` 与 `base` 各管一半，原文是两行：
+
+```js
+// astro.config.mjs
+site: 'https://knowledgediver.cloud',
+base: process.env.SITE_BASE ?? '/tc63',
+```
+
+`site` 给出域名，`base` 给出路径前缀。`process.env.SITE_BASE` 读构建时注入的环境变量，`??` 是「左边为空才取右边」的运算符，所以不带该变量构建时默认落到 `/tc63`。前者影响 `canonical`、`og:url` 一类绝对地址——`canonical` 是告诉搜索引擎该页正式 URL 的 link 标签，`og:url` 是分享卡片指向的同一地址——后者影响所有静态资源的相对前缀。
 
 | 引用类型 | 由谁加前缀 | 产物中的例子 |
 | --- | --- | --- |
@@ -21,15 +29,15 @@ updated: 2026-10-07
 | 页面元信息 | `site` 加 `base` | `link rel="canonical"` 为 `https://knowledgediver.cloud/tc63/` |
 | 手写的站内链接 | 需要显式调用 `url()` | `href="/tc63/projects/"` |
 
-前两类由构建器自动处理，第三类不会。仓库在文档里明确记了这一点：`base` 会自动处理 JS/CSS 资源前缀、`canonical`、`og:url`、`og:image` 与 `_astro/` 引用，但不会改手写的链接（`personal-homepage-research/15-deploy-tc63.md:32`）。因此站内链接统一走 `src/lib/url.ts` 的 `url()`。实测的 `dist/index.html` 里没有出现任何不带 `/tc63` 前缀的根绝对引用。
+前两类由构建器自动处理，第三类不会。仓库在文档里明确记了这一点：`base` 会自动处理 JS/CSS 资源前缀、`canonical`、`og:url`、`og:image` 与 `_astro/` 引用，但不会改手写的链接（`personal-homepage-research/15-deploy-tc63.md`）。因此站内链接统一走 `src/lib/url.ts` 的 `url()`。实测的 `dist/index.html` 里没有出现任何不带 `/tc63` 前缀的根绝对引用。
 
 ## url() 为什么要剥掉尾斜杠
 
-`url()` 的实现只有几行（`src/lib/url.ts:11-16`）：
+`url()` 的实现只有几行（`src/lib/url.ts`）：
 
 ```ts
 export const BASE = import.meta.env.BASE_URL;
-NaN
+const ROOT = BASE.endsWith('/') ? BASE.slice(0, -1) : BASE;
 
 export function url(path = '/'): string {
   const p = path.startsWith('/') ? path : '/' + path;
@@ -37,7 +45,7 @@ export function url(path = '/'): string {
 }
 ```
 
-Astro 把 `BASE_URL` 设成配置里的原样值 `'/tc63'`，末尾没有斜杠，与 Vite 常见的 `'/tc63/'` 不同。如果直接做字符串拼接，`BASE_URL + 'fluid/xxx.png'` 会得到 `/tc63fluid/xxx.png`，资源与搜索索引同时 404（`personal-homepage-research/15-deploy-tc63.md:50-54`）。`url()` 先把 `BASE` 归一化成不带尾斜杠的 `ROOT`，再补一个开头的斜杠，因此传入 `'/projects/'` 或 `'projects/'` 都得到同一个结果。
+`import.meta.env.BASE_URL` 是构建器注入到前端代码里的常量，值就是配置里的 `base`。Astro 把它设成原样值 `'/tc63'`，末尾没有斜杠，与 Vite 常见的 `'/tc63/'` 不同。如果直接做字符串拼接，`BASE_URL + 'fluid/xxx.png'` 会得到 `/tc63fluid/xxx.png`，资源与搜索索引同时 404（`personal-homepage-research/15-deploy-tc63.md`）。`url()` 先把 `BASE` 归一化成不带尾斜杠的 `ROOT`，再补一个开头的斜杠，因此传入 `'/projects/'` 或 `'projects/'` 都得到同一个结果。
 
 ```mermaid
 flowchart LR
@@ -49,7 +57,7 @@ flowchart LR
     G --> H["'/tc63fluid/x.png'，404"]
 ```
 
-`url()` 的注释把使用范围写得很清楚：html 里所有以 `/` 开头的绝对链接都必须带上 base（`src/lib/url.ts:1-9`）。相对链接不受影响，但站内统一用绝对链接加 `url()` 更可控。
+`url()` 的注释把使用范围写得很清楚：html 里所有以 `/` 开头的绝对链接都必须带上 base（`src/lib/url.ts`）。相对链接不受影响，但站内统一用绝对链接加 `url()` 更可控。
 
 ## 构建产物的目录形式与资源命名
 
@@ -65,7 +73,16 @@ flowchart LR
 
 ## 同一份源码的两套前缀
 
-同一个仓库同时发布到两个位置：腾讯云服务器上的 `/tc63` 与 GitHub 项目站点 `/TC63PersonalWebsite`。区别只在构建时传入的环境变量（`astro.config.mjs:17`、`.github/workflows/deploy.yml:29-31`）。
+同一个仓库同时发布到两个位置：腾讯云服务器上的 `/tc63` 与 GitHub 项目站点 `/TC63PersonalWebsite`。区别只在构建时传入的环境变量，GitHub 侧由 workflow 在构建那一步注入：
+
+```yaml
+# .github/workflows/deploy.yml
+- run: npm run build
+  env:
+    SITE_BASE: /TC63PersonalWebsite
+```
+
+workflow 是 GitHub Actions 的流水线定义，`steps` 里的每一项是流水线中的一步；`env` 把变量只注入这一步的进程环境。GitHub Pages 的项目站点 URL 形如 `<user>.github.io/<repo>/`，所以前缀取仓库名。
 
 ```mermaid
 flowchart TD
@@ -76,13 +93,24 @@ flowchart TD
     B --> B2["dist/index.html 的链接带 /TC63PersonalWebsite/ 前缀"]
 ```
 
-两套前缀不能混用：拿 Pages 产物去核对服务器路径会全部对不上，反之亦然。服务器侧的产物由本地 `./deploy.sh` 构建（默认不带 `SITE_BASE`），Pages 侧的产物由 workflow 构建，两边互不覆盖（`deploy.sh:9-13`、`.github/workflows/deploy.yml:27-31`）。
+两套前缀不能混用：拿 Pages 产物去核对服务器路径会全部对不上，反之亦然。服务器侧的产物由本地 `./deploy.sh` 构建（默认不带 `SITE_BASE`），Pages 侧的产物由 workflow 构建，两边互不覆盖（`deploy.sh`、`.github/workflows/deploy.yml`）。
 
 ## 推送之前的本地先验
 
-前缀问题在本地就能发现，`deploy.sh` 里有两条检查：构建后确认 `dist/index.html` 存在，再用 `grep` 验证链接带有 `/tc63/` 前缀，不满足就退出（`deploy.sh:25-29`）。第二条检查针对的正是「用 Pages 参数构建过又直接部署」的情形。
+前缀问题在本地就能发现，`deploy.sh` 里有两条检查：
 
-更完整的核对方式是逐条请求构建产物里的路径：`dist/index.html` 中的样式、脚本、站内链接与图片，以及搜索索引。实测记录里这些路径在服务器上全部返回 200，`/` 返回 404（`personal-homepage-research/15-deploy-tc63.md:156-157`）。
+```bash
+# deploy.sh
+[ -f dist/index.html ] || { echo "✗ dist/index.html 不存在，构建失败了？"; exit 1; }
+if ! grep -q 'href="/tc63/' dist/index.html; then
+  echo "⚠️ dist 里的链接不是 /tc63 前缀 —— 是不是用 SITE_BASE 构建过 Pages 版本？重新构建。"
+  exit 1
+fi
+```
+
+`[ -f 文件 ]` 判断文件是否存在，`||` 后面是失败时执行的分支；`grep -q` 只关心有没有匹配、不打印内容，靠退出码下结论，`!` 取反。第二条检查针对的正是「用 Pages 参数构建过又直接部署」的情形。
+
+更完整的核对方式是逐条请求构建产物里的路径：`dist/index.html` 中的样式、脚本、站内链接与图片，以及搜索索引。实测记录里这些路径在服务器上全部返回 200，`/` 返回 404（`personal-homepage-research/15-deploy-tc63.md`）。
 
 ## 子路径改动的影响面
 
@@ -94,7 +122,7 @@ flowchart TD
 | 手写链接改成相对路径 | 改回 `url()` 调用 | 构建器生成的资源 |
 | 迁到域名根部署 | `base` 设为 `'/'` | nginx 的 `root` 与 location |
 
-迁移时要一起检查 `isActive()` 一类用 `href === '/'` 判断的代码：子路径下首页 URL 变成 `/tc63/`，判据要跟着换成 `url('/')`，否则导航会在每个页面都点亮首页项（`personal-homepage-research/15-deploy-tc63.md:47-48`）。
+迁移时要一起检查 `isActive()` 一类用 `href === '/'` 判断的代码：子路径下首页 URL 变成 `/tc63/`，判据要跟着换成 `url('/')`，否则导航会在每个页面都点亮首页项（`personal-homepage-research/15-deploy-tc63.md`）。
 
 ## 易错点
 
@@ -105,7 +133,7 @@ flowchart TD
 | 导航高亮错位 | 首页判据用 `href === '/'` | 看子路径下首页 URL 是 `/tc63/` |
 | 拿 Pages 产物核对服务器 | 两套前缀不同 | 产物里搜 `/TC63PersonalWebsite` |
 | `canonical` 指向域名根 | `site` 或 `base` 配置不对 | 看 `dist/index.html` 的 `link rel="canonical"` |
-| 部署脚本前缀检查失败 | 用 `SITE_BASE` 构建过 | 重新执行不带该变量的构建（`deploy.sh:26-29`） |
+| 部署脚本前缀检查失败 | 用 `SITE_BASE` 构建过 | 重新执行不带该变量的构建（`deploy.sh`） |
 
 ## 小结
 
@@ -145,10 +173,10 @@ flowchart TD
 
 | 路径 | 用途 |
 | --- | --- |
-| `astro.config.mjs` | `site` 与 `base` 的定义（`:8-17`） |
-| `src/lib/url.ts` | `BASE` 归一化与 `url()` 实现（`:1-17`） |
-| `personal-homepage-research/15-deploy-tc63.md` | 前缀改动的影响面与尾斜杠问题（`:32-54`） |
-| `deploy.sh` | 构建后的前缀检查（`:25-29`） |
-| `.github/workflows/deploy.yml` | Pages 构建的 `SITE_BASE`（`:29-31`） |
-| `README.md` | 改路径前缀的说明（`:171-183`） |
+| `astro.config.mjs` | `site` 与 `base` 的定义 |
+| `src/lib/url.ts` | `BASE` 归一化与 `url()` 实现 |
+| `personal-homepage-research/15-deploy-tc63.md` | 前缀改动的影响面与尾斜杠问题 |
+| `deploy.sh` | 构建后的前缀检查 |
+| `.github/workflows/deploy.yml` | Pages 构建的 `SITE_BASE` |
+| `README.md` | 改路径前缀的说明 |
 | `dist/index.html`、`dist/about/index.html` | 产物中的 canonical 与资源前缀 |

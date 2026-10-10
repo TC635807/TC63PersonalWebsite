@@ -68,20 +68,20 @@ $$I(t) = K_i \int_0^t e(\tau)\,d\tau, \qquad e = T^* - T$$
 
 ```mermaid
 flowchart TD
-    A["误差 e 等于目标减当前温度"] --> B["计算 P 与 D 得到 output"]
-    B --> C{"output 小于 maxOutput"}
-    C -- "是" --> D["integral 累加 Ki 乘 e 乘 dt"]
-    D --> E{"integral 小于 0"}
-    E -- "是" --> F["integral 置 0"]
-    E -- "否" --> G["integral 限幅到 0 与 maxIntegral"]
-    F --> G
-    G --> H["output 加上 integral"]
-    C -- "否" --> H
-    H --> I{"output 小于 0"}
-    I -- "是" --> J["output 置 0"]
-    I -- "否" --> K["output 限幅到 maxOutput"]
-    J --> K
-    K --> L["写入 PWM 比较值"]
+ A["误差 e 等于目标减当前温度"] --> B["计算 P 与 D 得到 output"]
+ B --> C{"output 小于 maxOutput"}
+ C -- "是" --> D["integral 累加 Ki 乘 e 乘 dt"]
+ D --> E{"integral 小于 0"}
+ E -- "是" --> F["integral 置 0"]
+ E -- "否" --> G["integral 限幅到 0 与 maxIntegral"]
+ F --> G
+ G --> H["output 加上 integral"]
+ C -- "否" --> H
+ H --> I{"output 小于 0"}
+ I -- "是" --> J["output 置 0"]
+ I -- "否" --> K["output 限幅到 maxOutput"]
+ J --> K
+ K --> L["写入 PWM 比较值"]
 ```
 
 积分下限与输出下限都钳到 0，但它们作用在不同变量上。输出下限只保证送出的控制量非负；积分下限保证内部状态不向负方向堆积。去掉其中一个，另一个不会自动补上。
@@ -94,32 +94,32 @@ flowchart TD
 | 输出饱和 | `output` 触及 `maxOutput` | 占空比满值，温度继续上升 |
 | 执行器下限 | `integral` 或 `output` 触到 0 | 加热停止，只能被动散热 |
 
-本工程参数里 `maxIntegral` 是 4400，`maxOutput` 是 4500（`PID/Src/temp_pid.cpp:41`）。积分项单独存在时最多 4400，占满输出的 97.8%，加不上比例项也不会超过 4500，积分本身不能把输出顶到满值；输出饱和主要来自比例项。
+本工程参数里 `maxIntegral` 是 4400，`maxOutput` 是 4500（`PID/Src/temp_pid.cpp`）。积分项单独存在时最多 4400，占满输出的 97.8%，加不上比例项也不会超过 4500，积分本身不能把输出顶到满值；输出饱和主要来自比例项。
 
 积分上限 4400 与输出上限 4500 的比值接近 1，意味着积分几乎可以在输出线性区内单独把输出推到接近满值。温度环的稳态工作点通常落在中低占空比，这个上限只在极端工况下起作用。
 
 ```mermaid
 stateDiagram-v2
-    [*] --> 停止加热
-    停止加热 --> 满功率加热: 误差较大 比例项顶到满值
-    满功率加热 --> 调节加热: 误差缩小 积分接管稳态输出
-    调节加热 --> 停止加热: 温度超过目标 输出被下限钳到 0
-    调节加热 --> 调节加热: 热平衡 积分保持稳态码值
-    停止加热 --> 调节加热: 散热使温度回落
+ [*] --> 停止加热
+ 停止加热 --> 满功率加热: 误差较大 比例项顶到满值
+ 满功率加热 --> 调节加热: 误差缩小 积分接管稳态输出
+ 调节加热 --> 停止加热: 温度超过目标 输出被下限钳到 0
+ 调节加热 --> 调节加热: 热平衡 积分保持稳态码值
+ 停止加热 --> 调节加热: 散热使温度回落
 ```
 
 ## 两个下限在代码里的位置
 
 | 实现点 | 位置 | 代码 |
 | --- | --- | --- |
-| 积分累加条件 | `PID/Src/temp_pid.cpp:20` | `if (output < maxOutput)` |
-| 积分下限 | `PID/Src/temp_pid.cpp:22` | `if (integral < 0) integral = 0;` |
-| 积分上限 | `PID/Src/temp_pid.cpp:23` | `clamp(integral, 0.0f, maxIntegral)` |
-| 输出下限 | `PID/Src/temp_pid.cpp:29` | `if (output < 0) output = 0;` |
-| 输出限幅 | `PID/Src/temp_pid.cpp:32` | `clamp(output, 0.0f, maxOutput)` |
-| 参数 | `PID/Src/temp_pid.cpp:41` | `TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)` |
+| 积分累加条件 | `PID/Src/temp_pid.cpp` | `if (output < maxOutput)` |
+| 积分下限 | `PID/Src/temp_pid.cpp` | `if (integral < 0) integral = 0;` |
+| 积分上限 | `PID/Src/temp_pid.cpp` | `clamp(integral, 0.0f, maxIntegral)` |
+| 输出下限 | `PID/Src/temp_pid.cpp` | `if (output < 0) output = 0;` |
+| 输出限幅 | `PID/Src/temp_pid.cpp` | `clamp(output, 0.0f, maxOutput)` |
+| 参数 | `PID/Src/temp_pid.cpp` | `TempPID(1600.0f, 0.2f, 0.0f, 4500.0f, 4400.0f)` |
 
-积分的累加条件检查的是 `output < maxOutput`，这里的 `output` 是比例加微分的结果，还没有加积分。该条件只检查上界，没有检查下界，与基类 `PidBase::Calculate` 两端的检查（`PID/PidBase.h:44`）不同。在单向环里负输出没有意义，这个差别不引入额外问题。
+积分的累加条件检查的是 `output < maxOutput`，这里的 `output` 是比例加微分的结果，还没有加积分。该条件只检查上界，没有检查下界，与基类 `PidBase::Calculate` 两端的检查（`PID/PidBase.h`）不同。在单向环里负输出没有意义，这个差别不引入额外问题。
 
 ## 积分爬升速度与积分时间
 
@@ -147,12 +147,12 @@ $$\frac{dI}{dt} = 0.2\,e \quad (\text{输出码值每秒})$$
 
 | # | 易错点 | 表现 | 位置 |
 | --- | --- | --- | --- |
-| 1 | 把 `maxIntegral` 当成输出上限 | 把 4400 理解成占空比满量程 | `PID/Src/temp_pid.cpp:41` |
-| 2 | 认为积分下限可以省去 | 过冲后积分变负，恢复被拖长 | `PID/Src/temp_pid.cpp:22` |
-| 3 | 认为输出下限能替代积分下限 | 输出被钳到 0，但积分仍是负值 | `PID/Src/temp_pid.cpp:29` |
-| 4 | 用双向环的参数整定经验套温度环 | 积分时间 8000 s，响应远慢于电机环 | `PID/Src/temp_pid.cpp:41` |
+| 1 | 把 `maxIntegral` 当成输出上限 | 把 4400 理解成占空比满量程 | `PID/Src/temp_pid.cpp` |
+| 2 | 认为积分下限可以省去 | 过冲后积分变负，恢复被拖长 | `PID/Src/temp_pid.cpp` |
+| 3 | 认为输出下限能替代积分下限 | 输出被钳到 0，但积分仍是负值 | `PID/Src/temp_pid.cpp` |
+| 4 | 用双向环的参数整定经验套温度环 | 积分时间 8000 s，响应远慢于电机环 | `PID/Src/temp_pid.cpp` |
 | 5 | 认为只有加热就一定有过冲振荡 | 热容与热阻很大，过冲幅度取决于增益 | 第 2 节 |
-| 6 | 认为抗饱和检查覆盖全部输出区间 | 误差小于 2.8125 °C 时积分仍累加 | `PID/Src/temp_pid.cpp:20` |
+| 6 | 认为抗饱和检查覆盖全部输出区间 | 误差小于 2.8125 °C 时积分仍累加 | `PID/Src/temp_pid.cpp` |
 
 ## 小结
 
@@ -181,7 +181,7 @@ $$\frac{dI}{dt} = 0.2\,e \quad (\text{输出码值每秒})$$
 ### 基础题
 
 1. 写出热平衡方程，推导 $u_{ss}$ 的表达式，并说明它为什么必须大于 0。
-2. 把 `PID/Src/temp_pid.cpp:22` 的积分下限删掉，描述温度从过冲到回落的过程中积分与输出的变化。
+2. 把 `PID/Src/temp_pid.cpp` 的积分下限删掉，描述温度从过冲到回落的过程中积分与输出的变化。
 3. 用 $K_p = 1600$、$K_i = 0.2$ 计算积分时间，并说明它与 1 kHz 调用频率无关的原因。
 
 ### 挑战题
@@ -194,7 +194,7 @@ $$\frac{dI}{dt} = 0.2\,e \quad (\text{输出码值每秒})$$
 
 | 路径 | 用途 |
 | --- | --- |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/temp_pid.cpp` | 单向积分的实现（:10-50） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Src/temp_pid.cpp` | 单向积分的实现 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/Inc/temp_pid.h` | 类声明与 C 接口 |
-| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/PidBase.h` | 双向基类的抗饱和对照（:23-61） |
+| `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/PID/PidBase.h` | 双向基类的抗饱和对照 |
 | `/home/wyx/rm/2026SentriOmeniGimbal/2026OmniSentryGimbal/BMI088/Src/ImuTempControl.cpp` | PID 输出的消费点 |

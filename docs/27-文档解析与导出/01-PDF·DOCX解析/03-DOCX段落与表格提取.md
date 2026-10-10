@@ -44,7 +44,7 @@ def _parse_docx(content: bytes) -> str:
 | 导入依赖 | 函数内 `from docx import Document` |
 | 打开 | `Document(BytesIO(content))`，失败转 `ParseError` |
 | 段落 | 去空白后非空才收集 |
-| 表格 | 逐行、逐单元格取值，非空单元格用 ` | ` 连接 |
+| 表格 | 逐行、逐单元格取值，同一行非空单元格用竖线拼接 |
 | 空结果 | 抛 `ParseError` |
 | 合并 | 所有条目用空行分隔 |
 
@@ -76,7 +76,7 @@ flowchart TD
 
 ## 3. 表格行的拼接规则
 
-每个非空单元格的文本去空白后，用竖线加空格连接（`parser.py:116-120`）：
+每个非空单元格的文本去空白后，用竖线加空格连接（`parser.py`）：
 
 ```text
 | 原始表格 | 提取结果 |
@@ -94,6 +94,19 @@ flowchart TD
 | 合并单元格 | 按 python-docx 的表格模型，同一文本会在多个网格位置返回，行内可能重复 |
 
 ## 4. 只覆盖顶层表格
+
+DOCX 的段落与表格是两个平行的顶层序列，示意如下：
+
+```python
+# 示意：分别收集段落与表格
+texts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+for table in doc.tables:                 # 只遍历顶层表格
+    for row in table.rows:
+        cells = [c.text.strip() for c in row.cells]
+        texts.append(" | ".join(c for c in cells if c))
+```
+
+"DOCX 是 zip 包里的 XML"：解压后能看到`word/document.xml`，段落与表格是同级节点。`doc.tables`只返回顶层的表格对象，嵌套在单元格里的表格不会出现——这是"只覆盖顶层"的直接原因。代价是嵌套结构里的内容静默丢失；要覆盖它必须自己递归遍历 XML 节点。
 
 `doc.tables` 返回文档体的顶层表格。嵌套在单元格里的表格不会被遍历，表格里的图片也不会被识别，因为实现只取 `cell.text`。
 
@@ -134,7 +147,7 @@ sequenceDiagram
 
 ## 5. 依赖导入与异常类型
 
-与 PDF 一样，`python-docx` 在函数内导入（`parser.py:102`），依赖已在 `requirements.txt` 声明（`requirements.txt:20`，版本固定为 `1.2.0`）。缺依赖时抛 `ImportError`，路由只捕 `ParseError`，因此返回 500 而不是可读的 400。
+与 PDF 一样，`python-docx` 在函数内导入（`parser.py`），依赖已在 `requirements.txt` 声明（`requirements.txt`，版本固定为 `1.2.0`）。缺依赖时抛 `ImportError`，路由只捕 `ParseError`，因此返回 500 而不是可读的 400。
 
 打开阶段的异常被包装成「DOCX 文件损坏或无法读取」；段落与表格遍历阶段的异常没有捕获，遇到结构异常的文件会直接上抛。
 
@@ -146,7 +159,7 @@ sequenceDiagram
 
 ## 6. 大小与压缩比
 
-20 MB 上限在 `parse_file` 里按上传字节数判断（`parser.py:15`、`:43`）。DOCX 是压缩包，字节数小但解压后可能很大，解析时会一次性展开到内存。上传接口没有额外检查解压后体积，这与会话导入接口的 200 MB 解压上限形成对照（见 29/02-会话数据库 单元）。
+20 MB 上限在 `parse_file` 里按上传字节数判断（`parser.py`）。DOCX 是压缩包，字节数小但解压后可能很大，解析时会一次性展开到内存。上传接口没有额外检查解压后体积，这与会话导入接口的 200 MB 解压上限形成对照（见 29/02-会话数据库 单元）。
 
 | 限制 | 位置 | 粒度 |
 | --- | --- | --- |
@@ -157,11 +170,11 @@ sequenceDiagram
 
 | 易错点 | 现象 | 位置 |
 | --- | --- | --- |
-| 期待内容保持原顺序 | 段落全部排在表格前 | `parser.py:109-120` |
-| 以为空单元格会占位 | 被过滤导致列错位 | `parser.py:118` |
-| 以为嵌套表格会被读出 | 只遍历顶层 | `parser.py:116` |
-| 缺依赖时期待 400 | `ImportError` 落到 500 | `parser.py:102` |
-| 把图片版 DOCX 当成可解析 | 报没有可提取的文字 | `parser.py:122-123` |
+| 期待内容保持原顺序 | 段落全部排在表格前 | `parser.py` |
+| 以为空单元格会占位 | 被过滤导致列错位 | `parser.py` |
+| 以为嵌套表格会被读出 | 只遍历顶层 | `parser.py` |
+| 缺依赖时期待 400 | `ImportError` 落到 500 | `parser.py` |
+| 把图片版 DOCX 当成可解析 | 报没有可提取的文字 | `parser.py` |
 
 ## 小结
 
@@ -206,7 +219,7 @@ sequenceDiagram
 
 | 路径 | 用途 |
 | --- | --- |
-| `backend/documents/parser.py` | `_parse_docx` 全文（:99-125）与大小上限 |
+| `backend/documents/parser.py` | `_parse_docx` 全文与大小上限 |
 | `backend/routes/documents.py` | `ParseError` 转 400 与上传流程 |
-| `requirements.txt` | `python-docx` 版本声明（:20） |
+| `requirements.txt` | `python-docx` 版本声明 |
 | `backend/routes/session_io.py` | 另一处解压体积限制，用于对照 |

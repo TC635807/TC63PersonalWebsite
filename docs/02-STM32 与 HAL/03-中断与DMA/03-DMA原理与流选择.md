@@ -68,7 +68,7 @@ flowchart TD
 HAL 的 `DMA_HandleTypeDef.Init` 里每一项都对应寄存器里的一个字段，`HAL_DMA_Init()` 一次性写进 `CR` 与 `FCR`：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c:231-246（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c（节选） */
 tmp &= ((uint32_t)~(DMA_SxCR_CHSEL | DMA_SxCR_MBURST | DMA_SxCR_PBURST | ...));
 tmp |=  hdma->Init.Channel             | hdma->Init.Direction        |
         hdma->Init.PeriphInc           | hdma->Init.MemInc           |
@@ -92,7 +92,7 @@ tmp |=  hdma->Init.MemBurst | hdma->Init.PeriphBurst;
 地址与长度的装载发生在启动时，由 `DMA_SetConfig()` 完成：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c:1151 起（函数声明行） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c 起（函数声明行） */
 static void DMA_SetConfig(DMA_HandleTypeDef *hdma, uint32_t SrcAddress, uint32_t DstAddress, uint32_t DataLength)
 ```
 
@@ -133,7 +133,7 @@ FIFO 打开时，数据先进入一个 4 级 × 32 位的缓冲，攒到 `FIFOTh
 HAL 在双缓冲下的完成回调选择有一处反直觉的地方：`TCIF` 置起时硬件已经切换过 `CT`，所以 HAL 用 `CT` 的当前值去回调上一个缓冲区：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c:878-898（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c（节选） */
 if(((hdma->Instance->CR) & (uint32_t)(DMA_SxCR_DBM)) != RESET)
 {
   /* Current memory buffer used is Memory 0 */
@@ -190,11 +190,11 @@ sequenceDiagram
 
 | 外设与方向 | 流 | Channel | 方向 | 模式 | 流优先级 | FIFO | 源码位置 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `USART3_RX` 遥控接收 | `DMA1_Stream1` | `DMA_CHANNEL_4` | 外设到内存 | 循环 | 高 | 关闭 | `Core/Src/usart.c:180-189` |
-| `USART6_RX` 裁判接收 | `DMA2_Stream1` | `DMA_CHANNEL_5` | 外设到内存 | 单次 | 高 | 关闭 | `Core/Src/usart.c:226-235` |
-| `USART6_TX` 裁判发送 | `DMA2_Stream6` | `DMA_CHANNEL_5` | 内存到外设 | 循环 | 高 | 关闭 | `Core/Src/usart.c:244-253` |
-| `SPI1_RX` IMU 接收 | `DMA2_Stream2` | `DMA_CHANNEL_3` | 外设到内存 | 单次 | 最高 | 关闭 | `Core/Src/spi.c:99-108` |
-| `SPI1_TX` IMU 发送 | `DMA2_Stream3` | `DMA_CHANNEL_3` | 内存到外设 | 单次 | 高 | 关闭 | `Core/Src/spi.c:117-126` |
+| `USART3_RX` 遥控接收 | `DMA1_Stream1` | `DMA_CHANNEL_4` | 外设到内存 | 循环 | 高 | 关闭 | `Core/Src/usart.c` |
+| `USART6_RX` 裁判接收 | `DMA2_Stream1` | `DMA_CHANNEL_5` | 外设到内存 | 单次 | 高 | 关闭 | `Core/Src/usart.c` |
+| `USART6_TX` 裁判发送 | `DMA2_Stream6` | `DMA_CHANNEL_5` | 内存到外设 | 循环 | 高 | 关闭 | `Core/Src/usart.c` |
+| `SPI1_RX` IMU 接收 | `DMA2_Stream2` | `DMA_CHANNEL_3` | 外设到内存 | 单次 | 最高 | 关闭 | `Core/Src/spi.c` |
+| `SPI1_TX` IMU 发送 | `DMA2_Stream3` | `DMA_CHANNEL_3` | 内存到外设 | 单次 | 高 | 关闭 | `Core/Src/spi.c` |
 
 五条流的 `PeriphInc` 全部是 `DMA_PINC_DISABLE`，`MemInc` 全部是 `DMA_MINC_ENABLE`，数据宽度两边都是 `DMA_PDATAALIGN_BYTE` 与 `DMA_MDATAALIGN_BYTE`。
 
@@ -205,7 +205,7 @@ sequenceDiagram
 ### 3.2 时钟与中断使能
 
 ```c
-/* Core/Src/dma.c:39-62（节选） */
+/* Core/Src/dma.c（节选） */
 void MX_DMA_Init(void)
 {
   /* DMA controller clock enable */
@@ -227,7 +227,7 @@ void MX_DMA_Init(void)
 SPI 的 DMA 传输是"完成由 DMA 流报告"的典型例子。`HAL_SPI_TransmitReceive_DMA()` 内部把两个函数指针分别登记到收发两条流上：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c:1707 与 :1817（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c 与 （节选） */
 hspi->hdmatx->XferCpltCallback = SPI_DMATransmitCplt;
 ...
 hspi->hdmarx->XferCpltCallback = SPI_DMAReceiveCplt;
@@ -236,7 +236,7 @@ hspi->hdmarx->XferCpltCallback = SPI_DMAReceiveCplt;
 接收完成时，调用链是 `DMA2_Stream2_IRQHandler` 里的 `HAL_DMA_IRQHandler(&hdma_spi1_rx)` 到 `SPI_DMAReceiveCplt()` 再到 `HAL_SPI_TxRxCpltCallback()`：
 
 ```c
-/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c:3717-3738（节选） */
+/* Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c（节选） */
 if (hspi->ErrorCode == HAL_SPI_ERROR_NONE)
 {
   if (hspi->State == HAL_SPI_STATE_BUSY_RX)
@@ -255,12 +255,12 @@ if (hspi->ErrorCode == HAL_SPI_ERROR_NONE)
 驱动侧的回调只做一件事：置标志。
 
 ```cpp
-/* BMI088/Src/BMI088.cpp:15-17 */
+/* BMI088/Src/BMI088.cpp */
 static volatile uint8_t bmi088_spi_dma_done = 0;
 static volatile uint8_t bmi088_spi_dma_error = 0;
 static uint8_t bmi088_dma_tx_buf[BMI088_DMA_MAX_LEN];
 
-/* BMI088/Src/BMI088.cpp:295-308（节选） */
+/* BMI088/Src/BMI088.cpp（节选） */
 if (HAL_SPI_TransmitReceive_DMA(&hspi1, bmi088_dma_tx_buf, buf, len) != HAL_OK) {
     return HAL_ERROR;
 }
@@ -285,7 +285,7 @@ while (!bmi088_spi_dma_done && !bmi088_spi_dma_error) {
 
 $$t_{\text{byte}} = \frac{b}{f_{\text{baud}}}$$
 
-SPI1 的波特率预分频取自 `Core/Src/spi.c:49` 的 `SPI_BAUDRATEPRESCALER_64`，SPI1 挂在 APB2 的 84 MHz 上，所以
+SPI1 的波特率预分频取自 `Core/Src/spi.c` 的 `SPI_BAUDRATEPRESCALER_64`，SPI1 挂在 APB2 的 84 MHz 上，所以
 
 $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
@@ -305,7 +305,7 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 ### 4.3 在流使能时写 `NDTR`
 
-`NDTR` 只在 `CR.EN` 为 0 时可以写。清 `EN` 之后硬件要到当前传输结束才把它清零，紧接着写 `NDTR` 可能落在 `EN` 仍为 1 的窗口里，这次写入不生效。本工程 `Communication/Src/usart_dma.cpp:86-96` 就是"清 `EN`、写 `NDTR`、置 `EN`"的顺序，其中的风险在《串口 DMA 与空闲中断》里单独讨论。
+`NDTR` 只在 `CR.EN` 为 0 时可以写。清 `EN` 之后硬件要到当前传输结束才把它清零，紧接着写 `NDTR` 可能落在 `EN` 仍为 1 的窗口里，这次写入不生效。本工程 `Communication/Src/usart_dma.cpp` 就是"清 `EN`、写 `NDTR`、置 `EN`"的顺序，其中的风险在《串口 DMA 与空闲中断》里单独讨论。
 
 ### 4.4 直接模式下宽度不等
 
@@ -313,7 +313,7 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 ### 4.5 DMA 缓冲区是局部变量
 
-`HAL_SPI_TransmitReceive_DMA(&hspi1, tx, rx, len)` 之后函数返回，DMA 仍然在写 `rx`。如果 `rx` 是栈上的局部数组，函数返回后这块栈空间随时会被别的调用覆盖。本工程的 DMA 目标 `gyro`、`accel` 是全局数组（`Task/Src/ImuTask.cpp:15`），发送缓冲 `bmi088_dma_tx_buf` 是静态数组，没有这个问题。
+`HAL_SPI_TransmitReceive_DMA(&hspi1, tx, rx, len)` 之后函数返回，DMA 仍然在写 `rx`。如果 `rx` 是栈上的局部数组，函数返回后这块栈空间随时会被别的调用覆盖。本工程的 DMA 目标 `gyro`、`accel` 是全局数组（`Task/Src/ImuTask.cpp`），发送缓冲 `bmi088_dma_tx_buf` 是静态数组，没有这个问题。
 
 ### 4.6 把双缓冲当单缓冲用
 
@@ -321,7 +321,7 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 ### 4.7 混用阻塞与 DMA 的 SPI 时序
 
-`BMI088/Src/BMI088.cpp:217-219` 在调用 `BMI088_read_multiple_reg_dma()` 之前先用阻塞方式发送了一次寄存器地址，而该函数内部（`:288`）又会发一次同样的地址。这样的序列里前一次发送不经过 DMA，第二次才进入 DMA，两种时序混在同一次读操作里。它是否造成读回数据整体偏移一个寄存器，需要用逻辑分析仪核对实际 MOSI 与 MISO 波形，这一条标注为待实测。
+`BMI088/Src/BMI088.cpp` 在调用 `BMI088_read_multiple_reg_dma()` 之前先用阻塞方式发送了一次寄存器地址，而该函数内部又会发一次同样的地址。这样的序列里前一次发送不经过 DMA，第二次才进入 DMA，两种时序混在同一次读操作里。它是否造成读回数据整体偏移一个寄存器，需要用逻辑分析仪核对实际 MOSI 与 MISO 波形，这一条标注为待实测。
 
 ### 4.8 在中断里调用阻塞式中止
 
@@ -372,13 +372,13 @@ $$f_{\text{SPI1}} = \frac{84\ \text{MHz}}{64} = 1.3125\ \text{MHz}$$
 
 | 路径 | 用途 |
 | --- | --- |
-| `2026OmniSentryGimbal/Core/Src/dma.c` | DMA 控制器时钟与五个向量（:39-62） |
-| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3_RX 流与通道（:180-189）、USART6_RX（:226-235）、USART6_TX（:244-253） |
-| `2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 波特率预分频（:49）、SPI1_RX 流（:99-108）、SPI1_TX 流（:117-126） |
-| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 五个 DMA 向量的处理函数（:177-354） |
-| `2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 完成标志与发送缓冲（:15-17）、DMA 启动与等待（:279-315）、完成回调（:355-369） |
-| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 全局数组与 1 ms 循环（:14、:34-104） |
-| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 双缓冲启动与 `NDTR` 重置（:33-99、:118-178） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `CR` 与 `FCR` 装载（:231-269）、中断分发（:746-921）、双缓冲回调选择（:878-898）、地址长度装载（:1151） |
-| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c` | DMA 回调登记（:1707、:1817）、完成分发（:3717-3738） |
-| `2026OmniSentryChassis/Core/Src/dma.c` | 底盘板同配置（:39-62） |
+| `2026OmniSentryGimbal/Core/Src/dma.c` | DMA 控制器时钟与五个向量 |
+| `2026OmniSentryGimbal/Core/Src/usart.c` | USART3_RX 流与通道、USART6_RX、USART6_TX |
+| `2026OmniSentryGimbal/Core/Src/spi.c` | SPI1 波特率预分频、SPI1_RX 流、SPI1_TX 流 |
+| `2026OmniSentryGimbal/Core/Src/stm32f4xx_it.c` | 五个 DMA 向量的处理函数 |
+| `2026OmniSentryGimbal/BMI088/Src/BMI088.cpp` | 完成标志与发送缓冲、DMA 启动与等待、完成回调 |
+| `2026OmniSentryGimbal/Task/Src/ImuTask.cpp` | 全局数组与 1 ms 循环 |
+| `2026OmniSentryGimbal/Communication/Src/usart_dma.cpp` | 双缓冲启动与 `NDTR` 重置 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c` | `CR` 与 `FCR` 装载、中断分发、双缓冲回调选择、地址长度装载 |
+| `2026OmniSentryGimbal/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c` | DMA 回调登记、完成分发 |
+| `2026OmniSentryChassis/Core/Src/dma.c` | 底盘板同配置 |
