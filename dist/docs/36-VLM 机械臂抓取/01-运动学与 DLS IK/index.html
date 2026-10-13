@@ -1,0 +1,1418 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>运动学与 DLS IK · VLM 机械臂抓取 · 王宇翔</title><meta name="description" content="UR5e 加 Robotiq 2F85 的 TCP site 位姿与世界系雅可比的算法分工，私有 MjData 的只读契约，mj_kinematics 与 mj_comPos 各填哪些字段，以及在本机场景模型上核对到的实测数字。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/01-%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%20DLS%20IK/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="运动学与 DLS IK · VLM 机械臂抓取 · 王宇翔"><meta property="og:description" content="UR5e 加 Robotiq 2F85 的 TCP site 位姿与世界系雅可比的算法分工，私有 MjData 的只读契约，mj_kinematics 与 mj_comPos 各填哪些字段，以及在本机场景模型上核对到的实测数字。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/01-%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%20DLS%20IK/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/">VLM 机械臂抓取</a><span class="sep" aria-hidden="true">/</span><span class="now">运动学与 DLS IK</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>运动学与 DLS IK</b><span>05 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">05 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>TCP 正运动学与雅可比</span></a><ul class="toc__heads"><li><a href="#私有-mjdata-与只读契约" data-depth="2" data-heading-j="0">私有 MjData 与只读契约</a></li><li><a href="#两级前向mj_kinematics-与-mj_compos" data-depth="2" data-heading-j="1">两级前向：mj_kinematics 与 mj_comPos</a></li><li><a href="#六个臂关节的下标位置" data-depth="2" data-heading-j="2">六个臂关节的下标位置</a></li><li><a href="#雅可比的形状坐标系与列含义" data-depth="2" data-heading-j="3">雅可比的形状、坐标系与列含义</a></li><li><a href="#源码核对" data-depth="2" data-heading-j="4">源码核对</a></li><li><a href="#易错点与调试" data-depth="2" data-heading-j="5">易错点与调试</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#核心结论" data-depth="3" data-heading-j="7">核心结论</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="9">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>DLS 逆解与零空间</span></a><ul class="toc__heads"><li><a href="#误差向量的组装" data-depth="2" data-heading-j="0">误差向量的组装</a></li><li><a href="#阻尼最小二乘的更新式" data-depth="2" data-heading-j="1">阻尼最小二乘的更新式</a></li><li><a href="#自适应阻尼系数" data-depth="2" data-heading-j="2">自适应阻尼系数</a></li><li><a href="#单步关节增量限幅" data-depth="2" data-heading-j="3">单步关节增量限幅</a></li><li><a href="#零空间项与限位中心" data-depth="2" data-heading-j="4">零空间项与限位中心</a></li><li><a href="#一次迭代的完整实现" data-depth="2" data-heading-j="5">一次迭代的完整实现</a></li><li><a href="#易错点与调试" data-depth="2" data-heading-j="6">易错点与调试</a></li><li><a href="#权衡与参数表" data-depth="2" data-heading-j="7">权衡与参数表</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="8">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>多重启、限位与收敛判据</span></a><ul class="toc__heads"><li><a href="#两种调用形态" data-depth="2" data-heading-j="0">两种调用形态</a></li><li><a href="#八个种子的构造规则" data-depth="2" data-heading-j="1">八个种子的构造规则</a></li><li><a href="#固定随机种子带来的可复现性" data-depth="2" data-heading-j="2">固定随机种子带来的可复现性</a></li><li><a href="#收敛判据位置与姿态同时达标" data-depth="2" data-heading-j="3">收敛判据：位置与姿态同时达标</a></li><li><a href="#限位在求解中的位置" data-depth="2" data-heading-j="4">限位在求解中的位置</a></li><li><a href="#失败的两种出口" data-depth="2" data-heading-j="5">失败的两种出口</a></li><li><a href="#易错点与调试" data-depth="2" data-heading-j="6">易错点与调试</a></li><li><a href="#参数表与权衡" data-depth="2" data-heading-j="7">参数表与权衡</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="8">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="3"><a href="#file-4"><span class="n">04</span><span>位置伺服与任务空间积分外环</span></a><ul class="toc__heads"><li><a href="#位置执行器的静差" data-depth="2" data-heading-j="0">位置执行器的静差</a></li><li><a href="#慢速任务空间积分外环" data-depth="2" data-heading-j="1">慢速任务空间积分外环</a></li><li><a href="#姿态修正的左乘与右乘" data-depth="2" data-heading-j="2">姿态修正的左乘与右乘</a></li><li><a href="#速度前馈消掉斜坡滞后" data-depth="2" data-heading-j="3">速度前馈：消掉斜坡滞后</a></li><li><a href="#前馈的实测收益" data-depth="3" data-heading-j="4">前馈的实测收益</a></li><li><a href="#收尾伺服与仿真时间超时" data-depth="2" data-heading-j="5">收尾伺服与仿真时间超时</a></li><li><a href="#错误码与中止即停住" data-depth="2" data-heading-j="6">错误码与中止即停住</a></li><li><a href="#易错点与调试" data-depth="2" data-heading-j="7">易错点与调试</a></li><li><a href="#权衡" data-depth="2" data-heading-j="8">权衡</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="9">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="4"><a href="#file-5"><span class="n">05</span><span>易错点与调试</span></a><ul class="toc__heads"><li><a href="#私有数据与场景同步" data-depth="2" data-heading-j="0">私有数据与场景同步</a></li><li><a href="#前向链条的完整性" data-depth="2" data-heading-j="1">前向链条的完整性</a></li><li><a href="#四元数约定与误差坐标系" data-depth="2" data-heading-j="2">四元数约定与误差坐标系</a></li><li><a href="#限位种子与迭代参数" data-depth="2" data-heading-j="3">限位、种子与迭代参数</a></li><li><a href="#时间与力的口径" data-depth="2" data-heading-j="4">时间与力的口径</a></li><li><a href="#一条按现象的排查路径" data-depth="2" data-heading-j="5">一条按现象的排查路径</a></li><li><a href="#可复现的检查命令" data-depth="2" data-heading-j="6">可复现的检查命令</a></li><li><a href="#本单元引用的实测数字" data-depth="2" data-heading-j="7">本单元引用的实测数字</a></li><li><a href="#附本页引用的路径" data-depth="3" data-heading-j="8">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">VLM 机械臂抓取</span><span class="dot" aria-hidden="true">·</span><span>5 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-13</span><span class="dot" aria-hidden="true">·</span><span>MuJoCo / UR5e / 正运动学 / 雅可比 / vlm-admittance / 逆运动学 / 阻尼最小二乘 / 零空间</span></div><h1 class="docs__title">运动学与 DLS IK</h1><p class="docs__lead">UR5e 加 Robotiq 2F85 的 TCP site 位姿与世界系雅可比的算法分工，私有 MjData 的只读契约，mj_kinematics 与 mj_comPos 各填哪些字段，以及在本机场景模型上核对到的实测数字。</p></header><section class="dfile" id="file-1" data-file="01-正运动学与雅可比"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-正运动学与雅可比</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/01-运动学与 DLS IK/01-正运动学与雅可比.md</span></div><div class="dfile__body"><h1 id="tcp-正运动学与雅可比">TCP 正运动学与雅可比</h1>
+<p>本文对应公开项目 <code>TC635807/vlm-admittance</code>（<a href="https://github.com/TC635807/vlm-admittance%EF%BC%89%E7%9A%84">https://github.com/TC635807/vlm-admittance）的</a> <code>control/</code>。正解与雅可比都落在 <code>control/kinematics.py</code> 的 <code>Kinematics</code> 类里，四元数工具来自 <code>control/trajectory.py</code>。这两个结果同时被下游两处消费：规划器 <code>planning/planner.py</code> 用 <code>fk()</code> 复核 IK 给出的关节角，运动执行器 <code>control/motion.py</code> 用 <code>jacobian()</code> 把参考笛卡尔速度映射成关节速度。</p>
+<p>机器人的装配方式写在 <code>sim/scene.py</code>：<code>assets/ur5e/ur5e.xml</code>（Menagerie）与 <code>assets/robotiq_2f85/2f85.xml</code> 通过 <code>MjSpec.attach(grip, prefix="g_", site=arm.site("attachment_site"))</code> 组合，夹爪元素统一带 <code>g_</code> 前缀。工具中心点取 site <code>g_pinch</code>，这个名字定义在 <code>core/types.py</code> 的 <code>TCP_SITE</code>，法兰 site 是 <code>attachment_site</code>。</p>
+<h2 id="私有-mjdata-与只读契约">私有 MjData 与只读契约</h2>
+<p><code>Kinematics</code> 不直接往 <code>env.data</code> 上算。构造时它建了一份自己的 <strong>私有 MjData</strong>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._data </span><span style="color:#D73A49">=</span><span style="color:#24292E"> mujoco.MjData(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._jacp </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros((</span><span style="color:#005CC5">3</span><span style="color:#24292E">, </span><span style="color:#005CC5">self</span><span style="color:#24292E">.model.nv))</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._jacr </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros((</span><span style="color:#005CC5">3</span><span style="color:#24292E">, </span><span style="color:#005CC5">self</span><span style="color:#24292E">.model.nv))</span></span></code></pre>
+<p>之后每次求解都走同一条路：先把 <code>env.data.qpos</code> 整个复制进 <code>_data</code>，再覆盖 6 个臂关节。复制整份 qpos 而不是只写臂关节，是为了保留夹爪内部 8 个自由度与场景物体自由关节的当前值；这些值不参与 IK，但 <code>_data</code> 必须与真实场景同构，否则读出来的 site 位姿没有意义。</p>
+<p>这条只读约束有专门的断言。<code>control/smoke.py</code> 的 <code>TestKinematics</code> 在调用 <code>fk / jacobian / ik</code> 前后各存一份 <code>env.data.qpos</code>，要求逐位相等。设计上成立的原因是所有写操作都只落在 <code>_data</code>，<code>env.data</code> 全程只出现在 <code>d.qpos[:] = self.env.data.qpos</code> 这条右值读取里。</p>
+<h2 id="两级前向mj_kinematics-与-mj_compos">两级前向：mj_kinematics 与 mj_comPos</h2>
+<p>IK 内循环一步要算数千次前向，前向开销直接决定逆解耗时。<code>_sync()</code> 因此只跑两级轻量接口，不跑 <code>mj_forward</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _sync</span><span style="color:#24292E">(self, q):</span></span>
+<span class="line"><span style="color:#24292E">    d </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._data</span></span>
+<span class="line"><span style="color:#24292E">    d.qpos[:] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.env.data.qpos          </span><span style="color:#6A737D"># 只读复制：保留夹爪 8 个自由度（场景里的物体状态一并保留）</span></span>
+<span class="line"><span style="color:#24292E">    d.qpos[</span><span style="color:#005CC5">self</span><span style="color:#24292E">.arm_qpos_idx] </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.clamp(q)</span></span>
+<span class="line"><span style="color:#24292E">    mujoco.mj_kinematics(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model, d)</span></span>
+<span class="line"><span style="color:#24292E">    mujoco.mj_comPos(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model, d)</span></span></code></pre>
+<p><code>mj_kinematics</code> 填 <code>xpos / xmat / site_xpos / site_xmat</code> 这一类与位姿直接相关的字段。<code>mj_comPos</code> 继续填 <code>cdof / cinert / subtree_com</code> 这一类质心与运动学导数相关的字段。第二步不能省：<code>mj_jacSite</code> 依赖 <code>cdof</code>，而 <code>cdof</code> 由 <code>mj_comPos</code> 产生。</p>
+<p>这一步在 MuJoCo 3.12 上实测过，本轮复核又独立复现了一次。同一组关节角下只跑 <code>mj_kinematics</code>，<code>data.cdof</code> 全零，<code>mj_jacSite</code> 写出来的 <code>jacp</code> 也全零；补上 <code>mj_comPos</code> 之后再取雅可比，第 0 列平动分量从全零变成 <code>[-0.492, -0.134, 0.0]</code>，与有限差分一致。复核只需要几行：把 <code>env.data.qpos</code> 读进私有 <code>MjData</code>、覆盖臂关节，先 <code>mj_kinematics</code> 后取一次 <code>jacp</code>（全零），再调 <code>mj_comPos</code> 重取（<code>[-0.492, -0.134, 0.0]</code>）。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["env.data.qpos 只读复制"] --> B["覆盖 6 个臂关节为 clamp(q)"]
+  B --> C["mj_kinematics 填 site_xpos / site_xmat"]
+  C --> D["mj_comPos 填 cdof / cinert / subtree_com"]
+  D --> E["mj_jacSite 写 jacp / jacr"]
+  C --> F["mju_mat2Quat 由 site_xmat 得到 wxyz"]
+  E --> G["_eval 返回 pos / quat / J"]
+  F --> G</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["只跑 mj_kinematics"] --> B["cdof 全零"]
+  B --> C["mj_jacSite 输出全零雅可比"]
+  D["mj_kinematics + mj_comPos"] --> E["cdof 有值"]
+  E --> F["mj_jacSite 输出可用雅可比"]</pre></div>
+<p><code>mj_forward</code> 被排除的理由是它还会做碰撞检测与约束求解，而这些结果对 site 位姿与雅可比没有贡献。IK 单次求解内层迭代上限是 300 步，每步还要为试探解再算一次前向，量级上省下的就是这个检测开销。</p>
+<h2 id="六个臂关节的下标位置">六个臂关节的下标位置</h2>
+<p><code>Kinematics.__init__()</code> 从环境取两个下标数组：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.arm_qpos_idx </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.asarray(</span><span style="color:#005CC5">getattr</span><span style="color:#24292E">(env, </span><span style="color:#032F62">"arm_qpos_idx"</span><span style="color:#24292E">, np.arange(</span><span style="color:#005CC5">6</span><span style="color:#24292E">)), </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#005CC5">int</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.arm_dof_idx </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.asarray(</span><span style="color:#005CC5">getattr</span><span style="color:#24292E">(env, </span><span style="color:#032F62">"arm_dof_idx"</span><span style="color:#24292E">, np.arange(</span><span style="color:#005CC5">6</span><span style="color:#24292E">)), </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#005CC5">int</span><span style="color:#24292E">)</span></span></code></pre>
+<p>真实环境里这两个数组由 <code>sim/env.py</code> 的 <code>_resolve_ids()</code> 生成，取自 <code>core/types.py</code> 的 <code>ARM_JOINT_NAMES</code> 六个关节在 <code>jnt_qposadr</code> 与 <code>jnt_dofadr</code> 中的地址。本机场景实测两者都是 <code>[0 1 2 3 4 5]</code>，因为臂关节在模型里排在最前。两个数组都要求正好 6 个元素，不满足直接抛 <code>ValueError</code>。</p>
+<p>关节限位在构造时一并读入，来自 <code>core/config.py</code> 的 <code>ARM_JOINT_LIMITS</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>关节</th><th>下限</th><th>上限</th></tr></thead><tbody><tr><td>shoulder_pan_joint</td><td>-6.28319</td><td>6.28319</td></tr><tr><td>shoulder_lift_joint</td><td>-6.28319</td><td>6.28319</td></tr><tr><td>elbow_joint</td><td>-3.14150</td><td>3.14150</td></tr><tr><td>wrist_1_joint</td><td>-6.28319</td><td>6.28319</td></tr><tr><td>wrist_2_joint</td><td>-6.28319</td><td>6.28319</td></tr><tr><td>wrist_3_joint</td><td>-6.28319</td><td>6.28319</td></tr></tbody></table>
+<p><code>q_center</code> 取上下限的中点。六组限位都关于 0 对称，所以 <code>q_center</code> 是全零向量。IK 的零空间项正是往这个点回拉，这一条在下一篇展开。</p>
+<p><code>arm_qpos_idx</code> 与 <code>arm_dof_idx</code> 的语义不同：前者是 <code>qpos</code> 下标，后者是 <code>qvel / qfrc</code> 下标。本机模型里两者数值相同只是巧合（nq 与 nv 都从 0 开始给臂关节编号）。夹爪有 8 个内部自由度，臂关节之后的下标会被它们与物体自由关节占走，混用两个数组会在别的模型上直接错位。</p>
+<h2 id="雅可比的形状坐标系与列含义">雅可比的形状、坐标系与列含义</h2>
+<p><code>jacobian()</code> 返回 <code>(6, nv)</code>，前 3 行是 TCP 平动速度对关节速度的偏导，后 3 行是角速度部分，全部在世界系下表达。取法是把两个缓冲拼起来：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">mujoco.mj_jacSite(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model, d, </span><span style="color:#005CC5">self</span><span style="color:#24292E">._jacp, </span><span style="color:#005CC5">self</span><span style="color:#24292E">._jacr, sid)</span></span>
+<span class="line"><span style="color:#24292E">J </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.vstack([</span><span style="color:#005CC5">self</span><span style="color:#24292E">._jacp, </span><span style="color:#005CC5">self</span><span style="color:#24292E">._jacr]).copy()</span></span></code></pre>
+<p>列数 <code>nv</code> 是模型的速度维数，不是 6。装配后的臂加夹爪模型 <code>nq = nv = 14</code>（INTERFACES 记录的编译结果），运行时场景再挂上 5 个带自由关节的物体，按 <code>14 + 7N</code> 与 <code>14 + 6N</code> 得到 <code>nq = 49</code>、<code>nv = 44</code>、<code>nu = 7</code>（<code>sim/test_env.py</code> 的维度断言；本轮复现一致）。所以 <code>jacobian()</code> 在这些场景下返回 <code>(6, 44)</code>。</p>
+<p>对 TCP 位姿有贡献的只有前 6 列。夹爪 8 个内部自由度与物体自由关节对应的列，实测全部为 0：TCP 挂在夹爪底座上，手指开合不改变 <code>g_pinch</code> 的位置。IK 需要的是方阵，于是有一层薄封装：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> jacobian_arm</span><span style="color:#24292E">(self, q</span><span style="color:#D73A49">=</span><span style="color:#005CC5">None</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.jacobian(q)[:, </span><span style="color:#005CC5">self</span><span style="color:#24292E">.arm_dof_idx]</span></span></code></pre>
+<p><code>_solve()</code> 内部就是这么取的，拿到 <code>(6, 6)</code> 之后再算 <code>J Jᵀ</code>。速度前馈用的也是同一形状，<code>control/motion.py</code> 的 <code>_joint_vel_ref()</code> 里同样先切列再求伪逆。</p>
+<h2 id="源码核对">源码核对</h2>
+<p>两条交叉验证写在 <code>control/smoke.py</code> 的 <code>TestKinematics</code> 里，另两项是本轮直接做的属性与只读检查，合起来是本机运行 <code>python -m control.smoke</code> 的输出。这些数字取自打印结果，没有落盘；可复现的判据阈值写在 smoke 的断言里：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>检查项</th><th>做法</th><th>实测结果</th></tr></thead><tbody><tr><td>fk 与场景一致</td><td><code>fk(q)</code> 对比 <code>env.site_pose("g_pinch")</code></td><td>位置差 &#x3C; 1e-12，姿态差 &#x3C; 1e-12</td></tr><tr><td>雅可比正确性</td><td>对 6 个关节做 1e-6 前向差分</td><td>平动最大偏差 2.16e-07，转动 4.81e-10</td></tr><tr><td>只读契约</td><td>调用前后比对 <code>env.data.qpos</code></td><td>逐位相等</td></tr><tr><td>姿态表示</td><td><code>hasattr(data, "site_xquat")</code></td><td>False</td></tr></tbody></table>
+<p>最后一行解释了 <code>_eval()</code> 为什么绕一道：MuJoCo 3.12 的 MjData 没有 <code>site_xquat</code> 字段，姿态得由 <code>site_xmat</code> 转换。用的是 <code>mujoco.mju_mat2Quat</code>，输出顺序为 wxyz，与 MuJoCo 的 <code>qpos</code> 四元数约定一致：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">quat </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros(</span><span style="color:#005CC5">4</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">mujoco.mju_mat2Quat(quat, np.asarray(d.site_xmat[sid]).reshape(</span><span style="color:#005CC5">9</span><span style="color:#24292E">))</span></span></code></pre>
+<p><code>fk()</code> 在返回前还会过一遍 <code>normalize_quat()</code>，模长过小（&#x3C; 1e-12）时回退单位四元数。这是防御性写法，正常 <code>mju_mat2Quat</code> 的输出已经是单位四元数。</p>
+<h2 id="易错点与调试">易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td>雅可比全零</td><td>只跑了 <code>mj_kinematics</code>，<code>cdof</code> 为空</td><td>补上 <code>mj_comPos</code></td></tr><tr><td><code>AttributeError: site_xquat</code></td><td>MuJoCo 3.12 的 MjData 没有该字段</td><td>由 <code>site_xmat</code> 走 <code>mju_mat2Quat</code></td></tr><tr><td>四元数符号看起来相反</td><td>把 wxyz 当成 xyzw 读</td><td>全库统一 wxyz，<code>quat_mul</code> 是 Hamilton 乘积</td></tr><tr><td>取错列导致 <code>(6, 44)</code> 方阵运算报错</td><td>忘了切 <code>arm_dof_idx</code></td><td>用 <code>jacobian_arm()</code></td></tr><tr><td><code>env.data.qpos</code> 被改动</td><td>直接把 <code>_data</code> 换成了 <code>env.data</code></td><td>保持私有 MjData，跑 smoke 的断言</td></tr><tr><td>规划器复核通过但执行失败</td><td>复核只用 <code>fk</code> 看位置，<code>ok</code> 可能因姿态置 False</td><td>见同单元《多重启、限位与收敛判据》</td></tr></tbody></table>
+<p>排查顺序建议先确认前向链条完整：在 <code>_sync()</code> 之后打印 <code>_data.cdof</code> 是否非零，再打印 <code>jacp</code>。这两步就能区分是前向没跑够，还是列取错了。</p>
+<p><code>sim/env.py</code> 的 <code>site_pose()</code> 与 <code>Kinematics.fk()</code> 是两条独立实现（前者直接读 <code>env.data</code>，后者读 <code>_data</code>），两者一致这条断言同时覆盖了私有数据同步是否正确。改动机器人装配方式后先跑这条断言，而不是等下游的跟踪误差变大。</p>
+<h2 id="小结">小结</h2>
+<h3 id="核心结论">核心结论</h3>
+<ul>
+<li>TCP 位姿由 site <code>g_pinch</code> 给出，四元数约定是 wxyz，经 <code>mju_mat2Quat</code> 从 <code>site_xmat</code> 得到。</li>
+<li>前向只跑 <code>mj_kinematics</code> 加 <code>mj_comPos</code>：前者给位姿，后者给 <code>cdof</code>，雅可比依赖后者。</li>
+<li>雅可比是世界系 <code>(6, nv)</code>，前 3 行平动、后 3 行转动；IK 与前馈都只取 <code>arm_dof_idx</code> 六列。</li>
+<li>所有计算在私有 MjData 上完成，<code>env.data</code> 全程只读，smoke 有逐位断言。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>前向接口</td><td><code>mj_kinematics + mj_comPos</code></td><td>省掉碰撞检测，适配 IK 内循环；代价是必须自己记住两步的顺序</td></tr><tr><td>数据空间</td><td>私有 MjData 复制整份 qpos</td><td>不污染环境、结果与场景同步；代价是每次求解多一次全量拷贝</td></tr><tr><td>雅可比形状</td><td>返回 <code>(6, nv)</code> 原始列</td><td>保持与 <code>mj_jacSite</code> 同构；代价是调用方要自己切列</td></tr></tbody></table>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>control/kinematics.py</code></td><td><code>Kinematics</code> 的 fk / jacobian / 私有 MjData</td></tr><tr><td><code>control/trajectory.py</code></td><td><code>normalize_quat</code> 与四元数工具</td></tr><tr><td><code>control/smoke.py</code></td><td><code>TestKinematics</code> 交叉验证</td></tr><tr><td><code>sim/env.py</code></td><td><code>arm_qpos_idx / arm_dof_idx / site_pose</code></td></tr><tr><td><code>sim/scene.py</code></td><td>臂加夹爪的 <code>MjSpec.attach</code> 装配</td></tr><tr><td><code>core/config.py</code></td><td><code>ARM_JOINT_LIMITS</code>、<code>HOME_QPOS</code></td></tr><tr><td><code>core/types.py</code></td><td><code>TCP_SITE / FLANGE_SITE / ARM_JOINT_NAMES / ARM_NDOF</code></td></tr><tr><td><code>INTERFACES.md</code></td><td>§1 机器人模型与 §2.2 control 契约</td></tr></tbody></table>
+<p>上游仓库：<a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></p></div></section><section class="dfile" id="file-2" data-file="02-DLS 逆解与零空间"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-DLS 逆解与零空间</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/01-运动学与 DLS IK/02-DLS 逆解与零空间.md</span></div><div class="dfile__body"><h1 id="dls-逆解与零空间">DLS 逆解与零空间</h1>
+<p><code>control/kinematics.py</code> 的 <code>Kinematics.ik()</code> 是控制环里调用最频繁的运动学接口。<code>control/motion.py</code> 每个仿真步都要用它把导纳修正后的笛卡尔目标换成关节角，规划器 <code>planning/planner.py</code> 还要在一组初始角上做多次预热求解。这两处的共同要求是：单次求解够快，迭代过程不发散，失败要能明确报出来。</p>
+<p>求解策略是阻尼最小二乘（DLS）加零空间回中，外覆一层由 LM 思路来的自适应阻尼。整个过程只依赖 <code>fk</code>、<code>jacobian</code> 与关节限位，不引入二次规划或解析逆解。</p>
+<h2 id="误差向量的组装">误差向量的组装</h2>
+<p>迭代需要的是一个 6 维误差：前 3 维是目标位置减当前位置，后 3 维是姿态误差的旋转向量。<code>_error()</code> 负责这件事，位置与姿态分别处理：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">ep </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target_pos </span><span style="color:#D73A49">-</span><span style="color:#24292E"> p</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> target_quat </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    eo </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros(</span><span style="color:#005CC5">3</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    eo </span><span style="color:#D73A49">=</span><span style="color:#24292E"> rotvec_from_quat(quat_mul(target_quat, quat_conj(quat)))</span></span></code></pre>
+<p><code>quat_mul(a, b)</code> 是 Hamilton 乘积，语义与矩阵乘积 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mo stretchy="false">(</mo><mi>a</mi><mo stretchy="false">)</mo><mi>R</mi><mo stretchy="false">(</mo><mi>b</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">R(a)R(b)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mopen">(</span><span class="mord mathnormal">a</span><span class="mclose">)</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mopen">(</span><span class="mord mathnormal">b</span><span class="mclose">)</span></span></span></span> 一致。因此 <code>quat_mul(target_quat, quat_conj(quat))</code> 等于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>R</mi><mrow><mi>t</mi><mi>a</mi><mi>r</mi><mi>g</mi><mi>e</mi><mi>t</mi></mrow></msub><msubsup><mi>R</mi><mrow><mi>c</mi><mi>u</mi><mi>r</mi></mrow><mrow><mo>−</mo><mn>1</mn></mrow></msubsup></mrow><annotation encoding="application/x-tex">R_{target}R_{cur}^{-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1002em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0077em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.453em;margin-left:-0.0077em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">u</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span></span></span></span>，也就是把当前姿态转到目标姿态所需的旋转，表达在世界系下。旋转向量与雅可比的转动行在同一套坐标系里，两者可以直接相乘。</p>
+<p><code>rotvec_from_quat()</code> 负责最短分支。它先把 w 为负的四元数整体取反（四元数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mi>q</mi></mrow><annotation encoding="application/x-tex">-q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 表示同一旋转），再取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>θ</mi><mo>=</mo><mn>2</mn><msub><mrow><mi>arctan</mi><mo>⁡</mo></mrow><mn>2</mn></msub><mo stretchy="false">(</mo><mi mathvariant="normal">∣</mi><mi>v</mi><mi mathvariant="normal">∣</mi><mo separator="true">,</mo><mi>w</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\theta = 2\arctan_2(|v|, w)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop"><span class="mop">arctan</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mord">∣</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mclose">)</span></span></span></span>，得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi>θ</mi><mi mathvariant="normal">∣</mi><mo>≤</mo><mi>π</mi></mrow><annotation encoding="application/x-tex">|\theta| \le \pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span></span></span></span> 的表示。角度接近零时（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi>v</mi><mi mathvariant="normal">∣</mi><mo>&#x3C;</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>12</mn></mrow></msup></mrow><annotation encoding="application/x-tex">|v| &#x3C; 10^{-12}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">12</span></span></span></span></span></span></span></span></span></span></span></span>）直接返回 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>v</mi></mrow><annotation encoding="application/x-tex">2v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span></span></span></span>，避开 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>v</mi><mi mathvariant="normal">/</mi><mi mathvariant="normal">∣</mi><mi>v</mi><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">v/|v|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mord">/∣</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mord">∣</span></span></span></span> 的除零。</p>
+<p>误差向量把米与弧度拼在一起，<code>tol</code> 与 <code>best_norm</code> 都直接对这个拼接向量取二范数。这等于给平动与转动相同的权重，源码里没有量纲归一化。</p>
+<p><code>target_quat=None</code> 时后 3 维置零，迭代只约束位置。此时 DLS 在姿态方向没有误差可以下降，解会在位置子空间里取阻尼最小的方向。规划器 <code>plan_pose</code> 依赖这一形态：只给位置时 IK 是欠约束的，<code>ok</code> 可能因为姿态误差未达标而为 False，而位置已经到达。</p>
+<h2 id="阻尼最小二乘的更新式">阻尼最小二乘的更新式</h2>
+<p>雅可比是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>6</mn><mo>×</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">6 \times 6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span>，直接求逆在奇异位形附近会爆掉。DLS 给 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>J</mi><msup><mi>J</mi><mi>T</mi></msup></mrow><annotation encoding="application/x-tex">J J^T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8413em;"></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span></span></span></span> 加一个正定项：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>q</mi><mo>˙</mo></mover><mo>=</mo><msup><mi>J</mi><mi>T</mi></msup><msup><mrow><mo fence="true">(</mo><mi>J</mi><msup><mi>J</mi><mi>T</mi></msup><mo>+</mo><msup><mi>λ</mi><mn>2</mn></msup><mi>I</mi><mo fence="true">)</mo></mrow><mrow><mo>−</mo><mn>1</mn></mrow></msup><mi>e</mi><mo>+</mo><mrow><mo fence="true">(</mo><mi>I</mi><mo>−</mo><msup><mi>J</mi><mo lspace="0em" rspace="0em">+</mo></msup><mi>J</mi><mo fence="true">)</mo></mrow><mi>k</mi><mrow><mo fence="true">(</mo><msub><mi>q</mi><mrow><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msub><mo>−</mo><mi>q</mi><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\dot q = J^T \left(J J^T + \lambda^2 I\right)^{-1} e + \left(I - J^{+} J\right) k \left(q_{center} - q\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8623em;vertical-align:-0.1944em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.404em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.054em;"><span style="top:-3.3029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0213em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">+</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ce</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">er</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></p>
+<p>第一项对应原式里 <code>A = J6 @ J6.T + (lam * lam) * I6</code> 之后的 <code>dq = J6.T @ solve(A, err)</code>。第二项是零空间投影，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>J</mi><mo lspace="0em" rspace="0em">+</mo></msup><mo>=</mo><msup><mi>J</mi><mi>T</mi></msup><mo stretchy="false">(</mo><mi>J</mi><msup><mi>J</mi><mi>T</mi></msup><mo>+</mo><msup><mi>λ</mi><mn>2</mn></msup><mi>I</mi><msup><mo stretchy="false">)</mo><mrow><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">J^{+} = J^T (J J^T + \lambda^2 I)^{-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7713em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">+</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0913em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> 就是代码里的 <code>Jpinv</code>。</p>
+<p>阻尼 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi></mrow><annotation encoding="application/x-tex">\lambda</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span></span></span></span> 在 0 附近时该式退化为最小范数解的最小二乘近似；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi></mrow><annotation encoding="application/x-tex">\lambda</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span></span></span></span> 变大则关节增量整体收缩，靠近奇异位形时不会给出巨大的关节速度。代价是误差下降变慢，收敛需要的迭代步数变多。</p>
+<p>零空间投影 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>=</mo><mi>I</mi><mo>−</mo><msup><mi>J</mi><mo lspace="0em" rspace="0em">+</mo></msup><mi>J</mi></mrow><annotation encoding="application/x-tex">N = I - J^{+}J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7713em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7713em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">+</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span></span></span></span> 把任意关节增量映射到不改变末端误差的方向。这一项在冗余构型上才有非零空间，对 6 自由度的 UR5e 而言，只有在雅可比退化（有效秩小于 6）时才起作用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["输入种子 seed 与目标位姿"] --> B["q = clamp(seed)，求 fk 与 J"]
+  B --> C["err = _error(p, quat, target)"]
+  C --> D{"best_norm &#x3C;= tol ?"}
+  D -- "是" --> Z["返回 best_q"]
+  D -- "否" --> E["A = J J^T + lam^2 I"]
+  E --> F["dq = J^T A^-1 err + N k (q_center - q)"]
+  F --> G["按 max_step 限幅得到 dq"]
+  G --> H["q_try = clamp(q + dq)，重算 fk/J/err"]
+  H --> I{"误差严格下降 ?"}
+  I -- "是" --> J["接受：lam 减半"]
+  I -- "否" --> K["拒绝：lam 乘 4"]
+  J --> D
+  K --> D</pre></div>
+<h2 id="自适应阻尼系数">自适应阻尼系数</h2>
+<p>阻尼按每步的试探结果调整，并非固定值。初值取自构造时写死的 <code>lam0 = 1e-3</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>分支</th><th>条件</th><th>动作</th><th>上限</th></tr></thead><tbody><tr><td>试探解有效</td><td>新误差比历史最优小超过 1e-12</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>←</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>λ</mi><mi mathvariant="normal">/</mi><mn>2</mn><mo separator="true">,</mo><mtext> </mtext><msup><mn>10</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\lambda \leftarrow \max(\lambda/2,\ 10^{-6})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord mathnormal">λ</span><span class="mord">/2</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></td><td>下限 1e-6</td></tr><tr><td>试探解被拒</td><td>误差没有下降</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>←</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>4</mn><mi>λ</mi><mo separator="true">,</mo><mtext> </mtext><msup><mn>10</mn><mn>3</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\lambda \leftarrow \min(4\lambda,\ 10^{3})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord">4</span><span class="mord mathnormal">λ</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></td><td>到 1e3 直接退出</td></tr><tr><td>线性方程组奇异</td><td><code>np.linalg.LinAlgError</code></td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>←</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>10</mn><mi>λ</mi><mo separator="true">,</mo><mtext> </mtext><msup><mn>10</mn><mn>3</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\lambda \leftarrow \min(10\lambda,\ 10^{3})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord">10</span><span class="mord mathnormal">λ</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></td><td>到 1e3 直接退出</td></tr></tbody></table>
+<p><code>1e3</code> 被当作卡死的判据：阻尼大到这个量级时，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>λ</mi><mn>2</mn></msup><mo>=</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><annotation encoding="application/x-tex">\lambda^2 = 10^6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span> 已经彻底压死关节增量，继续迭代没有意义，直接跳出返回当前最优解。此时 <code>best_norm</code> 通常远大于 <code>tol</code>，最终 <code>ok=False</code>。</p>
+<p>接受判据用 <code>n2 &#x3C; best_norm - 1e-12</code> 而不是单纯的 <code>n2 &#x3C; best_norm</code>。这一条 1e-12 的余量过滤掉数值噪声导致的假下降：误差只差最后几位有效数字时继续接受，会让阻尼一路减到下限、步长抖起来，也拖长迭代。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["试探解误差 n2"] --> B{"n2 &#x3C; best_norm - 1e-12 ?"}
+  B -- "是" --> C["接受 q_try"]
+  C --> D["lam = max(lam * 0.5, 1e-6)"]
+  B -- "否" --> E["保留原 q"]
+  E --> F["lam = min(lam * 4, 1e3)"]
+  F --> G{"lam >= 1e3 ?"}
+  G -- "是" --> H["退出迭代"]
+  G -- "否" --> I["继续下一步"]
+  D --> I
+  J["np.linalg.LinAlgError"] --> K["lam = min(lam * 10, 1e3)"]
+  K --> G</pre></div>
+<h2 id="单步关节增量限幅">单步关节增量限幅</h2>
+<p>求解出来的 <code>dq</code> 在写回之前统一限幅：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">n </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.linalg.norm(dq))</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> n </span><span style="color:#D73A49">></span><span style="color:#005CC5"> self</span><span style="color:#24292E">.max_step:</span></span>
+<span class="line"><span style="color:#24292E">    dq </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dq </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">.max_step </span><span style="color:#D73A49">/</span><span style="color:#24292E"> n)</span></span>
+<span class="line"><span style="color:#24292E">q_try </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.clamp(q </span><span style="color:#D73A49">+</span><span style="color:#24292E"> dq)</span></span></code></pre>
+<p><code>max_step</code> 是构造时设的 0.25 rad/迭代，按整段关节增量的二范数缩放，不是逐关节截断。整段缩放保持增量方向不变，避免逐关节截断改变搜索方向。限幅的直接作用是让迭代轨迹平滑：奇异位形附近 DLS 仍可能给出较大的方向分量，不限制的话单步就能跳到构型的另一端，后面的求解虽然可能收敛，但关节角在相邻控制步之间来回跳，对位置伺服不友好。</p>
+<p><code>clamp</code> 作用在加完增量之后，把试探解拉回 <code>ARM_JOINT_LIMITS</code>。关节角顶到限位时，<code>clamp</code> 之后的误差可能不再下降，迭代会走「试探被拒、阻尼增大」的分支，最终以 <code>ok=False</code> 结束。这是设计上认可的行为：求解器不越限，失败交给调用方判断。</p>
+<h2 id="零空间项与限位中心">零空间项与限位中心</h2>
+<p>零空间项的写法是 <code>dq = dq + N @ (self.nullspace_gain * (self.q_center - q))</code>，增益 <code>nullspace_gain</code> 默认 0.05。<code>q_center</code> 在构造时由上下限中点算出：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.q_min </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.array(</span><span style="color:#005CC5">ARM_JOINT_LIMITS</span><span style="color:#24292E">[:, </span><span style="color:#005CC5">0</span><span style="color:#24292E">], </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#005CC5">float</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.q_max </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.array(</span><span style="color:#005CC5">ARM_JOINT_LIMITS</span><span style="color:#24292E">[:, </span><span style="color:#005CC5">1</span><span style="color:#24292E">], </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#005CC5">float</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">.q_center </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 0.5</span><span style="color:#D73A49"> *</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">.q_min </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.q_max)</span></span></code></pre>
+<p><code>core/config.py</code> 的六组限位都关于 0 对称，所以 <code>q_center</code> 是全零向量，零空间项实际把关节往「六个角都回到 0」的位形拉。这个位形对 UR5e 而言并不在关节中位（<code>HOME_QPOS</code> 是另一组角），它只是限位区间的几何中心。作用是把冗余方向上的自由漂移压住，避免多次调用后关节角在零空间里慢慢游走。</p>
+<p>这一项不会破坏末端误差：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span> 的像空间与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>J</mi></mrow><annotation encoding="application/x-tex">J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span></span></span></span> 的行空间正交，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>J</mi><mi>N</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">J N = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span>，所以零空间增量对当前误差的一阶贡献为零。它影响的是「同一个末端位姿由哪组关节角实现」。</p>
+<p>增益取 0.05 偏小，单个迭代步的回拉量有限。这个值与 <code>max_step</code> 一起决定了迭代不会因为零空间项而震荡：零空间增量混在 <code>dq</code> 里之后同样受 0.25 rad 限幅。</p>
+<h2 id="一次迭代的完整实现">一次迭代的完整实现</h2>
+<p>把上面几段拼起来就是 <code>_solve()</code> 的主循环。为了控制篇幅，这里保留更新与判据部分，去掉异常兜底的分支书写：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">q </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.clamp(seed)</span></span>
+<span class="line"><span style="color:#24292E">p, quat, J </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._eval(q)</span></span>
+<span class="line"><span style="color:#24292E">err </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._error(p, quat, target_pos, target_quat)</span></span>
+<span class="line"><span style="color:#24292E">best_q, best_norm, lam </span><span style="color:#D73A49">=</span><span style="color:#24292E"> q.copy(), </span><span style="color:#005CC5">float</span><span style="color:#24292E">(np.linalg.norm(err)), </span><span style="color:#005CC5">self</span><span style="color:#24292E">.lam0</span></span>
+<span class="line"><span style="color:#24292E">I6 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.eye(</span><span style="color:#005CC5">6</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> _ </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(max_iters):</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> best_norm </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#24292E"> tol:</span></span>
+<span class="line"><span style="color:#D73A49">        break</span></span>
+<span class="line"><span style="color:#24292E">    J6 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> J[:, </span><span style="color:#005CC5">self</span><span style="color:#24292E">.arm_dof_idx]</span></span>
+<span class="line"><span style="color:#24292E">    A </span><span style="color:#D73A49">=</span><span style="color:#24292E"> J6 </span><span style="color:#D73A49">@</span><span style="color:#24292E"> J6.T </span><span style="color:#D73A49">+</span><span style="color:#24292E"> (lam </span><span style="color:#D73A49">*</span><span style="color:#24292E"> lam) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> I6</span></span>
+<span class="line"><span style="color:#24292E">    dq </span><span style="color:#D73A49">=</span><span style="color:#24292E"> J6.T </span><span style="color:#D73A49">@</span><span style="color:#24292E"> np.linalg.solve(A, err)</span></span>
+<span class="line"><span style="color:#24292E">    Jpinv </span><span style="color:#D73A49">=</span><span style="color:#24292E"> J6.T </span><span style="color:#D73A49">@</span><span style="color:#24292E"> np.linalg.inv(A)</span></span>
+<span class="line"><span style="color:#24292E">    dq </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dq </span><span style="color:#D73A49">+</span><span style="color:#24292E"> (I6 </span><span style="color:#D73A49">-</span><span style="color:#24292E"> Jpinv </span><span style="color:#D73A49">@</span><span style="color:#24292E"> J6) </span><span style="color:#D73A49">@</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">.nullspace_gain </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">.q_center </span><span style="color:#D73A49">-</span><span style="color:#24292E"> q))</span></span>
+<span class="line"><span style="color:#24292E">    n </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.linalg.norm(dq))</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> n </span><span style="color:#D73A49">></span><span style="color:#005CC5"> self</span><span style="color:#24292E">.max_step:</span></span>
+<span class="line"><span style="color:#24292E">        dq </span><span style="color:#D73A49">=</span><span style="color:#24292E"> dq </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">.max_step </span><span style="color:#D73A49">/</span><span style="color:#24292E"> n)</span></span>
+<span class="line"><span style="color:#24292E">    q_try </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.clamp(q </span><span style="color:#D73A49">+</span><span style="color:#24292E"> dq)</span></span>
+<span class="line"><span style="color:#24292E">    p2, quat2, J2 </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._eval(q_try)</span></span>
+<span class="line"><span style="color:#24292E">    err2 </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._error(p2, quat2, target_pos, target_quat)</span></span>
+<span class="line"><span style="color:#24292E">    n2 </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.linalg.norm(err2))</span></span></code></pre>
+<p>两点实现细节单独记下：其一，主项用 <code>np.linalg.solve</code> 解方程组，只有零空间需要显式逆矩阵，这样主路径少一次矩阵求逆；其二，接受试探解时 <code>q / J / err</code> 三个变量一起更新，下一轮直接用新雅可比，不用重算。</p>
+<p>每轮迭代的前向开销是两次 <code>_eval</code>（当前解与试探解），这也是 <code>_sync()</code> 不跑 <code>mj_forward</code> 的原因。<code>max_iters</code> 默认 300，控制环里由 <code>control/motion.py</code> 压到 120，<code>tol</code> 也从 1e-3 收到 5e-4。</p>
+<h2 id="易错点与调试">易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td>迭代原地不动、误差恒定</td><td>阻尼已经顶到 1e3，增量被压死</td><td>看 <code>best_norm</code>，判为卡死换种子</td></tr><tr><td>关节角在控制步之间跳</td><td>增量限幅被改动或 <code>max_step</code> 放大</td><td>保持整段范数限幅</td></tr><tr><td>姿态误差长期在 ±π 附近</td><td>用了绝对旋转向量而非最短分支</td><td>保留 <code>rotvec_from_quat</code> 的翻分支逻辑</td></tr><tr><td>解出负的零空间效果</td><td>把 <code>q_center</code> 当成 HOME</td><td><code>q_center</code> 是限位中点，本机为全零</td></tr><tr><td><code>LinAlgError</code> 直接抛出</td><td>少了异常分支</td><td>捕获后升阻尼继续</td></tr><tr><td>位置到了但 <code>ok=False</code></td><td>误差范数同时含姿态</td><td>只约束位置时传 <code>target_quat=None</code></td></tr></tbody></table>
+<p>调试时优先打印两个量：<code>best_norm</code> 与 <code>lam</code> 的末值。<code>best_norm</code> 停在 1e-2 量级通常意味着限位或奇异位形，<code>lam</code> 顶到 1e3 意味着搜索方向已经被完全压死。两者组合能区分「够不着」与「算不动」。</p>
+<h2 id="权衡与参数表">权衡与参数表</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>值</th><th>作用</th></tr></thead><tbody><tr><td><code>lam0</code></td><td>1e-3</td><td>初始阻尼</td></tr><tr><td>阻尼减半</td><td>误差下降时</td><td>靠近解时放开步长</td></tr><tr><td>阻尼乘 4</td><td>误差未下降时</td><td>收缩搜索</td></tr><tr><td>阻尼上限</td><td>1e3</td><td>卡死判据</td></tr><tr><td><code>max_step</code></td><td>0.25 rad</td><td>单步关节增量范数上限</td></tr><tr><td><code>nullspace_gain</code></td><td>0.05</td><td>零空间回中速率</td></tr><tr><td><code>max_iters</code></td><td>300</td><td>单种子迭代上限</td></tr><tr><td><code>tol</code></td><td>1e-3</td><td>位置与姿态的联合收敛阈值</td></tr></tbody></table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>求解方法</td><td>DLS 而非解析逆解</td><td>奇异位形附近稳定；代价是误差下降慢、需要自适应阻尼</td></tr><tr><td>阻尼策略</td><td>LM 式乘除而非固定值</td><td>靠近解时步长大；代价是每步多一次试探前向</td></tr><tr><td>误差权重</td><td>平动与转动同权</td><td>实现简单；代价是量纲不统一，阈值需要按场景调</td></tr><tr><td>零空间</td><td>回限位中心</td><td>关节角不漂；代价是回拉方向与任务无关</td></tr></tbody></table>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>control/kinematics.py</code></td><td><code>_error</code> 与 <code>_solve</code> 的完整实现</td></tr><tr><td><code>control/trajectory.py</code></td><td><code>quat_mul / quat_conj / rotvec_from_quat</code></td></tr><tr><td><code>control/motion.py</code></td><td>调用 <code>ik</code> 时的 <code>max_iters / tol</code></td></tr><tr><td><code>core/config.py</code></td><td><code>ARM_JOINT_LIMITS</code>（限位与中点来源）</td></tr><tr><td><code>core/types.py</code></td><td><code>ARM_NDOF</code></td></tr><tr><td><code>INTERFACES.md</code></td><td>§2.2 <code>Kinematics</code> 签名</td></tr></tbody></table>
+<p>上游仓库：<a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></p></div></section><section class="dfile" id="file-3" data-file="03-多重启、限位与收敛判据"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-多重启、限位与收敛判据</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/01-运动学与 DLS IK/03-多重启、限位与收敛判据.md</span></div><div class="dfile__body"><h1 id="多重启限位与收敛判据">多重启、限位与收敛判据</h1>
+<p><code>Kinematics.ik()</code> 的签名里，<code>q0</code> 决定走哪条求解路径，<code>tol</code> 决定什么时候算收敛，返回值里的 <code>ok</code> 决定上层继续走还是改判失败。这三个点连起来构成逆解的对外行为，比 <code>_solve()</code> 内部的迭代细节更影响系统表现。</p>
+<h2 id="两种调用形态">两种调用形态</h2>
+<p><code>ik()</code> 的入口有两种形态，差别只在 <code>q0</code> 是否为 None：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> q0 </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    seeds </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [</span><span style="color:#005CC5">self</span><span style="color:#24292E">.clamp(np.asarray(q0, </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#005CC5">float</span><span style="color:#24292E">).reshape(</span><span style="color:#005CC5">ARM_NDOF</span><span style="color:#24292E">))]</span></span>
+<span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    seeds </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [</span><span style="color:#005CC5">self</span><span style="color:#24292E">.arm_qpos(), </span><span style="color:#005CC5">self</span><span style="color:#24292E">.clamp(</span><span style="color:#005CC5">HOME_QPOS</span><span style="color:#24292E">)]</span></span>
+<span class="line"><span style="color:#24292E">    rng </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.random.default_rng(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.rng_seed)</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> k </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.n_restarts):</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#24292E"> k </span><span style="color:#D73A49">%</span><span style="color:#005CC5"> 2</span><span style="color:#D73A49"> ==</span><span style="color:#005CC5"> 0</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">            seeds.append(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.clamp(rng.uniform(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.q_min, </span><span style="color:#005CC5">self</span><span style="color:#24292E">.q_max)))</span></span>
+<span class="line"><span style="color:#D73A49">        else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">            seeds.append(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.clamp(</span><span style="color:#005CC5">HOME_QPOS</span><span style="color:#D73A49"> +</span><span style="color:#24292E"> rng.uniform(</span><span style="color:#D73A49">-</span><span style="color:#005CC5">0.8</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.8</span><span style="color:#24292E">, </span><span style="color:#005CC5">ARM_NDOF</span><span style="color:#24292E">)))</span></span></code></pre>
+<p>给出 <code>q0</code> 时只构造一个种子，<code>_solve()</code> 只跑一遍。控制环需要的是这种形态：<code>control/motion.py</code> 的 <code>_apply_reference()</code> 把上一步的 IK 解作为 <code>q_seed</code> 传进来，利用关节角的连续性减少迭代步数。多一次随机重启意味着多 6 次完整求解，500 Hz 的控制环承受不了。</p>
+<p>缺省时不传 <code>q0</code>，走多重启：先试当前关节角与 <code>HOME_QPOS</code> 两个确定性种子，再补 6 个随机种子。规划器的 <code>plan_pose</code> 走的是这条路径，它先做一次 <code>q0=None</code> 的多重启求解，再按 <code>[当前位形] + 19 个随机角</code> 逐个热身求解；<code>n_seeds</code> 默认 20。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["ik(target_pos, target_quat, q0)"] --> B{"q0 是否为 None ?"}
+  B -- "否" --> C["seeds = [clamp(q0)]"]
+  B -- "是" --> D["seeds = [当前关节角, clamp(HOME_QPOS)]"]
+  D --> E["rng = default_rng(seed=0)"]
+  E --> F["6 次重启：偶数均匀采样、奇数在 HOME 附近扰动"]
+  F --> G["逐个 seed 调用 _solve，记录最优"]
+  C --> G
+  G --> H{"best_norm &#x3C;= tol ?"}
+  H -- "是" --> I["提前结束，返回 ok=True"]
+  H -- "否" --> J["试完所有种子，ok=False"]</pre></div>
+<h2 id="八个种子的构造规则">八个种子的构造规则</h2>
+<p><code>q0=None</code> 时共 8 个种子，顺序固定：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>序号</th><th>来源</th><th>覆盖的意图</th></tr></thead><tbody><tr><td>1</td><td><code>arm_qpos()</code> 当前关节角</td><td>就近求解，连续运动的首选</td></tr><tr><td>2</td><td><code>clamp(HOME_QPOS)</code></td><td>复位位形，日常任务命中率高</td></tr><tr><td>3、5、7</td><td>限位盒内均匀采样</td><td>覆盖不同的解分支</td></tr><tr><td>4、6、8</td><td><code>HOME_QPOS</code> 加 ±0.8 内均匀扰动</td><td>在已知好位形附近细查</td></tr></tbody></table>
+<p>两类随机种子交替出现，顺序由 <code>k % 2</code> 决定。均匀采样覆盖整个关节限位盒，代价是绝大多数随机点离目标很远；<code>HOME</code> 附近的扰动点则更可能落在可解区域内。交替排列让迭代在前几次尝试里就能碰到一个可用解，不必等均匀采样的点全部试完。</p>
+<p><code>HOME_QPOS</code> 取自 <code>core/config.py</code>，值是 <code>[-1.5708, -1.5708, 1.5708, -1.5708, -1.5708, 0.0]</code>。扰动幅度 0.8 rad 是硬编码值，没有暴露成可调属性；可调的只有 <code>n_restarts</code>（默认 6）。</p>
+<p>重启循环的写法是「逐个求解、随时更新最优、达到阈值就提前跳出」。这意味着顺序有意义：命中率高的种子排在前面，平均迭代步数更少。把随机种子放在前面也能得到同样的解，只是更慢。</p>
+<h2 id="固定随机种子带来的可复现性">固定随机种子带来的可复现性</h2>
+<p>构造函数里写了 <code>self.rng_seed = 0</code>，<code>ik()</code> 每次调用都用它新建一个生成器：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">rng </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.random.default_rng(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.rng_seed)</span></span></code></pre>
+<p>注意这行在 <code>ik()</code> 内部而不是构造时执行一次。每次调用都重新播种，因此「同一个目标位姿、同一个当前关节角」的两次 <code>ik()</code> 调用产生完全相同的 8 个种子序列，求解结果逐位一致。测试与回归依赖这一点：<code>control/smoke.py</code> 的 <code>TestKinematics.test_ik_roundtrip</code> 用固定的一组目标位姿断言收敛，不需要为随机性留容差。</p>
+<p>如果把生成器改成实例属性、只在构造时播种一次，行为会变成「同一进程里多次求解依次消耗随机流」，结果随调用次数漂移，回归测试会时好时坏。这是重启机制里最容易被误改的一处。</p>
+<h2 id="收敛判据位置与姿态同时达标">收敛判据：位置与姿态同时达标</h2>
+<p><code>_error()</code> 把位置误差与姿态误差拼成一个 6 维向量，收敛判据只对这个拼接向量的二范数取阈值：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∥</mi><mtext> </mtext><mo stretchy="false">[</mo><msub><mi>e</mi><mi>p</mi></msub><mtext> </mtext><mo separator="true">;</mo><mtext> </mtext><msub><mi>e</mi><mi>o</mi></msub><mo stretchy="false">]</mo><mtext> </mtext><mi mathvariant="normal">∥</mi><mo>≤</mo><mtext>tol</mtext></mrow><annotation encoding="application/x-tex">\|\,[e_p\,;\,e_o]\,\| \le \text{tol}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">o</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">tol</span></span></span></span></span></p>
+<p><code>tol</code> 默认 1e-3。二范数不超过 1e-3 意味着每一个分量都不超过 1e-3，因此这条判据同时保证位置误差不超过 1 mm、姿态误差不超过 1e-3 rad（约 0.057 度）。反过来说，位置达标而姿态差一点，整个判据仍然为假，这是设计上要求的行为：末端夹爪的朝向决定抓取方向，姿态不到位会直接影响抓取。</p>
+<p><code>target_quat=None</code> 时姿态部分置零，判据退化成纯位置条件，此时任何姿态都算合格。</p>
+<p>提前退出的位置在 <code>ik()</code> 的种子循环里：某个种子求解后 <code>best_norm &#x3C;= tol</code> 就 <code>break</code>，不再尝试后面的种子。<code>_solve()</code> 内部也有一处同样的判断，位于每轮迭代开头，作用是在已经收敛时不再多做一次前向与试探。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["_solve 返回 best_q, best_norm"] --> B{"best_norm &#x3C; 历史最优 ?"}
+  B -- "是" --> C["更新 best_q / best_norm"]
+  B -- "否" --> D["保留原最优"]
+  C --> E{"best_norm &#x3C;= tol ?"}
+  D --> E
+  E -- "是" --> F["跳出种子循环"]
+  E -- "否" --> G{"还有种子 ?"}
+  G -- "是" --> A
+  G -- "否" --> H["ok = best_norm &#x3C;= tol"]
+  F --> H</pre></div>
+<h2 id="限位在求解中的位置">限位在求解中的位置</h2>
+<p>关节限位来自构造时读入的 <code>ARM_JOINT_LIMITS</code>。它出现在三个地方：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位置</th><th>用法</th><th>影响</th></tr></thead><tbody><tr><td><code>clamp()</code></td><td>把任意关节角拉回区间</td><td>种子与试探解都受限</td></tr><tr><td>随机种子采样</td><td><code>rng.uniform(q_min, q_max)</code></td><td>重启点落在可行域内</td></tr><tr><td><code>q_center</code></td><td>上下限中点</td><td>零空间回拉的目标位形</td></tr></tbody></table>
+<p>限位本身只按关节角比较，不涉及速度或力矩限制。<code>clamp()</code> 也用在别的模块上：<code>MotionRunner.follow_joint_path()</code> 对规划器给出的路点逐个 <code>clamp</code>，速度前馈叠加之后再 <code>clamp</code> 一次，保证前馈偏移不把命令推出限位。</p>
+<p>限位区间对 UR5e 而言并不都对称：只有 <code>elbow_joint</code> 是 ±3.1415，其余五个是 ±6.28319。这是 Menagerie 的 <code>ur5e.xml</code> 给出的值，直接抄进 <code>core/config.py</code>。求解器把限位当作硬边界，顶到边界仍不收敛就报失败。</p>
+<h2 id="失败的两种出口">失败的两种出口</h2>
+<p><code>ik()</code> 返回 <code>(best_q, ok)</code>，<code>ok=False</code> 时 <code>best_q</code> 仍是迭代过程中误差最小的那组关节角，不是种子本身。上层拿到这个解要看是否可用，不能假设它是有效解。</p>
+<p>两条失败路径对应不同的错误码：</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["目标位姿"] --> B["move_to_pose 出发前预检 ik(q0=None)"]
+  B -- "ok=False" --> C["返回 unreachable，_halt 停住"]
+  B -- "ok=True" --> D["进入轨迹跟踪循环"]
+  D --> E["_apply_reference 用上一步解热身 ik"]
+  E -- "ok=False" --> F["冷启动 ik(q0=None) 重试一次"]
+  F -- "仍失败" --> G["返回 ik_fail，_halt 停住"]
+  F -- "成功" --> H["继续下一步"]
+  E -- "ok=True" --> H</pre></div>
+<p><code>control/motion.py</code> 的控制步内调用带更严的参数：<code>max_iters=120</code>、<code>tol=5e-4</code>。前者把单步耗时压住，后者比 IK 默认值更紧，原因是控制环每一步都会重新求解，单步精度稍差可以由后续步补上，而迭代次数直接决定 500 Hz 能否维持。热身失败后代码会退回一次完整的 <code>ik()</code>（<code>q0=None</code>，默认 <code>max_iters=300</code>、<code>tol=1e-3</code>），这次允许用随机重启换一个解分支。</p>
+<p><code>move_to_pose()</code> 在构造轨迹之前先做一次预检，用的是 <code>q0=None</code> 的完整求解。预检失败直接返回 <code>unreachable</code>，一步都不走。这条预检的存在让「目标在可达空间之外」与「执行途中 IK 失败」分成了两个错误码，上层重试策略可以据此区分。</p>
+<p>规划器对 <code>ok</code> 的态度更谨慎：<code>plan_pose</code> 不直接信任 IK 的 <code>ok</code>，而是用 <code>fk()</code> 复核位置误差是否小于 <code>pos_tol = 5 mm</code>，显式给了 <code>quat</code> 时才额外检查姿态误差小于 <code>rot_tol = 0.05 rad</code>。原因是 <code>target_quat=None</code> 时 IK 欠约束，<code>ok</code> 可能因姿态项置 False，而位置已经到达。</p>
+<h2 id="易错点与调试">易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td>控制环单步耗时忽高忽低</td><td>给 <code>q0</code> 的位置传了 None，每步都在多重启</td><td>控制环内始终传上一步解</td></tr><tr><td>同一目标两次求解结果不同</td><td>把 <code>default_rng</code> 提到了构造期</td><td>保持每次 <code>ik()</code> 内重新播种</td></tr><tr><td><code>ok=True</code> 但位置有偏差</td><td>只看 <code>ok</code>，没看误差量级</td><td><code>ok</code> 只保证联合范数达标，精确值要看复核</td></tr><tr><td>规划器认为可达、执行报 <code>ik_fail</code></td><td>规划只查位置 5 mm、执行要求 5e-4</td><td>两处判据不同，属预期</td></tr><tr><td>解出的关节角贴限位</td><td>目标靠近工作空间边界</td><td>检查 <code>clamp</code> 后误差是否真的下降</td></tr><tr><td>重启次数改大后变慢</td><td>8 个种子每次都跑满</td><td>收敛时循环会提前跳出，只有难解目标才跑满</td></tr></tbody></table>
+<p>排查时先看 <code>best_norm</code> 而不是 <code>ok</code>。<code>best_norm</code> 在 1e-2 量级说明迭代被限位或奇异位形挡住，在 1e-3 附近说明只差一点精度。前者换种子或改目标，后者收紧 <code>tol</code> 或增加迭代次数。</p>
+<h2 id="参数表与权衡">参数表与权衡</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>默认</th><th>可调</th><th>说明</th></tr></thead><tbody><tr><td><code>n_restarts</code></td><td>6</td><td>是</td><td>随机重启次数，总种子数为 8</td></tr><tr><td><code>rng_seed</code></td><td>0</td><td>是</td><td>生成器种子，每次 <code>ik()</code> 重新播种</td></tr><tr><td><code>max_iters</code></td><td>300</td><td>调用时传入</td><td>单个种子的迭代上限</td></tr><tr><td><code>tol</code></td><td>1e-3</td><td>调用时传入</td><td>位置与姿态的联合阈值</td></tr><tr><td><code>max_step</code></td><td>0.25 rad</td><td>是</td><td>单步增量范数上限</td></tr></tbody></table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>种子形态</td><td><code>q0</code> 给出即单次求解</td><td>控制环可维持 500 Hz；代价是丢掉换分支的机会</td></tr><tr><td>重启分布</td><td>均匀采样与 HOME 扰动交替</td><td>兼顾全局覆盖与近解细查；代价是两种都不是最优采样</td></tr><tr><td>收敛判据</td><td>位置与姿态联合范数</td><td>两个量一次判断；代价是无法单独放松其中一个</td></tr><tr><td>失败语义</td><td>返回 <code>ok=False</code> 而不抛异常</td><td>调用方可按错误码分流；代价是失败解仍需被调用方检查</td></tr></tbody></table>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>control/kinematics.py</code></td><td><code>ik()</code> 种子构造与收敛判断</td></tr><tr><td><code>control/motion.py</code></td><td>预检、控制步内调用与两个错误码</td></tr><tr><td><code>planning/planner.py</code></td><td><code>plan_pose</code> 的种子展开与 <code>fk</code> 复核</td></tr><tr><td><code>core/config.py</code></td><td><code>HOME_QPOS / ARM_JOINT_LIMITS</code></td></tr><tr><td><code>control/smoke.py</code></td><td>IK 往返用例与阈值</td></tr></tbody></table>
+<p>上游仓库：<a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></p></div></section><section class="dfile" id="file-4" data-file="04-位置伺服与任务空间积分外环"><div class="dfile__head"><span class="dfile__idx">FILE 04</span><span class="dfile__name">04-位置伺服与任务空间积分外环</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/01-运动学与 DLS IK/04-位置伺服与任务空间积分外环.md</span></div><div class="dfile__body"><h1 id="位置伺服与任务空间积分外环">位置伺服与任务空间积分外环</h1>
+<p><code>control/motion.py</code> 的 <code>MotionRunner</code> 把三种东西串成一条控制链：轨迹采样给出的参考位姿、导纳控制器给出的让位量、以及本文要讲的任务空间积分补偿。三者叠加之后才送去 <code>kin.ik()</code> 解关节角。验收要求末端误差小于 5 mm，而位置执行器自身的静差在自由空间里就有 1 cm 量级，不补这一层达不到指标。</p>
+<h2 id="位置执行器的静差">位置执行器的静差</h2>
+<p>Menagerie 的 UR5e 用位置执行器驱动。这类执行器的力矩形式是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><msub><mi>k</mi><mi>p</mi></msub><mo stretchy="false">(</mo><mtext>ctrl</mtext><mo>−</mo><mi>q</mi><mo stretchy="false">)</mo><mo>−</mo><msub><mi>k</mi><mi>v</mi></msub><mover accent="true"><mi>q</mi><mo>˙</mo></mover></mrow><annotation encoding="application/x-tex">\tau = k_p(\text{ctrl} - q) - k_v\dot q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord text"><span class="mord">ctrl</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span></span>，只有比例与微分两项，没有重力前馈。本机读模型实测的增益：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>执行器</th><th><code>gainprm[0]</code> 即 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>p</mi></msub></mrow><annotation encoding="application/x-tex">k_p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></th><th><code>biasprm[2]</code> 即 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><msub><mi>k</mi><mi>v</mi></msub></mrow><annotation encoding="application/x-tex">-k_v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></th><th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>v</mi></msub><mi mathvariant="normal">/</mi><msub><mi>k</mi><mi>p</mi></msub></mrow><annotation encoding="application/x-tex">k_v/k_p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></th></tr></thead><tbody><tr><td>shoulder_pan / shoulder_lift / elbow</td><td>2000</td><td>-400</td><td>0.2 s</td></tr><tr><td>wrist_1 / wrist_2 / wrist_3</td><td>500</td><td>-100</td><td>0.2 s</td></tr></tbody></table>
+<p>腕部三个执行器的增益比前三个小四倍，但 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>v</mi></msub><mi mathvariant="normal">/</mi><msub><mi>k</mi><mi>p</mi></msub></mrow><annotation encoding="application/x-tex">k_v/k_p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 六个通道统一是 0.2 s。这个比值在后面算速度前馈系数时被直接使用。</p>
+<p>没有重力补偿的直接后果是稳态静差。<code>control/motion.py</code> 的模块注释记录了两组本机实测：把 <code>ctrl</code> 固定在 <code>HOME_QPOS</code> 时 TCP 静止下沉约 11 mm；命令另一组关节角时稳态静差约 14 mm。两者都不是小量，单靠「IK 解出目标关节角、写进 ctrl、步进」这套朴素的链路，末端永远停在目标下方一厘米附近。</p>
+<p>静差的位置依赖在别的单元也出现过：<code>README.md</code> 记录 <code>can_yellow</code> 抓取不稳时提到「位置伺服无重力补偿，随位形漂约 1 cm」，与这里的量级一致。</p>
+<h2 id="慢速任务空间积分外环">慢速任务空间积分外环</h2>
+<p>补偿做法是在笛卡尔空间加一个慢速积分项，把「命令点与真实末端点之间的偏差」累加起来，叠加到下发给 IK 的目标上：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mo>=</mo><mrow><mo fence="true">[</mo><mtext> </mtext><msub><mi>p</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub><mo>−</mo><msub><mi>p</mi><mrow><mi>a</mi><mi>c</mi><mi>t</mi></mrow></msub><mtext>  </mtext><mo separator="true">;</mo><mtext>  </mtext><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">v</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">c</mi></mrow><mrow><mo fence="true">(</mo><msub><mi>q</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub><mo>⊗</mo><msubsup><mi>q</mi><mrow><mi>a</mi><mi>c</mi><mi>t</mi></mrow><mo lspace="0em" rspace="0em">∗</mo></msubsup><mo fence="true">)</mo></mrow><mtext> </mtext><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">e = \left[\,p_{cmd} - p_{act}\;;\; \mathrm{rotvec}\left(q_{cmd} \otimes q_{act}^{*}\right)\,\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathrm">rotvec</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊗</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6887em;"><span style="top:-2.453em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∗</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mclose delimcenter" style="top:0em;">]</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mo>←</mo><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">p</mi></mrow><mrow><mo fence="true">(</mo><mi>I</mi><mo>+</mo><mi>g</mi><mtext> </mtext><mi mathvariant="normal">Δ</mi><mi>t</mi><mtext> </mtext><mi>e</mi><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">I \leftarrow \mathrm{clamp}\left(I + g\,\Delta t\, e\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">←</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">clamp</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">Δ</span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">e</span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mrow><mi>g</mi><mi>o</mi><mi>a</mi><mi>l</mi></mrow></msub><mo>=</mo><msub><mi>x</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub><mo>+</mo><msub><mi>I</mi><mrow><mi>p</mi><mi>o</mi><mi>s</mi></mrow></msub><mo separator="true">,</mo><mspace width="2em"></mspace><msub><mi>q</mi><mrow><mi>g</mi><mi>o</mi><mi>a</mi><mi>l</mi></mrow></msub><mo>=</mo><mi>exp</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><msub><mi>I</mi><mrow><mi>r</mi><mi>o</mi><mi>t</mi></mrow></msub><mo fence="true">)</mo></mrow><mo>⊗</mo><msub><mi>q</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub></mrow><annotation encoding="application/x-tex">x_{goal} = x_{cmd} + I_{pos},\qquad q_{goal} = \exp\left(I_{rot}\right) \otimes q_{cmd}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="mord mathnormal mtight">os</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">exp</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>代码在 <code>_integral_step()</code> 里，参数是 <code>integral_gain = 5.0</code>（单位 1/s）与 <code>integral_limit = [0.06, 0.06, 0.06, 0.20, 0.20, 0.20]</code>：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">p_act, q_act </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._pose()</span></span>
+<span class="line"><span style="color:#24292E">e_pos </span><span style="color:#D73A49">=</span><span style="color:#24292E"> x_cmd[:</span><span style="color:#005CC5">3</span><span style="color:#24292E">] </span><span style="color:#D73A49">-</span><span style="color:#24292E"> p_act</span></span>
+<span class="line"><span style="color:#24292E">e_rot </span><span style="color:#D73A49">=</span><span style="color:#24292E"> rotvec_from_quat(quat_mul(quat_cmd, quat_conj(q_act)))</span></span>
+<span class="line"><span style="color:#005CC5">self</span><span style="color:#24292E">._cart_int </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._cart_int </span><span style="color:#D73A49">+</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">.integral_gain </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.dt) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> np.concatenate([e_pos, e_rot])</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> g0 </span><span style="color:#D73A49">in</span><span style="color:#24292E"> (</span><span style="color:#005CC5">0</span><span style="color:#24292E">, </span><span style="color:#005CC5">3</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    g </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.arange(g0, g0 </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 3</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    n </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.linalg.norm(</span><span style="color:#005CC5">self</span><span style="color:#24292E">._cart_int[g]))</span></span>
+<span class="line"><span style="color:#24292E">    lim </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.integral_limit[g0])</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> n </span><span style="color:#D73A49">></span><span style="color:#24292E"> lim:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">._cart_int[g] </span><span style="color:#D73A49">*=</span><span style="color:#24292E"> lim </span><span style="color:#D73A49">/</span><span style="color:#24292E"> n</span></span>
+<span class="line"><span style="color:#24292E">x_goal </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.concatenate([x_cmd[:</span><span style="color:#005CC5">3</span><span style="color:#24292E">] </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._cart_int[:</span><span style="color:#005CC5">3</span><span style="color:#24292E">], x_cmd[</span><span style="color:#005CC5">3</span><span style="color:#24292E">:</span><span style="color:#005CC5">6</span><span style="color:#24292E">]])</span></span></code></pre>
+<p>积分限幅按平动组与转动组分别取模长，超过上限时按比例缩放整组，与 IK 的单步限幅同一个思路。上限本身是经验值：0.06 m 比实测静差（0.011 到 0.014 m）大一个量级，留出应对负载变化的余量，同时不至于让目标点偏出工作空间。</p>
+<p>积分在每次笛卡尔运动开始时清零，<code>_reset_integral()</code> 把 <code>_cart_int</code> 置零。这一条防的是跨动作的 windup：抓取下降时累积的补偿量如果带到下一次抬升，起点目标会带着上一次的偏差。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["轨迹采样 pos_ref / quat_ref"] --> B["导纳 update 得到 x_cmd"]
+  B --> C["读当前 TCP 位姿 p_act / q_act"]
+  C --> D["e = 位置差 + 最短旋转向量"]
+  D --> E["I = clamp(I + gain * dt * e)"]
+  E --> F["x_goal = x_cmd + I_pos"]
+  E --> G["quat_goal = exp(I_rot) 左乘 x_cmd 姿态"]
+  F --> H["kin.ik(x_goal, quat_goal)"]
+  G --> H
+  H --> I["叠加速度前馈并 clamp"]
+  I --> J["set_arm_joint_targets 后 step"]</pre></div>
+<h2 id="姿态修正的左乘与右乘">姿态修正的左乘与右乘</h2>
+<p>姿态部分的修正写成了左乘：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">quat_goal </span><span style="color:#D73A49">=</span><span style="color:#24292E"> quat_mul(quat_from_rotvec(</span><span style="color:#005CC5">self</span><span style="color:#24292E">._cart_int[</span><span style="color:#005CC5">3</span><span style="color:#24292E">:</span><span style="color:#005CC5">6</span><span style="color:#24292E">]), quat_cmd)</span></span></code></pre>
+<p>写成左乘是必须的，因为误差的取法决定的坐标系是世界系。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>e</mi><mrow><mi>r</mi><mi>o</mi><mi>t</mi></mrow></msub><mo>=</mo><msub><mi>q</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub><mo>⊗</mo><msubsup><mi>q</mi><mrow><mi>a</mi><mi>c</mi><mi>t</mi></mrow><mo lspace="0em" rspace="0em">∗</mo></msubsup></mrow><annotation encoding="application/x-tex">e_{rot} = q_{cmd} \otimes q_{act}^{*}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9357em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6887em;"><span style="top:-2.453em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∗</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span></span></span></span> 相当于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>R</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub><msubsup><mi>R</mi><mrow><mi>a</mi><mi>c</mi><mi>t</mi></mrow><mrow><mo>−</mo><mn>1</mn></mrow></msubsup></mrow><annotation encoding="application/x-tex">R_{cmd}R_{act}^{-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1em;vertical-align:-0.2458em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0077em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8542em;"><span style="top:-2.4542em;margin-left:-0.0077em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.1031em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2458em;"><span></span></span></span></span></span></span></span></span></span>，它是世界系下的一个旋转，把它转成旋转向量后也在世界系表达。修正量要作用在同一边：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>I</mi><mrow><mi>r</mi><mi>o</mi><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><mo>⊗</mo><msub><mi>q</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\exp(I_{rot}) \otimes q_{cmd}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 对应 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi><mo stretchy="false">(</mo><msub><mi>I</mi><mrow><mi>r</mi><mi>o</mi><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><msub><mi>R</mi><mrow><mi>c</mi><mi>m</mi><mi>d</mi></mrow></msub></mrow><annotation encoding="application/x-tex">R(I_{rot})R_{cmd}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0077em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，两个旋转都在世界系里复合。</p>
+<p>改成右乘 <code>quat_mul(quat_cmd, quat_from_rotvec(...))</code> 会变成体坐标系修正，与误差的坐标系不匹配。源码注释记录了后果：参考姿态转动较大时会收敛到错误的固定点，实测姿态残留 0.217 rad。这个量级在抓取上足以让夹爪朝向偏掉十几度，指垫对不准物体。</p>
+<p>平动部分不存在这个问题，位置本身就是世界系绝对量，直接相加即可。整套积分外环的转动通道都建立在「误差世界系、修正左乘」这一对配套关系上。</p>
+<h2 id="速度前馈消掉斜坡滞后">速度前馈：消掉斜坡滞后</h2>
+<p>积分补的是稳态静差，跟踪移动目标时还有一项由速度引起的滞后。对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><msub><mi>k</mi><mi>p</mi></msub><mo stretchy="false">(</mo><mtext>ctrl</mtext><mo>−</mo><mi>q</mi><mo stretchy="false">)</mo><mo>−</mo><msub><mi>k</mi><mi>v</mi></msub><mover accent="true"><mi>q</mi><mo>˙</mo></mover></mrow><annotation encoding="application/x-tex">\tau = k_p(\text{ctrl} - q) - k_v\dot q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord text"><span class="mord">ctrl</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span></span> 做稳态分析，跟踪斜坡的静差约为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>k</mi><mi>v</mi></msub><mi mathvariant="normal">/</mi><msub><mi>k</mi><mi>p</mi></msub><mo stretchy="false">)</mo><mover accent="true"><mi>q</mi><mo>˙</mo></mover></mrow><annotation encoding="application/x-tex">(k_v/k_p)\dot q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span></span>。模型里 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>v</mi></msub><mi mathvariant="normal">/</mi><msub><mi>k</mi><mi>p</mi></msub><mo>=</mo><mn>0.2</mn></mrow><annotation encoding="application/x-tex">k_v/k_p = 0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span> s，参考速度取 0.15 m/s 量级时，单通道滞后就有 30 mm 量级。</p>
+<p>前馈系数直接从模型读，不写死：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">kp </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(model.actuator_gainprm[aid][</span><span style="color:#005CC5">0</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#24292E">kv </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">float</span><span style="color:#24292E">(model.actuator_biasprm[aid][</span><span style="color:#005CC5">2</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> kp </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0.0</span><span style="color:#D73A49"> and</span><span style="color:#24292E"> kv </span><span style="color:#D73A49">></span><span style="color:#005CC5"> 0.0</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    lead[i] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> kv </span><span style="color:#D73A49">/</span><span style="color:#24292E"> kp</span></span></code></pre>
+<p><code>biasprm[2]</code> 存的是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><msub><mi>k</mi><mi>v</mi></msub></mrow><annotation encoding="application/x-tex">-k_v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，所以取负号还原成正值。判据 <code>kp > 0 and kv > 0</code> 同时兜住非位置执行器（此时 <code>biasprm[2]</code> 为 0）与模型异常：两种情况下前馈系数保持 0，行为自动退化为无前馈。</p>
+<p>参考关节速度由 <code>_joint_vel_ref()</code> 算：对轨迹做 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>±</mo><mn>0.5</mn><mi mathvariant="normal">Δ</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">\pm 0.5\Delta t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="mord">±</span><span class="mord">0.5Δ</span><span class="mord mathnormal">t</span></span></span></span> 的中心差分得到笛卡尔 twist，再用雅可比伪逆映射到关节空间：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover accent="true"><mi>q</mi><mo>˙</mo></mover><mrow><mi>r</mi><mi>e</mi><mi>f</mi></mrow></msub><mo>=</mo><msup><mi>J</mi><mi>T</mi></msup><msup><mrow><mo fence="true">(</mo><mi>J</mi><msup><mi>J</mi><mi>T</mi></msup><mo>+</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup><mi>I</mi><mo fence="true">)</mo></mrow><mrow><mo>−</mo><mn>1</mn></mrow></msup><mrow><mo fence="true">[</mo><msub><mi>v</mi><mrow><mi>r</mi><mi>e</mi><mi>f</mi></mrow></msub><mtext> </mtext><mo separator="true">;</mo><mtext> </mtext><msub><mi>ω</mi><mrow><mi>r</mi><mi>e</mi><mi>f</mi></mrow></msub><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\dot q_{ref} = J^{T}\left(JJ^{T} + 10^{-4} I\right)^{-1}\left[v_{ref}\,;\,\omega_{ref}\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.954em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.404em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.054em;"><span style="top:-3.3029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">]</span></span></span></span></span></p>
+<p>阻尼固定取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span>，不参与自适应，这里的目的是避免奇异位形导致前馈项爆掉。最后一步是 <code>q_cmd = q_ik + self.vel_lead * qd_ref</code>，叠加之后再 <code>clamp</code> 一次，避免前馈把命令推出关节限位。</p>
+<p>前馈用的是上一轮 IK 解作为种子，而返回给下一轮的热身种子是 <code>q_ik</code> 本身，不含前馈偏移。这样做保持姿态连续：种子始终来自纯 IK 解，不会被前馈项带偏累积。</p>
+<h3 id="前馈的实测收益">前馈的实测收益</h3>
+<p><code>control/smoke.py</code> 的三次 <code>move_to_pose</code> 用例在本机的输出：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>位移方向</th><th>终态误差</th><th>轨迹段最大跟踪误差</th><th>步数</th></tr></thead><tbody><tr><td><code>[0.0, -0.12, 0.05]</code></td><td>0.94 mm</td><td>12.03 mm</td><td>543</td></tr><tr><td><code>[0.1, 0.06, 0.0]</code></td><td>0.75 mm</td><td>6.13 mm</td><td>500</td></tr><tr><td><code>[-0.06, 0.02, 0.1]</code></td><td>0.98 mm</td><td>27.65 mm</td><td>886</td></tr></tbody></table>
+<p>模块注释给出的对比是「轨迹中段最大误差 28 mm 降到 12 mm，收尾后小于 1 mm」，与上表的量级一致：轨迹段的最大跟踪误差仍在毫米到厘米之间，靠收尾伺服把终态压到 1 mm 以内。<code>track_max</code> 是整段轨迹的峰值，出现在加速或减速相位，不是稳态指标。</p>
+<h2 id="收尾伺服与仿真时间超时">收尾伺服与仿真时间超时</h2>
+<p>轨迹跑完之后还有一段收尾，用来把末端从「伺服滞后处」挪到目标点。循环条件是平动误差不超过 <code>settle_tol = 1e-3</code> m 且姿态误差不超过 <code>settle_rot_tol = 0.01</code> rad，上限是 <code>settle_time = 1.5</code> s：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> _ </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">max</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#005CC5">int</span><span style="color:#24292E">(</span><span style="color:#005CC5">round</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.settle_time </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.dt)))):</span></span>
+<span class="line"><span style="color:#24292E">    pos_act, quat_act </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._pose()</span></span>
+<span class="line"><span style="color:#24292E">    e_pos </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.linalg.norm(pos_act </span><span style="color:#D73A49">-</span><span style="color:#24292E"> np.asarray(pos_end)))</span></span>
+<span class="line"><span style="color:#24292E">    e_rot </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.linalg.norm(rotvec_from_quat(</span></span>
+<span class="line"><span style="color:#24292E">        quat_mul(np.asarray(quat_end), quat_conj(quat_act)))))</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> e_pos </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.settle_tol </span><span style="color:#D73A49">and</span><span style="color:#24292E"> e_rot </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.settle_rot_tol:</span></span>
+<span class="line"><span style="color:#D73A49">        break</span></span>
+<span class="line"><span style="color:#24292E">    q_seed, fmax, fail </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._apply_reference(pos_end, quat_end, flim, q_seed, steps, </span><span style="color:#005CC5">None</span><span style="color:#24292E">)</span></span></code></pre>
+<p>收尾段继续按最终参考跑导纳与积分，但不再有轨迹推进，<code>qd_ref</code> 传 None，速度前馈关闭。收尾与轨迹段共用同一个 timeout 预算，超出同样中止。</p>
+<p>所有超时都用仿真时间判断，即 <code>steps * self.dt</code>，不是墙钟。仿真时间只由步数决定，物理步进确定可复现，同一段轨迹在不同负载的机器上给出的 timeout 判定一致。<code>MoveResult.duration</code> 字段填的也是这个量。</p>
+<p><code>move_to_pose()</code> 在 <code>duration=None</code> 时按直线距离估算轨迹时长：<code>clip(max(0.6, dist / 0.15), 0.6, 6.0)</code>。分母 0.15 是参考速度量级，下限 0.6 s 保证短距离移动也有完整的 min-jerk 加减速，上限 6 s 防止远距离运动把 timeout 撑爆。</p>
+<h2 id="错误码与中止即停住">错误码与中止即停住</h2>
+<p><code>MotionRunner</code> 对外只有一套错误码：<code>timeout | force_limit | ik_fail | unreachable | invalid_path</code>。任何一个非成功返回都会先经过 <code>_abort()</code>，它做了两件事：先 <code>_halt()</code> 停住，再用停住后的实际位姿构造 <code>MoveResult</code>。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _halt</span><span style="color:#24292E">(self) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    q_hold </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.asarray(</span><span style="color:#005CC5">self</span><span style="color:#24292E">._arm_q(), </span><span style="color:#E36209">dtype</span><span style="color:#D73A49">=</span><span style="color:#005CC5">float</span><span style="color:#24292E">).reshape(</span><span style="color:#005CC5">ARM_NDOF</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> _ </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">max</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#005CC5">int</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.halt_steps))):</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">.env.set_arm_joint_targets(q_hold)</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">.env.step()</span></span></code></pre>
+<p>停住的动作由两部分组成。目标设为当前关节角，位置伺服不再继续往接触方向压，残留的压入指令被撤销；同时照常 <code>step</code>，让新命令实际作用到物理上。模块注释写明只用前者不够：接触仍按旧穿透演化，实测不这么做时，一次失败的预检返回会让上一帧的压入指令继续生效，0.2 s 内末端力冲到 7471 N。</p>
+<p><code>halt_steps</code> 默认 20 步，即 40 ms 仿真时间。这段步数不计入 <code>MoveResult.steps</code> 与 <code>duration</code>，安全动作不额外占用上层的步数预算。<code>_halt()</code> 内部的所有异常都被吞掉，中止路径必须能返回结果，不能因为清场动作再抛异常。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["控制步检测到异常条件"] --> B{"哪一类 ?"}
+  B -- "sim time 超 timeout" --> C["error_code = timeout"]
+  B -- "IK 不可达" --> D["error_code = ik_fail"]
+  B -- "预检失败" --> E["error_code = unreachable"]
+  B -- "关节路径为空" --> F["error_code = invalid_path"]
+  B -- "力超 flim" --> G["error_code = force_limit"]
+  C --> H["_abort：先 _halt 停住"]
+  D --> H
+  E --> H
+  F --> H
+  G --> H
+  H --> I["按当前关节角空步 20 步"]
+  I --> J["读停住后的实际位姿"]
+  J --> K["返回 ok=False 的 MoveResult"]</pre></div>
+<p>力的上限有两层。第一层是柔顺参数自带的 <code>force_limit</code>（<code>z_only</code> 默认 8 N，抓取档 15 N，放置档 20 N）；第二层是 <code>force_limit_cap</code>，默认 200 N，只作用于调用方显式传入的 <code>force_limit</code>。显式值超过上限时被钳制并 <code>warnings.warn</code>，不依赖调用方自律。两个保留的口子：<code>force_limit=None</code> 用柔顺参数自带值、不受 cap 约束；<code>force_limit_cap=float("inf")</code> 显式关闭这层保护。</p>
+<p>力读数的符号取自 <code>adm_force_sign = -1.0</code>。<code>env.contact_force_on_ee()</code> 返回的是作用在末端上的力，而导纳方程右边是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><msub><mi>f</mi><mrow><mi>e</mi><mi>x</mi><mi>t</mi></mrow></msub></mrow><annotation encoding="application/x-tex">-f_{ext}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">x</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，直接喂原值会让参考点继续压向接触面。取负之后末端沿力的方向让位，接触力保持有界。自由空间力读数为 0，这个符号对无接触运动没有影响。</p>
+<h2 id="易错点与调试">易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理</th></tr></thead><tbody><tr><td>末端稳定停在目标下方约 1 cm</td><td>位置伺服无重力补偿，积分外环没生效</td><td>检查 <code>_reset_integral</code> 是否被误用、<code>integral_gain</code> 是否为 0</td></tr><tr><td>姿态收敛到错误朝向</td><td>姿态修正改成了右乘</td><td>保持 <code>quat_mul(exp(I_rot), quat_cmd)</code> 的左乘形式</td></tr><tr><td>终点误差忽大忽小</td><td>收尾被跳过或 <code>settle_tol</code> 被放大</td><td>保持 1 mm 平动、0.01 rad 转动的收尾阈值</td></tr><tr><td>超时判定随机器负载变化</td><td>用了墙钟时间</td><td>用 <code>steps * self.dt</code> 判断</td></tr><tr><td>中止后力继续上涨</td><td>只改了 ctrl 没有 step</td><td><code>_halt</code> 必须包含空步循环</td></tr><tr><td>传入 <code>force_limit=1e9</code> 仍然被中止</td><td>cap 生效并钳到 200 N</td><td>要放开需显式设 <code>force_limit_cap=inf</code></td></tr><tr><td>轨迹段误差达标但终态不达标</td><td>只看 <code>track_max</code>，没看 <code>final_pos</code></td><td><code>move_to_pose</code> 返回后对比 <code>final_pos</code> 与目标</td></tr></tbody></table>
+<p>调试顺序建议从静差开始：先跑一次纯位置伺服（<code>hold</code>），打印 TCP 位姿随时间的变化，确认下沉量级在 1 cm 附近；再打开积分外环看稳态是否收敛到命令点。这样能把执行器问题与运动学问题分开。</p>
+<p><code>target_state()</code> 提供了同一时刻的三个位置：<code>ref_pos</code> 是轨迹参考、<code>adm_pos</code> 是纯导纳输出、<code>cmd_pos</code> 是实际下发给 IK 的点。三者之差可直接读出导纳让位量与积分补偿量。判断有没有外力要用 <code>force_norm</code>，自由空间里 <code>|adm_pos - ref_pos|</code> 也有毫弧级别的导纳稳态滞后，不能当柔顺让位的判据。</p>
+<h2 id="权衡">权衡</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>静差补偿</td><td>笛卡尔积分外环</td><td>与导纳共用同一套目标接口；代价是引入积分限幅与跨动作清零的额外状态</td></tr><tr><td>前馈系数</td><td>从模型 <code>gainprm / biasprm</code> 读</td><td>换执行器不用改代码；代价是依赖模型字段语义，读错就静默退化</td></tr><tr><td>超时口径</td><td>仿真时间</td><td>判定可复现；代价是墙钟耗时不可控，实时性要靠步数估算</td></tr><tr><td>中止策略</td><td>先停住再返回</td><td>不留下压入指令；代价是每次失败多 20 步仿真开销</td></tr><tr><td>力上限</td><td>柔顺值与独立 cap 双层</td><td>调用方失误也不会压到危险量级；代价是显式大值会被静默钳制</td></tr></tbody></table>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>control/motion.py</code></td><td>积分外环、前馈、收尾、<code>_halt</code> 与错误码</td></tr><tr><td><code>control/trajectory.py</code></td><td><code>quat_mul / quat_conj / quat_from_rotvec / rotvec_from_quat</code></td></tr><tr><td><code>control/kinematics.py</code></td><td><code>ik()</code> 与前馈用的 <code>jacobian</code></td></tr><tr><td><code>control/admittance.py</code></td><td>导纳输出 <code>x_cmd</code> 的来源</td></tr><tr><td><code>core/types.py</code></td><td><code>MoveResult</code> 与错误码承载字段</td></tr><tr><td><code>core/config.py</code></td><td><code>SIM_DT / DEFAULT_COMPLIANCE / HOME_QPOS</code></td></tr><tr><td><code>sim/env.py</code></td><td><code>set_arm_joint_targets / contact_force_on_ee / site_pose</code></td></tr><tr><td><code>control/smoke.py</code></td><td>静差、终态误差与中止行为用例</td></tr></tbody></table>
+<p>上游仓库：<a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></p></div></section><section class="dfile" id="file-5" data-file="05-易错点与调试"><div class="dfile__head"><span class="dfile__idx">FILE 05</span><span class="dfile__name">05-易错点与调试</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/01-运动学与 DLS IK/05-易错点与调试.md</span></div><div class="dfile__body"><h1 id="易错点与调试">易错点与调试</h1>
+<p>本单元的四篇文档分别讲了正解与雅可比、DLS 迭代、多重启与收敛判据、位置伺服与积分外环。这一篇把散落在各处的误用集中起来，按「现象、原因、定位手段」组织，并给出可复现的检查命令与基线数字。所有条目都能在 <code>control/kinematics.py</code>、<code>control/motion.py</code>、<code>control/trajectory.py</code> 与 <code>control/smoke.py</code> 里找到对应实现或断言。</p>
+<h2 id="私有数据与场景同步">私有数据与场景同步</h2>
+<p><code>Kinematics</code> 的私有 MjData 是整条链上最容易被破坏的不变量。它的契约是：<code>env.data</code> 只读，所有前向计算在 <code>self._data</code> 上完成。破坏方式多是调试时的顺手改动：把 <code>self._data = self.env.data</code> 写成一行捷径，或在外面直接改 <code>env.data.qpos</code> 之后忘了重新 <code>mj_forward</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>定位手段</th></tr></thead><tbody><tr><td>调用运动学后场景状态变了</td><td>私有 MjData 被替换成 <code>env.data</code></td><td>跑 <code>TestKinematics.test_env_data_not_polluted</code></td></tr><tr><td><code>fk</code> 结果与 <code>env.site_pose</code> 不一致</td><td>私有数据没同步场景（物体或夹爪状态不同）</td><td>对同一组关节角同时打印两条实现的结果</td></tr><tr><td>前向算出来全是 0</td><td><code>_sync</code> 里漏了 <code>mj_comPos</code></td><td>打印 <code>_data.cdof</code> 是否非零</td></tr><tr><td>物体位置变了导致 IK 结果变</td><td>私有数据复制的是复制时刻的场景，属预期</td><td>对比两次调用之间场景是否被 step</td></tr></tbody></table>
+<p><code>_sync()</code> 复制整份 <code>env.data.qpos</code>，所以私有数据看到的是「调用瞬间」的场景。这在正常控制流里没问题：每个控制步先 step 再求解，复制到的就是当前状态。异步调用（例如 viewer 线程直接调 <code>fk</code>）会读到上一次 step 的状态，需要把调用与主循环放在同一把锁下。交互式查看器那一路并发读 <code>data</code> 曾实测触发 SIGABRT，处理方式记录在 <code>sim/render.py</code> 的同步说明里。</p>
+<h2 id="前向链条的完整性">前向链条的完整性</h2>
+<p><code>_sync()</code> 只跑两级前向接口，顺序固定：<code>mj_kinematics</code> 再 <code>mj_comPos</code>。第二步的产物 <code>cdof</code> 是 <code>mj_jacSite</code> 的输入。这一步在 MuJoCo 3.12 上本机实测过：只跑 <code>mj_kinematics</code> 时 <code>cdof</code> 全零、<code>jacp</code> 也全零；补上 <code>mj_comPos</code> 后第 0 列平动分量变成 <code>[-0.492, -0.134, 0.0]</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["雅可比全零或数值异常"] --> B{"_data.cdof 是否非零 ?"}
+  B -- "全零" --> C["缺 mj_comPos，补齐两步前向"]
+  B -- "非零" --> D{"jacp 是否非零 ?"}
+  D -- "全零" --> E["site_id 解析错误，检查 mj_name2id 返回值"]
+  D -- "非零" --> F{"形状是否为 (6, nv) ?"}
+  F -- "否" --> G["检查 jacp / jacr 缓冲的分配维数"]
+  F -- "是" --> H["检查是否切了 arm_dof_idx 六列"]</pre></div>
+<p><code>site_id</code> 在构造时解析一次，找不到 <code>g_pinch</code> 直接抛 <code>ValueError</code>。所以运行到取雅可比时 <code>site_id</code> 一般是对的；链条里容易断的是 <code>cdof</code> 与列切片。</p>
+<h2 id="四元数约定与误差坐标系">四元数约定与误差坐标系</h2>
+<p>全库统一 wxyz，与 MuJoCo 的 <code>qpos</code> 约定一致。外部库习惯 xyzw，两边混用是这一块最常见的错误：读入的姿态顺序错了，<code>rotvec_from_quat</code> 会给出一个看起来合理但方向错误的旋转向量，迭代能收敛到某个位姿，只是朝向不对。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>定位手段</th></tr></thead><tbody><tr><td>姿态误差符号相反</td><td>把 wxyz 当成 xyzw</td><td>用单位四元数与 90 度旋转对照 <code>fk</code> 输出</td></tr><tr><td>姿态长期停在 ±π 附近</td><td>用了绝对旋转向量而非最短分支</td><td>检查是否绕过 <code>rotvec_from_quat</code> 直接算绝对角</td></tr><tr><td>积分补偿后姿态偏向一侧</td><td>姿态修正写成右乘</td><td>对比 <code>quat_mul(exp(I_rot), q_cmd)</code> 与右乘的残留角</td></tr><tr><td><code>mju_mat2Quat</code> 报字段不存在</td><td>访问 <code>site_xquat</code></td><td>MuJoCo 3.12 无该字段，改从 <code>site_xmat</code> 转换</td></tr></tbody></table>
+<p>关于误差坐标系，一条可操作的判据是：误差由 <code>quat_mul(target, quat_conj(cur))</code> 给出时，修正必须左乘；由 <code>quat_mul(quat_conj(cur), target)</code> 给出时，修正才右乘。两者只能配一对。源码注释记录了右乘的不匹配后果：参考姿态转动较大时收敛到错误固定点，实测残留 0.217 rad。</p>
+<h2 id="限位种子与迭代参数">限位、种子与迭代参数</h2>
+<p>限位是硬边界，<code>clamp</code> 出现在种子构造、试探解回写与前馈偏移三处。种子的构造顺序影响平均耗时：<code>q0</code> 给出时只有一个种子，缺省时是 8 个，两类随机种子交替排列。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>定位手段</th></tr></thead><tbody><tr><td>控制环单步耗时波动大</td><td>控制步内传了 <code>q0=None</code></td><td>打印每步 <code>_solve</code> 实际迭代次数</td></tr><tr><td>同一目标两次求解不同</td><td><code>default_rng</code> 移到了构造期</td><td>确认播种在 <code>ik()</code> 每次调用内</td></tr><tr><td>迭代卡住不动</td><td>阻尼顶到 1e3 的上限</td><td>打印 <code>lam</code> 末值，判为卡死换种子</td></tr><tr><td>关节角在控制步之间跳</td><td>单步限幅被改成逐关节截断</td><td>保持整段范数限幅 <code>max_step=0.25</code></td></tr><tr><td><code>ok=True</code> 但位置有偏差</td><td>判据是位置与姿态的联合范数</td><td>单独打印位置误差与姿态误差</td></tr><tr><td>规划通过、执行报 <code>ik_fail</code></td><td>规划复核位置 5 mm、执行要求 5e-4</td><td>两处阈值不同，属预期行为</td></tr></tbody></table>
+<p>把 <code>ok</code> 当作唯一判据是这一块最容易踩的一步。<code>ok</code> 只说明联合误差范数达标；要判断精度，得看 <code>best_q</code> 对应的位置误差与姿态误差。<code>plan_pose</code> 正是因此不信任 <code>ok</code>，改用 <code>fk</code> 复核。</p>
+<h2 id="时间与力的口径">时间与力的口径</h2>
+<p><code>MotionRunner</code> 里所有超时都用仿真时间 <code>steps * self.dt</code>，不是墙钟。混用会让同一个测试在不同负载的机器上给出不同结论。力有两层上限：柔顺参数自带的 <code>force_limit</code>，以及只约束显式传入值的 <code>force_limit_cap</code>（默认 200 N）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>定位手段</th></tr></thead><tbody><tr><td>超时判定随机器负载变化</td><td>用了墙钟时间</td><td>检查 <code>steps * self.dt</code> 与 timeout 的比较处</td></tr><tr><td>传入 1e9 的力上限仍被中止</td><td>cap 钳到 200 N 并告警</td><td><code>warnings.warn</code> 会打印钳制后的值</td></tr><tr><td>中止后力继续上涨</td><td><code>_halt</code> 缺 <code>step</code>，只改了 ctrl</td><td>检查空步循环是否存在</td></tr><tr><td>判断柔顺让位时数字偏大</td><td>用了 `</td><td>adm_pos - ref_pos</td></tr><tr><td><code>v_max</code> 模式下 timeout 不够</td><td>限速模式忽略 duration、耗时变长</td><td>按 <code>dist / v_max + 1 s</code> 放大 timeout</td></tr></tbody></table>
+<p>最后一条与 <code>v_max</code> 有关：<code>follow()</code> 在限速模式下把参考推进交给 <code>_RateLimitedTraj</code>，轨迹时长由 <code>v_max</code> 决定而不是 <code>duration</code>，同时关闭速度前馈。调用方传的 duration 在这一模式下被忽略。</p>
+<h2 id="一条按现象的排查路径">一条按现象的排查路径</h2>
+<p><code>control/smoke.py</code> 的三次 <code>move_to_pose</code> 用例给出了一组可对照的基线：终态误差 0.94 / 0.75 / 0.98 mm，轨迹段最大跟踪误差 12.03 / 6.13 / 27.65 mm。新写的调用方如果终态误差超出 1 mm 一个量级，可以先与这组数字对比，再决定往哪个方向查。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["末端误差超出预期"] --> B{"终态误差多大 ?"}
+  B -- "约 1 cm" --> C["位置伺服静差未补偿，查积分外环"]
+  B -- "毫米级但大于 5 mm" --> D["查收尾是否被跳过、settle_tol 是否被放大"]
+  B -- "轨迹段大、终态小" --> E["前馈或轨迹时长参数，属可接受范围"]
+  C --> F{"I 是否随步累积 ?"}
+  F -- "一直为零" --> G["_reset_integral 被误用或 gain 为 0"]
+  F -- "累积但被削平" --> H["积分限幅过小或目标超出可达范围"]
+  D --> I["对比 final_pos 与目标位姿"]
+  I --> J["查 ik_fail / unreachable 错误码"]</pre></div>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["改参数之前"] --> B["跑 control.smoke 记录基线"]
+  B --> C["确认用例数与失败数"]
+  C --> D["只改一个参数，重跑同一组用例"]
+  D --> E{"终态误差是否变好 ?"}
+  E -- "是" --> F["检查是否引入新的中止或超时"]
+  E -- "否" --> G["回退该参数，换下一个怀疑对象"]
+  F --> H["对比 track_max 与 final_pos 两个指标"]</pre></div>
+<h2 id="可复现的检查命令">可复现的检查命令</h2>
+<p>控制模块自带 smoke，覆盖运动学、导纳、安全中止与目标状态展示。在源工程根目录执行：</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#005CC5">cd</span><span style="color:#032F62"> /home/tc63/mujoco/vlm_admittance</span></span>
+<span class="line"><span style="color:#24292E">MUJOCO_GL</span><span style="color:#D73A49">=</span><span style="color:#032F62">glfw</span><span style="color:#6F42C1"> /home/tc63/mujoco/.venv/bin/python</span><span style="color:#005CC5"> -m</span><span style="color:#032F62"> control.smoke</span></span></code></pre>
+<p>本机最近一次运行的结论是 44 个用例、失败 0、错误 0、跳过 0。输出里与本单元直接相关的行：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>输出行</th><th>含义</th><th>实测值</th></tr></thead><tbody><tr><td><code>[kin] 私有 MjData</code></td><td><code>env.data.qpos</code> 逐位未变</td><td>OK</td></tr><tr><td><code>[kin] fk == env.site_pose</code></td><td>两条实现一致</td><td>位置与姿态差均小于 1e-12</td></tr><tr><td><code>[kin] jacobian 有限差分误差</code></td><td>雅可比正确性</td><td>平动 2.16e-07，转动 4.81e-10</td></tr><tr><td><code>[kin] IK 往返 10 次</code></td><td>逆解精度</td><td>最差位置 0.3829 mm、姿态 4.90e-04 rad</td></tr><tr><td><code>[motion] 直线运动终态最差误差</code></td><td>伺服与积分外环</td><td>0.98 mm</td></tr><tr><td><code>[motion] 姿态跟踪</code></td><td>平动与转动同时看</td><td>姿态 0.0027 rad、位置 1.00 mm</td></tr></tbody></table>
+<p><code>MUJOCO_GL=glfw</code> 是离屏渲染的前置条件（WSL 加 WSLg，需要 DISPLAY），写在 <code>INTERFACES.md</code> 的环境事实里。只跑运动学用例时也要保留这个变量，因为环境构造会创建渲染相关资源。</p>
+<h2 id="本单元引用的实测数字">本单元引用的实测数字</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>数字</th><th>含义</th><th>来源</th></tr></thead><tbody><tr><td>0.3829 mm / 4.90e-04 rad</td><td>IK 往返最差误差（10 组目标）</td><td><code>control/smoke.py</code> 本机运行</td></tr><tr><td>0.98 mm</td><td><code>move_to_pose</code> 终态最差误差（3 组位移）</td><td><code>control/smoke.py</code> 本机运行</td></tr><tr><td>0.011 m / 0.014 m</td><td>位置伺服静态下沉与稳态静差</td><td><code>control/motion.py</code> 模块注释记录</td></tr><tr><td>28 mm 降到 12 mm</td><td>速度前馈前后轨迹中段最大误差</td><td><code>control/motion.py</code> 模块注释记录</td></tr><tr><td>0.217 rad</td><td>姿态积分右乘的残留误差</td><td><code>control/motion.py</code> 模块注释记录</td></tr><tr><td>7471 N</td><td>中止不做 <code>_halt</code> 时 0.2 s 内的末端力</td><td><code>control/motion.py</code> 模块注释记录</td></tr><tr><td>200 N</td><td><code>force_limit_cap</code> 默认硬上限</td><td><code>control/motion.py</code> 构造函数</td></tr><tr><td>0.2 s</td><td>六个执行器统一的 <code>kv / kp</code></td><td>本机读模型 <code>gainprm / biasprm</code></td></tr></tbody></table>
+<p>前四条由本机运行 smoke 复现，中间三条来自源码注释里记录的实测，最后两条由读模型字段得到。<code>can_yellow</code> 随位形漂移约 1 cm 的记录写在 <code>README.md</code>，与本表的静差数字量级一致。</p>
+<h3 id="附本页引用的路径">附：本页引用的路径</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>control/kinematics.py</code></td><td>私有 MjData、前向链条、<code>ik</code> 的种子与判据</td></tr><tr><td><code>control/motion.py</code></td><td>积分外环、前馈、收尾、中止与力上限</td></tr><tr><td><code>control/trajectory.py</code></td><td>四元数工具与最短分支</td></tr><tr><td><code>control/smoke.py</code></td><td>全部基线断言与输出行</td></tr><tr><td><code>sim/env.py</code></td><td><code>site_pose / contact_force_on_ee / set_arm_joint_targets</code></td></tr><tr><td><code>planning/planner.py</code></td><td><code>plan_pose</code> 的 <code>fk</code> 复核口径</td></tr><tr><td><code>README.md</code></td><td>已知问题里的位形漂移记录</td></tr><tr><td><code>INTERFACES.md</code></td><td>环境事实与 control 契约</td></tr></tbody></table>
+<p>上游仓库：<a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></p></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/35-%E5%B7%A5%E7%A8%8B%E4%B8%8E%E5%8F%91%E5%B8%83/04-DSH%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91/"><span class="k">← 上一篇</span><span class="t">DSH插件开发</span><span class="d">工程与发布 · 3 个文件</span></a><a class="next" href="/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/02-%E7%AC%9B%E5%8D%A1%E5%B0%94%20min-jerk%20%E8%BD%A8%E8%BF%B9/"><span class="k">下一篇 →</span><span class="t">笛卡尔 min-jerk 轨迹</span><span class="d">VLM 机械臂抓取 · 4 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 589 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

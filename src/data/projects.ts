@@ -2,7 +2,8 @@
  * 作品数据 —— 全站唯一真源。
  *
  * 数据来源（不编造）：
- *  - 三个公开仓库：GitHub REST API 元数据 + 仓库 README 原文（2026-10-06 抓取）
+ *  - 四个公开仓库：GitHub REST API 元数据 + 仓库 README 原文（mjx-go1-getup / KnowledgeDiver /
+ *    better-crawler4agent 于 2026-10-06 抓取；vlm-admittance 于 2026-10-13 按本地仓库原文核对）
  *  - 两个私有仓库：本地文档（/home/wyx/rm/... 的 README.md / 项目概述.md / 云台串口协议.md）
  *  - metrics 里的数字全部来自各仓库 README 自己的复现脚本结果，未做二次验证
  *
@@ -42,6 +43,78 @@ export type Project = {
 };
 
 export const projects: Project[] = [
+  {
+    slug: "vlm-admittance",
+    title: "vlm-admittance",
+    subtitle: "VLM 决策 + RRT-Connect 规划 + 六维导纳的 MuJoCo 机械臂抓取",
+    summary:
+      "MuJoCo 里的 UR5e + Robotiq 2F85 抓取框架：上层用支持图片输入的多模态大模型做任务级决策（抓哪个、放到哪、多柔、失败了怎么改），底层是自己写的经典控制——DLS IK、笛卡尔 min-jerk 轨迹、六维导纳外环、RRT-Connect 规划。不训练 VLA，也不需要数据集；换成任意 OpenAI 兼容的多模态端点就能跑，没有 key 时用 MockVLM 走同一条代码路径。",
+    year: "2026",
+    role: "个人项目",
+    status: "已开源",
+    statusKind: "live",
+    tech: ["Python 3.14", "MuJoCo 3.12", "UR5e + Robotiq 2F85", "VLM / VLA", "DLS IK", "min-jerk 轨迹", "六维导纳", "RRT-Connect"],
+    links: [{ label: "GitHub", href: "https://github.com/TC635807/vlm-admittance" }],
+    cover: {
+      src: "/images/vlm-admittance/hero.png",
+      alt: "MuJoCo 场景总览：UR5e 机械臂与 Robotiq 2F85 夹爪在桌前，桌上放着红、绿、黄、蓝四个物体与一个托盘",
+      caption: "MuJoCo 真实渲染，非示意图",
+    },
+    gallery: [
+      {
+        src: "/images/vlm-admittance/grasp-sequence.jpg",
+        alt: "一次 pick → place 的四个瞬间：初始场景、top 视角、夹住红块抬升、放进托盘",
+        caption: "一次 pick → place 的四格序列（图由这套代码直接渲染输出）",
+      },
+      {
+        src: "/images/vlm-admittance/vlm-frames.png",
+        alt: "每一步发给 VLM 的两张图：overview 与 top 各 512×512",
+        caption: "每一步实际发给 VLM 的画面：overview + top（512×512 · JPEG q85 · 64.8 KB）",
+      },
+      {
+        src: "/images/vlm-admittance/force-curves.png",
+        alt: "10 秒窗口内的六关节力矩、夹爪力与指间距曲线",
+        caption: "实时面板：6 关节力矩 + 夹爪力 + 指间距",
+      },
+    ],
+    featured: true,
+    metrics: [
+      { label: "全链路验收", value: "9/10 通过", note: "2026-10-12 实跑，唯一失败是既有的导纳让位方向用例" },
+      { label: "IK 往返误差", value: "0.38 mm / 4.9e-4 rad", note: "DLS IK + 零空间；move_to_pose 终态 0.98 mm" },
+      { label: "端到端抓放", value: "抬升 119.3 mm → 偏差 0.5 mm", note: "box_red 进托盘，峰值接触力 1.46 N" },
+      { label: "规划", value: "位姿误差 0.0000 m", note: "绕障 0.12 s、挡板接触 0" },
+      { label: "真实端点三条指令", value: "全部成功 · 9.1~11.9 s", note: "Ollama 兼容端点 + deepseek-v4.1-flash，含「轻一点」翻成导纳档" },
+    ],
+    sections: [
+      {
+        heading: "两条环，按频率分工",
+        items: [
+          "慢环 0.5~2 Hz（agent/）：渲染 overview / wrist / top，把相机图与场景 JSON 拼成 messages，用 function calling 拿回 SkillCall；真端点走 VLMClient，离线走 MockVLM。",
+          "快环 500 Hz（每步 mj_step，skills/ + planning/ + control/）：技能库把 SkillCall 变成确定性动作序列，规划、轨迹、导纳、IK 依次落到底层位置伺服。",
+          "大模型每步只拿到场景 JSON（不含物体真值位姿）和相机图；「轻一点」这类话会被翻译成导纳参数（K/D/axes/force_limit），经技能层兜底后作用在快环上。",
+        ],
+      },
+      {
+        heading: "底层是自己写的经典控制",
+        items: [
+          "DLS IK：dq = Jᵀ(JJᵀ+λ²I)⁻¹e + (I − J⁺J)·k·(q_center − q)，λ 自适应，单步限幅 0.25 rad，给了上一步的解就只做一次热启动求解。",
+          "笛卡尔 min-jerk 轨迹：五次多项式 10s³−15s⁴+6s⁵ 插位置，姿态用同一个 s 做 slerp（走最短弧，避免绕远路）。",
+          "六维导纳外环：Mẍ + Dẋ + K(x−x_ref) = −f_ext，半隐式欧拉离散，dt=2 ms；接触段另有参考限速，单步压入量就是 v_max·dt。",
+          "RRT-Connect：自研双向树 + shortcut/densify，碰撞检测用私有 MjData，规划过程不污染仿真状态。",
+        ],
+      },
+      {
+        heading: "几点经验（来自仓库 README）",
+        items: [
+          "UR5e 位置伺服没有重力补偿：HOME 静沉约 11 mm、任意关节角稳态静差约 14 mm，纯「IK → ctrl」到不了 5 mm；加任务空间积分外环 + 速度前馈后，轨迹中段误差从 28 mm 降到 12 mm，收尾后 <1 mm。",
+          "抓取成功不能用代理值判：夹爪开合比例换算的指间距与真实指垫间距差 7~10 mm；抬升的返回值曾被完全忽略，实测接触力 46 N 中止、方块只动了 1 mm 仍报成功。",
+          "单相机验证两个方向都会错：腕部相机只要停在物体上方就能看到上万像素，是近似恒真的假阳性；现在主判据是 top 前后的 check_gone，腕部只做反闸与兜底。",
+          "中止必须真的停住：任何失败返回都先把关节目标设回当前角并空步 20 步，否则残留的压入指令能在 0.2 s 内把末端力冲到 7471 N。",
+        ],
+      },
+    ],
+    note: "不需要训练 VLA：没有数据集、没有策略权重，决策层换成任意 OpenAI 兼容的多模态端点即可；没有 key 时 MockVLM 走同一条代码路径。",
+  },
   {
     slug: "mjx-go1-getup",
     title: "MJX Go1 Get-Up",

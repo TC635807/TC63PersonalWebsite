@@ -1,0 +1,782 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>技能库与仿真集成 · VLM 机械臂抓取 · 王宇翔</title><meta name="description" content="技能库把一次 SkillCall 展开成规划、接近、守卫式下降、合爪、抬升、放置与失败恢复的固定流程，并给出抓取位姿解析、刚柔分档、力看门狗与三级脱困的取值依据。"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/06-%E6%8A%80%E8%83%BD%E5%BA%93%E4%B8%8E%E4%BB%BF%E7%9C%9F%E9%9B%86%E6%88%90/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="技能库与仿真集成 · VLM 机械臂抓取 · 王宇翔"><meta property="og:description" content="技能库把一次 SkillCall 展开成规划、接近、守卫式下降、合爪、抬升、放置与失败恢复的固定流程，并给出抓取位姿解析、刚柔分档、力看门狗与三级脱困的取值依据。"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/06-%E6%8A%80%E8%83%BD%E5%BA%93%E4%B8%8E%E4%BB%BF%E7%9C%9F%E9%9B%86%E6%88%90/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/">VLM 机械臂抓取</a><span class="sep" aria-hidden="true">/</span><span class="now">技能库与仿真集成</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>技能库与仿真集成</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>技能库的确定性动作序列</span></a><ul class="toc__heads"><li><a href="#1-执行层夹在慢环与快环之间" data-depth="2" data-heading-j="0">1. 执行层夹在慢环与快环之间</a></li><li><a href="#2-抓取位姿由接近轴与偏航角解析得到" data-depth="2" data-heading-j="1">2. 抓取位姿由接近轴与偏航角解析得到</a></li><li><a href="#3-闭合量按物体宽度反算" data-depth="2" data-heading-j="2">3. 闭合量按物体宽度反算</a></li><li><a href="#4-pick-的动作序列" data-depth="2" data-heading-j="3">4. pick 的动作序列</a></li><li><a href="#5-自由段用刚性档接触段切柔顺档" data-depth="2" data-heading-j="4">5. 自由段用刚性档，接触段切柔顺档</a></li><li><a href="#6-守卫式下降与力看门狗" data-depth="2" data-heading-j="5">6. 守卫式下降与力看门狗</a></li><li><a href="#7-place-的四种落点" data-depth="2" data-heading-j="6">7. place 的四种落点</a></li><li><a href="#8-撤退恢复与三级脱困" data-depth="2" data-heading-j="7">8. 撤退、恢复与三级脱困</a></li><li><a href="#9-带载禁瞬移" data-depth="2" data-heading-j="8">9. 带载禁瞬移</a></li><li><a href="#10-易错点与调试" data-depth="2" data-heading-j="9">10. 易错点与调试</a></li><li><a href="#11-小结" data-depth="2" data-heading-j="10">11. 小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>纯视觉闭环与抓取验证</span></a><ul class="toc__heads"><li><a href="#1-无真值的前提与信息边界" data-depth="2" data-heading-j="0">1. 无真值的前提与信息边界</a></li><li><a href="#2-目标像素到世界坐标" data-depth="2" data-heading-j="1">2. 目标像素到世界坐标</a></li><li><a href="#3-颜色分割与连通域" data-depth="2" data-heading-j="2">3. 颜色分割与连通域</a></li><li><a href="#4-抓取验证的证据分层" data-depth="2" data-heading-j="3">4. 抓取验证的证据分层</a></li><li><a href="#5-技能侧的无真值抓取判据" data-depth="2" data-heading-j="4">5. 技能侧的无真值抓取判据</a></li><li><a href="#6-放置与子目标的图像判据" data-depth="2" data-heading-j="5">6. 放置与子目标的图像判据</a></li><li><a href="#7-易错点与调试" data-depth="2" data-heading-j="6">7. 易错点与调试</a></li><li><a href="#8-口径与权衡" data-depth="2" data-heading-j="7">8. 口径与权衡</a></li><li><a href="#判据来源" data-depth="3" data-heading-j="8">判据来源</a></li><li><a href="#权衡表" data-depth="3" data-heading-j="9">权衡表</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>仿真场景、渲染与验收</span></a><ul class="toc__heads"><li><a href="#1-场景由两份-menagerie-模型拼成" data-depth="2" data-heading-j="0">1. 场景由两份 Menagerie 模型拼成</a></li><li><a href="#2-工作台物体与三台相机" data-depth="2" data-heading-j="1">2. 工作台、物体与三台相机</a></li><li><a href="#3-名称到索引与环境对象" data-depth="2" data-heading-j="2">3. 名称到索引与环境对象</a></li><li><a href="#4-确定性重置与接触力查询" data-depth="2" data-heading-j="3">4. 确定性重置与接触力查询</a></li><li><a href="#5-离屏渲染的懒加载与深度" data-depth="2" data-heading-j="4">5. 离屏渲染的懒加载与深度</a></li><li><a href="#6-像素闭环如何接进仿真" data-depth="2" data-heading-j="5">6. 像素闭环如何接进仿真</a></li><li><a href="#7-两条验收路径" data-depth="2" data-heading-j="6">7. 两条验收路径</a></li><li><a href="#8-交互式并发与锁" data-depth="2" data-heading-j="7">8. 交互式并发与锁</a></li><li><a href="#9-易错点与调试" data-depth="2" data-heading-j="8">9. 易错点与调试</a></li><li><a href="#10-集成口径与余量" data-depth="2" data-heading-j="9">10. 集成口径与余量</a></li><li><a href="#场景与环境的固定约定" data-depth="3" data-heading-j="10">场景与环境的固定约定</a></li><li><a href="#权衡表" data-depth="3" data-heading-j="11">权衡表</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">VLM 机械臂抓取</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-13</span><span class="dot" aria-hidden="true">·</span><span>VLM / 机械臂抓取 / 技能库 / 导纳控制 / MuJoCo / 视觉闭环 / 抓取验证 / 图像处理</span></div><h1 class="docs__title">技能库与仿真集成</h1><p class="docs__lead">技能库把一次 SkillCall 展开成规划、接近、守卫式下降、合爪、抬升、放置与失败恢复的固定流程，并给出抓取位姿解析、刚柔分档、力看门狗与三级脱困的取值依据。</p></header><section class="dfile" id="file-1" data-file="01-技能库的确定性动作序列"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-技能库的确定性动作序列</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/06-技能库与仿真集成/01-技能库的确定性动作序列.md</span></div><div class="dfile__body"><h1 id="技能库的确定性动作序列">技能库的确定性动作序列</h1>
+<p>本文对应公开项目 <code>TC635807/vlm-admittance</code> 的 <code>skills/</code>（<a href="https://github.com/TC635807/vlm-admittance%EF%BC%89%E3%80%82%E6%8A%80%E8%83%BD%E5%BA%93%E6%98%AF%E5%86%B3%E7%AD%96%E5%B1%82%E4%B8%8E%E6%8E%A7%E5%88%B6%E5%B1%82%E4%B9%8B%E9%97%B4%E7%9A%84%E6%89%A7%E8%A1%8C%E5%B1%82%EF%BC%9A%E6%A8%A1%E5%9E%8B%E5%8F%AA%E8%BE%93%E5%87%BA%E4%B8%80%E4%B8%AA">https://github.com/TC635807/vlm-admittance）。技能库是决策层与控制层之间的执行层：模型只输出一个</a> <code>SkillCall</code>（技能名、参数字典、可选柔顺意图），<code>skills/library.py</code> 把它展开成一段顺序固定的物理动作，并在失败时回一个带 <code>error_code</code> 的结构化结果。</p>
+<p>这段流程必须是确定性的，因为一次抓取要穿过规划、IK、位置伺服、接触力与视觉校验五道环节。顺序与参数固定下来之后，失败才能被归因到具体环节，模型也才能基于观测改参数重试。</p>
+<h2 id="1-执行层夹在慢环与快环之间">1. 执行层夹在慢环与快环之间</h2>
+<p>系统里有两层时间尺度。慢环 0.5~2 Hz、事件触发，位于 <code>agent/</code>：渲染相机图、组装 messages、调用模型、校验返回的 <code>SkillCall</code>。快环 500 Hz、每个物理步 <code>mj_step</code> 一次，位于 <code>control/</code>、<code>planning/</code> 与 <code>skills/</code>。技能库是两层之间的接口，慢环调用一次，内部可能跑掉几千个物理步。</p>
+<p><code>SkillExecutor.__init__</code> 接收四个协作对象：<code>env</code>（场景与环境）、<code>kin</code>（DLS IK）、<code>runner</code>（轨迹执行与力看门狗）、<code>planner</code>（RRT-Connect）。自身只维护少量状态：当前柔顺档 <code>compliance</code>、手持物体 id <code>holding</code>、最近一次成功抓取前的位姿 <code>last_pick_pose</code>，以及逐次追加的 <code>history</code>。</p>
+<p>技能名与方法名一一对应。<code>__call__</code> 用下划线前缀拼出方法名，找不到就返回 <code>unknown_skill</code>；技能方法内部抛出的异常统一收敛成 <code>exception</code> 结果，不让异常穿过执行层。调用耗时与观察结果都写进 <code>history</code>，供上层把上下文交回模型。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["SkillCall"] --> B["按下划线前缀拼出方法名"]
+  B --> C{"存在同名方法"}
+  C -- "否" --> D["返回 unknown_skill"]
+  C -- "是" --> E["执行技能方法"]
+  E --> F{"技能方法是否抛异常"}
+  F -- "是" --> G["收敛为 exception 结果"]
+  F -- "否" --> H["SkillResult"]
+  G --> I["追加 history 并返回"]
+  H --> I</pre></div>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#005CC5"> __call__</span><span style="color:#24292E">(self, call: SkillCall) -> SkillResult:</span></span>
+<span class="line"><span style="color:#24292E">    t0 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.time()</span></span>
+<span class="line"><span style="color:#24292E">    name </span><span style="color:#D73A49">=</span><span style="color:#24292E"> call.skill</span></span>
+<span class="line"><span style="color:#24292E">    fn </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> getattr</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">, </span><span style="color:#032F62">"_skill_"</span><span style="color:#D73A49"> +</span><span style="color:#005CC5"> str</span><span style="color:#24292E">(name), </span><span style="color:#005CC5">None</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> fn </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        res </span><span style="color:#D73A49">=</span><span style="color:#24292E"> SkillResult(</span><span style="color:#005CC5">False</span><span style="color:#24292E">, name, </span><span style="color:#D73A49">f</span><span style="color:#032F62">"unknown skill: </span><span style="color:#005CC5">{</span><span style="color:#24292E">name</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#032F62">"unknown_skill"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">            res </span><span style="color:#D73A49">=</span><span style="color:#24292E"> fn(call)</span></span>
+<span class="line"><span style="color:#D73A49">        except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#24292E">            res </span><span style="color:#D73A49">=</span><span style="color:#24292E"> SkillResult(</span><span style="color:#005CC5">False</span><span style="color:#24292E">, name, </span><span style="color:#D73A49">f</span><span style="color:#032F62">"exception: </span><span style="color:#005CC5">{type</span><span style="color:#24292E">(exc).</span><span style="color:#005CC5">__name__}</span><span style="color:#032F62">: </span><span style="color:#005CC5">{</span><span style="color:#24292E">exc</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">, </span><span style="color:#032F62">"exception"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    res.duration </span><span style="color:#D73A49">=</span><span style="color:#24292E"> time.time() </span><span style="color:#D73A49">-</span><span style="color:#24292E"> t0</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.history.append({</span><span style="color:#032F62">"call"</span><span style="color:#24292E">: call.to_json(), </span><span style="color:#032F62">"result"</span><span style="color:#24292E">: res.to_observation()})</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> res</span></span></code></pre>
+<h2 id="2-抓取位姿由接近轴与偏航角解析得到">2. 抓取位姿由接近轴与偏航角解析得到</h2>
+<p>Robotiq 2F85 挂到 UR5e 法兰之后，TCP site <code>g_pinch</code> 的局部 +z 轴就是接近轴（pinch 相对 base_mount 沿 +z 偏移 0.145）。于是「从上往下抓」等价于让 TCP 局部 +z 指向世界系 -z，而不是去凑一组欧拉角。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mtext>top</mtext></msub><mo>=</mo><mrow><mi mathvariant="normal">Z</mi><mn>2</mn><mi mathvariant="normal">V</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">c</mi></mrow><mo stretchy="false">(</mo><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mo>−</mo><mn>1</mn><mo stretchy="false">]</mo><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"></mspace><mi>q</mi><mo>=</mo><msub><mi>q</mi><mtext>top</mtext></msub><mo>⊗</mo><msub><mi>q</mi><mtext>axis</mtext></msub><mo stretchy="false">(</mo><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo><mo separator="true">,</mo><mi>ψ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">q_{\text{top}} = \mathrm{Z2Vec}([0,0,-1]), \qquad q = q_{\text{top}} \otimes q_{\text{axis}}([0,0,1], \psi)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">top</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">Z2Vec</span></span><span class="mopen">([</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mord">1</span><span class="mclose">])</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">top</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">axis</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">([</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ψ</span><span class="mclose">)</span></span></span></span></p>
+<p><code>approach_quat(yaw)</code> 先用 <code>mujoco.mju_quatZ2Vec</code> 求出对齐用的 <code>q_down</code>，再绕局部 z 转 yaw。乘序是 <code>q_down ⊗ q_yaw</code>，也就是把偏航加在已经对齐的局部坐标系里。yaw 的作用是选择两指的开合方向：方块可以绕竖直轴任意转，圆柱与窄物体对指垫与表面的贴合很敏感，需要换一个 yaw 重试。</p>
+<p>侧面夹持走另一个入口 <code>approach_quat_dir(direction, roll)</code>：把接近轴指向给定的世界系方向，roll 同样是绕局部 z 的转动。<code>top-down</code> 就是 <code>direction=[0,0,-1]</code>，与 <code>approach_quat</code> 等价。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> approach_quat</span><span style="color:#24292E">(yaw: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 0.0</span><span style="color:#24292E">) -> np.ndarray:</span></span>
+<span class="line"><span style="color:#24292E">    q_down </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros(</span><span style="color:#005CC5">4</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    mujoco.mju_quatZ2Vec(q_down, np.array([</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#D73A49">-</span><span style="color:#005CC5">1.0</span><span style="color:#24292E">]))</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#005CC5"> abs</span><span style="color:#24292E">(</span><span style="color:#005CC5">float</span><span style="color:#24292E">(yaw)) </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> 1e-9</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> q_down</span></span>
+<span class="line"><span style="color:#24292E">    q_yaw </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros(</span><span style="color:#005CC5">4</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    mujoco.mju_axisAngle2Quat(q_yaw, np.array([</span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">]), </span><span style="color:#005CC5">float</span><span style="color:#24292E">(yaw))</span></span>
+<span class="line"><span style="color:#24292E">    out </span><span style="color:#D73A49">=</span><span style="color:#24292E"> np.zeros(</span><span style="color:#005CC5">4</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    mujoco.mju_mulQuat(out, q_down, q_yaw)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> out</span></span></code></pre>
+<h2 id="3-闭合量按物体宽度反算">3. 闭合量按物体宽度反算</h2>
+<p><code>close_ratio_for(obj)</code> 把物体水平半尺寸换算成夹爪开合比例。标定来自仿真实测：开合比例 1 时指间距 93 mm，比例 0 时 8.4 mm，中间线性。目标指间距取物件宽度减去一个余量（默认 6 mm），保证夹紧而不是虚合。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>ratio</mtext><mo>=</mo><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">p</mi></mrow><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mfrac><mrow><mn>2000</mn><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>s</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>s</mi><mi>y</mi></msub><mo stretchy="false">)</mo><mo>−</mo><mi>m</mi><mo>−</mo><msub><mi>g</mi><mtext>closed</mtext></msub></mrow><mrow><msub><mi>g</mi><mtext>open</mtext></msub><mo>−</mo><msub><mi>g</mi><mtext>closed</mtext></msub></mrow></mfrac><mo separator="true">,</mo><mtext> </mtext><mn>0</mn><mo separator="true">,</mo><mtext> </mtext><mn>1</mn><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\text{ratio} = \mathrm{clip}\!\left(\frac{2000\max(s_x,s_y) - m - g_{\text{closed}}}{g_{\text{open}} - g_{\text{closed}}},\, 0,\, 1\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6679em;"></span><span class="mord text"><span class="mord">ratio</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="mord"><span class="mord mathrm">clip</span></span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0323em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.0359em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2819em;"><span></span></span></span></span></span></span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.0359em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">closed</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.5073em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2000</span><span class="mspace mtight" style="margin-right:0.1952em;"></span><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span><span class="mopen mtight">(</span><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mpunct mtight">,</span><span class="mord mtight"><span class="mord mathnormal mtight">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2819em;"><span></span></span></span></span></span></span><span class="mclose mtight">)</span><span class="mbin mtight">−</span><span class="mord mathnormal mtight">m</span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.0359em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">closed</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.5423em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mi>x</mi></msub><mo separator="true">,</mo><msub><mi>s</mi><mi>y</mi></msub></mrow><annotation encoding="application/x-tex">s_x,s_y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">x</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">y</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> 是半尺寸（米），<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span> 是 6 mm 余量，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mtext>open</mtext></msub><mo>=</mo><mn>93</mn></mrow><annotation encoding="application/x-tex">g_{\text{open}}=93</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">open</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">93</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>g</mi><mtext>closed</mtext></msub><mo>=</mo><mn>8.4</mn></mrow><annotation encoding="application/x-tex">g_{\text{closed}}=8.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">closed</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8.4</span></span></span></span>。固定用 0.35 对 40 mm 方块勉强可行，但对 30 mm 圆柱会算出 38 mm 的指间距，大于物件本身，根本夹不住，因此必须按物体现算。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6F42C1">@</span><span style="color:#005CC5">staticmethod</span></span>
+<span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> close_ratio_for</span><span style="color:#24292E">(obj: SceneObject, margin_mm: </span><span style="color:#005CC5">float</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 6.0</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">float</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    width_mm </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 2000.0</span><span style="color:#D73A49"> *</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(</span><span style="color:#005CC5">max</span><span style="color:#24292E">(obj.size[</span><span style="color:#005CC5">0</span><span style="color:#24292E">], obj.size[</span><span style="color:#005CC5">1</span><span style="color:#24292E">]))</span></span>
+<span class="line"><span style="color:#24292E">    gap_mm </span><span style="color:#D73A49">=</span><span style="color:#24292E"> width_mm </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(margin_mm)</span></span>
+<span class="line"><span style="color:#24292E">    span </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> GRIPPER_GAP_OPEN_MM</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> GRIPPER_GAP_CLOSED_MM</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(np.clip((gap_mm </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> GRIPPER_GAP_CLOSED_MM</span><span style="color:#24292E">) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> span, </span><span style="color:#005CC5">0.0</span><span style="color:#24292E">, </span><span style="color:#005CC5">1.0</span><span style="color:#24292E">))</span></span></code></pre>
+<p>无真值模式下拿不到 <code>SceneObject</code>，改用同一条标定的 <code>_close_ratio_for_size(half_size)</code>；连尺寸都没有时按类别先验取 0.35（方块）/ 0.55（圆柱）/ 0.75（水瓶）。模型给的闭合量只作为更紧的上限，两者取较小值，因为更松会夹空、更紧不会。</p>
+<h2 id="4-pick-的动作序列">4. pick 的动作序列</h2>
+<p><code>_skill_pick</code> 的主干可以拆成七步：入口清场、解析目标、构造姿态与闭合量、移动到预抓取位、守卫式接触下降、分块合爪、抬升并核对证据。任何一步失败都先松爪再撤退，然后把失败原因写进 <code>reasons</code>，最多按 <code>PICK_ATTEMPT_PLAN</code> 的 3 组参数重试。</p>
+<p>三组重试参数是有取舍的：标准深度、略浅（0.3 倍深度，避免指垫顶桌面）、更紧加 90 度偏航（贴合方向救场）。深压被证明收益低而且会把指垫顶到桌面，所以从早期的 10 组压缩到 3 组。三组用完仍然失败时，技能层不再自己换参数，而是把结构化观测交回模型重新规划。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  P0["入口清场检查"] --> P1["解析目标点与类别"]
+  P1 --> P2["构造抓取姿态与闭合量"]
+  P2 --> P3["移动到预抓取位"]
+  P3 --> P4{"物体是否被碰离原位超过 8 mm"}
+  P4 -- "是" --> P5["松爪撤退，返回失败"]
+  P4 -- "否" --> P6["守卫式接触下降"]
+  P6 --> P7["分块合爪并监测接触力"]
+  P7 --> P8["沿接近方向抬升"]
+  P8 --> P9{"抬升成功且随动证据成立"}
+  P9 -- "是" --> P10["写 holding 与成功指标"]
+  P9 -- "否" --> P11{"还有下一组重试参数"}
+  P11 -- "是" --> P2
+  P11 -- "否" --> P5</pre></div>
+<p>预抓取位由目标点沿接近方向反向偏移 <code>APPROACH_HEIGHT</code>（0.10 m）得到。下降之前会复检物体是否被碰跑：预抓取位的移动本身可能把物体推走，实测圆柱被推移 33 mm，继续下降与合爪后又被推到 127 mm 与 152 mm，所以超过 <code>PICK_APPROACH_DRIFT_TOL</code>（8 mm）就立刻撤退。</p>
+<h2 id="5-自由段用刚性档接触段切柔顺档">5. 自由段用刚性档，接触段切柔顺档</h2>
+<p>同一段动作在自由空间与接触期的需求相反。自由段要求末端严格跟随参考轨迹，用 <code>STIFF_COMPLIANCE</code>：<code>k=5000, d=200, m=5</code>，六个轴全部关闭导纳，等于纯位置控制。接触段要求末端让位，用 <code>PLACE_TOUCH_COMPLIANCE</code>：只在 z 向开启，<code>k=120, d=20</code>，力阈值 6 N。</p>
+<p>模型的柔顺意图只允许改变刚度与阻尼，不允许降低技能自身的安全力阈值。<code>_motion_compliance</code> 对 <code>force_limit</code> 取技能基准值作为下界，否则模型一句「轻一点」会把阈值压到 8 N，导致正常的贴面放置都被判超限。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _motion_compliance</span><span style="color:#24292E">(self, call: SkillCall, base: ComplianceParams) -> ComplianceParams:</span></span>
+<span class="line"><span style="color:#24292E">    comp </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._compliance_from_call(call, base)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> ComplianceParams(</span><span style="color:#E36209">k</span><span style="color:#D73A49">=</span><span style="color:#24292E">comp.k, </span><span style="color:#E36209">d</span><span style="color:#D73A49">=</span><span style="color:#24292E">comp.d, </span><span style="color:#E36209">m</span><span style="color:#D73A49">=</span><span style="color:#24292E">comp.m, </span><span style="color:#E36209">axes</span><span style="color:#D73A49">=</span><span style="color:#24292E">comp.axes,</span></span>
+<span class="line"><span style="color:#E36209">                            force_limit</span><span style="color:#D73A49">=</span><span style="color:#005CC5">max</span><span style="color:#24292E">(</span><span style="color:#005CC5">float</span><span style="color:#24292E">(comp.force_limit), </span><span style="color:#005CC5">float</span><span style="color:#24292E">(base.force_limit)))</span></span></code></pre>
+<p>抓取下降只用 z 向柔顺。六维全开会把接触反力传成横向位移，末端被推横之后指垫夹偏，30 mm 圆柱在这个模式下实测必失败。抬升段则相反，可以接受模型给的软档，因为此时没有接触面需要保持。</p>
+<h2 id="6-守卫式下降与力看门狗">6. 守卫式下降与力看门狗</h2>
+<p>放置下降是 guarded move：几何算出的目标高度只当上限，是否到位由接触力判定。容器与托盘有壁厚和边缘，几何高度差几毫米就会过度下压，实测用 20 N 档下降时先以 21.6 N 中止，随后机械臂卡死、接触力冲到 400~500 N。现在的做法是接触力一到就算到位，厚度误差由导纳吸收。</p>
+<p><code>_descend_until_contact</code> 走两段限速：先用 <code>PLACE_APPROACH_VMAX</code>（0.006 m/s）从目标上方 60 mm 走到目标上方 10 mm 处，再用 <code>PLACE_VMAX</code>（0.003 m/s）走完最后 10 mm 与 10 mm 的几何地板余量，接触判据取当前力与该步 <code>max_force</code> 的较大者，阈值 2.5 N。两段都打开 <code>stop_on_force</code>，力到阈值就冻结参考并正常返回，而不是报错。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>限速</th><th>终点</th><th>触发条件</th></tr></thead><tbody><tr><td>阶段 1 接近</td><td>0.006 m/s</td><td>目标上方 10 mm</td><td>力 >= 2.5 N 或 contact-stop</td></tr><tr><td>阶段 2 触底</td><td>0.003 m/s</td><td>目标下方 10 mm 几何地板</td><td>力 >= 2.5 N 或 contact-stop</td></tr><tr><td>容器撞壁</td><td>同上</td><td>同容器分支</td><td>触点在目标上方 > 20 mm 即接触</td></tr></tbody></table>
+<p>抓取下降的入口 <code>_descend_grasp_until_contact</code> 对矮物体保持单段轨迹，对细高物体才拆成巡航段加最后 10 mm 限速段。细高物体的模型高度常常给的是瓶身中部，实际先碰到的是瓶盖或瓶肩，所以巡航段也带同一个 3 N 看门狗。看门狗中止返回 <code>force_limit</code>，调用方把它当成接触信号，冻结在当前高度合爪，等于抓住了上半身。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> r.error_code </span><span style="color:#D73A49">==</span><span style="color:#032F62"> "force_limit"</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._freeze_arm(</span><span style="color:#005CC5">int</span><span style="color:#24292E">(</span><span style="color:#005CC5">PLACE_CONTACT_HOLD_STEPS</span><span style="color:#24292E">))</span></span>
+<span class="line"><span style="color:#24292E">    f_hold </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(</span><span style="color:#005CC5">float</span><span style="color:#24292E">(f_now), </span><span style="color:#005CC5">self</span><span style="color:#24292E">._force_norm(), </span><span style="color:#005CC5">float</span><span style="color:#24292E">(peak))</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#032F62"> "contact"</span><span style="color:#24292E">, {</span><span style="color:#032F62">"grasp_z_effective"</span><span style="color:#24292E">: </span><span style="color:#005CC5">round</span><span style="color:#24292E">(tcp_z, </span><span style="color:#005CC5">4</span><span style="color:#24292E">),</span></span>
+<span class="line"><span style="color:#032F62">                       "touchdown_force"</span><span style="color:#24292E">: </span><span style="color:#005CC5">round</span><span style="color:#24292E">(f_hold, </span><span style="color:#005CC5">3</span><span style="color:#24292E">)}, \</span></span>
+<span class="line"><span style="color:#24292E">        MoveResult(</span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#032F62">"接触即停（守卫式接触下降）"</span><span style="color:#24292E">, </span><span style="color:#005CC5">None</span><span style="color:#24292E">, </span><span style="color:#E36209">max_force</span><span style="color:#D73A49">=</span><span style="color:#005CC5">float</span><span style="color:#24292E">(f_hold))</span></span></code></pre>
+<h2 id="7-place-的四种落点">7. place 的四种落点</h2>
+<p><code>_skill_place</code> 支持四种目标，四者互斥，同时给两个以上直接返回 <code>bad_args</code>。容器落点的支撑面取容器顶面，桌面落点取 <code>TABLE_HEIGHT</code>，叠放取锚点顶面，横向并排取锚点 xy 加上方向单位向量乘以中心距。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>目标</th><th>支撑面</th><th>关键校验</th></tr></thead><tbody><tr><td><code>container_id</code></td><td>容器中心或显式 xy</td><td>容器顶面</td><td>目标必须是容器</td></tr><tr><td><code>surface=table</code></td><td>显式 xy 或自选空位</td><td>桌面上表面 0.40</td><td>空位与其它物体净距 >= 80 mm</td></tr><tr><td><code>on_top_of</code></td><td>锚点 xy 加偏移</td><td>锚点顶面</td><td>锚点底面离桌面在 [-10, +20] mm</td></tr><tr><td><code>anchor_id + relation</code></td><td>锚点 xy 加方向</td><td>桌面上表面</td><td>relation 必须在白名单内</td></tr></tbody></table>
+<p>放置成功要四条同时成立：物体 xy 距目标小于 6 cm、底面离支撑面落在 [-1, +2] cm、接触力不超过 5 N、夹爪已张开，否则返回 <code>place_mismatch</code>。释放之后强制再抬升 0.15 m，把指垫彻底带离被放物体；抬升失败或仍有残余压力时立刻走多方向脱身。</p>
+<h2 id="8-撤退恢复与三级脱困">8. 撤退、恢复与三级脱困</h2>
+<p>任何中止或恢复路径在移动之前都要先做 <code>_freeze_arm</code>：把当前 6 个关节角写成位置目标并空步若干步。这一步不能省。<code>move_to_pose</code> 因力超限中止时，<code>data.ctrl</code> 仍停在最后一条压入指令上，此时若直接发起下一次运动，而它恰好是出发前 IK 预检失败一步都不走，位置伺服会继续按旧 ctrl 下压，实测 0.196 s 内末力冲到 7471 N。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> _freeze_arm</span><span style="color:#24292E">(self, steps: </span><span style="color:#005CC5">int</span><span style="color:#D73A49"> =</span><span style="color:#005CC5"> 20</span><span style="color:#24292E">) -> </span><span style="color:#005CC5">None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    q </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._arm_qpos_now()</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">.env.set_arm_joint_targets(q)</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">.log(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[skills] 停住失败（set_arm_joint_targets）: </span><span style="color:#005CC5">{</span><span style="color:#24292E">exc</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">        return</span></span>
+<span class="line"><span style="color:#D73A49">    try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">.env.step(</span><span style="color:#005CC5">max</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#005CC5">int</span><span style="color:#24292E">(steps)))</span></span>
+<span class="line"><span style="color:#D73A49">    except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#005CC5">        self</span><span style="color:#24292E">.log(</span><span style="color:#D73A49">f</span><span style="color:#032F62">"[skills] 停住步进失败: </span><span style="color:#005CC5">{</span><span style="color:#24292E">exc</span><span style="color:#005CC5">}</span><span style="color:#032F62">"</span><span style="color:#24292E">)</span></span></code></pre>
+<p><code>_retreat</code> 只做一次温和撤退：力已经松（不超过阈值）时方向取纯 +z，有力时才沿接触反力的反方向走。方向这里不能照噪声反力取，实测 |F|=0.6 N 时噪声朝下，沿着它撤退等于主动下压 8 cm，接触力从 0.6 N 涨到 32.3 N。力上限取「进入力的 1.5 倍」再夹到 [40, 45] N，运动时长 2.5 s。旧实现把上限抬到 1e9 并做多轮升级，实测撤退期间末端反而下沉，|F| 从 20 N 涨到 8437 N。</p>
+<p><code>_recover</code> 先松爪再做一次温和撤退。判据同时要求两条：几何上连续 20 步不再与被挡物体接触，且末端力回落到安全阈值。只看几何会误判压桌面这类接触，因为接触反查只映射场景物体。<code>_escape_contact</code> 在此基础上追加一次关节空间抬升，<code>_finish_failure</code> 在两种手段都清不掉时才重置场景，并把 <code>obstruction_id</code> 与受阻力一起上报。</p>
+<p><code>hard_recover</code> 是交互式使用中的应急入口，分三级：常规撤退、规划器直接回 <code>HOME_QPOS</code> 的关节位形、重置整个场景。每一级在动作前后都调用 <code>_freeze_arm</code>，避免留下继续压入的指令。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 接触残留
+  接触残留 --> 松爪: _recover
+  松爪 --> 温和撤退
+  温和撤退 --> 脱身确认: 连续 20 步无接触且力回落
+  温和撤退 --> 关节抬升: 仍有接触
+  关节抬升 --> 脱身确认: 几何判据通过
+  关节抬升 --> 场景重置: 仍不干净
+  脱身确认 --> [*]
+  场景重置 --> [*]</pre></div>
+<h2 id="9-带载禁瞬移">9. 带载禁瞬移</h2>
+<p><code>_skill_home</code> 优先走关节路径。带载时，夹爪与被夹物体的持续接触会让碰撞检查把起始位形判非法，于是规划返回 <code>None</code>，此时在规划窗口临时忽略「手持物与夹爪」这一对接触后重试。仍然失败才考虑 <code>env.home()</code> 的瞬移兜底。</p>
+<p>瞬移有严格前置条件：接触力接近 0、夹爪已张开，且手里没有载荷。带载时一律禁止瞬移，因为瞬移会让机械臂瞬间跑到 0.6 m 之外，手里的物体被拖着走或直接丢下。走不了关节路径就诚实返回 <code>home_blocked</code>，保留持物状态交给上层处理。<code>env.home()</code> 自身也不再默认张开夹爪，需要张开的调用方显式传参。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">loaded </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.holding </span><span style="color:#D73A49">is</span><span style="color:#D73A49"> not</span><span style="color:#005CC5"> None</span><span style="color:#D73A49"> and</span><span style="color:#24292E"> gripper </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> GRIPPER_OPEN_MIN</span></span>
+<span class="line"><span style="color:#24292E">grip_gate_ok </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (gripper </span><span style="color:#D73A49">>=</span><span style="color:#005CC5"> GRIPPER_OPEN_MIN</span><span style="color:#24292E">) </span><span style="color:#D73A49">or</span><span style="color:#24292E"> loaded</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> loaded:</span></span>
+<span class="line"><span style="color:#24292E">    why </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">f</span><span style="color:#032F62">"带载（holding=</span><span style="color:#005CC5">{self</span><span style="color:#24292E">.holding</span><span style="color:#005CC5">}</span><span style="color:#032F62">）禁止瞬移归位：瞬移会把手里夹着的物体"</span></span>
+<span class="line"><span style="color:#D73A49">           f</span><span style="color:#032F62">"拖走/丢下，必须走关节路径或先放下物体"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">elif</span><span style="color:#24292E"> f_norm </span><span style="color:#D73A49">></span><span style="color:#005CC5"> HOME_SAFE_FORCE_N</span><span style="color:#D73A49"> or</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> grip_gate_ok:</span></span>
+<span class="line"><span style="color:#24292E">    why </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#D73A49">f</span><span style="color:#032F62">"接触力 </span><span style="color:#005CC5">{</span><span style="color:#24292E">f_norm</span><span style="color:#D73A49">:.1f</span><span style="color:#005CC5">}</span><span style="color:#032F62"> N（阈值 </span><span style="color:#005CC5">{HOME_SAFE_FORCE_N</span><span style="color:#D73A49">:.1f</span><span style="color:#005CC5">}</span><span style="color:#032F62"> N）/ "</span></span>
+<span class="line"><span style="color:#D73A49">           f</span><span style="color:#032F62">"夹爪开合 </span><span style="color:#005CC5">{</span><span style="color:#24292E">gripper</span><span style="color:#D73A49">:.2f</span><span style="color:#005CC5">}</span><span style="color:#032F62">（需 >= </span><span style="color:#005CC5">{GRIPPER_OPEN_MIN</span><span style="color:#D73A49">:.2f</span><span style="color:#005CC5">}</span><span style="color:#032F62">）"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">    why </span><span style="color:#D73A49">=</span><span style="color:#032F62"> ""</span></span></code></pre>
+<h2 id="10-易错点与调试">10. 易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理位置</th></tr></thead><tbody><tr><td>技能报成功但物体没动</td><td>抬升返回值被忽略，只看了夹爪开合判据</td><td><code>_skill_pick</code> 要求 <code>grasp_lift_ok</code> 与随动证据同时成立</td></tr><tr><td>中止后力继续飙升</td><td><code>data.ctrl</code> 停在压入指令上</td><td>任何恢复路径先 <code>_freeze_arm</code></td></tr><tr><td>撤退越退越紧</td><td>沿噪声反力方向走，或把力上限抬得过高</td><td>力小取纯 +z，上限封顶 45 N，只退一次</td></tr><tr><td>圆柱抓不住</td><td>固定闭合量算出的指间距大于物件宽度</td><td><code>close_ratio_for</code> 按宽度反算</td></tr><tr><td>模型说「轻一点」导致正常放置中止</td><td>柔顺意图把 <code>force_limit</code> 也压低了</td><td><code>_motion_compliance</code> 对力阈值取下界</td></tr><tr><td>带载归位被拒</td><td>判据要求夹爪开合 >= 0.80，夹着 45.5 mm 方块时恒为 0.44</td><td>带载时改走关节路径，禁止瞬移</td></tr><tr><td>放置下降压死</td><td>几何高度差几毫米，用大阈值硬顶</td><td>守卫式下降，接触即停</td></tr></tbody></table>
+<p><code>place</code> 下降的源码注释写的是「1.5 mm 小步 + 每步 2.5 N 看门狗」，现行实现已经改成两段限速轨迹，<code>PLACE_CONTACT_STEP_M</code> 这个常量在技能层没有被引用，只在 smoke 里被导入。两处口径不一致，读参数时以代码路径为准。</p>
+<h2 id="11-小结">11. 小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>技能名与方法名通过下划线前缀绑定，异常一律收敛成结构化 <code>SkillResult</code>。</li>
+<li>抓取姿态由 TCP 局部 +z 接近轴加绕局部 z 的偏航角解析得到。</li>
+<li>闭合量按物体宽度线性反算，余量 6 mm，标定是 93 mm 与 8.4 mm。</li>
+<li>自由段用刚性档，接触与抓取段切柔顺档；模型不能下调安全力阈值。</li>
+<li>放置下降是守卫式接触停止，接触力到阈值即认为到位。</li>
+<li>恢复的固定顺序是停住、松爪、一次温和撤退、几何判据确认，最后才重置场景。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍点</th><th>本项目选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>抓取重试</td><td>3 组固定组合</td><td>行为可归因；代价是遇到未覆盖的摆放仍会失败，需要模型重新规划</td></tr><tr><td>接触判据</td><td>力阈值即到位</td><td>免去精确几何；代价是力阈值取值需要标定</td></tr><tr><td>恢复强度</td><td>只退一次的温和策略</td><td>不会越挣越紧；代价是清不掉时直接重置场景，丢失任务进度</td></tr><tr><td>带载归位</td><td>禁止瞬移、只走关节路径</td><td>不会掉件；代价是规划失败时归位被拒</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-纯视觉闭环与抓取验证"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-纯视觉闭环与抓取验证</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/06-技能库与仿真集成/02-纯视觉闭环与抓取验证.md</span></div><div class="dfile__body"><h1 id="纯视觉闭环与抓取验证">纯视觉闭环与抓取验证</h1>
+<p>本文讨论 <code>agent/loop.py</code> 的复核层与 <code>sim/vision.py</code>、<code>sim/perception.py</code> 组成的感知侧。技能层自称抓取成功只是一个候选结果，是否真的把目标拿走由独立证据确认。整套判据只用相机图像与物理接触信息，不读物体真值位姿。</p>
+<h2 id="1-无真值的前提与信息边界">1. 无真值的前提与信息边界</h2>
+<p>慢环送给模型的场景描述只有物体 id、颜色、类别、是否可抓、是否容器与尺寸，不含任何位姿。<code>include_poses=False</code> 就是这种 no-oracle 模式。文本块用 <code>SCENE_JSON_BEGIN</code> 与 <code>SCENE_JSON_END</code> 包住，<code>MockVLM</code> 靠这对标记做确定性解析，真实端点只把它当普通文本。</p>
+<p>目标位置由模型自己看图像决定，输出的是像素而不是坐标。技能层只接收世界系 xy，不接收 <code>state.objects[...].pose</code>。隔离在代码里有硬约束：复核链不调用 <code>env.object_pose</code> 与 <code>env.set_object_pose</code>，也不读 <code>state.objects[*].pose</code>；喂给复核模型的 metrics 只保留白名单证据键，键名含 <code>pose</code>、<code>truth</code>、<code>oracle</code>、<code>position</code>、<code>xy</code>、<code>quat</code>、<code>qpos</code> 的一律丢弃。</p>
+<p>验收里有一条专门的毒丸用例 <code>tests/test_isolation_no_truth.py</code>：它把 <code>object_pose</code> 一类真值接口替换成直接抛异常，纯视觉闭环仍要跑完全流程。这条用例的意义是把隔离从约定变成可检查的约束。</p>
+<h2 id="2-目标像素到世界坐标">2. 目标像素到世界坐标</h2>
+<p><code>CameraModel</code> 从 <code>model.cam_fovy</code> 与 <code>mj_forward</code> 得到的相机位姿构建针孔模型，不硬编码任何相机位置。焦距按竖直视场角换算：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo>=</mo><mo stretchy="false">(</mo><mi>H</mi><mi mathvariant="normal">/</mi><mn>2</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mi>tan</mi><mo>⁡</mo><mo stretchy="false">(</mo><mtext>fovy</mtext><mi mathvariant="normal">/</mi><mn>2</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">f = (H/2)/\tan(\text{fovy}/2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mord">/2</span><span class="mclose">)</span><span class="mord">/</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">tan</span><span class="mopen">(</span><span class="mord text"><span class="mord">fovy</span></span><span class="mord">/2</span><span class="mclose">)</span></span></span></span>。世界点到相机系的变换与投影是：</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>c</mi></msub><mo>=</mo><msup><mi>R</mi><mi>T</mi></msup><mo stretchy="false">(</mo><mi>P</mi><mo>−</mo><mi>c</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="1em"></mspace><mtext>depth</mtext><mo>=</mo><mo>−</mo><msub><mi>p</mi><mi>c</mi></msub><mo stretchy="false">[</mo><mn>2</mn><mo stretchy="false">]</mo><mo separator="true">,</mo><mspace width="1em"></mspace><mi>u</mi><mo>=</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mi>W</mi><mn>2</mn></mfrac></mstyle><mo>+</mo><mi>f</mi><mstyle scriptlevel="0" displaystyle="false"><mfrac><mrow><msub><mi>p</mi><mi>c</mi></msub><mo stretchy="false">[</mo><mn>0</mn><mo stretchy="false">]</mo></mrow><mtext>depth</mtext></mfrac></mstyle><mo separator="true">,</mo><mspace width="1em"></mspace><mi>v</mi><mo>=</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mi>H</mi><mn>2</mn></mfrac></mstyle><mo>−</mo><mi>f</mi><mstyle scriptlevel="0" displaystyle="false"><mfrac><mrow><msub><mi>p</mi><mi>c</mi></msub><mo stretchy="false">[</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><mtext>depth</mtext></mfrac></mstyle></mrow><annotation encoding="application/x-tex">p_c = R^{T}(P - c), \quad \text{depth} = -p_c[2], \quad u = \tfrac{W}{2} + f\tfrac{p_c[0]}{\text{depth}}, \quad v = \tfrac{H}{2} - f\tfrac{p_c[1]}{\text{depth}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0913em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">c</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">depth</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">−</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord">2</span><span class="mclose">]</span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">W</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.4911em;vertical-align:-0.4811em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">depth</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mopen mtight">[</span><span class="mord mtight">0</span><span class="mclose mtight">]</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.4911em;vertical-align:-0.4811em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">depth</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mopen mtight">[</span><span class="mord mtight">1</span><span class="mclose mtight">]</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>矩阵 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> 的列分别是相机局部的 x 右、y 上、z 后轴在世界系的分量，MuJoCo 相机沿自身 -z 轴观察，所以深度取负号。反投影走 <code>ray(u,v)</code> 得到世界系射线，再与水平面 z 求交。腕部相机随机械臂运动，<code>CameraModel</code> 在每次投影前比较私有 <code>MjData</code> 的 qpos 与 <code>env.data</code>，不同就重新 <code>mj_forward</code> 刷新标定。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> project</span><span style="color:#24292E">(self, xyz) -> Optional[</span><span style="color:#005CC5">tuple</span><span style="color:#24292E">]:</span></span>
+<span class="line"><span style="color:#24292E">    point </span><span style="color:#D73A49">=</span><span style="color:#24292E"> _as_vec3(xyz, </span><span style="color:#032F62">"xyz"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> point </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#005CC5"> None</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">._sync()</span></span>
+<span class="line"><span style="color:#24292E">    p_c </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.cam_mat.T </span><span style="color:#D73A49">@</span><span style="color:#24292E"> (point </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.cam_pos)</span></span>
+<span class="line"><span style="color:#24292E">    depth </span><span style="color:#D73A49">=</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">float</span><span style="color:#24292E">(p_c[</span><span style="color:#005CC5">2</span><span style="color:#24292E">])</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> depth </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> DEPTH_EPS</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#005CC5"> None</span></span>
+<span class="line"><span style="color:#24292E">    u </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.width </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 2.0</span><span style="color:#D73A49"> +</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._focal </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(p_c[</span><span style="color:#005CC5">0</span><span style="color:#24292E">]) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> depth</span></span>
+<span class="line"><span style="color:#24292E">    v </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.height </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> 2.0</span><span style="color:#D73A49"> -</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._focal </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> float</span><span style="color:#24292E">(p_c[</span><span style="color:#005CC5">1</span><span style="color:#24292E">]) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> depth</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> (</span><span style="color:#005CC5">0.0</span><span style="color:#D73A49"> &#x3C;=</span><span style="color:#24292E"> u </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.width </span><span style="color:#D73A49">and</span><span style="color:#005CC5"> 0.0</span><span style="color:#D73A49"> &#x3C;=</span><span style="color:#24292E"> v </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> self</span><span style="color:#24292E">.height):</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#005CC5"> None</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> (</span><span style="color:#005CC5">float</span><span style="color:#24292E">(u), </span><span style="color:#005CC5">float</span><span style="color:#24292E">(v))</span></span></code></pre>
+<p><code>AgentLoop._resolve_pixel</code> 把模型给的像素换成世界 xy。主像素优先用 top 视角，只有 overview 像素时按单目处理。两个视角都给时走双目三角：取两条空间射线的最近点，两点距离就是残差；残差超过 15 mm 直接返回失败，不回退单目，由上层记成可重试的 <code>perception_error</code>。单目路径用 <code>z_hint</code> 指定的水平面求交，缺省是桌面高度；对高物体，俯视视差最大可达 7 cm，所以定位给出 z 时会写进 <code>target_z_hint</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["模型给 target_pixel 与可选 overview 像素"] --> B{"是否同时给了两个视角"}
+  B -- "是" --> C["两条射线求最近点"]
+  C --> D{"残差是否超过 15 mm"}
+  D -- "是" --> E["perception_error 可重试"]
+  D -- "否" --> F["得到世界 xyz"]
+  B -- "否" --> G["与 z_hint 水平面求交"]
+  G --> F
+  F --> H["pick 写 target_xy 与 target_z_hint"]
+  F --> I["place 写 xy"]</pre></div>
+<p>像素在场时，模型冗余给出的 <code>target_id</code> 与 <code>target_xy</code> 会被丢弃并记一条参数纠正，避免两套目标互相矛盾。<code>target_id</code> 不参与定位，但会留给抓取验证做交叉校验，确认夹爪接触的是模型点名的那个物体。</p>
+<h2 id="3-颜色分割与连通域">3. 颜色分割与连通域</h2>
+<p><code>color_blob</code> 是感知判据的公共入口：把 RGB 转成 HSV，按颜色取掩码，再做连通域标注，最后给连通域打分。给 <code>hint_uv</code> 时只在半径 60 px 内找候选，排名同时看面积、离 hint 的距离、面积是否合理与致密程度；面积超过画面 25% 的连通块直接忽略。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>输入</th><th>行为</th><th>原因</th></tr></thead><tbody><tr><td>有 hint 的红色方块</td><td>在 hint 附近取最优连通域</td><td>局部先验压掉桌面反光与阴影</td></tr><tr><td>无 hint 的 gray / white / black</td><td>直接返回未找到</td><td>与桌面、背景同色，全图搜索必然给错点</td></tr><tr><td>有 hint 的 gray 等低饱和色</td><td>额外要求致密度 >= 0.55 且 hint 落在框内</td><td>碎片化掩码宁可不给结果</td></tr><tr><td>找不到候选</td><td>返回 <code>found=False</code>，不抛异常</td><td>由上层决定降级或重试</td></tr></tbody></table>
+<p><code>refine_pixel</code> 把模型的粗像素精修到颜色质心，并返回位移量 <code>delta_px</code>。精修失败时原样返回模型给的像素，<code>refined=False</code>，调用方可以安全回退。实测无 hint 地对托盘做全图搜索会给出偏离真值 99 到 145 px 的点，所以低饱和色拒绝无 hint 搜索是刻意的取舍。</p>
+<h2 id="4-抓取验证的证据分层">4. 抓取验证的证据分层</h2>
+<p><code>_verify_pick_grasp</code> 的主判据是 top 视角的前后对比。抓取前在目标像素附近记下色块面积，抓取后再渲染 top 图，问的是「原位置的色块是否已经不在」：色块消失，或者面积掉到原来的三分之一以下，判 <code>grasp_verified=True</code>；色块仍在原位，默认判 <code>grasp_not_confirmed</code>，调用方绝不改写成成功。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> before.found:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_not_found_before"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> before.area_px </span><span style="color:#D73A49">&#x3C;</span><span style="color:#005CC5"> int</span><span style="color:#24292E">(min_area_px):</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_too_small_before"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> after.found:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_gone"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> after.area_px </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 3</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#24292E"> before.area_px:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_area_shrank"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_still_present"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span></code></pre>
+<p>单靠 top 会漏判一类真实成功：物体被夹起来但没被夹爪挡住，top 图里面积几乎不变。实测蓝块被抓起后面积从 818 变到 827，纯前后对比会把成功判成失败。为此加了一条物理随动例外：技能报告的抬升成功且夹爪接触的物体已经离地时，允许判成功。物理证据说的是「手里夹着某个可动物体」，不说明夹的是目标，所以例外还配了一道反向闸：腕部相机可用且看不到目标颜色时不允许放行。</p>
+<p>腕部相机本身单独使用时可靠性不足。它挂在夹爪根部朝下看，只要夹爪停在物体上方就能看到大片颜色：抓住 40 mm 方块时面积约 16384 px，空夹爪 0 px，但距顶 6 cm 时仍有 12527 px、19 cm 时还有 1299 px。这是接近恒真的假阳性来源，所以它只做诊断指标、top 判据不可用时的兜底，以及上面那道反闸。面积阈值是 <code>WRIST_GRASP_MIN_AREA_PX = 1500</code>。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["技能自称抓取成功"] --> B{"技能 metrics 是否给了抬升位移 >= 20 mm"}
+  B -- "是" --> C["真值路径直接采信"]
+  B -- "否" --> D["渲染 top 并与抓取前对比"]
+  D --> E{"check_gone 判定"}
+  E -- "True" --> F["grasp_verified=True"]
+  E -- "False" --> G{"抬升成功且物体离地，且腕部不矛盾"}
+  G -- "是" --> F
+  G -- "否" --> H["grasp_not_confirmed 可重试"]
+  E -- "None 时 top 判据做不了" --> I{"腕部色块面积是否 >= 1500 px"}
+  I -- "是" --> F
+  I -- "否" --> J["grasp_not_confirmed"]
+  I -- "腕部也不可用" --> L["grasp_verified=None 记未验证"]</pre></div>
+<p>两条图像判据都不可用时，结果记成 <code>grasp_verified=None</code> 加 <code>grasp_unverified=True</code>，既不判成功也不判失败。腕部面积一律作为诊断指标保留，不再单独决定成败。</p>
+<h2 id="5-技能侧的无真值抓取判据">5. 技能侧的无真值抓取判据</h2>
+<p><code>pick</code> 在无真值模式下拿不到物体位姿，只能用夹爪的实测开合与接触力做判断。<code>_jaw_gap_mm</code> 把夹爪开合比例按同一套标定换算成指间距：全闭 8.4 mm、全开 93 mm、中间线性。</p>
+<p>判断指间是否有物，基线取全闭间距与本次指令间距的较大者。原因是一个容易误判的现象：指向空处时夹爪照样能走到指令开合度，只有被物体挡住、合不到位才算夹住。方块与低矮物体的容差取 1 mm，细高物体取 4 mm，细高物体另有「合爪被力看门狗挡住」这条正面证据作为门。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">baseline </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(</span><span style="color:#005CC5">GRIPPER_GAP_CLOSED_MM</span><span style="color:#24292E">, </span><span style="color:#005CC5">float</span><span style="color:#24292E">(command_gap_mm))</span></span>
+<span class="line"><span style="color:#24292E">tolerance </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> slender </span><span style="color:#D73A49">else</span><span style="color:#005CC5"> 4.0</span></span>
+<span class="line"><span style="color:#24292E">held_by_gap </span><span style="color:#D73A49">=</span><span style="color:#24292E"> (</span><span style="color:#005CC5">self</span><span style="color:#24292E">._jaw_gap_mm() </span><span style="color:#D73A49">></span><span style="color:#24292E"> baseline </span><span style="color:#D73A49">+</span><span style="color:#24292E"> tolerance)</span></span></code></pre>
+<p>抓取成功的完整条件是：抬升阶段的 <code>MoveResult.ok</code> 成立，抬升后夹爪接触的物体已经不被支撑面托着，并且指间距相对指令值确实偏大。抬升的返回值必须检查，旧实现只要开合判据过就报成功，实测抬升以 46 N 中止、方块只动 0.8 mm 仍被判成「已抓起」。无真值时不知道物件的 id，<code>holding</code> 用占位常量表示，后续放置只当作「手里有东西」。</p>
+<h2 id="6-放置与子目标的图像判据">6. 放置与子目标的图像判据</h2>
+<p>放置与叠放的复核用纯图像几何，三条判据都在 <code>sim/perception.py</code> 里。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>判据</th><th>输入</th><th>判定</th></tr></thead><tbody><tr><td><code>check_inside</code></td><td>被放物颜色、容器外接框</td><td>被放物色块质心在容器框内缩后仍在内</td></tr><tr><td><code>check_stacked</code></td><td>上层色、下层色</td><td>上层质心在下层框内且重叠率不低于 0.55</td></tr><tr><td><code>check_gone</code></td><td>前后两帧、颜色、hint</td><td>原位置色块消失或面积掉到三分之一以下</td></tr></tbody></table>
+<p><code>check_inside</code> 的内缩量缺省取容器短边的 6%，近似容器壁的像素宽度。<code>check_stacked</code> 为抵抗遮挡，下层框取「与上层框相邻的所有下层连通域的并框」：先取面积最大的块，再把外接框与上层框间隙不超过上层短边 25% 的块并入。三条判据都只用图像信息。</p>
+<p><code>place</code> 之后还有一条独立信号 <code>_check_place_release</code>：腕部仍看到目标颜色且面积不低于 1500 px 时记 <code>release_verified=False</code>，提示可能没放下或粘在夹爪上。它只写 metrics，不改技能的 ok 与 error_code，放置是否成功仍由技能层的几何校验与子目标复核决定。</p>
+<p><code>locate</code> 工具产出的外接框还能反过来估尺寸：<code>bbox_to_world</code> 把框四角经射线投到桌面平面，得到世界系包围盒与尺寸，<code>estimate_size</code> 取长边短边。这个估计值作为 <code>target_size</code> 传给技能，让闭合量按真实尺寸算。</p>
+<h2 id="7-易错点与调试">7. 易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理位置</th></tr></thead><tbody><tr><td>真抓成功被判失败</td><td>top 视角里物体没被夹爪挡住，面积变化很小</td><td>物理随动例外加腕部反闸</td></tr><tr><td>空抓被判成功</td><td>腕部只看面积，夹爪停在物体上方也能看到大片颜色</td><td>腕部降级为诊断与反闸，主判据换 top</td></tr><tr><td>精修后目标点更偏</td><td>无 hint 地全图搜索低饱和色</td><td>低饱和色无 hint 直接返回未找到</td></tr><tr><td>高物体落点偏远</td><td>单目按桌面反投影，俯视视差随高度增大</td><td>给 <code>target_z_hint</code> 或补第二视角做三角</td></tr><tr><td>双目三角给出错点</td><td>两视角没对准同一个特征</td><td>三角残差超过 15 mm 直接判失败</td></tr><tr><td>复核读到真值</td><td>证据键混进了位姿字段</td><td>白名单过滤后交回模型</td></tr></tbody></table>
+<p><code>object_point</code> 在双目残差过大时不会静默回退单目，这一点与部分调用方的直觉相反：宁可返回可重试的失败，也不给一个看起来可用但来源不明的点。</p>
+<h2 id="8-口径与权衡">8. 口径与权衡</h2>
+<h3 id="判据来源">判据来源</h3>
+<ul>
+<li>主判据是 top 的前后对比，问的是物体是否还在原位。</li>
+<li>物理随动证据只做例外，且必须配合腕部反闸。</li>
+<li>腕部面积是诊断指标与兜底，不单独决定成败。</li>
+<li>图像判据做不了时明示未验证，不猜测。</li>
+<li>信息隔离通过白名单与毒丸测试固定下来。</li>
+</ul>
+<h3 id="权衡表">权衡表</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍点</th><th>选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>单目还是双目</td><td>优先双目，残差超限不回退</td><td>高物体定位稳；代价是拿不到第二视角时只能靠 z_hint</td></tr><tr><td>主判据选谁</td><td>top 前后对比</td><td>语义就是「被拿走」；代价是遮挡场景要补物理证据</td></tr><tr><td>低饱和色处理</td><td>无 hint 拒绝搜索</td><td>不给错点；代价是托盘这类目标必须由模型给像素</td></tr><tr><td>未验证的处理</td><td>记 None 并标注</td><td>不谎报；代价是上层需要把未验证当作可重试状态</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-仿真场景、渲染与验收"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-仿真场景、渲染与验收</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-VLM 机械臂抓取/06-技能库与仿真集成/03-仿真场景、渲染与验收.md</span></div><div class="dfile__body"><h1 id="仿真场景渲染与验收">仿真场景、渲染与验收</h1>
+<p>本文覆盖 <code>sim/</code> 与 <code>tests/</code> 两个目录。仿真侧负责三件事：把机器人、桌面与物体组装成可编译的模型，把相机图算出来交给决策层，以及提供接触力这类物理量给控制层。验收侧负责证明这几条链路合起来能跑通。</p>
+<h2 id="1-场景由两份-menagerie-模型拼成">1. 场景由两份 Menagerie 模型拼成</h2>
+<p><code>build_spec</code> 是场景组装的入口。它先用 <code>MjSpec.from_file</code> 读入 UR5e 与 Robotiq 2F85 两份 Menagerie 模型，把夹爪挂到机械臂的 <code>attachment_site</code> 上，再补齐桌面、地面、物体、灯光与相机。返回的是尚未编译的 <code>MjSpec</code>，编译发生在 <code>MuJoCoArmEnv</code> 的构造函数里。</p>
+<p>几个取值来自实测：父子 spec 的 <code>option</code> 必须一致，否则编译期会连续报 Attach conflict 警告，所以两边都设 <code>impratio=10.0</code> 与椭圆接触锥；<code>ur5e.xml</code> 的 base body 位于世界原点，不抬高会让 HOME 位形的 TCP 穿桌，因此把 <code>base</code> 的 pos 改到 <code>ROBOT_BASE_POS</code>；时间步在 spec 上写 <code>SIM_DT</code>，编译后还会再覆盖一次。</p>
+<p>挂夹爪用 <code>arm.attach(grip, prefix="g_", site=arm.site("attachment_site"))</code>。前缀让夹爪的所有名字带 <code>g_</code>，环境侧就靠这个前缀识别末端 body 集合。组装完成后统一调 <code>_add_props</code> 加属性，走 MjSpec API 而不是先导出字符串再解析，原因是 <code>MjSpec.from_string</code> 之后再 attach 会让子 spec 的元素名带上斜杠前缀，<code>mj_name2id</code> 查这些名字会返回 -1。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["读入 ur5e.xml"] --> B["设 option 与 base 位置"]
+  C["读入 robotiq_2f85.xml"] --> D["attach 到 attachment_site"]
+  B --> D
+  D --> E["加地面、桌子、物体、灯光"]
+  E --> F["加 overview 与 top 相机"]
+  F --> G["抬高离屏 framebuffer"]
+  G --> H["在 g_base 上加腕部相机"]
+  H --> I["返回未编译的 MjSpec"]</pre></div>
+<p>离屏 framebuffer 必须显式放大。本机 MuJoCo 默认的离屏高度只有 480，渲染 512×512 会直接报「Image height 512 > framebuffer height 480」，所以 spec 上把 <code>visual.global_.offwidth</code> 与 <code>offheight</code> 都设成 1024。</p>
+<h2 id="2-工作台物体与三台相机">2. 工作台、物体与三台相机</h2>
+<p>桌面是固定 body <code>table</code>，上表面 z = 0.40，对应 <code>TABLE_HEIGHT</code>。桌面 box 的半尺寸是 (0.60, 0.60, 0.02)，中心放在 (0.10, 0, 0.38)，四条桌腿是四个小 box。地面是一张平面 geom，配棋盘纹理；<code>with_barrier=True</code> 时在 (0.25, 0, 0.52) 加一块竖直挡板，挡板没有关节，供规划绕障测试用。</p>
+<p>默认场景有五个物体：红、蓝、绿三个方块，一个黄色圆柱，一个灰色托盘。每个物体是一个带 free joint 的 body。尺寸字段是半尺寸，<code>(0.02, 0.02, 0.02)</code> 对应 40 mm 方块；圆柱的 size 按 MuJoCo 约定写 (半径, 半高) 两项，因此 <code>can_yellow</code> 的 (0.015, 0.015, 0.035) 是半径 15 mm、半高 35 mm。物体中心 z 取 <code>TABLE_HEIGHT + 半高</code>，静止时正好落在桌面上。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>物体</th><th>类别</th><th>半尺寸</th><th>可抓</th><th>容器</th></tr></thead><tbody><tr><td><code>box_red</code></td><td>box</td><td>0.02, 0.02, 0.02</td><td>是</td><td>否</td></tr><tr><td><code>box_blue</code></td><td>box</td><td>0.02, 0.02, 0.02</td><td>是</td><td>否</td></tr><tr><td><code>box_green</code></td><td>box</td><td>0.02, 0.02, 0.02</td><td>是</td><td>否</td></tr><tr><td><code>can_yellow</code></td><td>cylinder</td><td>半径 0.015，半高 0.035</td><td>是</td><td>否</td></tr><tr><td><code>tray</code></td><td>tray</td><td>0.09, 0.07, 0.012</td><td>否</td><td>是</td></tr></tbody></table>
+<p>托盘由五块 geom 拼成：一块底加四面壁，壁厚半值 4 mm。这个形状让它能真的接住物体，也让容器内落放需要判断撞壁。日常场景是另一份独立布局 <code>DAILY_OBJECTS</code>（水瓶与眼镜盒），不改默认布局，通过 <code>build_spec(DAILY_OBJECTS)</code> 或 <code>MuJoCoArmEnv(objects=DAILY_OBJECTS)</code> 选用。</p>
+<p>相机共三台，名字固定为 <code>overview</code>、<code>wrist</code>、<code>top</code>。overview 与 top 是固定在 worldbody 上的相机，位置与朝向由 <code>_look_at_quat</code> 从位置和目标点算出；腕部相机在 attach 之后加到 <code>g_base</code> 上，参数是 pos <code>[0, 0, 0.070]</code>、quat <code>[0, 1, 0, 0]</code>、fovy 110 度。这几个数是实测调出来的：<code>pos.z</code> 不超过 0.06 时相机会埋在夹爪 base 网格内部，深度中位数只有 2.6 cm；0.070 时刚好落在两指之间；fovy 不放大到 110 度，横向 ±3 cm 的指垫会落在 45 度视锥外，画面里看不到夹爪。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  W["worldbody"] --> O["overview 相机 斜上方俯视"]
+  W --> T["top 相机 正上方俯视"]
+  W --> TB["table 固定 body"]
+  W --> F["floor 平面"]
+  W --> OB["物体 带 free joint"]
+  TB --> TG["桌面与四条桌腿"]
+  OB --> G1["方块 盒 geom"]
+  OB --> G2["圆柱 圆柱 geom"]
+  OB --> G3["托盘 底加四壁"]</pre></div>
+<h2 id="3-名称到索引与环境对象">3. 名称到索引与环境对象</h2>
+<p><code>MuJoCoArmEnv.__init__</code> 编译模型、建 <code>MjData</code>、调 <code>_resolve_ids</code> 把名字换成索引，最后做一次 <code>reset</code>。<code>_resolve_ids</code> 里最常用的几组是：6 个臂关节的 qpos 与 dof 地址、7 个执行器索引、TCP site 索引、夹爪两个 driver 关节的地址，以及物体 body、qpos 地址与元数据的映射。</p>
+<p>末端 body 集合按名字前缀识别：所有以 <code>g_</code> 开头的 body 都算夹爪子树。这个集合被接触力查询与碰撞检测复用。物体列表按 <code>_objects_spec</code> 的顺序返回，顺序固定，<code>list_objects()</code> 每次都按同一顺序生成，便于上层做前后对比。</p>
+<p>编译后的维度可以用一条公式核对：机器人本体贡献 14 个 qpos 与 14 个 dof，每个带 free joint 的物体再加 7 个 qpos 与 6 个 dof。因此 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo>=</mo><mn>14</mn><mo>+</mo><mn>7</mn><mi>N</mi></mrow><annotation encoding="application/x-tex">nq = 14 + 7N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">14</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">7</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi><mo>=</mo><mn>14</mn><mo>+</mo><mn>6</mn><mi>N</mi></mrow><annotation encoding="application/x-tex">nv = 14 + 6N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">14</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>u</mi><mo>=</mo><mn>7</mn></mrow><annotation encoding="application/x-tex">nu = 7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">7</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>e</mi><mi>q</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">neq = 3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span> 是物体个数。默认五个物体时 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo>=</mo><mn>49</mn></mrow><annotation encoding="application/x-tex">nq=49</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">49</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi><mo>=</mo><mn>44</mn></mrow><annotation encoding="application/x-tex">nv=44</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">44</span></span></span></span>。<code>sim/test_env.py</code> 的 <code>test_model_layout_matches_contract</code> 直接断言这四个维度，改物体布局就会在这条断言上暴露。</p>
+<h2 id="4-确定性重置与接触力查询">4. 确定性重置与接触力查询</h2>
+<p><code>reset(seed)</code> 先把机械臂写回 <code>HOME_QPOS</code>、夹爪全开、清零速度，再摆放物体。<code>seed=0</code> 时物体精确位于配置位置，与 <code>model.qpos0</code> 完全一致，方便规划与执行对齐；<code>seed</code> 非零时用 <code>numpy.random.default_rng(seed)</code> 在 xy 上做 ±15 mm 的微扰。两种情况都可复现。</p>
+<p>重置瞬间物体底面与桌面上表面只是相切，MuJoCo 不生成接触，<code>ncon</code> 为 0；步进若干步之后物体沉底约 0.1 mm，才出现稳定的静置接触，实测 20 步时 ncon 稳定在 21。这一点会误导按 <code>ncon > 0</code> 判碰撞的代码，所以碰撞检测单独统计与机器人相关的接触对。</p>
+<p>接触力由 <code>contact_force_on_ee</code> 汇总：遍历所有接触，只保留至少一个 geom 属于夹爪子树的接触对，把 <code>mj_contactForce</code> 给出的 6 维 wrench 从接触系旋回世界系。符号按 <code>mj_contactForce</code> 的语义确定：它给出的是施加在 geom2 上的力，所以末端是 geom2 时取正、是 geom1 时取负，最后把力矩从接触点平移到 <code>g_pinch</code>。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> i </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(d.ncon):</span></span>
+<span class="line"><span style="color:#24292E">    c </span><span style="color:#D73A49">=</span><span style="color:#24292E"> d.contact[i]</span></span>
+<span class="line"><span style="color:#24292E">    b1 </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> int</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model.geom_bodyid[c.geom1])</span></span>
+<span class="line"><span style="color:#24292E">    b2 </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> int</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model.geom_bodyid[c.geom2])</span></span>
+<span class="line"><span style="color:#24292E">    ee1 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> b1 </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._ee_body_ids</span></span>
+<span class="line"><span style="color:#24292E">    ee2 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> b2 </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> self</span><span style="color:#24292E">._ee_body_ids</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> ee1 </span><span style="color:#D73A49">and</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> ee2:</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span></span>
+<span class="line"><span style="color:#24292E">    mujoco.mj_contactForce(</span><span style="color:#005CC5">self</span><span style="color:#24292E">.model, d, i, buf)</span></span>
+<span class="line"><span style="color:#24292E">    rot </span><span style="color:#D73A49">=</span><span style="color:#24292E"> c.frame.reshape(</span><span style="color:#005CC5">3</span><span style="color:#24292E">, </span><span style="color:#005CC5">3</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    f_w </span><span style="color:#D73A49">=</span><span style="color:#24292E"> rot.T </span><span style="color:#D73A49">@</span><span style="color:#24292E"> buf[:</span><span style="color:#005CC5">3</span><span style="color:#24292E">]</span></span>
+<span class="line"><span style="color:#24292E">    sign </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> 1.0</span><span style="color:#D73A49"> if</span><span style="color:#24292E"> ee2 </span><span style="color:#D73A49">else</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">1.0</span></span>
+<span class="line"><span style="color:#24292E">    force </span><span style="color:#D73A49">+=</span><span style="color:#24292E"> sign </span><span style="color:#D73A49">*</span><span style="color:#24292E"> f_w</span></span></code></pre>
+<p><code>get_state()</code> 把 TCP 位姿、关节状态、物体列表与接触状态打包成 <code>SceneState</code>，同时维护本次运行的峰值力 <code>_max_force</code> 与夹持判定 <code>_holding</code>。夹持判定是尽力而为的：夹爪闭合到阈值以内且与某物体有接触，就把该物体 id 记为 holding。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant U as 调用方
+  participant E as MuJoCoArmEnv
+  participant R as SceneRenderer
+  U->>E: 构造环境 编译模型并解析索引
+  U->>E: reset seed
+  E-->>U: 回到 HOME 并摆放物体
+  U->>E: step 推进物理
+  U->>E: render 相机名
+  E->>R: 懒加载渲染器
+  R-->>U: HxWx3 彩色图
+  U->>E: contact_force_on_ee
+  E-->>U: 世界系力与力矩</pre></div>
+<h2 id="5-离屏渲染的懒加载与深度">5. 离屏渲染的懒加载与深度</h2>
+<p><code>SceneRenderer</code> 把 <code>mujoco.Renderer</code> 的创建推迟到第一次取图。创建渲染器要建 GL 上下文与 framebuffer，本机 glfw 后端首次约几百毫秒，之后复用。渲染器按 <code>(宽, 高)</code> 缓存，切换尺寸不会反复重建；请求尺寸超过模型离屏缓冲时，渲染器会按需抬高 <code>offwidth</code> 与 <code>offheight</code>，只影响离屏渲染，不动物理。</p>
+<p>深度图的开关是配对的：先 <code>enable_depth_rendering</code>，取完立刻 <code>disable_depth_rendering</code>，否则后续彩色渲染会拿到单通道的深度数据。<code>Renderer.render</code> 返回内部缓冲的引用，再次渲染会覆盖，所以模块统一 <code>.copy()</code> 后返回，调用方可以直接持有。深度单位是米，天空与超出远平面处是远平面值。</p>
+<p>WSL 上加 <code>MUJOCO_GL=glfw</code> 是前提，本机 EGL 不可用。这个变量必须在 import mujoco 之前生效，<code>sim/_glinit.py</code> 就负责这件事，并被渲染模块在导入 <code>mujoco</code> 之前先导入。自动化与自测一律走 headless，不加参数会真的在桌面上弹出 MuJoCo 窗口。</p>
+<h2 id="6-像素闭环如何接进仿真">6. 像素闭环如何接进仿真</h2>
+<p>相机标定不读硬编码位置，而是用一份私有 <code>MjData</code> 跑 <code>mj_forward</code>，从 <code>cam_xpos</code> 与 <code>cam_xmat</code> 拿位姿。私有 <code>MjData</code> 与规划、控制的约定一致：只复制 <code>env.data.qpos</code>，不改动环境本身。腕部相机随机械臂运动，每次投影前比较 qpos 是否变化，变了就重新标定。</p>
+<p>分辨率取 <code>env.render_size</code>，默认 512×512，与 <code>sim/render.py</code> 实际渲染的图严格对应，所以投影像素可以直接在渲染图上采样。实测桌面点做 project 再 pixel_to_plane 的往返误差约 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>10</mn><mrow><mo>−</mo><mn>15</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-15}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">15</span></span></span></span></span></span></span></span></span></span></span></span> m。把五个物体中心投影到像素再采样颜色，红方块取到 [255,108,98]、黄圆柱取到 [255,255,131]，与该像素的深度值也对得上，说明相机的朝向与 v 向下都取对了。</p>
+<h2 id="7-两条验收路径">7. 两条验收路径</h2>
+<p>脚本化验收 <code>demo/scripted_pick_place</code> 不依赖模型：构造 env、IK、导纳控制器、运动执行器、碰撞检测、规划器与技能库，然后依次执行 <code>home</code>、<code>pick</code>、<code>place</code>，每一步打印 ok、消息与 metrics，并在开始、抓后、放后各存一轮三视角图。三个技能都成功才返回 0。它验证的是 sim、control、planning、skills 四层能不能接起来。</p>
+<p>全链路验收 <code>tests/run_acceptance</code> 跑十个用例：core 契约导入、<code>sim.smoke</code>、<code>control.smoke</code>、<code>planning.smoke</code>、<code>agent.smoke</code>、脚本化抓放、交互式自测、<code>interactive_flows</code>、<code>target_overlay</code>、<code>place_semantics</code>。每个用例独立起子进程、独立超时，最后打印通过数。2026-10-12 的实跑结果是 9/10 通过，唯一失败的是 <code>test_target_overlay</code> 里导纳让位方向的用例，属已知未修项。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>验收项</th><th>关键结果</th></tr></thead><tbody><tr><td><code>sim.smoke</code></td><td>维度与契约一致，三相机都产出 512×512 彩色图与深度图，静止力约 0</td></tr><tr><td><code>control.smoke</code></td><td>44 用例；IK 往返 0.38 mm / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4.9</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">4.9\times10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4.9</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span> rad；<code>move_to_pose</code> 终态 0.98 mm</td></tr><tr><td><code>planning.smoke</code></td><td>5 用例；<code>plan_pose</code> 误差 0.0000 m；绕障 0.12 s、挡板接触 0</td></tr><tr><td><code>agent.smoke</code></td><td>239 用例；<code>MockVLM</code> 决策确定；非法调用被拒</td></tr><tr><td><code>e2e_scripted</code></td><td><code>box_red</code> 抬升 119.3 mm、峰值力 1.46 N，放入托盘落点偏差 0.5 mm</td></tr><tr><td><code>interactive_flows</code></td><td>17 用例；意图路由、持物不变量、强制恢复、pick 子目标复核</td></tr><tr><td><code>target_overlay</code></td><td>失败：外力 +z 时参考位移应为负，实测 +0.32</td></tr></tbody></table>
+<p>其余单测覆盖 <code>sim.test_env</code> 14 项、抓取高度 9 项、面板 12 项、子目标循环 6 项，以及前面提到的无真值隔离 5 项。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["run_acceptance"] --> B["core 契约导入"]
+  A --> C["sim.smoke 场景与渲染"]
+  A --> D["control.smoke 控制"]
+  A --> E["planning.smoke 规划"]
+  A --> F["agent.smoke 决策"]
+  A --> G["scripted_pick_place 端到端"]
+  A --> H["interactive 自测与流程"]
+  A --> I["target_overlay 与 place_semantics"]
+  I --> J{"全部通过"}
+  J -- "否" --> K["按失败用例定位模块"]</pre></div>
+<h2 id="8-交互式并发与锁">8. 交互式并发与锁</h2>
+<p>交互式运行时主线程只做一件事：<code>viewer.sync()</code>。MuJoCo 要求渲染与物理在同一个线程，所以 <code>env.step</code> 与 <code>env.render</code> 都在工作线程里执行，主线程每帧把工作线程的结果合入渲染。</p>
+<p>两个线程会同时读写 <code>env.data</code>：主线程的 <code>viewer.sync()</code> 内部会复制可视化数据，工作线程在跑轨迹。保护方式是环境对象内部的一把 <code>RLock</code>，<code>env</code> 的所有公开 data 访问都走它。锁必须可重入，因为 <code>MotionRunner</code> 内部会嵌套调用 <code>env.step</code> 与 <code>env.render</code>。不使用这把锁时，取图与 <code>viewer.sync()</code> 并发是数据竞争，实测会直接 SIGABRT。</p>
+<p><code>--headless</code> 模式下没有窗口，面板仍然照常输出文件，所以自动化与自测不需要 X 显示。</p>
+<h2 id="9-易错点与调试">9. 易错点与调试</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>现象</th><th>原因</th><th>处理位置</th></tr></thead><tbody><tr><td>编译期一串 Attach conflict</td><td>父子 spec 的接触选项不一致</td><td>两边都设 <code>impratio</code> 与椭圆锥</td></tr><tr><td>名字查不到返回 -1</td><td>从字符串解析后再 attach，名字被加斜杠前缀</td><td>统一走 MjSpec API 直接加元素</td></tr><tr><td>渲染报 framebuffer 太小</td><td>默认离屏高度不足 512</td><td>抬高 <code>offwidth</code> 与 <code>offheight</code></td></tr><tr><td>彩色图变成单通道</td><td>深度渲染没有关掉</td><td>取图放在 try/finally 里配对开关</td></tr><tr><td>保存的图内容错位</td><td>持有了 <code>Renderer.render</code> 的引用，被下一次渲染覆盖</td><td>统一 <code>.copy()</code> 后返回</td></tr><tr><td>重置后物体不算碰撞</td><td>相切时不生成接触，<code>ncon</code> 为 0</td><td>步进若干步或按接触对判定</td></tr><tr><td>腕部画面看不到夹爪</td><td>fovy 太小，指垫落在视锥外</td><td>fovy 放大到 110 度</td></tr><tr><td>取图时崩溃</td><td>与 <code>viewer.sync()</code> 并发读写 <code>data</code></td><td>共用一把可重入锁</td></tr></tbody></table>
+<p><code>sim/scene.py</code> 的 <code>build_spec</code> 注释把编译维度写成「14+7×物体数」，只涵盖了 qpos 的增量，没有写出 <code>nv</code> 的增量是 6 而不是 7。核对维度时按 <code>sim/test_env.py</code> 的断言为准，那里把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi></mrow><annotation encoding="application/x-tex">nq</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi></mrow><annotation encoding="application/x-tex">nv</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span></span></span></span> 分开写了。</p>
+<h2 id="10-集成口径与余量">10. 集成口径与余量</h2>
+<h3 id="场景与环境的固定约定">场景与环境的固定约定</h3>
+<ul>
+<li>场景组装走 <code>MjSpec</code>，夹爪用 <code>g_</code> 前缀挂载，末端 body 集合靠前缀识别。</li>
+<li>物体尺寸是半尺寸，圆柱按 MuJoCo 约定取半径与半高。</li>
+<li>三台相机的名字固定，腕部相机挂在夹爪 body 上。</li>
+<li>编译维度服从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>q</mi><mo>=</mo><mn>14</mn><mo>+</mo><mn>7</mn><mi>N</mi></mrow><annotation encoding="application/x-tex">nq = 14 + 7N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">14</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">7</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>v</mi><mo>=</mo><mn>14</mn><mo>+</mo><mn>6</mn><mi>N</mi></mrow><annotation encoding="application/x-tex">nv = 14 + 6N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">14</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>u</mi><mo>=</mo><mn>7</mn></mrow><annotation encoding="application/x-tex">nu = 7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">7</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>e</mi><mi>q</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">neq = 3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">n</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span>。</li>
+<li><code>seed=0</code> 精确摆放，非零种子做 ±15 mm 微扰，两者都可复现。</li>
+<li>渲染懒加载、按尺寸缓存，深度开关成对，返回前复制缓冲。</li>
+</ul>
+<h3 id="权衡表">权衡表</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>取舍点</th><th>选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>场景组装方式</td><td>MjSpec API 直接构建</td><td>名字干净、可编程加元素；代价是需要了解 MjSpec 接口</td></tr><tr><td>渲染器管理</td><td>懒加载加尺寸缓存</td><td>首帧之外不再付创建开销；代价是每个尺寸各占一份 GL 资源</td></tr><tr><td>物体布局</td><td>默认与日常两套独立布局</td><td>不动默认场景；代价是两套都要各自核对间距</td></tr><tr><td>并发保护</td><td>一把可重入锁</td><td>两线程共享 <code>data</code> 安全；代价是所有公开访问都串行</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/36-VLM%20%E6%9C%BA%E6%A2%B0%E8%87%82%E6%8A%93%E5%8F%96/05-VLM%20%E5%86%B3%E7%AD%96%E4%B8%8E%E5%AD%90%E7%9B%AE%E6%A0%87%E7%BC%96%E6%8E%92/"><span class="k">← 上一篇</span><span class="t">VLM 决策与子目标编排</span><span class="d">VLM 机械臂抓取 · 5 个文件</span></a><span class="unitnav__pad" aria-hidden="true"></span></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 589 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
