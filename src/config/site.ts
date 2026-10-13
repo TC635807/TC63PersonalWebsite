@@ -12,15 +12,12 @@ export const site = {
   major: '自动化',
   grade: '2024 级本科生',
   /** 一句话定位（Hero 区大字下面那行） */
-  tagline: '重庆大学 自动化 · 机器人控制 · 强化学习 · AI 工具链',
+  tagline: '重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链',
   /** 方向关键词（需要单行展示方向时用） */
-  focus: '机器人控制 · 强化学习 · AI 工具链',
-  /** 做法：关于页与首页面板共用的那一段 */
-  approach:
-    '写代码时尽量让结论可复现：每个数字都配一个能跑出它的脚本，并把判据本身写清楚 —— 用哪个阈值、连续多少帧算成立、对比基线是什么。因为这些细节一变，结论可能差一个数量级。',
+  focus: '机器人控制 · 机械臂操作 · 强化学习 · AI 工具链',
   /** 站点描述（meta description / og:description） */
   description:
-    '重庆大学 2024 级自动化专业本科生。作品集：Unitree Go1 的强化学习行走与起身策略、RoboMaster 哨兵机器人固件（云台板 + 底盘板两套）、本地优先的 AI 知识系统 KnowledgeDiver，以及把 URL 变成干净正文的 MCP 工具。',
+    '重庆大学 2024 级自动化专业本科生。做过 RoboMaster 哨兵机器人的云台板与底盘板固件、Unitree Go1 的强化学习行走与起身策略，还做过 UR5e 机械臂抓取框架 vlm-admittance。两个 AI 工具是本地知识系统 KnowledgeDiver 和抓网页正文的 MCP 服务 better-crawler4agent。',
   /** 语言 */
   locale: 'zh-CN',
   /** 正式域名（与 astro.config.mjs 的 site 一致；子路径 base 在那边配置） */
