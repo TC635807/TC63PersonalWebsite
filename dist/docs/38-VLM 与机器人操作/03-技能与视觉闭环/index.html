@@ -1,0 +1,763 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>技能与视觉闭环 · VLM 与机器人操作 · 王宇翔</title><meta name="description" content="决策层与执行层为什么要分层、每一层各自该决定什么、技能为什么必须是一段确定性序列、跨调用状态放在哪里，以及错误码如何变成可决策的信号"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/03-%E6%8A%80%E8%83%BD%E4%B8%8E%E8%A7%86%E8%A7%89%E9%97%AD%E7%8E%AF/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="技能与视觉闭环 · VLM 与机器人操作 · 王宇翔"><meta property="og:description" content="决策层与执行层为什么要分层、每一层各自该决定什么、技能为什么必须是一段确定性序列、跨调用状态放在哪里，以及错误码如何变成可决策的信号"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/03-%E6%8A%80%E8%83%BD%E4%B8%8E%E8%A7%86%E8%A7%89%E9%97%AD%E7%8E%AF/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/">VLM 与机器人操作</a><span class="sep" aria-hidden="true">/</span><span class="now">技能与视觉闭环</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>技能与视觉闭环</b><span>02 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">02 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>技能层的职责边界</span></a><ul class="toc__heads"><li><a href="#时间尺度先划出分层的位置" data-depth="2" data-heading-j="0">时间尺度先划出分层的位置</a></li><li><a href="#哪些决定留给模型哪些留给技能" data-depth="2" data-heading-j="1">哪些决定留给模型，哪些留给技能</a></li><li><a href="#技能为什么必须是一段确定性序列" data-depth="2" data-heading-j="2">技能为什么必须是一段确定性序列</a></li><li><a href="#跨调用的状态该放在哪里" data-depth="2" data-heading-j="3">跨调用的状态该放在哪里</a></li><li><a href="#错误码怎样变成可决策的信号" data-depth="2" data-heading-j="4">错误码怎样变成可决策的信号</a></li><li><a href="#模型意图与安全阈值的边界" data-depth="2" data-heading-j="5">模型意图与安全阈值的边界</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="6">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>纯视觉验证</span></a><ul class="toc__heads"><li><a href="#验证要回答的是哪一个问题" data-depth="2" data-heading-j="0">验证要回答的是哪一个问题</a></li><li><a href="#视觉验证的失效模式" data-depth="2" data-heading-j="1">视觉验证的失效模式</a></li><li><a href="#主判据怎么选" data-depth="2" data-heading-j="2">主判据怎么选</a></li><li><a href="#多视角怎么分工" data-depth="2" data-heading-j="3">多视角怎么分工</a></li><li><a href="#几何证据与物理证据谁兜底" data-depth="2" data-heading-j="4">几何证据与物理证据谁兜底</a></li><li><a href="#像素误差与置信门限" data-depth="2" data-heading-j="5">像素误差与置信门限</a></li><li><a href="#判不出来时结论怎么写" data-depth="2" data-heading-j="6">判不出来时结论怎么写</a></li><li><a href="#信息隔离要由构造保证" data-depth="2" data-heading-j="7">信息隔离要由构造保证</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="8">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="9">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="10">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="11">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="12">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="13">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="14">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="15">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">VLM 与机器人操作</span><span class="dot" aria-hidden="true">·</span><span>2 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-15</span><span class="dot" aria-hidden="true">·</span><span>VLM / 机器人操作 / 技能层 / 分层设计 / 错误处理 / 视觉验证 / 图像判据 / 多视角</span></div><h1 class="docs__title">技能与视觉闭环</h1><p class="docs__lead">决策层与执行层为什么要分层、每一层各自该决定什么、技能为什么必须是一段确定性序列、跨调用状态放在哪里，以及错误码如何变成可决策的信号</p></header><section class="dfile" id="file-1" data-file="01-技能层的职责边界"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-技能层的职责边界</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/38-VLM 与机器人操作/03-技能与视觉闭环/01-技能层的职责边界.md</span></div><div class="dfile__body"><h1 id="技能层的职责边界">技能层的职责边界</h1>
+<p>把会看图、会对话的模型接到机械臂上，最直接的做法是让模型在每个控制周期输出一条运动命令。接上去之后，两件事会同时暴露：模型的响应以秒计，而控制周期以毫秒计；模型对同一条指令的措辞每次略有不同，而执行层需要的是一段可以复现的动作。分层由这两个约束逼出来，与风格偏好无关。</p>
+<p>下面先说明分层要解决的第一个问题是时间尺度，再讨论哪些决定该留给模型、哪些必须由执行层承担，然后讲技能为什么必须是一段确定性序列、跨调用的状态该放在哪里，最后说明错误码怎样从一条报错变成上层可以据此分支的信号。</p>
+<h2 id="时间尺度先划出分层的位置">时间尺度先划出分层的位置</h2>
+<p>决策是事件驱动的：识别出一个物体、一次尝试失败、任务被改口径，才需要重新决策。执行是周期驱动的：物理步进与位置伺服每隔几毫秒走一次，接触力、关节角、末端位姿都在这个尺度上变化。一次决策依赖的模型调用以秒计，与执行周期相差两到三个数量级。</p>
+<p>一条必须在毫秒尺度上重算的量，不能来自一次网络调用。反过来，一个需要结合语言、图像与上下文的判断，也不该塞进每毫秒执行一次的循环里。分层的判据可以写成一条规则：按量自身的变化速率归属，与它的重要程度无关。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>决策层</th><th>执行层</th></tr></thead><tbody><tr><td>触发方式</td><td>事件触发，秒级</td><td>周期驱动，毫秒级</td></tr><tr><td>输入</td><td>图像、场景描述、历史</td><td>关节状态、接触力、目标位姿</td></tr><tr><td>输出</td><td>选哪个技能、用什么参数</td><td>一串确定的物理动作</td></tr><tr><td>判断依据</td><td>意图、上下文、歧义</td><td>几何、时序、接触</td></tr><tr><td>失败呈现</td><td>换策略或改口径</td><td>结构化错误码与证据</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant D as 决策层
+  participant E as 执行层
+  participant P as 物理世界
+  D->>D: 看图像与场景描述
+  D->>E: 下达技能调用
+  E->>P: 逐周期推进运动
+  P-->>E: 位姿与接触力
+  E-->>D: 结构化结果与证据
+  D->>D: 决定重试或换策略</pre></div>
+<p>这条环形结构还有一个隐性收益：两层可以各自被验证。执行层不依赖模型也能被脚本化驱动，决策层不依赖真实硬件也能用确定性替身跑通。把两层耦合成一层，任何一次失败都同时牵扯网络、模型与控制器，定位成本会高一个量级。</p>
+<h2 id="哪些决定留给模型哪些留给技能">哪些决定留给模型，哪些留给技能</h2>
+<p>划分依据是这条决定有没有客观上正确的答案。凡是能从当前状态算出来的量，都不该问模型：末端在哪里、法兰到目标的距离、物体有多宽、这段运动要多久、接触力有没有超过阈值，这些问题各自有确定解，模型给出的是估计，而估计比计算更容易错。</p>
+<p>反过来，依赖意图与上下文的判断必须由模型承担：三个外形相似的方块里拿哪一个、把物体放到桌上还是放进托盘、一句“轻一点”对应多大的柔顺、这次失败之后是换目标还是换策略。这些问题没有唯一正确答案，需要语言与图像里的语境。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>决定</th><th>归属</th><th>理由</th></tr></thead><tbody><tr><td>选哪个物体、放到哪里</td><td>决策层</td><td>依赖意图与场景语境</td></tr><tr><td>抓取位姿与接近方向</td><td>执行层</td><td>由几何关系唯一确定</td></tr><tr><td>夹爪闭合量</td><td>执行层</td><td>由物体宽度与标定换算</td></tr><tr><td>柔顺程度</td><td>决策层给意图，执行层定档</td><td>意图是描述性的，档位要满足稳定条件</td></tr><tr><td>运动时长与限速</td><td>执行层</td><td>由距离、速度上限与接触安全决定</td></tr><tr><td>失败后是否重试</td><td>决策层</td><td>需要结合历史与任务目标</td></tr></tbody></table>
+<p>边界定好之后，决策层的输出就不再是自然语言，而是一个字段固定的小结构：技能名、参数、可选的柔顺意图。参数要过一遍校验：未知字段过滤掉而不是报错，类型与范围不合法才拒绝，最后再检查它与场景是否自洽。校验的收益是把模型的自由发挥限制在参数空间里，而不是让它自由地发明动作。</p>
+<h2 id="技能为什么必须是一段确定性序列">技能为什么必须是一段确定性序列</h2>
+<p>确定性在这里指同一份调用加上同一份状态，得到同一串有序的物理动作。它换来三件东西。第一是失败归因：一次抓取包含接近、下降、合爪、抬升几段，如果顺序或判据每次不同，失败时无法判断是接近偏了还是合爪没夹住。第二是重试语义：上层只改一个参数再调用，其余环节保持不变，改动才有可比较的基准。第三是安全：什么时候先停住、什么时候先松爪，这些顺序不能交给一次采样决定。</p>
+<p>确定性不等于固定轨迹。序列的顺序和每段的进出判据是固定的，段内的轨迹则随测量状态变化：下降在接触时停止，合爪在力升高时停止，抬升在位移不再变化时判定失败。固定的部分是流程，自适应的部分是参数。把两者混为一谈，会得出“要么僵化、要么不可控”的结论。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  S0["入口检查 是否卡在接触中"] --> S1["规划接近位与姿态"]
+  S1 --> S2["自由段 刚性跟随"]
+  S2 --> S3{"接近过程是否碰动目标"}
+  S3 -- "是" --> X["撤退并返回结构化失败"]
+  S3 -- "否" --> S4["接触段 柔顺下降"]
+  S4 --> S5{"是否触到接触"}
+  S5 -- "是" --> S6["在接触高度合爪"]
+  S5 -- "否" --> S7["到达几何下限"] --> S6
+  S6 --> S8{"抬升是否成功且物体随动"}
+  S8 -- "是" --> OK["返回成功与证据"]
+  S8 -- "否" --> X</pre></div>
+<p>把这段话落到入口上，就是一个按名字派发、把异常收敛成结果的函数：执行层的对外承诺只有“成功”与“带原因的失败”两种，内部异常不许穿透到决策层。下面这段来自项目的派发入口（节选，省略了耗时统计与日志）。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#005CC5"> __call__</span><span style="color:#24292E">(self, call):</span></span>
+<span class="line"><span style="color:#24292E">    fn </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> getattr</span><span style="color:#24292E">(</span><span style="color:#005CC5">self</span><span style="color:#24292E">, </span><span style="color:#032F62">"_skill_"</span><span style="color:#D73A49"> +</span><span style="color:#005CC5"> str</span><span style="color:#24292E">(call.skill), </span><span style="color:#005CC5">None</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> fn </span><span style="color:#D73A49">is</span><span style="color:#005CC5"> None</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">        res </span><span style="color:#D73A49">=</span><span style="color:#24292E"> SkillResult(</span><span style="color:#005CC5">False</span><span style="color:#24292E">, call.skill, </span><span style="color:#032F62">"unknown skill"</span><span style="color:#24292E">, </span><span style="color:#032F62">"unknown_skill"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    else</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        try</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#24292E">            res </span><span style="color:#D73A49">=</span><span style="color:#24292E"> fn(call)</span></span>
+<span class="line"><span style="color:#D73A49">        except</span><span style="color:#005CC5"> Exception</span><span style="color:#D73A49"> as</span><span style="color:#24292E"> exc:</span></span>
+<span class="line"><span style="color:#24292E">            res </span><span style="color:#D73A49">=</span><span style="color:#24292E"> SkillResult(</span><span style="color:#005CC5">False</span><span style="color:#24292E">, call.skill, </span><span style="color:#005CC5">str</span><span style="color:#24292E">(exc), </span><span style="color:#032F62">"exception"</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#005CC5">    self</span><span style="color:#24292E">.history.append({</span><span style="color:#032F62">"call"</span><span style="color:#24292E">: call.to_json(), </span><span style="color:#032F62">"result"</span><span style="color:#24292E">: res.to_observation()})</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> res</span></span></code></pre>
+<p>顺序固定还有一个容易忽略的收益：每一段产出哪一类证据是可以预期的。接触段能给出触地高度，合爪段能给出被阻挡时的开合度，抬升段能给出位移与随动信息。校验环节知道该期待什么，才能判断证据缺没缺。</p>
+<h2 id="跨调用的状态该放在哪里">跨调用的状态该放在哪里</h2>
+<p>技能调用原则上应当无状态，但有两类信息只能跨调用保存。一类是手里拿着什么：放置要知道被放物是什么，否则算不出落点高度；另一类是上一次成功抓取时物体在哪，任务中止时才谈得上放回原处。柔顺档位也属于这一类，它由一次调用设定、被后续调用使用。</p>
+<p>状态一旦引入，卫生规则就随之而来。能被物理量重新推导的，就不要只信内部记录：夹爪实际张开到接近全开时，手里的物体已经不在，状态必须随之清空，否则界面与动作会对不上。失败路径要负责把状态清干净，尤其是“场景被重置”这类会让所有旧状态失效的动作。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>状态</th><th>为什么需要</th><th>失效条件</th><th>卫生规则</th></tr></thead><tbody><tr><td>手持物体</td><td>放置要算落点高度与判据</td><td>夹爪实际张开或场景重置</td><td>按物理张开度复核后清空</td></tr><tr><td>上次拾取位姿</td><td>中止时放回原处</td><td>落点被占或超出桌面</td><td>放回前重新校验落点</td></tr><tr><td>当前柔顺档</td><td>一次设定、后续复用</td><td>任务切换到别的阶段</td><td>每段运动按需重新指定</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 空闲
+  空闲 --> 持物: 抓取成功
+  持物 --> 空闲: 放置成功并张开夹爪
+  持物 --> 空闲: 夹爪被判定已张开
+  持物 --> 清空: 场景重置
+  清空 --> 空闲</pre></div>
+<p>状态放在执行层而不是决策层，是因为它描述的是物理事实。决策层保存的是任务目标，执行层保存的是“此刻手里有什么”。两者混在一起时，任务切换会留下一个与物理不符的持物标记，后续放置就会对着空气下压。</p>
+<h2 id="错误码怎样变成可决策的信号">错误码怎样变成可决策的信号</h2>
+<p>一条报错给人看，一个错误码给分支用。执行层返回的结果需要同时带三样：是否成功、从有限集合里取的一个错误码、以及解释这个码的证据。决策层据此做三种选择中的一种：改参数重试、换技能重试、直接结束。</p>
+<p>为什么码要来自有限集合：只有集合有限，终止条件才写得出来。例如同一技能加同一个错误码连续出现两次而决策层仍提议同一技能，说明重试不再产生新信息，应当停止；再比如某些码表示世界已经变了，第二次出现就没有继续的必要。自由文本做不到这一点，因为两次报错的字符串几乎不可能完全一致。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>错误类别</th><th>含义</th><th>上层应有的反应</th></tr></thead><tbody><tr><td>参数类</td><td>调用本身不合法，未产生物理动作</td><td>修正调用，可立即重试</td></tr><tr><td>几何类</td><td>目标不可达或路径非法</td><td>换目标点或换抓取档位</td></tr><tr><td>接触类</td><td>力超限、超时、卡住</td><td>降速或改柔顺后重试，注意次数上限</td></tr><tr><td>状态类</td><td>场景已被改动或重置</td><td>不再重试，重新规划任务</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  R["技能返回结构化结果"] --> OK{"是否成功"}
+  OK -- "是" --> N["继续下一个技能"]
+  OK -- "否" --> C{"错误码类别"}
+  C -- "参数" --> F["修正参数后重试"]
+  C -- "几何" --> G["换目标或换抓取方式"]
+  C -- "接触" --> H{"该码是否已连续出现两次"}
+  H -- "否" --> I["调整速度或柔顺后重试"]
+  H -- "是" --> J["停止并交回决策层"]
+  C -- "状态" --> J</pre></div>
+<p>证据的作用是让重试有方向。只回一个“抓取失败”，上层能做的只有原样重试；回一个“在接触高度合爪时力超限，受阻物是容器边缘”，上层就知道该换落点或换降速。证据里还会带上建议补充的观测类型，例如需要再看一张图，把“重试”从盲目试参数变成带信息的再决策。</p>
+<h2 id="模型意图与安全阈值的边界">模型意图与安全阈值的边界</h2>
+<p>模型可以表达对柔顺程度的偏好，这种偏好作用于刚度与阻尼，也就是末端让位的幅度。但它不允许降低保护性阈值。力阈值衡量的是“接触是否异常”，正常贴面接触本身就可能接近阈值，把它调低会让正常动作被判成超限。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数类别</th><th>谁能设定</th><th>模型能否降低</th></tr></thead><tbody><tr><td>刚度与阻尼</td><td>模型意图映射到档位</td><td>可以</td></tr><tr><td>力阈值</td><td>执行层基准值</td><td>不可以，只取下界</td></tr><tr><td>硬上限</td><td>执行层常量</td><td>不可以</td></tr><tr><td>目标位姿与姿态</td><td>模型给出，执行层校验</td><td>可以，但不可达会被拒</td></tr></tbody></table>
+<p>硬上限存在的理由是接触力的量级。位置伺服刚性压入时，末端力可以冲到很大的量级，远超正常接触所需的数值；把上限做成可调参数，一次错误的偏好就可能把保护放到没有作用的位置。因此硬上限写成常量，外部传入更大的值会被夹回，并留下一条告警。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>把执行层当成薄封装</td><td>认为它只是把模型输出转发给控制器</td><td>它还要承担几何、时序、接触与安全</td></tr><tr><td>2</td><td>让模型输出末端或关节轨迹</td><td>秒级延迟进入毫秒级环路</td><td>两个时间尺度差两到三个数量级</td></tr><tr><td>3</td><td>用自然语言消息驱动重试</td><td>上层无法判断该不该继续</td><td>消息给人看，码给分支用</td></tr><tr><td>4</td><td>让执行层自行换参数盲重试</td><td>失败原因被掩盖，观测不再有用</td><td>结构化证据应交回上层重新规划</td></tr><tr><td>5</td><td>把确定性理解成固定轨迹</td><td>放弃接触期的自适应</td><td>固定的是顺序与判据，变的是段内参数</td></tr><tr><td>6</td><td>认为柔顺意图可以下调安全阈值</td><td>正常贴面动作被判超限</td><td>意图只作用于刚度与阻尼</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>分层的第一依据是时间尺度：秒级的决策与毫秒级的执行不能压在同一个循环里。</li>
+<li>有客观正确答案的量留给执行层，依赖意图与语境的判断留给决策层。</li>
+<li>技能是一段顺序与判据固定的动作序列，段内轨迹随测量状态自适应。</li>
+<li>跨调用状态只保存物理事实，并能用物理量复核与清空。</li>
+<li>错误码取自有限集合，才能表达“同一失败连续两次就停止”这类终止条件。</li>
+<li>模型的柔顺意图作用于刚度与阻尼，保护性阈值与硬上限由执行层守住。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>分层位置</td><td>按时间尺度切，不按功能切</td><td>每层可独立验证；代价是接口要先定清楚</td></tr><tr><td>技能粒度</td><td>一次调用对应一件可完成的物理动作</td><td>失败可归因；代价是技能数量随动作类型增长</td></tr><tr><td>重试位置</td><td>上层决策，执行层只给证据</td><td>观测不被浪费；代价是上层要有像样的重试策略</td></tr><tr><td>状态归属</td><td>物理事实留在执行层</td><td>与真实状态一致；代价是需要一套失效规则</td></tr><tr><td>安全参数</td><td>阈值只取下界、硬上限为常量</td><td>模型不能削弱保护；代价是柔性略低</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>举出三个“有客观正确答案”的决定，说明为什么它们不该交给模型。</li>
+<li>说明技能的确定性序列与固定轨迹之间的区别，各举一个例子。</li>
+<li>为什么错误码需要来自有限集合？用终止条件的写法说明。</li>
+<li>列出执行层需要跨调用保存的状态，并写出每一种的失效条件。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>为“模型给出一句柔顺偏好”设计一条落到执行层的映射规则，要求安全阈值不受影响。</li>
+<li>设计一份错误码分类表，并规定每一类在决策层的默认处置与重试上限。</li>
+<li>设计一套状态卫生检查清单，覆盖抓取、放置、失败与场景重置四条路径。</li>
+<li>如果允许模型直接指定运动时长，会产生哪些可观测的问题？写出替代方案。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>skills/library.py</code></td><td>技能派发与各技能的动作序列</td></tr><tr><td><code>agent/loop.py</code></td><td>慢环调度、参数校验与失败回灌</td></tr><tr><td><code>agent/schema.py</code></td><td>工具定义与参数白名单</td></tr><tr><td><code>core/types.py</code></td><td>技能调用、结果与状态的类型定义</td></tr><tr><td><code>core/config.py</code></td><td>柔顺档位与安全阈值常量</td></tr><tr><td><code>control/motion.py</code></td><td>运动执行、错误码与力看门狗</td></tr><tr><td><code>planning/planner.py</code></td><td>关节空间规划与路径校验</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-纯视觉验证"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-纯视觉验证</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/38-VLM 与机器人操作/03-技能与视觉闭环/02-纯视觉验证.md</span></div><div class="dfile__body"><h1 id="纯视觉验证">纯视觉验证</h1>
+<p>执行层返回成功，意思是它按既定顺序完成了动作。这个回答没有覆盖一个更基本的问题：物体是否真的离开了原来的位置。合爪可能夹在空气里，抬升可能只是把物体碰了一下，放置可能把它按回了原处。把执行层的自述当成最终结论，任务会在最需要暴露问题的时刻给出肯定回答。验证层的职责，是用独立于执行过程的证据回答那个更基本的问题。</p>
+<p>下面先界定验证要回答的是哪一个问题，再列出视觉验证的典型失效模式，然后讨论主判据的选择、多视角的分工、几何证据与物理证据的优先级，最后说明判不出结论时结论该怎么写。</p>
+<h2 id="验证要回答的是哪一个问题">验证要回答的是哪一个问题</h2>
+<p>验证问题是会写错的。写成“夹爪里有没有目标颜色”，回答容易得到，却与任务目标只有弱相关；写成“物体是否还在原位”，才是任务成功条件的直接表述；写成“物体是否随末端一起移动”，问的是物理事实，但它不包含身份信息。选错问题不会让验证报错，只会让它在关键时刻给出没有意义的正确答案。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>候选判据</th><th>判读的是什么</th><th>与目标语义的关系</th><th>主要风险</th></tr></thead><tbody><tr><td>夹爪内是否出现目标颜色</td><td>代理量</td><td>弱，夹爪停在物体上方也成立</td><td>近似恒真的假阳性</td></tr><tr><td>单帧里目标是否可见</td><td>状态量</td><td>中，物体被挡住就判不出来</td><td>遮挡下两个方向都会错</td></tr><tr><td>原位置是否仍有目标颜色</td><td>目标语义</td><td>强，直接对应“被拿走”</td><td>依赖抓取前的基准帧</td></tr><tr><td>夹爪接触的物体是否离地</td><td>物理事实</td><td>强但不含身份</td><td>不能区分夹的是哪一个</td></tr></tbody></table>
+<p>判断一个判据是否合格，看它有没有能力给出否定答案。一个几乎总是返回成功的判据，即使偶尔正确也不构成证据；一个在判据失效时返回“不知道”的判据，反而比强行二选一更有用。</p>
+<h2 id="视觉验证的失效模式">视觉验证的失效模式</h2>
+<p>第一类是代理量本身接近恒真。腕部相机挂在夹爪根部朝下看，只要夹爪停在物体正上方就能看到大片颜色，物体并没有被抓起。这类信号在单帧上看起来很显著，在语义上却与成功没有必然联系。</p>
+<p>第二类是遮挡造成漏判。物体被真实抓起时，如果它没有被夹爪挡住，俯视图里原位置的色块可能只是略微变化，甚至因为视角变化而面积回升。只按“原位置是否还有颜色”就会把真实成功判成失败。</p>
+<p>第三类是几何误差。单目反投影需要一个假定平面，物体越高，透视外推的偏差越大，对细高物体可以到厘米量级。像素点选偏一点，落到世界坐标上就是几厘米的偏移。</p>
+<p>第四类是同色干扰。灰、白、黑这类低饱和颜色与桌面、阴影、背景接近，在没有局部先验的情况下全图搜索很难稳定分割，容易给出位置错误的色块。</p>
+<p>第五类是双视角没有对准同一特征。两条射线求最近点时，如果两个像素指向的是物体上的不同位置，近点距离会异常，结果是得到一个看起来合理但来源不明的三维点。</p>
+<p>第六类是信息泄漏。验证时直接读仿真里的真值位姿，判据会变得永远正确，却无法迁移到没有真值的场景。隔离靠约定守不住，必须由构造保证。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>失效模式</th><th>表现</th><th>设计上的应对</th></tr></thead><tbody><tr><td>代理量近似恒真</td><td>夹爪停在物体上方也报有颜色</td><td>代理量只作反闸，不作主判据</td></tr><tr><td>遮挡导致漏判</td><td>真抓起但俯视图面积几乎不变</td><td>允许物理证据在满足身份门时兜底</td></tr><tr><td>几何误差</td><td>高物体落点偏移随高度增大</td><td>给高度提示或补第二视角</td></tr><tr><td>同色干扰</td><td>无先验的全图搜索给出错点</td><td>低饱和色必须有局部先验才判</td></tr><tr><td>双视角错配</td><td>三角近点距离异常</td><td>用残差作为门限，超限直接失败</td></tr><tr><td>信息泄漏</td><td>判据永远正确但与现场无关</td><td>证据键白名单与隔离检查</td></tr></tbody></table>
+<h2 id="主判据怎么选">主判据怎么选</h2>
+<p>选择顺序可以概括为三句：比状态判读更信变化判读，比代理量更信语义量，判据要能说“否”。状态判读依赖一个在每帧都稳定可分的特征，光照、标定、材质变化都会让它漂移；变化判读看的是同一位置前后两帧的差异，恒定偏置在相减时被消掉，代价是需要一帧基准与一个稳定的参考区域。</p>
+<p>以“物体是否被拿走”为例，可行的主判据是抓取前在目标像素附近记下色块，抓取后在原位置重新检测：原色块消失，或者面积掉到原来的三分之一以下，判为拿走；仍然存在则判失败。三分之一这个比值是量级取舍：要求绝对消失会被部分遮挡与边缘抗锯齿误伤，放到接近 1 又会把“轻微移动”当成成功。下面是该项目判据的实现节选，省略了面积下限的分支。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> before.found:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_not_found_before"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> after.found:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_gone"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">if</span><span style="color:#24292E"> after.area_px </span><span style="color:#D73A49">*</span><span style="color:#005CC5"> 3</span><span style="color:#D73A49"> &#x3C;</span><span style="color:#24292E"> before.area_px:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">True</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_area_shrank"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#24292E"> {</span><span style="color:#032F62">"ok"</span><span style="color:#24292E">: </span><span style="color:#005CC5">False</span><span style="color:#24292E">, </span><span style="color:#032F62">"why"</span><span style="color:#24292E">: </span><span style="color:#032F62">"subject_still_present"</span><span style="color:#24292E">, </span><span style="color:#032F62">"metrics"</span><span style="color:#24292E">: metrics}</span></span></code></pre>
+<p>这段判据的每一支都对应一种语义：基准帧找不到物体时直接失败而不是猜测；抓取后找不到色块是最强的成功证据；面积缩到三分之一以下算成功；其余一律判仍在原位。判据宁可漏判成功，也不把失败写成成功，因为前者的代价是一次重试，后者的代价是一个错误的动作序列继续往下走。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant V as 验证层
+  participant C as 相机
+  participant E as 执行层
+  V->>C: 抓取前拍基准帧
+  V->>V: 在目标像素附近记录色块
+  V->>E: 下达抓取
+  E-->>V: 返回自述结果与证据
+  V->>C: 抓取后按同一位置重拍
+  V->>V: 比较前后两帧的面积与位置</pre></div>
+<h2 id="多视角怎么分工">多视角怎么分工</h2>
+<p>多视角的价值在于每个视角承担不同角色，而不是把几个视角的结论投票平均。主判据用俯视图的前后对比，因为它能看到“原位置”这个与语义直接相关的区域；腕部视角离得近、能看到夹爪内部，适合做反闸与兜底；斜视视角提供第二组射线用于三维定位；色块面积这类连续量留作诊断，不单独决定成败。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>角色</th><th>通常选哪个视角</th><th>为什么</th><th>局限</th></tr></thead><tbody><tr><td>主判据</td><td>俯视</td><td>能看到原位置的变化</td><td>被夹爪遮挡时失效</td></tr><tr><td>反闸</td><td>腕部</td><td>离夹爪近，能看夹爪内部</td><td>停在物体上方也成立</td></tr><tr><td>兜底</td><td>腕部</td><td>主判据不可用时仍有信号</td><td>需要更高的面积门限</td></tr><tr><td>定位</td><td>俯视加斜视</td><td>两条射线给出残差</td><td>需对准同一特征</td></tr><tr><td>诊断</td><td>任一</td><td>连续量便于观察趋势</td><td>不参与成败判定</td></tr></tbody></table>
+<p>角色分开之后，视角之间的冲突就有明确处理方式：主判据说成功就算成功；主判据说仍在原位，而腕部也看不到目标色块时，不允许用物理证据放行，因为那说明手里夹的多半是别的东西。反过来，主判据不可用时才允许降级到腕部，并且要在结论里标记降级原因。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["执行层报告成功"] --> B{"俯视前后对比是否判成功"}
+  B -- "是" --> OK["确认成功"]
+  B -- "否" --> C{"是否有物理随动证据且身份门通过"}
+  C -- "是" --> D{"腕部是否看到目标颜色"}
+  D -- "是" --> OK
+  D -- "否" --> NO["判未确认"]
+  C -- "否" --> E{"俯视判据是否可用"}
+  E -- "否" --> F{"腕部面积是否超过门限"}
+  F -- "是" --> OK
+  F -- "否" --> NO
+  E -- "是" --> NO
+  B -- "判据不可用" --> G["记未知 不判成功也不判失败"]</pre></div>
+<h2 id="几何证据与物理证据谁兜底">几何证据与物理证据谁兜底</h2>
+<p>优先级要按证据的硬度排，而不是按实现的方便排。图像前后对比直接回答语义问题，放在第一位。物理随动证据描述的是“夹爪接触着一个可动物体，并且它已经不被支撑面托着”，这个事实比像素更硬，但它不含身份，所以要加一道身份门：被接触的物体必须是本次目标任务，且另一视角没有出现矛盾。</p>
+<p>物理证据只在主判据说“仍在原位”时才用来兜底，用来覆盖遮挡造成的漏判。如果两个视角都看不到目标，主判据也失效，此时降级到腕部面积门限；如果连腕部都不可用，结论记成未知，既不判成功也不判失败。这条链的每一级都必须写清降级理由，否则后来读日志的人无法判断结论的可信度。</p>
+<p>判据的返回值用三值比用布尔更合适。三值让“证据不足”成为一个可以传递的状态：上层可以据此选择重试、补一张图，或者交给模型复核，而不是被迫在成功与失败之间选一个。把未知折叠成成功会让错误动作继续，折叠成失败会让正常任务反复重试。</p>
+<h2 id="像素误差与置信门限">像素误差与置信门限</h2>
+<p>单目反投影的几何关系是针孔模型：由竖直视场角算出焦距，把世界点变换到相机系后按深度做除法。假定平面与物体实际高度不一致时，反投影会把点沿视线外推，误差随高度与相机倾角增长。细高物体按桌面平面反投影，偏差可以到厘米量级。</p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo>=</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mi>W</mi><mn>2</mn></mfrac></mstyle><mo>+</mo><mi>f</mi><mstyle scriptlevel="0" displaystyle="false"><mfrac><mrow><msub><mi>p</mi><mi>c</mi></msub><mo stretchy="false">[</mo><mn>0</mn><mo stretchy="false">]</mo></mrow><mtext>depth</mtext></mfrac></mstyle><mo separator="true">,</mo><mspace width="2em"></mspace><mi>v</mi><mo>=</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mi>H</mi><mn>2</mn></mfrac></mstyle><mo>−</mo><mi>f</mi><mstyle scriptlevel="0" displaystyle="false"><mfrac><mrow><msub><mi>p</mi><mi>c</mi></msub><mo stretchy="false">[</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><mtext>depth</mtext></mfrac></mstyle></mrow><annotation encoding="application/x-tex">u = \tfrac{W}{2} + f\tfrac{p_c[0]}{\text{depth}}, \qquad v = \tfrac{H}{2} - f\tfrac{p_c[1]}{\text{depth}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">W</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.4911em;vertical-align:-0.4811em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">depth</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mopen mtight">[</span><span class="mord mtight">0</span><span class="mclose mtight">]</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">v</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0813em;">H</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.4911em;vertical-align:-0.4811em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">depth</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mopen mtight">[</span><span class="mord mtight">1</span><span class="mclose mtight">]</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4811em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></p>
+<p>双目三角把误差变成一个可观测的量：两条射线的最近点距离就是残差，越小说明两个像素越可能对应同一特征。残差超过门限时应当直接判失败，而不是静默回退到单目。回退会让一次本可发现的错配变成一个位置错误的抓取，代价远大于重试。</p>
+<p>门限的取值与任务尺度有关：残差在毫米量级时三维点可信，到了厘米量级就已经与物体本身的尺寸相当。低饱和颜色的处理原则类似，缺少局部先验时宁可判为未找到，也不给一个来源不明的点。</p>
+<h2 id="判不出来时结论怎么写">判不出来时结论怎么写</h2>
+<p>验证的输出至少要有四种取值：确认成功、未确认、未知与不适用。未知用于判据不可用，不适用用于本次任务根本没有目标颜色这类情况。写清这两者的区别，上层才能区分“需要换判据”和“需要重试”。</p>
+<p>结论里还要带上判据本身的名字与关键量：用了哪个视角、前后面积各是多少、是否走了降级路径、物理证据是否参与。这些量在当下像是冗余，事后定位一次误判时它们决定能不能复盘。结论的结构化程度，直接决定验证层能不能被信任。</p>
+<h2 id="信息隔离要由构造保证">信息隔离要由构造保证</h2>
+<p>隔离的目标是让验证只用现场可得的观测，而不是仿真里的真值。做法有三层：场景描述本身不携带物体位姿，只给类别、颜色与尺寸；反投影只依赖相机标定与像素；回灌给复核模型的证据走白名单，键名里出现位姿、真值一类词的一律丢弃。</p>
+<p>约定会被新代码绕过，构造不会。把真值接口替换成直接抛异常的替身，再跑一遍完整流程，是一种把隔离变成可检查约束的做法：只要有人写了读真值的分支，流程立刻失败。这比在文档里写“不要读真值”更可靠。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>隔离层</th><th>做法</th><th>绕过时的后果</th></tr></thead><tbody><tr><td>场景描述</td><td>只给类别、颜色、尺寸</td><td>模型依赖真值，现场失效</td></tr><tr><td>反投影</td><td>只用标定与像素</td><td>定位退化为查表</td></tr><tr><td>证据回灌</td><td>键名白名单过滤</td><td>复核拿到不该给的量</td></tr><tr><td>隔离检查</td><td>真值接口抛异常的替身</td><td>读真值的分支立刻暴露</td></tr></tbody></table>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>用夹爪内是否出现颜色当主判据</td><td>夹爪停在物体上方也判成功</td><td>该量与成功只有弱相关</td></tr><tr><td>2</td><td>用单帧状态代替前后对比</td><td>遮挡下两个方向都判错</td><td>变化判读能消掉恒定偏置</td></tr><tr><td>3</td><td>主判据不可用时静默回退</td><td>错配被当成可信定位</td><td>残差超限应当直接判失败</td></tr><tr><td>4</td><td>把物理证据当成身份证据</td><td>夹着别的物体也被放行</td><td>物理事实不含身份，需要身份门</td></tr><tr><td>5</td><td>判不出来时按成功处理</td><td>错误动作继续往下走</td><td>未知应当独立成为结论</td></tr><tr><td>6</td><td>用真值位姿做验证</td><td>判据永远正确但与现场无关</td><td>隔离要由构造保证</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>验证要独立于执行层的自述，回答任务成功条件的直接表述。</li>
+<li>判据的合格标准是能给出否定答案，近似恒真的代理量不构成证据。</li>
+<li>主判据优先选变化判读与语义量，前后对比能消掉光照与标定带来的恒定偏置。</li>
+<li>多视角按角色分工：主判据、反闸、兜底、定位与诊断，各自不越权。</li>
+<li>物理证据比像素硬但不含身份，只在主判据漏判时兜底并加身份门。</li>
+<li>证据不足时结论记为未知，三值语义让上层能区分重试与换判据。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>主判据</td><td>前后对比而非单帧状态</td><td>对恒定偏置不敏感；代价是需要基准帧与稳定参考区</td></tr><tr><td>多视角</td><td>分角色而不是投票</td><td>冲突有明确处置；代价是接口要区分角色</td></tr><tr><td>物理证据</td><td>只作兜底并加身份门</td><td>覆盖遮挡漏判；代价是需要接触信息与身份校验</td></tr><tr><td>置信门限</td><td>残差超限直接失败</td><td>不给来源不明的点；代价是错配时多一次重试</td></tr><tr><td>结论取值</td><td>三值加不适用</td><td>未知可传递；代价是上层要处理更多分支</td></tr><tr><td>隔离方式</td><td>构造保证而非约定</td><td>不会被新代码绕过；代价是要维护替身与检查</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>说明“夹爪里是否有目标颜色”与“物体是否离开原位”在语义上的差别，各举一个会判错的例子。</li>
+<li>前后对比为什么能抵消一部分光照与标定误差？它需要哪些前提？</li>
+<li>双目三角的残差衡量的是什么？残差超限时为什么不应回退单目？</li>
+<li>验证结论里的“未知”与“不适用”分别对应什么情形？</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>为一项“把物体放进容器”的任务设计一套判据，要求给出主判据、反闸与兜底，并说明各自的失效条件。</li>
+<li>设计一份验证降级顺序表，规定每一级的前提、标记方式与上层处置。</li>
+<li>给定同色干扰严重的场景，设计一条不依赖真值的判据，并写出它的否定答案长什么样。</li>
+<li>设计一套隔离检查方案，说明哪些接口应被替换为抛异常的替身，以及检查应覆盖哪些流程。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>sim/perception.py</code></td><td>颜色连通域、几何包含与前后对比判据</td></tr><tr><td><code>sim/vision.py</code></td><td>相机模型、投影与反投影、双目三角</td></tr><tr><td><code>agent/loop.py</code></td><td>抓取验证、降级顺序与证据回灌</td></tr><tr><td><code>agent/taskplan.py</code></td><td>子目标复核的判据顺序与置信门限</td></tr><tr><td><code>skills/library.py</code></td><td>执行层自述与随动物理证据</td></tr><tr><td><code>sim/env.py</code></td><td>末端位姿与接触力查询</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/02-Agent%20%E9%97%AD%E7%8E%AF/"><span class="k">← 上一篇</span><span class="t">Agent 闭环</span><span class="d">VLM 与机器人操作 · 2 个文件</span></a><span class="unitnav__pad" aria-hidden="true"></span></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 588 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

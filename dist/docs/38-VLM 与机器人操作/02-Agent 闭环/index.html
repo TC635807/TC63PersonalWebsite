@@ -1,0 +1,755 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Agent 闭环 · VLM 与机器人操作 · 王宇翔</title><meta name="description" content="感知、决策、校验、执行、观察如何闭合成环；结束条件、错误语义分层、重试退避与上下文边界怎么设计"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/02-Agent%20%E9%97%AD%E7%8E%AF/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="Agent 闭环 · VLM 与机器人操作 · 王宇翔"><meta property="og:description" content="感知、决策、校验、执行、观察如何闭合成环；结束条件、错误语义分层、重试退避与上下文边界怎么设计"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/02-Agent%20%E9%97%AD%E7%8E%AF/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/">VLM 与机器人操作</a><span class="sep" aria-hidden="true">/</span><span class="now">Agent 闭环</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>Agent 闭环</b><span>02 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">02 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>Agent 循环与失败回灌</span></a><ul class="toc__heads"><li><a href="#一步的五个阶段" data-depth="2" data-heading-j="0">一步的五个阶段</a></li><li><a href="#观察必须是结构化的" data-depth="2" data-heading-j="1">观察必须是结构化的</a></li><li><a href="#历史成对追加与任务边界" data-depth="2" data-heading-j="2">历史：成对追加与任务边界</a></li><li><a href="#结束条件" data-depth="2" data-heading-j="3">结束条件</a></li><li><a href="#错误语义分层与重试" data-depth="2" data-heading-j="4">错误语义分层与重试</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="5">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="6">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="7">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="8">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="9">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="10">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="11">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="12">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>子目标分解与独立复核</span></a><ul class="toc__heads"><li><a href="#复合任务为什么要在中间切一刀" data-depth="2" data-heading-j="0">复合任务为什么要在中间切一刀</a></li><li><a href="#子目标怎么表示" data-depth="2" data-heading-j="1">子目标怎么表示</a></li><li><a href="#拆解的两条路径" data-depth="2" data-heading-j="2">拆解的两条路径</a></li><li><a href="#每个子目标一段独立上下文" data-depth="2" data-heading-j="3">每个子目标一段独立上下文</a></li><li><a href="#复核为什么必须用独立证据" data-depth="2" data-heading-j="4">复核为什么必须用独立证据</a></li><li><a href="#判定顺序与弃权语义" data-depth="2" data-heading-j="5">判定顺序与弃权语义</a></li><li><a href="#信息隔离" data-depth="2" data-heading-j="6">信息隔离</a></li><li><a href="#复核不能扰动被验证的状态" data-depth="2" data-heading-j="7">复核不能扰动被验证的状态</a></li><li><a href="#重试怎么设计" data-depth="2" data-heading-j="8">重试怎么设计</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="9">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="10">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="11">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="12">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="13">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="14">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="15">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="16">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">VLM 与机器人操作</span><span class="dot" aria-hidden="true">·</span><span>2 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-15</span><span class="dot" aria-hidden="true">·</span><span>VLM / Agent / 闭环控制 / 失败恢复 / 重试 / 子目标 / 任务规划 / 独立复核</span></div><h1 class="docs__title">Agent 闭环</h1><p class="docs__lead">感知、决策、校验、执行、观察如何闭合成环；结束条件、错误语义分层、重试退避与上下文边界怎么设计</p></header><section class="dfile" id="file-1" data-file="01-Agent 循环与失败回灌"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-Agent 循环与失败回灌</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/38-VLM 与机器人操作/02-Agent 闭环/01-Agent 循环与失败回灌.md</span></div><div class="dfile__body"><h1 id="agent-循环与失败回灌">Agent 循环与失败回灌</h1>
+<p>把模型接进循环之后，第一个要回答的问题是选错之后会怎样，而不是它选得对不对。一次失败就让任务终止，模型再强也只能做一步；失败被静默吞掉，任务看起来在推进而实际没有进展。失败信息的形态决定了循环能不能自己恢复。</p>
+<p>下面先把一步拆成五个阶段，再讲观察怎么构造、历史如何划界、结束条件怎么定，最后讨论错误分层与重试退避。</p>
+<h2 id="一步的五个阶段">一步的五个阶段</h2>
+<p>一次完整迭代由感知、决策、校验、执行、观察构成，每个阶段都可能失败，处理方式各不相同。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>输入</th><th>输出</th><th>失败处理</th></tr></thead><tbody><tr><td>感知</td><td>环境状态与多视角图像</td><td>场景快照与图像字典</td><td>单个视角失败只跳过该视角</td></tr><tr><td>决策</td><td>系统提示、历史、当前观察</td><td>一个动作加参数</td><td>异常记一条失败结果，允许有限次重试</td></tr><tr><td>校验</td><td>动作与场景快照</td><td>通过或拒绝原因</td><td>拒绝原因作为观察回灌，继续循环</td></tr><tr><td>执行</td><td>通过校验的动作</td><td>结构化结果</td><td>异常转成结果，不让循环崩掉</td></tr><tr><td>观察</td><td>执行结果</td><td>追加进历史的消息对</td><td>记录判断依据，供下一步使用</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant L as 循环
+  participant E as 环境
+  participant M as 决策模型
+  participant X as 执行层
+  L->>E: 取状态与图像
+  E-->>L: 场景快照
+  L->>M: 系统提示 加 历史 加 当前观察
+  M-->>L: 动作与参数
+  L->>L: 三段校验
+  L->>X: 执行动作
+  X-->>L: 结构化结果
+  L->>L: 结果与调用成对写入历史</pre></div>
+<p>五个阶段里有三处刻意的设计。感知阶段对单视角失败采取跳过而不是中止，因为多视角本身就是冗余。执行阶段把异常转成结构化结果，让「执行器崩溃」与「动作失败」在循环眼里是同一种输入。观察阶段无论成功失败都写入，保证每一步都有对应的上下文。</p>
+<h2 id="观察必须是结构化的">观察必须是结构化的</h2>
+<p>回灌给模型的内容应当是一组字段，而不是一段自然语言。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段</th><th>作用</th></tr></thead><tbody><tr><td>成功标志</td><td>决定下一步是否进入完成判定</td></tr><tr><td>动作名</td><td>与发起调用对应，防止上下文错位</td></tr><tr><td>说明</td><td>给人看的自然语言，可包含具体原因</td></tr><tr><td>错误码</td><td>给循环与模型看的分类，决定重试还是终止</td></tr><tr><td>指标</td><td>物理量、几何证据、耗时等可核对的数据</td></tr></tbody></table>
+<p>错误码与说明分离是关键。说明可以写得很具体，但它不适合做程序判据：文本一改，依赖它的逻辑就失效。分类应由一个稳定的枚举承担，重试决策、终止决策、统计聚合都读枚举。</p>
+<p>失败回灌的目标是让模型能重新规划，因此观察里要补上「为什么会失败」的可执行线索：可能的阻挡物、接触力大小、建议重新观察的视角。补全动作只发生在观察上。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#6A737D"># 失败观察的补全：只加信息，不改动作</span></span>
+<span class="line"><span style="color:#24292E">metrics.setdefault(</span><span style="color:#032F62">"failure_reason"</span><span style="color:#24292E">, result.message)</span></span>
+<span class="line"><span style="color:#24292E">metrics.setdefault(</span><span style="color:#032F62">"obstruction_id"</span><span style="color:#24292E">, guess_obstruction(state, call))</span></span>
+<span class="line"><span style="color:#24292E">metrics.setdefault(</span><span style="color:#032F62">"contact_force_norm"</span><span style="color:#24292E">, force_norm(state))</span></span>
+<span class="line"><span style="color:#24292E">metrics.setdefault(</span><span style="color:#032F62">"suggested_views"</span><span style="color:#24292E">, </span><span style="color:#005CC5">list</span><span style="color:#24292E">(cameras))</span></span></code></pre>
+<p>有一条边界必须守住：循环不代替模型改参数，也不自行重试同一个动作。它只补观测，重新规划由模型决定。否则「模型负责决策」这条设计前提会在实现里被悄悄推翻。</p>
+<h2 id="历史成对追加与任务边界">历史：成对追加与任务边界</h2>
+<p>历史由成对的消息构成：一条记录发起的动作，一条记录该动作的观察。成对存放有三个好处：可以原样发给兼容端点；文本扫描式的规则决策器能把调用与结果配对；裁剪时以「组」为单位，不会拆散因果关系。</p>
+<p>跨任务调用同一个循环时，需要一条任务边界标记。没有它，上一条命令的抓取与放置记录会被当成当前任务的进度，导致状态判断错误。做法是在本轮第一条动作消息里内联一段任务标识，解析方只把最后一个标记之后的记录当作当前任务。</p>
+<p>裁剪同样按组进行，并遵守一条优先级：当前任务的整段记录必须保留，其余历史按条数上限从旧到新丢弃。保留最早一组作为锚点，可以让上下文里仍有「最初的任务」这类背景，而不必保留全部中间过程。</p>
+<h2 id="结束条件">结束条件</h2>
+<p>循环必须能在四种情况下停下来，缺任何一种都会出现空转或误停。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>条件</th><th>判据</th><th>目的</th></tr></thead><tbody><tr><td>正常完成</td><td>模型给出完成或提问动作</td><td>收尾或转人工</td></tr><tr><td>重复失败</td><td>同一动作、同一错误码、同一参数组合连续出现</td><td>防止对着必然失败的动作空转</td></tr><tr><td>不可重试错误再现</td><td>环境类致命错误第二次出现</td><td>及时止损，不再浪费步数</td></tr><tr><td>步数上限</td><td>迭代次数达到预算</td><td>兜底，保证任务在有限时间内结束</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">stateDiagram-v2
+  [*] --> 观察
+  观察 --> 决策
+  决策 --> 校验: 收到动作
+  校验 --> 执行: 通过
+  校验 --> 观察: 拒绝 带原因
+  执行 --> 观察: 结果
+  观察 --> 结束: 完成或提问
+  观察 --> 结束: 重复失败
+  观察 --> 结束: 致命错误再现
+  决策 --> 结束: 步数达上限
+  结束 --> [*]</pre></div>
+<p>「重复失败」的判据要包含参数组合。同一动作换个参数是一次新尝试，按动作名判重会把模型改正后的调用误杀；把参数序列化成一个指纹再比较，参数一变就放行。这条细节决定了守卫是保护还是阻碍。</p>
+<p>「不可重试错误」指那些再试也不会改变的错误，例如归位路径被持有物挡住、场景被外部改动。它们第一次出现允许重试一次，第二次出现立即终止。把「世界的问题」与「模型的问题」分开，循环才能在两种情况下做出不同处置。</p>
+<p>步数上限是最后一道兜底。即使模型每一步都合理，累计步数过多也说明任务本身超出能力范围，继续跑只消耗预算。</p>
+<h2 id="错误语义分层与重试">错误语义分层与重试</h2>
+<p>重试发生在三个层次，混在一起会出问题。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>层次</th><th>触发</th><th>措施</th><th>上限</th></tr></thead><tbody><tr><td>传输层</td><td>网络错误、超时、限流与网关类状态码</td><td>退避后重发同一请求</td><td>少量固定次数</td></tr><tr><td>决策层</td><td>响应无法解析出动作</td><td>提高输出预算并追加约束提示后重发</td><td>与传输层共用次数</td></tr><tr><td>任务层</td><td>动作执行失败</td><td>不自动重试，交模型重新规划</td><td>由结束条件约束</td></tr></tbody></table>
+<p>传输层与决策层的共同点是没有产生副作用，重发安全。任务层已经动过机械臂，自动重发可能重复执行，因此必须交回决策层。</p>
+<p>分类依据应当是异常自带的稳定属性，而不是错误文本。文本是给人看的，措辞会变；属性是给程序用的。把分类挂在异常上，调用方读属性即可。</p>
+<p>退避采用递增间隔，从数百毫秒到数秒，长度随尝试次数增加。递增的作用是让瞬时故障有时间恢复，同时避免高频重试放大服务端压力。次数上限保证失败最终会暴露给上层。</p>
+<p>空回复需要单独处理。在带思维链的端点上，完成预算常被推理内容占满，正文为空。此时重试的有效措施是提高输出预算并追加一条「必须给出工具调用」的提示，而不是原样重发；只修改本次请求，不动调用方传入的消息。这类失败能否重试，同样取决于异常的稳定属性。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>把失败当成异常上抛</td><td>循环被一次错误打断</td><td>失败应当是回灌给模型的观察</td></tr><tr><td>2</td><td>用错误文本做重试判据</td><td>文本改一次逻辑就失效</td><td>分类应由错误的稳定属性承担</td></tr><tr><td>3</td><td>按动作名判断重复失败</td><td>改正后的调用被误杀</td><td>判据要包含参数指纹</td></tr><tr><td>4</td><td>任务层失败自动重发</td><td>同一动作被执行两次</td><td>已产生副作用的重试必须交回决策</td></tr><tr><td>5</td><td>保留全部历史</td><td>上下文膨胀、旧任务污染当前状态</td><td>需要按任务边界与组裁剪</td></tr><tr><td>6</td><td>认为步数上限可以不要</td><td>任务在无效循环里耗尽预算</td><td>上限是防止空转的最后一道约束</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>一步由感知、决策、校验、执行、观察五个阶段构成，每个阶段都有对应的降级方式。</li>
+<li>观察是结构化字段而非一段话，错误码承担程序判据，说明承担人类可读的原因。</li>
+<li>失败回灌只补信息、不改动作；重新规划属于模型的职责。</li>
+<li>历史成对追加，任务边界标记把上一任务的进度隔离在外，裁剪按组且保留当前任务。</li>
+<li>四个结束条件分别覆盖正常收尾、重复失败、致命错误与预算耗尽。</li>
+<li>重试分三层：传输与决策层可安全重发，任务层必须交回模型重新规划。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>失败信息</td><td>结构化错误码加说明</td><td>可程序判据又可读；代价是两处都要维护</td></tr><tr><td>重复失败守卫</td><td>动作加参数指纹</td><td>不误杀改正后的调用；代价是模型换写法仍会消耗步数</td></tr><tr><td>历史长度</td><td>有上限并按组裁剪</td><td>上下文可控；代价是长任务会丢早期细节</td></tr><tr><td>重试策略</td><td>递增退避加次数上限</td><td>容忍瞬时故障；代价是失败反馈有延迟</td></tr><tr><td>空回复处理</td><td>提高预算并加约束提示</td><td>针对性解决预算被占满；代价是需要区分失败原因</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出一轮迭代的五个阶段，并写出每个阶段失败时的处理方式。</li>
+<li>说明错误码与说明字段为什么必须分开。</li>
+<li>写出四个结束条件各自的判据与目的。</li>
+<li>解释任务层失败为什么不自动重试。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>设计一份失败观察的字段清单，要求包含定位线索且能区分「模型选错」与「世界不配合」。</li>
+<li>为重复失败守卫设计一版参数指纹方案，说明如何处理含浮点参数与嵌套结构的调用。</li>
+<li>给定端点频繁返回空回复，设计一版分层重试方案，写出每层的触发、措施与上限。</li>
+<li>设计历史裁剪算法，要求当前任务完整、旧任务可截断、调用与观察不成对分离。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>agent/loop.py</code></td><td>主循环、结束条件、失败观察补全与历史管理</td></tr><tr><td><code>agent/state.py</code></td><td>消息构造与阻挡物推断</td></tr><tr><td><code>agent/vlm_client.py</code></td><td>端点重试、错误分类与离线规则器</td></tr><tr><td><code>agent/taskplan.py</code></td><td>子目标编排对循环的调用方式</td></tr><tr><td><code>core/types.py</code></td><td>动作与结果的类型定义</td></tr><tr><td>仓库根</td><td><code>vlm-admittance</code>，公开仓库 <a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-子目标分解与独立复核"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-子目标分解与独立复核</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/38-VLM 与机器人操作/02-Agent 闭环/02-子目标分解与独立复核.md</span></div><div class="dfile__body"><h1 id="子目标分解与独立复核">子目标分解与独立复核</h1>
+<p>复合任务的失败常常出在两个地方：模型做完了第一步，却在第二步把上一步的结论当成当前事实；或者它声称做完了，实际没有。前者是上下文边界问题，后者是验证问题。两者都不是靠换一个更强的模型能解决的，需要在结构上分别处理。</p>
+<p>下面先讲为什么要在任务中间切一刀，再讲子目标怎么表示与规划，然后讨论复核为什么必须独立、判定顺序如何排、隔离与观察位的约束，最后是重试设计。</p>
+<h2 id="复合任务为什么要在中间切一刀">复合任务为什么要在中间切一刀</h2>
+<p>一条长链直接跑到底有三个问题。上下文里混着多个阶段的动作与观察，模型难以判断「现在到哪一步」；中途失败时，归因只能落到整条任务上，重试要么全部重来，要么无从下手；进度对外不可见，人只能等到结束才知道结果。把任务拆成有序子目标后，每个子目标有自己的范围、自己的成功判据和自己的重试次数。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>维度</th><th>单体长链</th><th>拆成子目标</th></tr></thead><tbody><tr><td>上下文</td><td>全部阶段混在一起</td><td>每个子目标一段独立上下文</td></tr><tr><td>失败归因</td><td>落到整条任务</td><td>落到具体子目标</td></tr><tr><td>重试粒度</td><td>整体重来或放弃</td><td>只重试未通过的子目标</td></tr><tr><td>进度可见性</td><td>只有结束状态</td><td>每个子目标有结论与依据</td></tr><tr><td>验证方式</td><td>只能整体判断</td><td>按类型选判据</td></tr><tr><td>代价</td><td>结构简单</td><td>多一次规划调用与一层编排</td></tr></tbody></table>
+<p>拆分的代价是引入一层编排：规划可能出错，子目标之间的边界可能与物理动作不对齐，跨子目标的信息需要显式传递。这些代价要在设计里被承认，而不是靠「规划得很好」来掩盖。</p>
+<h2 id="子目标怎么表示">子目标怎么表示</h2>
+<p>一个子目标需要三部分信息：给执行层看的自然语言指令、给复核层看的类型、给人看的验收说明。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>类型</th><th>含义</th><th>默认复核方式</th></tr></thead><tbody><tr><td>放进容器</td><td>把物体放入某个容器内部</td><td>检测目标色块是否落在容器范围内</td></tr><tr><td>叠放</td><td>把物体放到另一物体上方</td><td>检测上下两色块的相邻与重叠关系</td></tr><tr><td>放到指定点</td><td>把物体放到给定位置</td><td>无固定几何判据，交视觉复核</td></tr><tr><td>只抓取</td><td>抓起来即可，不放置</td><td>技能的夹持证据，缺失时看原位色块是否消失</td></tr><tr><td>自由形式</td><td>说不清或无法分类</td><td>交视觉复核</td></tr></tbody></table>
+<p>类型是复核的入口：它把「怎么算完成」变成一个可枚举的选择，而不是每次重新判断。颜色与类别字段用于颜色分割与指代解析，属于线索而非判据。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["复合任务文本"] --> B["规划阶段 要求拆成有序子目标"]
+  B --> C{"解析是否成功"}
+  C -- "成功" --> D["若干带类型的子目标"]
+  C -- "失败或为空" --> E["按文本线索给出单个兜底子目标"]
+  D --> F["逐个执行 每个开一段独立上下文"]
+  E --> F
+  F --> G["独立复核"]
+  G -- "通过" --> H["记录结论 进入下一个"]
+  G -- "未通过" --> I["带原因重试 有次数上限"]</pre></div>
+<h2 id="拆解的两条路径">拆解的两条路径</h2>
+<p>规划是一次单独的模型调用，与执行阶段分离。规划工具只在规划阶段可用，出现在执行阶段会被判为非法调用。这样做有明确目的：规划一次给出整条计划，执行阶段只负责推进；若允许在执行中重新规划，循环会失去进度概念，也容易在一个子目标里反复重置计划。</p>
+<p>模型规划可能给不出可用结果：没有调用规划工具、列表为空、字段缺失、类型非法。这些情况都需要一条确定性兜底，从任务文本里按线索推断出单个子目标。兜底宁可粗，不可错：把复合任务当成一个整体，只会让复核退化到视觉判断；而错误的拆分会让后续步骤在错误前提下执行。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>文本线索</th><th>兜底类型</th><th>理由</th></tr></thead><tbody><tr><td>出现容器词与放置语义</td><td>放进容器</td><td>有明确的几何判据可用</td></tr><tr><td>出现叠放词且点名两种颜色</td><td>叠放</td><td>可判断上下关系</td></tr><tr><td>只有抓取语义</td><td>只抓取</td><td>无需放置目标</td></tr><tr><td>其余</td><td>自由形式</td><td>没有可靠判据，交视觉复核</td></tr></tbody></table>
+<h2 id="每个子目标一段独立上下文">每个子目标一段独立上下文</h2>
+<p>执行每个子目标时都新建一个循环实例，而不是复用同一个。原因在于任务状态的定义方式：循环通过一段任务标识来划分「当前任务」，复用实例会让上一个子目标的观察继续参与当前状态的统计，出现「已经抓过了」这类错误结论。</p>
+<p>独立上下文还带来两个副作用。好的方面是失败计数按子目标重置，一个子目标的失败不会拖垮后续子目标；坏的方面是跨子目标的记忆丢失，例如上一步标定出的容器像素在下一步不再可见。解决办法是把这类跨步骤可复用的感知结果放进一份共享缓存，由动作阶段写入、复核阶段只读，并在新任务开始时清空。</p>
+<h2 id="复核为什么必须用独立证据">复核为什么必须用独立证据</h2>
+<p>模型的自评不能作为完成依据。原因在于它的判断用的是与执行阶段相同的上下文与图像：如果执行阶段的判断错了，自评会沿同一个错误继续；而且它的目标是推进任务，倾向于把「差不多完成」报成完成。</p>
+<p>独立证据要求复核与执行在三处不同：输入不同（复核重新渲染当前画面，而不是复用执行时的观察）、机制不同（几何判据与执行时的运动规划无关）、来源不同（复核不读被执行层修改过的中间状态）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>证据类型</th><th>来源</th><th>强度</th><th>失效条件</th></tr></thead><tbody><tr><td>几何判据</td><td>颜色分割与框关系</td><td>高，可复现</td><td>颜色规则失效或目标被遮挡</td></tr><tr><td>技能指标</td><td>执行层返回的物理量</td><td>高</td><td>指标口径与语义不符</td></tr><tr><td>前后对比</td><td>执行前后的同一视角图像</td><td>中</td><td>目标未被遮挡时仍可见</td></tr><tr><td>视觉复核</td><td>模型看当前画面作答</td><td>中，带置信度</td><td>回复为空或置信度低</td></tr><tr><td>模型自评</td><td>执行过程中的声明</td><td>低，仅作信号</td><td>无法证伪</td></tr></tbody></table>
+<p>几何判据优先级最高，因为它可复现、可解释，并且失败时能给出具体原因。视觉复核排在后面，用于没有固定几何判据的类型，或几何判据无法判定时。</p>
+<h2 id="判定顺序与弃权语义">判定顺序与弃权语义</h2>
+<p>判定顺序是固定的：先跑几何判据，通过即完成；不通过或无法判定时，再问视觉复核；两者都不通过才判未完成。任何异常一律判未完成，绝不返回成功。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  A["复核一个子目标"] --> B["过滤证据 只保留白名单字段"]
+  B --> C{"几何判据是否成立"}
+  C -- "成立" --> D["判完成 依据为几何"]
+  C -- "不成立或无法判定" --> E{"视觉复核是否可用"}
+  E -- "可用" --> F{"答复完成且置信度达标"}
+  F -- "是" --> G["判完成 依据为视觉复核"]
+  F -- "否" --> H["判未完成 合并两边理由"]
+  E -- "不可用" --> H</pre></div>
+<p>这里有一处容易被忽略的语义区分：无结论与否定是两回事。复核模型可能因为输出预算被占满而返回空内容，此时既不能说完成，也不能说未完成，而应记为「无法判定」。把无法判定当成否定，会让本来正确的执行被判失败；把它当成肯定，则会谎报成功。正确的处理是保留这一状态，让它消耗一次重试机会但计入可重试。</p>
+<p>视觉复核给出完成时还要过一道置信度门槛。门槛的作用是把「可能是」转成「证据不足」。低于门槛的肯定答复按未完成处理，理由里写明置信度不够，供下一轮重试参考。</p>
+<h2 id="信息隔离">信息隔离</h2>
+<p>复核过程不能读物体真值位姿，喂给复核模型的证据也要过滤：只保留与判据直接相关的字段，凡是含有坐标、真值、位置语义的键一律丢弃。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>字段类别</th><th>是否给复核</th><th>理由</th></tr></thead><tbody><tr><td>夹持标志、指间距</td><td>给</td><td>与抓取判据直接相关</td></tr><tr><td>抬升与随动证据</td><td>给</td><td>物理事实，可兜底图像判据</td></tr><tr><td>接触力、落点高度</td><td>给</td><td>支撑接触类判断</td></tr><tr><td>阻挡物与失败原因</td><td>给</td><td>帮助解释未完成</td></tr><tr><td>物体位姿、坐标</td><td>不给</td><td>等同真值，会让复核变成套话</td></tr><tr><td>场景内部诊断字段</td><td>不给</td><td>与判据无关，只是泄漏面</td></tr></tbody></table>
+<p>隔离的意义在于让复核具备失败的可能。如果复核拿到的输入里已经包含答案，它的通过只说明判据实现没有出错，说明不了感知链路是否可用。把真值挡住之后，复核的失败才指向真实问题。</p>
+<p>隔离本身是可检验的：把真值接口换成抛异常的桩，整条闭环仍要跑通；再扫描发给复核的消息，确认其中不出现坐标类字段。</p>
+<h2 id="复核不能扰动被验证的状态">复核不能扰动被验证的状态</h2>
+<p>为了让相机看清结果，复核前通常要把机械臂移出工作区。这条操作在多数情况下无害，在持物时会把物体连同夹爪一起挪走，甚至让物体掉落，于是「复核」这个动作本身破坏了被验证的状态。</p>
+<p>规则因此需要加一条前置判断：如果子目标是抓取类，或者当前仍持有物体，就跳过归位；其余情况再移出工作区。更通用的表述是，任何观测动作在执行前都要检查它的副作用是否会改变待观测状态。</p>
+<p>观察动作失败或超时也不允许把子目标判死。归位失败只记日志，复核照常进行，复核仍然是唯一判据。</p>
+<h2 id="重试怎么设计">重试怎么设计</h2>
+<p>重试次数要有上限，同时重试必须带信息。第二次尝试的指令里附上上一次复核给出的原因，让模型换一种做法，而不是原样重复。原因通常包含：几何判据的实测值、视觉复核的理由、缺失的证据类型。</p>
+<p>还要区分两种未通过：判据明确否定，说明动作确实没成功；无法判定，说明证据不足。前者需要改变动作，后者需要改善观测。把两者分开记入结果，重试时才能选择不同的调整方向。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>记录字段</th><th>含义</th></tr></thead><tbody><tr><td>子目标</td><td>本条记录对应的子目标</td></tr><tr><td>尝试次数</td><td>到通过或耗尽为止的尝试数</td></tr><tr><td>是否完成</td><td>由独立证据给出</td></tr><tr><td>证据类型</td><td>几何、视觉复核或失败</td></tr><tr><td>原因</td><td>未通过时的具体依据</td></tr></tbody></table>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>把模型自评当完成依据</td><td>任务报成功但物体未动</td><td>自评与执行共享同一上下文，无法证伪</td></tr><tr><td>2</td><td>认为几何判据永远可靠</td><td>遮挡或颜色失效时误判</td><td>几何判据依赖分割质量，需要视觉复核兜底</td></tr><tr><td>3</td><td>把无结论当成未完成</td><td>正确执行被判失败</td><td>空答复是证据不足，不是否定</td></tr><tr><td>4</td><td>复用同一个循环跑所有子目标</td><td>上一步状态污染当前判断</td><td>状态按任务边界划分，子目标之间要重置</td></tr><tr><td>5</td><td>复核前一律归位</td><td>持物时把物体挪丢</td><td>观测动作可能破坏被观测状态</td></tr><tr><td>6</td><td>重试不带原因</td><td>模型原样重复同一动作</td><td>重试需要上一轮的具体失败信息</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>复合任务拆成有序子目标，是为了限定上下文范围、定位失败、暴露进度与选择验证方式。</li>
+<li>子目标由指令、类型与验收说明组成，类型决定复核判据。</li>
+<li>规划由模型完成，解析失败时用确定性单条兜底，宁可粗不可错。</li>
+<li>每个子目标使用独立的上下文与失败计数，跨步骤可复用的感知结果放共享缓存。</li>
+<li>复核必须独立：输入、机制与状态来源都与执行阶段不同，模型自评只作信号。</li>
+<li>判定顺序是几何优先、视觉复核兜底、异常一律判未完成；无结论与否定必须分开。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>拆分粒度</td><td>按语义子目标拆</td><td>失败可定位、可重试；代价是多一次规划与一层编排</td></tr><tr><td>规划来源</td><td>模型规划加确定性兜底</td><td>兼顾灵活与可用；代价是兜底只能给出粗粒度结果</td></tr><tr><td>复核优先级</td><td>几何优先、视觉兜底</td><td>结果可复现；代价是需要为每种类型设计判据</td></tr><tr><td>无结论处理</td><td>单独记状态并允许重试</td><td>不误判正确执行；代价是多消耗尝试次数</td></tr><tr><td>信息范围</td><td>只给白名单证据</td><td>复核能真实失败；代价是证据字段需要逐项审核</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>列出把复合任务拆成子目标后获得的四项收益与两项代价。</li>
+<li>说明子目标的类型字段为什么是复核的入口。</li>
+<li>解释模型自评为什么不能作为完成依据。</li>
+<li>写出复核的判定顺序，以及无法判定与否定在处置上的差别。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>为一个「先放到桌上再叠到另一物体上」的任务设计子目标划分，写出每个子目标的类型与判据。</li>
+<li>设计一份复核证据白名单，说明每个字段支撑哪条判据，以及哪些字段必须排除。</li>
+<li>设计观察位策略：给出「何时可以移出工作区、何时必须保持原位」的判据与检查顺序。</li>
+<li>若把重试上限从 3 次提高到 10 次，分析会带来哪些收益与风险，并给出一版更合理的重试策略。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>agent/taskplan.py</code></td><td>子目标类型、规划、独立复核与编排</td></tr><tr><td><code>agent/loop.py</code></td><td>单个子目标的执行循环与完成声明处理</td></tr><tr><td><code>agent/schema.py</code></td><td>规划工具与复核工具的定义与校验</td></tr><tr><td><code>sim/perception.py</code></td><td>几何判据：容器内、叠放、消失判断</td></tr><tr><td><code>tests/</code></td><td>隔离检查与子目标闭环回归</td></tr><tr><td>仓库根</td><td><code>vlm-admittance</code>，公开仓库 <a href="https://github.com/TC635807/vlm-admittance">https://github.com/TC635807/vlm-admittance</a></td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/01-%E5%A4%9A%E6%A8%A1%E6%80%81%E5%86%B3%E7%AD%96/"><span class="k">← 上一篇</span><span class="t">多模态决策</span><span class="d">VLM 与机器人操作 · 2 个文件</span></a><a class="next" href="/tc63/docs/38-VLM%20%E4%B8%8E%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%93%8D%E4%BD%9C/03-%E6%8A%80%E8%83%BD%E4%B8%8E%E8%A7%86%E8%A7%89%E9%97%AD%E7%8E%AF/"><span class="k">下一篇 →</span><span class="t">技能与视觉闭环</span><span class="d">VLM 与机器人操作 · 2 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 588 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>

@@ -1,0 +1,991 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>运动规划 · 机械臂运动学与控制 · 王宇翔</title><meta name="description" content="采样规划需要的是位形可否使用的布尔判据；接触清单里哪些接触算碰撞、查询为什么必须无副作用，以及离散采样为什么必然存在漏判窗口"><link rel="canonical" href="https://knowledgediver.cloud/tc63/docs/36-%E6%9C%BA%E6%A2%B0%E8%87%82%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%E6%8E%A7%E5%88%B6/03-%E8%BF%90%E5%8A%A8%E8%A7%84%E5%88%92/"><link rel="icon" type="image/svg+xml" href="/tc63/favicon.svg"><meta name="generator" content="Astro v7.3.5"><meta name="theme-color" content="#ffffff"><meta property="og:type" content="website"><meta property="og:site_name" content="王宇翔"><meta property="og:title" content="运动规划 · 机械臂运动学与控制 · 王宇翔"><meta property="og:description" content="采样规划需要的是位形可否使用的布尔判据；接触清单里哪些接触算碰撞、查询为什么必须无副作用，以及离散采样为什么必然存在漏判窗口"><meta property="og:url" content="https://knowledgediver.cloud/tc63/docs/36-%E6%9C%BA%E6%A2%B0%E8%87%82%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%E6%8E%A7%E5%88%B6/03-%E8%BF%90%E5%8A%A8%E8%A7%84%E5%88%92/"><meta property="og:image" content="https://knowledgediver.cloud/tc63/og.png"><meta property="og:image:alt" content="社交分享卡片：王宇翔 —— 重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链"><meta property="og:locale" content="zh_CN"><meta name="twitter:card" content="summary_large_image"><link rel="stylesheet" href="/tc63/_astro/BaseLayout.Bw8pNA6E.css"><link rel="stylesheet" href="/tc63/_astro/DocsLayout.D7LWvJto.css"></head><body class="is-docs"><a class="skip" href="#main">跳到主要内容</a><header class="rail"><a class="rail__mark" href="/tc63/" aria-label="回到首页 · 王宇翔"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M2,2 H31 L42,13 V42 H2 Z" fill="none" stroke="var(--violet-700)" stroke-width="2.5"></path><path d="M13,31 L20,13 L27,31 Z" fill="var(--violet-600)"></path><line x1="7" y1="36.5" x2="37" y2="36.5" stroke="var(--line-2)" stroke-width="1.5"></line></svg></a><nav class="rail__nav" aria-label="主导航"><a href="/tc63/">终端</a><a href="/tc63/projects/">项目</a><a href="/tc63/about/">关于</a></nav><span class="rail__foot">© 2026 王宇翔</span></header><main id="main"><div class="shell"><div class="docprogress" data-progress aria-hidden="true"></div><header class="docbar" data-docbar><div class="docbar__in"><a class="docbar__mark" href="/tc63/docs/" aria-label="回到文档区首页"><b aria-hidden="true"></b><span>文档区</span></a><nav class="docbar__crumb" aria-label="位置"><a href="/tc63/docs/">文档</a><span class="sep" aria-hidden="true">/</span><a href="/tc63/docs/36-%E6%9C%BA%E6%A2%B0%E8%87%82%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%E6%8E%A7%E5%88%B6/">机械臂运动学与控制</a><span class="sep" aria-hidden="true">/</span><span class="now">运动规划</span></nav><span class="docbar__spacer"></span><button class="docsearch-btn" type="button" data-search-open aria-haspopup="dialog"><span aria-hidden="true">⌕</span><span>搜索文档</span><kbd>Ctrl K</kbd></button></div></header><div class="docs" data-docs><aside class="docs__rail"><button class="railtoggle" type="button" data-railtoggle aria-expanded="false" aria-controls="doc-rail"><b>运动规划</b><span>03 文件</span><span class="chev" aria-hidden="true">›</span></button><div class="railbox" id="doc-rail" data-railbox><div class="railbox__head"><span class="railbox__k">Contents</span><span class="railbox__n">03 文件</span></div><nav aria-label="本单元目录" data-toc><div class="toc__file" data-fi="0"><a href="#file-1"><span class="n">01</span><span>碰撞检测判什么</span></a><ul class="toc__heads"><li><a href="#规划需要的是布尔判据" data-depth="2" data-heading-j="0">规划需要的是布尔判据</a></li><li><a href="#三条过滤把接触清单变成碰撞判据" data-depth="2" data-heading-j="1">三条过滤把接触清单变成碰撞判据</a></li><li><a href="#忽略表表达哪些接触在规划里没有意义" data-depth="2" data-heading-j="2">忽略表表达“哪些接触在规划里没有意义”</a></li><li><a href="#查询必须无副作用" data-depth="2" data-heading-j="3">查询必须无副作用</a></li><li><a href="#边合法性是连续问题采样只能近似" data-depth="2" data-heading-j="4">边合法性是连续问题，采样只能近似</a></li><li><a href="#限位判据为什么只需查端点" data-depth="2" data-heading-j="5">限位判据为什么只需查端点</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="6">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="7">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="8">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="9">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="10">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="11">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="12">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="13">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="1"><a href="#file-2"><span class="n">02</span><span>RRT-Connect</span></a><ul class="toc__heads"><li><a href="#高维空间里为什么改用采样" data-depth="2" data-heading-j="0">高维空间里为什么改用采样</a></li><li><a href="#单向树随机采样与最近邻扩展" data-depth="2" data-heading-j="1">单向树：随机采样与最近邻扩展</a></li><li><a href="#双向两棵树交替生长与贪心连接" data-depth="2" data-heading-j="2">双向：两棵树交替生长与贪心连接</a></li><li><a href="#采样目标的两个来源" data-depth="2" data-heading-j="3">采样目标的两个来源</a></li><li><a href="#步长迭代上限与节点预算" data-depth="2" data-heading-j="4">步长、迭代上限与节点预算</a></li><li><a href="#边离散分辨率与可复现性" data-depth="2" data-heading-j="5">边离散分辨率与可复现性</a></li><li><a href="#快路径与失败语义" data-depth="2" data-heading-j="6">快路径与失败语义</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="7">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div><div class="toc__file" data-fi="2"><a href="#file-3"><span class="n">03</span><span>路径后处理与位姿规划</span></a><ul class="toc__heads"><li><a href="#折线与疏密rrt-输出的两个问题" data-depth="2" data-heading-j="0">折线与疏密：RRT 输出的两个问题</a></li><li><a href="#短路随机两点直连并删掉中间节点" data-depth="2" data-heading-j="1">短路：随机两点直连并删掉中间节点</a></li><li><a href="#加密把每段切成不超过上限的子段" data-depth="2" data-heading-j="2">加密：把每段切成不超过上限的子段</a></li><li><a href="#后处理的顺序与代价" data-depth="2" data-heading-j="3">后处理的顺序与代价</a></li><li><a href="#位姿规划为什么需要多组逆解种子" data-depth="2" data-heading-j="4">位姿规划：为什么需要多组逆解种子</a></li><li><a href="#为什么不直接信任逆解的成功标志" data-depth="2" data-heading-j="5">为什么不直接信任逆解的成功标志</a></li><li><a href="#换种子重试与交付前的复核" data-depth="2" data-heading-j="6">换种子重试与交付前的复核</a></li><li><a href="#常见判断偏差" data-depth="2" data-heading-j="7">常见判断偏差</a></li><li><a href="#小结" data-depth="2" data-heading-j="8">小结</a></li><li><a href="#核心概念" data-depth="3" data-heading-j="9">核心概念</a></li><li><a href="#设计权衡" data-depth="3" data-heading-j="10">设计权衡</a></li><li><a href="#练习" data-depth="2" data-heading-j="11">练习</a></li><li><a href="#基础题" data-depth="3" data-heading-j="12">基础题</a></li><li><a href="#挑战题" data-depth="3" data-heading-j="13">挑战题</a></li><li><a href="#附本页引用的路径" data-depth="2" data-heading-j="14">附：本页引用的路径</a></li></ul></div></nav></div></aside><div class="docs__main"><article class="unit"><header class="unit__head"><div class="unit__kicker"><span class="violet">机械臂运动学与控制</span><span class="dot" aria-hidden="true">·</span><span>3 个文件</span><span class="dot" aria-hidden="true">·</span><span>更新 2026-10-15</span><span class="dot" aria-hidden="true">·</span><span>运动规划 / 碰撞检测 / 自由空间 / 采样 / RRT / 采样算法 / 关节空间 / 路径平滑</span></div><h1 class="docs__title">运动规划</h1><p class="docs__lead">采样规划需要的是位形可否使用的布尔判据；接触清单里哪些接触算碰撞、查询为什么必须无副作用，以及离散采样为什么必然存在漏判窗口</p></header><section class="dfile" id="file-1" data-file="01-碰撞检测判什么"><div class="dfile__head"><span class="dfile__idx">FILE 01</span><span class="dfile__name">01-碰撞检测判什么</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-机械臂运动学与控制/03-运动规划/01-碰撞检测判什么.md</span></div><div class="dfile__body"><h1 id="碰撞检测判什么">碰撞检测判什么</h1>
+<p>给机械臂规划一条绕过障碍的关节路径，第一道坎不在搜索算法，而在“什么算碰到”。物理引擎输出的是一张接触清单，清单里既有物体压在桌面上这类与机械臂无关的接触，也有机构自己零件之间的接触。直接拿接触数量当碰撞数量，会让几乎所有位形都判成非法，规划器连起点都出不去。</p>
+<p>下面先把规划需要的判据说清楚，再拆开一次查询里“哪些接触算碰撞”的三条过滤，然后讨论查询为什么必须无副作用，最后给出离散采样漏判的来源与量化方式。</p>
+<h2 id="规划需要的是布尔判据">规划需要的是布尔判据</h2>
+<p>采样式规划把运动规划化简成一串二值查询：一个位形在不在自由空间里，一条线段是不是整条都在自由空间里。算法不要求知道离障碍有多远，也不要求障碍边界有解析表达式。这个选择换来两件事：查询接口可以很窄，只有合法与不合法两种返回；规划器对场景几何不需要任何假设，换机器人、换障碍都不用改搜索逻辑。</p>
+<p>代价是丢失了距离信息。有符号距离能让采样朝远离障碍的方向偏置，也能给路径留出安全裕度；只有布尔判据时，贴着障碍通过的路径与离障碍很远的路径没有区别。这个代价在“找到一条可行路径就够”的场景里可以接受，在“必须留出安全间隙”的场景里就要在判据之外另加距离评估。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>判据形态</th><th>规划器能得到什么</th><th>主要代价</th></tr></thead><tbody><tr><td>布尔合法性</td><td>位形与线段是否可用</td><td>无法表达安全裕度</td></tr><tr><td>有符号距离</td><td>离障碍多远与梯度方向</td><td>查询更贵，需要额外实现</td></tr><tr><td>接触对清单</td><td>谁与谁相互接触</td><td>归因与过滤交给调用方</td></tr></tbody></table>
+<p>物理引擎给出的天然产物是第三种，所以规划层要自己把它折算成第一种。折算规则就是这一篇的主体。</p>
+<h2 id="三条过滤把接触清单变成碰撞判据">三条过滤把接触清单变成碰撞判据</h2>
+<p>接触清单的长度不等于碰撞次数，因为清单里混着两类与机械臂无关的条目：环境物体之间的接触（物体压桌面、物体互相堆叠），以及机构内部的自接触。前者在场景里长期存在，后者在多数位形下也存在。判定一次位形是否合法，需要三条过滤同时成立：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">d</mi><mi mathvariant="normal">e</mi></mrow><mo stretchy="false">(</mo><msub><mi>g</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>g</mi><mn>2</mn></msub><mo stretchy="false">)</mo><mtext>  </mtext><mo>⟺</mo><mtext>  </mtext><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">b</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi></mrow><mo stretchy="false">(</mo><msub><mi>g</mi><mn>1</mn></msub><mo stretchy="false">)</mo><mo>∨</mo><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">b</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">t</mi></mrow><mo stretchy="false">(</mo><msub><mi>g</mi><mn>2</mn></msub><mo stretchy="false">)</mo><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mtext>  </mtext><mo>∧</mo><mtext>  </mtext><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mrow><mi mathvariant="normal">d</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">s</mi><mi mathvariant="normal">t</mi></mrow><mo>&#x3C;</mo><mo>−</mo><mi>ε</mi><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mtext>  </mtext><mo>∧</mo><mtext>  </mtext><mi mathvariant="normal">¬</mi><mtext> </mtext><mrow><mi mathvariant="normal">i</mi><mi mathvariant="normal">g</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi></mrow><mo stretchy="false">[</mo><msub><mi>g</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>g</mi><mn>2</mn></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">\mathrm{collide}(g_1, g_2) \iff
+\big(\mathrm{robot}(g_1) \lor \mathrm{robot}(g_2)\big)
+\;\land\; \big(\mathrm{dist} &#x3C; -\varepsilon\big)
+\;\land\; \lnot\,\mathrm{ignore}[g_1, g_2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">collide</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⟺</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathrm">robot</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∨</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathrm">robot</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathrm">dist</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord">−</span><span class="mord mathnormal">ε</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">¬</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathrm">ignore</span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span></span>
+<p>第一条要求接触双方至少有一方属于机器人。这条过滤是必须的：桌面上的物体在重力下沉稳落定之后，环境接触是常态，把所有接触都算碰撞等于把整个自由空间判空。第二条用穿透深度定义碰撞，容差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi></mrow><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span></span></span></span> 默认取零，也就是只要有实际穿透就判碰撞；把容差调大，贴合面上的数值噪声就不会被当成碰撞，代价是允许的穿透量随之变大。第三条留给机构自接触与调用方显式指定的忽略对，细节见下一节。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> contact </span><span style="color:#D73A49">in</span><span style="color:#24292E"> contacts:</span></span>
+<span class="line"><span style="color:#24292E">    g1, g2 </span><span style="color:#D73A49">=</span><span style="color:#24292E"> contact.geom1, contact.geom2</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> (is_robot[g1] </span><span style="color:#D73A49">or</span><span style="color:#24292E"> is_robot[g2]):</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span><span style="color:#6A737D">                      # 纯环境接触，与本位形无关</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> contact.dist </span><span style="color:#D73A49">>=</span><span style="color:#D73A49"> -</span><span style="color:#24292E">min_penetration:</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span><span style="color:#6A737D">                      # 没有实际穿透</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> ignore_mask[g1, g2]:</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span><span style="color:#6A737D">                      # 机构自接触或显式忽略</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> False</span><span style="color:#6A737D">                      # 三条都过，判为碰撞</span></span>
+<span class="line"><span style="color:#D73A49">return</span><span style="color:#005CC5"> True</span></span></code></pre>
+<p>第一条过滤需要一份“哪些几何属于机器人”的集合。按名字筛是不可靠的：导入的机器人模型里，碰撞几何往往没有名字，只有用于显示的外观网格才命名过；不同来源的模型命名习惯也不一致。按结构筛更稳：从关节所在的身体沿父链上溯到根，再展开整棵子树，子树覆盖的几何就是机器人本体与挂在末端的工具。这个集合随模型结构变化，不随命名变化。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  J["关节名查到的 6 个关节"] --> B["每个关节所在的身体"]
+  B --> R["沿父链上溯到世界的直接子节点"]
+  R --> S["展开整棵机器人子树"]
+  S --> G["子树内的几何集合"]
+  S --> T["子树内除连杆链以外的部分"]
+  T --> I["末端工具，默认成对忽略其内部接触"]
+  G --> F["接触过滤的第一条判据"]</pre></div>
+<p>第二条过滤的容差是一个设计量，不是精度问题。取值太小会把贴合面的数值噪声算成碰撞，取值太大会让真实的浅穿透被放过。它的量级应当远小于机械臂与障碍的特征尺度，同时大于求解器在静止接触上留下的抖动幅度。</p>
+<h2 id="忽略表表达哪些接触在规划里没有意义">忽略表表达“哪些接触在规划里没有意义”</h2>
+<p>机构内部的自接触在物理上是真实的，在规划语义里却没有意义：夹爪手指互插、多连杆机构的杆件自接触，都会在正常位形下持续出现。如果把它们算作碰撞，机械臂的可用位形会大幅收缩，甚至收缩到空集。</p>
+<p>忽略表的构造方式是几何对的布尔矩阵，默认把末端工具内部的几何两两置为忽略，再叠加调用方传入的忽略对。忽略对的名字同时接受几何名与身体名，这样即使碰撞几何没有名字，也可以按所属身体配置。矩阵在运行时可以增补，因为忽略需求随任务变化：抓取过程中手持物体与手指的持续接触在物理上一直存在，而规划仍需要从当前位形出发寻找路径。
+这条需求引出一个接口设计上的取舍：忽略表是查询器的一部分，还是调用方每次传参？做成查询器内部状态，调用方只需要在需要时临时改写，用完还原；做成参数，每次查询都要重新构造矩阵，开销更大。临时改写的方式要求改动范围严格限定在一次查询窗口内，否则忽略会泄漏到其它模块的碰撞语义里。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>忽略类别</th><th>典型来源</th><th>是否为默认</th><th>生效时机</th></tr></thead><tbody><tr><td>工具内部自接触</td><td>夹爪手指与连杆机构</td><td>默认忽略</td><td>始终</td></tr><tr><td>调用方指定的几何对</td><td>调试或特殊任务</td><td>按需加入</td><td>配置后始终</td></tr><tr><td>手持物体与工具</td><td>抓取过程中的持续接触</td><td>不默认</td><td>仅规划窗口内临时生效</td></tr></tbody></table>
+<h2 id="查询必须无副作用">查询必须无副作用</h2>
+<p>规划是预测，不是执行。搜索过程会对成百上千个位形做查询，其中绝大多数不会被执行；这些查询不能改变仿真状态，否则规划本身就会把场景推着走，物体位置与关节状态在搜索过程中漂移，查询结果也不再彼此可比。</p>
+<p>做法是准备一份私有的状态副本，每次查询把仿真状态整份快照过来，只覆盖机械臂的关节量，再调用一次前向计算。快照保证查询看到的是当前场景：物体已经落在哪里就按哪里算，而不是复位时的初始布局。只覆盖关节量保证夹爪开合、物体姿态这些与搜索无关的自由度保持真实值。速度量清零，让同一组关节角每次都得到同一份接触清单：接触几何与速度无关，残留速度只会带来不可复现的结果。</p>
+<p>前向计算取到哪一层也是一个取舍。规划只需要运动学与接触信息，不需要积分，也不需要推进时间，因此调用只算派生量的前向层，而不跑步进物理。前者开销小且不产生任何状态变化，后者会把仿真往前推一步。这个选择把查询与执行在实现层面分开，规划器因此可以任意频繁地调用。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  Q["输入关节角"] --> SZ{"维度与有限性检查"}
+  SZ -- "不合格" --> BAD["判为不合法"]
+  SZ -- "通过" --> LIM{"落在关节限位内"}
+  LIM -- "否" --> BAD
+  LIM -- "是" --> CP["把仿真状态快照进私有副本"]
+  CP --> OV["只覆盖机械臂关节，速度清零"]
+  OV --> FW["前向计算生成接触清单"]
+  FW --> FLT["三条过滤逐条检查"]
+  FLT -- "命中碰撞" --> BAD
+  FLT -- "全部通过" --> OK["判为合法"]</pre></div>
+<h2 id="边合法性是连续问题采样只能近似">边合法性是连续问题，采样只能近似</h2>
+<p>单点查询可以做到精确：给定位形，前向计算给出的接触清单是确定答案。边的合法性则是一个连续问题：整条关节空间线段是否都落在自由空间里。物理引擎没有线段碰撞这样的接口，只能把它离散成一串点，逐点查询。</p>
+<p>离散化必然带来漏判窗口。设线段长度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span>、切 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span> 段，相邻采样点的间距是</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>s</mi><mo>=</mo><mfrac><mi>d</mi><mi>n</mi></mfrac></mrow><annotation encoding="application/x-tex">\Delta s = \frac{d}{n}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">n</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>
+<p>设某障碍在关节空间中的穿越宽度为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi></mrow><annotation encoding="application/x-tex">w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span>。若 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mo>&#x3C;</mo><mi mathvariant="normal">Δ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">w &#x3C; \Delta s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&#x3C;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal">s</span></span></span></span>，存在相位使两个相邻采样点都落在障碍之外，这条线段就被判为合法。漏判风险随 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mi mathvariant="normal">/</mi><mi mathvariant="normal">Δ</mi><mi>s</mi></mrow><annotation encoding="application/x-tex">w / \Delta s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mord">/Δ</span><span class="mord mathnormal">s</span></span></span></span> 减小而升高；要保证不漏，需要 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>s</mi><mo>≤</mo><mi>w</mi></mrow><annotation encoding="application/x-tex">\Delta s \le w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord">Δ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span></span></span></span>。这条判据把采样多密才算够从经验问题变成了可计算问题：分辨率的上限由场景中最小障碍的穿越宽度决定。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> is_edge_valid</span><span style="color:#24292E">(q1, q2, steps):</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> is_state_valid(q1) </span><span style="color:#D73A49">or</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> is_state_valid(q2):</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#005CC5"> False</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> k </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, steps):</span></span>
+<span class="line"><span style="color:#24292E">        s </span><span style="color:#D73A49">=</span><span style="color:#24292E"> k </span><span style="color:#D73A49">/</span><span style="color:#24292E"> steps</span></span>
+<span class="line"><span style="color:#D73A49">        if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> is_state_valid(q1 </span><span style="color:#D73A49">+</span><span style="color:#24292E"> s </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (q2 </span><span style="color:#D73A49">-</span><span style="color:#24292E"> q1)):</span></span>
+<span class="line"><span style="color:#D73A49">            return</span><span style="color:#005CC5"> False</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#005CC5"> True</span></span></code></pre>
+<p>段数的取法有两种常见形态，差别在采样间距如何随边长变化：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>段数策略</th><th>采样间距</th><th>长边上的表现</th></tr></thead><tbody><tr><td>固定段数</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>s</mi><mo>=</mo><mi>d</mi><mi mathvariant="normal">/</mi><mi>n</mi></mrow><annotation encoding="application/x-tex">\Delta s = d / n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">d</span><span class="mord">/</span><span class="mord mathnormal">n</span></span></span></span>，随边长线性增大</td><td>边长越长越容易漏判</td></tr><tr><td>固定分辨率</td><td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>s</mi><mo>≈</mo><mi>ρ</mi></mrow><annotation encoding="application/x-tex">\Delta s \approx \rho</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">ρ</span></span></span></span>，与边长无关</td><td>段数随边长增长，漏判风险稳定</td></tr></tbody></table>
+<p>固定分辨率把段数算成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">⌈</mo><mi>d</mi><mi mathvariant="normal">/</mi><mi>ρ</mi><mo stretchy="false">⌉</mo></mrow><annotation encoding="application/x-tex">\lceil d / \rho \rceil</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">⌈</span><span class="mord mathnormal">d</span><span class="mord">/</span><span class="mord mathnormal">ρ</span><span class="mclose">⌉</span></span></span></span>，再钳到一个上下限：下限保证很短的边也有中间采样点，上限防止超长边把时间全花在采样上。规划器通常同时用到两种策略：单步扩展的边很短，两种取法差别不大；后处理阶段会出现跨度很大的候选边，这时固定分辨率的优势才显现出来。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> edge_steps</span><span style="color:#24292E">(a, b, resolution, max_steps</span><span style="color:#D73A49">=</span><span style="color:#005CC5">64</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">    d </span><span style="color:#D73A49">=</span><span style="color:#24292E"> norm(b </span><span style="color:#D73A49">-</span><span style="color:#24292E"> a)</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> clip(ceil(d </span><span style="color:#D73A49">/</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(resolution, </span><span style="color:#005CC5">1e-9</span><span style="color:#24292E">)), </span><span style="color:#005CC5">2</span><span style="color:#24292E">, max_steps)</span></span></code></pre>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  E["一条待检查的关节空间线段，长度 d"] --> FIX["固定段数"]
+  E --> RES["固定分辨率"]
+  FIX --> F1["采样间距 d 除以 n，随边长增大"]
+  RES --> R1["段数取 d 除以 rho 向上取整，间距约为 rho"]
+  F1 --> F2["长边漏判风险上升"]
+  R1 --> R2["漏判风险与边长无关"]</pre></div>
+<h2 id="限位判据为什么只需查端点">限位判据为什么只需查端点</h2>
+<p>关节限位是每个关节一个独立区间，六个区间的笛卡尔积是一个凸集，也就是关节空间里的一个盒体。凸集的性质直接给出结论：线段两端都在盒内时，整条线段都在盒内。因此边的限位检查只需要查两个端点，中间的采样点不必重复判断限位，只需判断碰撞。</p>
+<p>碰撞判断没有这个性质，自由空间一般不是凸的，所以中间点必须逐点查。把两类约束分开处理，既省掉重复的限位判断，也让限位是凸约束、碰撞是非凸约束这个区别在代码结构里显式可见。</p>
+<p>端点是否算在限位内是另一处约定。把端点算进去，边界位形合法；不算进去，边界位形非法。两种约定都能工作，重要的是全仓统一：如果采样边界、限位判据、目标钳制三处用了不同约定，就会出现规划器给出的目标被判定超限这类自相矛盾的结果。</p>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>用接触总数当碰撞数</td><td>所有位形都判非法，起点也走不出去</td><td>环境里存在与机器人无关的长期接触</td></tr><tr><td>2</td><td>按几何名筛选机器人部件</td><td>忽略配置不生效，连杆碰撞漏判</td><td>导入模型的碰撞几何常常没有名字</td></tr><tr><td>3</td><td>认为忽略表只服务夹爪</td><td>手持物体时起点被判非法</td><td>忽略需求随任务变化，需要临时生效</td></tr><tr><td>4</td><td>对长边沿用固定段数</td><td>稀疏采样跨过薄障碍</td><td>采样间距随边长线性增大</td></tr><tr><td>5</td><td>认为采样够密就不会漏判</td><td>薄障碍仍然被跨过</td><td>漏判取决于间距与障碍宽度之比</td></tr><tr><td>6</td><td>让查询直接读写仿真状态</td><td>搜索过程改变物体位置</td><td>规划是预测，查询必须无副作用</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>采样规划需要的是一张布尔判据表，不是距离场；物理引擎给出的接触清单要经过折算才能用。</li>
+<li>折算规则是三条过滤：至少一方属于机器人、存在实际穿透、不在忽略表内。</li>
+<li>机器人几何集合按结构界定而不是按命名界定，这样对模型命名习惯不敏感。</li>
+<li>查询基于私有状态快照，只覆盖机械臂关节并清空速度，保证无副作用且结果可复现。</li>
+<li>边的合法性只能离散近似，采样间距必须不大于最小障碍在关节空间里的穿越宽度。</li>
+<li>限位是凸约束，只需查端点；碰撞是非凸约束，必须逐点查。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>判据形态</td><td>布尔合法性</td><td>接口窄、算法简单；代价是没有安全裕度</td></tr><tr><td>机器人界定</td><td>按身体子树</td><td>对命名不敏感；代价是依赖模型结构</td></tr><tr><td>穿透容差</td><td>默认零，按需调大</td><td>语义严格；代价是需要为数值噪声留容差</td></tr><tr><td>忽略表位置</td><td>查询器内部状态加临时改写</td><td>调用简单；代价是改写要限定在查询窗口内</td></tr><tr><td>边采样</td><td>固定分辨率加段数上下限</td><td>长边不漏判；代价是长边查询更贵</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出接触折算成碰撞的三条过滤条件，并各给一个会被该条件拦掉的例子。</li>
+<li>为什么机器人几何集合按身体子树界定比按几何名界定更稳？给出两种界定方式各自失效的场景。</li>
+<li>一条长 1.0 rad 的关节空间线段，分别按固定 12 段与固定 0.02 rad 分辨率切分，计算两种采样间距，并指出哪一种在长边上更安全。</li>
+<li>说明关节限位为凸集时，为什么边检查可以只查端点，而碰撞检查不行。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>场景中存在最小穿越宽度为 0.01 rad 的薄障碍。设计一套边采样策略，给出分辨率取值、段数上限与理由，并说明段数上限带来的残余漏判风险。</li>
+<li>为一次抓取任务设计忽略表的生命周期：哪些接触对在什么阶段加入、何时还原，写出接口与还原时机，并说明忽略泄漏到其它模块的后果。</li>
+<li>设计一份碰撞查询的自检清单，覆盖无副作用、可复现、几何集合正确性、忽略表生效与穿透容差五类检查。</li>
+<li>若把布尔判据升级为有符号距离，规划算法的哪些部分需要改动？给出改动清单与新增的取舍。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>planning/collision.py</code></td><td>位形与边合法性查询、接触过滤、忽略表与调试接口</td></tr><tr><td><code>planning/rrt_connect.py</code></td><td>边的离散段数计算与调用方</td></tr><tr><td><code>core/config.py</code></td><td>关节限位区间，采样边界与限位判据的共同来源</td></tr><tr><td><code>core/interfaces.py</code></td><td>规划协议中的查询方法签名</td></tr><tr><td><code>planning/smoke.py</code></td><td>过滤规则与无副作用的核对用例</td></tr></tbody></table></div></section><section class="dfile" id="file-2" data-file="02-RRT-Connect"><div class="dfile__head"><span class="dfile__idx">FILE 02</span><span class="dfile__name">02-RRT-Connect</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-机械臂运动学与控制/03-运动规划/02-RRT-Connect.md</span></div><div class="dfile__body"><h1 id="rrt-connect">RRT-Connect</h1>
+<p>在六维关节空间里给机械臂找一条绕开障碍的路径，第一反应通常是网格搜索，或者沿着障碍的几何边界走。网格搜索的单元数随维度指数增长，六维下很快就会超出任何可用的时间与存储预算；几何方法要求障碍在关节空间里有解析边界，而关节空间里的障碍是工作空间障碍经过运动学映射的像，通常没有解析表达。两类方法在高维上都很快失效。</p>
+<p>采样式规划换了一个问题设定：不要求覆盖整个空间，只要求在自由空间里连出一条可行路径。下面先说明这个换法为什么成立，再讲单向树的扩展机制，然后展开双向树与贪心连接，最后讨论步长、采样偏置、迭代上限与边离散分辨率这几组需要一起选的参数。</p>
+<h2 id="高维空间里为什么改用采样">高维空间里为什么改用采样</h2>
+<p>网格搜索把空间切成单元，逐个标记自由或占用，完备性建立在分辨率上：分辨率足够细时一定能找到存在的路径。代价是单元数按维度指数增长，而关节空间的维度等于自由度，六轴机械臂就是六维。几何方法走另一条路：显式构造障碍的边界与自由空间的连通性，完备性好，但对环境的假设最强。</p>
+<p>采样式规划不做覆盖，只在自由空间里随机取点、把点连成树或图。它的完备性变成概率完备：只要路径存在且算法运行足够久，找到它的概率趋近于一。这个弱化的承诺换来了对维度不敏感的增长行为，以及对障碍表达几乎没有要求。代价是结果带随机性、不保证最短，并且必须配合后处理才能交给控制器执行。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>方法</th><th>完备性</th><th>维度适应性</th><th>解的质量</th><th>主要代价</th></tr></thead><tbody><tr><td>网格搜索</td><td>分辨率完备</td><td>单元数随维度指数增长</td><td>依赖分辨率</td><td>时间与存储快速膨胀</td></tr><tr><td>几何与路线图</td><td>完备</td><td>依赖障碍的解析边界</td><td>通常较好</td><td>构造复杂，动态环境难维护</td></tr><tr><td>采样法</td><td>概率完备</td><td>与维度弱相关</td><td>不保证最优</td><td>结果随机，需要后处理</td></tr></tbody></table>
+<p>“概率完备”这句话有两处必须读准。第一，它只保证路径存在时最终能找到，不保证多长时间能找到，所以迭代上限是失败判据而不是完成判据。第二，它依赖采样在自由空间上的覆盖，若采样分布或连接方式有系统偏差，某些窄通道可能长期采不到。</p>
+<h2 id="单向树随机采样与最近邻扩展">单向树：随机采样与最近邻扩展</h2>
+<p>单向 RRT 的每一步只有四件事：在关节空间里取一个随机点，找到树上离它最近的节点，从这个节点朝随机点走一个固定步长，检查这段边是否可用；可用就把新节点接上去。重复这个过程，树会朝未被覆盖的区域生长。</p>
+<p>扩展方向指向随机点，长度被步长截断：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>q</mi><mtext>new</mtext></msub><mo>=</mo><msub><mi>q</mi><mtext>near</mtext></msub><mo>+</mo><mfrac><mrow><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>ε</mi><mo separator="true">,</mo><mi>d</mi><mo stretchy="false">)</mo></mrow><mi>d</mi></mfrac><mtext> </mtext><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><msub><mi>q</mi><mtext>rand</mtext></msub><mo>−</mo><msub><mi>q</mi><mtext>near</mtext></msub><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo></mrow><annotation encoding="application/x-tex">q_{\text{new}} = q_{\text{near}} + \frac{\min(\varepsilon, d)}{d}\,\bigl(q_{\text{rand}} - q_{\text{near}}\bigr)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">new</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">near</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.113em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">min</span><span class="mopen">(</span><span class="mord mathnormal">ε</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mopen"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">rand</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.2em;vertical-align:-0.35em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">near</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose"><span class="delimsizing size1">)</span></span></span></span></span></span>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span> 是最近节点到随机点的距离，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi></mrow><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span></span></span></span> 是步长。最近邻取树上到随机点距离最小的节点：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>i</mi><mo>=</mo><mi>arg</mi><mo>⁡</mo><munder><mrow><mi>min</mi><mo>⁡</mo></mrow><mi>j</mi></munder><mo stretchy="false">∥</mo><msub><mi>q</mi><mi>j</mi></msub><mo>−</mo><msub><mi>q</mi><mtext>rand</mtext></msub><mo stretchy="false">∥</mo></mrow><annotation encoding="application/x-tex">i = \arg\min_j \lVert q_j - q_{\text{rand}} \rVert</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.6138em;vertical-align:-0.8638em;"></span><span class="mop">ar<span style="margin-right:0.0139em;">g</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-2.3723em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8638em;"><span></span></span></span></span></span><span class="mopen">∥</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">rand</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">∥</span></span></span></span></span>
+<p>为什么朝最近节点扩展就能覆盖空间，可以用最近邻区域的形状解释：树上每个节点对应空间中的一块区域，落在这块区域里的随机点都会朝该节点扩展。树的节点越稀疏的地方，单块区域越大，被采中的概率越高，树就朝那里生长。这个机制让扩展自然偏向未探索区域，不需要额外的启发式。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">def</span><span style="color:#6F42C1"> extend</span><span style="color:#24292E">(tree, target, step_size):</span></span>
+<span class="line"><span style="color:#24292E">    i </span><span style="color:#D73A49">=</span><span style="color:#24292E"> nearest(tree, target)</span></span>
+<span class="line"><span style="color:#24292E">    delta </span><span style="color:#D73A49">=</span><span style="color:#24292E"> target </span><span style="color:#D73A49">-</span><span style="color:#24292E"> tree[i]</span></span>
+<span class="line"><span style="color:#24292E">    d </span><span style="color:#D73A49">=</span><span style="color:#24292E"> norm(delta)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> d </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 1e-9</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#24292E"> i, </span><span style="color:#005CC5">True</span></span>
+<span class="line"><span style="color:#24292E">    new </span><span style="color:#D73A49">=</span><span style="color:#24292E"> tree[i] </span><span style="color:#D73A49">+</span><span style="color:#24292E"> delta </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (</span><span style="color:#005CC5">min</span><span style="color:#24292E">(step_size, d) </span><span style="color:#D73A49">/</span><span style="color:#24292E"> d)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> edge_valid(tree[i], new):</span></span>
+<span class="line"><span style="color:#D73A49">        return</span><span style="color:#D73A49"> -</span><span style="color:#005CC5">1</span><span style="color:#24292E">, </span><span style="color:#005CC5">False</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> add(tree, new, i), d </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#24292E"> step_size</span></span></code></pre>
+<p>步长同时承担两个角色：它限制单条边的长度，也决定节点增长的快慢。边只有一条，因此树的规模与边数是同一量级。这个稀疏结构是采样法的优点也是缺点：节点少意味着内存小、最近邻查询便宜；连接关系单一意味着路径只有一条候选，找不到就整棵树重来。</p>
+<h2 id="双向两棵树交替生长与贪心连接">双向：两棵树交替生长与贪心连接</h2>
+<p>单向树从起点出发，要走到终点附近的概率取决于两者之间的距离与空间体积。双向版本让起点与终点各长一棵树，任意一棵扩展成功之后，让另一棵朝新节点做贪心连接，两棵树交替生长。距离目标越远，单向树需要的节点越多；两棵树相向生长时，各自的覆盖半径只需要走完一半路程。</p>
+<p>贪心连接是双向版本的关键。它与普通扩展的差别在循环次数：扩展只走一步，走不动就放弃；连接反复朝同一个目标走，每一步都检查边，直到到达目标或被障碍挡住。这个循环利用了一个事实：两棵树的节点之间往往存在一条直线可达的自由段，一次连接可以把这段直线整段走完，等价于一次加了很多个节点。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>操作</th><th>循环次数</th><th>目标</th><th>失败时的行为</th></tr></thead><tbody><tr><td>扩展</td><td>一步</td><td>随机采样点或对方树的根</td><td>放弃这一步，交换角色</td></tr><tr><td>连接</td><td>反复直到到达或被挡</td><td>对方刚生成的新节点</td><td>保留已加上的节点，交换角色</td></tr></tbody></table>
+<p>相遇的判据是距离阈值而不是精确相等。两棵树的节点由不同的扩展路径生成，浮点上不会精确重合，用一个小阈值判定到达即可。这个阈值同时防止另一种退化：两棵树的根几乎重合时，最近节点不再变化，若没有到达判据，连接循环会反复添加同一个点。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant M as 主循环
+  participant A as 当前树
+  participant B as 对方树
+  M->>M: 取一个采样目标
+  M->>A: 朝目标扩展一步
+  A->>A: 最近邻与边检查
+  A-->>M: 新节点或失败
+  M->>B: 朝新节点贪心连接
+  loop 每一步都检查边
+    B->>B: 朝目标走一个步长
+  end
+  B-->>M: 到达或被挡
+  M->>M: 交换两棵树的角色</pre></div>
+<h2 id="采样目标的两个来源">采样目标的两个来源</h2>
+<p>采样目标决定树往哪里长，它有两个来源，按概率分配。主要来源是关节限位盒内的均匀采样，作用是把节点撒向尚未覆盖的区域。另一个来源是直接取对方树的根节点，作用是把两棵树往彼此身上拉。两者组合的意义是：均匀采样负责探索，取对方根节点负责相遇。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>目标 = 对方树的根节点        以 goal_bias 的概率</span></span>
+<span class="line"><span>目标 = 限位盒内均匀采样        其余情况</span></span></code></pre>
+<p>偏置概率是一处需要一起看的参数。取值过高，树会长期沿着两个根之间的连线生长，遇到障碍就卡住，探索性消失；取值过低，两棵树靠随机采样相遇，需要的节点数随距离增长。取值在零点一到零点二之间是常见折中：绝大多数轮次保持探索，少量轮次直接朝对方推进。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>偏置取值</th><th>树的行为</th><th>适合的场景</th></tr></thead><tbody><tr><td>接近零</td><td>纯随机探索，相遇慢</td><td>障碍复杂、通道曲折</td></tr><tr><td>零点一到零点二</td><td>探索为主，定期朝对方推进</td><td>通用</td></tr><tr><td>接近一</td><td>只沿两棵树的连线生长</td><td>几乎无障碍的远距离目标</td></tr></tbody></table>
+<h2 id="步长迭代上限与节点预算">步长、迭代上限与节点预算</h2>
+<p>步长 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi></mrow><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span></span></span></span> 是扩展一次的最大关节空间位移，它同时影响三件事：单条边跨越障碍的风险、边检查的成本、达到目标所需的节点数。步长越大，单条边越长，越可能跨过薄障碍，边离散所需的采样点也越多；步长越小，节点增长越快，最近邻查询与树的存储会先成为瓶颈。合理取值与场景中最薄障碍的尺度挂钩，而不是与关节范围的绝对值挂钩。</p>
+<p>迭代上限的作用容易被误解。它属于失败判据：到达上限只说明这段时间内没找到路径，不说明路径不存在。因此上限必须与时间预算和节点容量一起定。轮数上限与节点总量上限是两个量，因为一轮里的贪心连接可能添加很多节点，只限制轮数不足以限制规模。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>参数</th><th>太小</th><th>太大</th><th>量级参考</th></tr></thead><tbody><tr><td>步长</td><td>节点暴涨，最近邻变慢</td><td>单边跨越薄障碍，检查变贵</td><td>零点一弧度级</td></tr><tr><td>迭代上限</td><td>窄通道来不及展开就放弃</td><td>失败时等待过久</td><td>数千轮级</td></tr><tr><td>偏置概率</td><td>相遇依赖运气</td><td>探索性消失</td><td>零点一级</td></tr><tr><td>边分辨率</td><td>长边漏判</td><td>采样开销上升</td><td>零点零二弧度级</td></tr></tbody></table>
+<h2 id="边离散分辨率与可复现性">边离散分辨率与可复现性</h2>
+<p>树上的每条新边都要离散采样后逐点检查。分辨率与步长是两个独立的量：步长决定树长什么样，分辨率决定检查一条边有多细。若把两者混为一谈，用固定段数去检查所有边，长边的采样间距会随长度增大，薄障碍就有被跨过的窗口。按固定分辨率反推段数可以消除这个依赖：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>n</mi><mo>=</mo><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">p</mi></mrow><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mrow><mo fence="true">⌈</mo><mfrac><mi>d</mi><mi>ρ</mi></mfrac><mo fence="true">⌉</mo></mrow><mo separator="true">,</mo><mtext> </mtext><mn>2</mn><mo separator="true">,</mo><mtext> </mtext><mn>64</mn><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">n = \mathrm{clip}\!\left(\left\lceil \frac{d}{\rho} \right\rceil,\ 2,\ 64\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4em;vertical-align:-0.95em;"></span><span class="mord"><span class="mord mathrm">clip</span></span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">⌈</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">ρ</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">⌉</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">64</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span></span></span></span></span>
+<p>下限取二保证很短的边也有一个中间采样点，上限防止超长边把时间全花在采样上。分辨率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi></mrow><annotation encoding="application/x-tex">\rho</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">ρ</span></span></span></span> 由场景中最小的障碍穿越宽度决定，理由在碰撞检测那一篇里已经给出。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="text"><code><span class="line"><span>每次调用规划入口：rng = default_rng(seed)</span></span></code></pre>
+<p>随机源的处理方式决定结果能不能复现。每次规划按种子重新播种，同种子加同查询得到完全一致的两棵树、完全一致的路径；如果只在构造器里播种一次，随机状态会跨多次规划累积前进，同一组查询在不同调用顺序下给出不同结果。可复现的价值在三处体现：失败能重放，重试序列确定，参数比较时只有被比较的变量在变。</p>
+<h2 id="快路径与失败语义">快路径与失败语义</h2>
+<p>主循环之前先做一次直连检查：起点与终点之间的一条边若可用，直接返回两个点，整棵树都不必建。近距离目标在调用里占相当比例，这一步省掉的开销最大，而且返回结果与搜索得到的路径同样有效。</p>
+<p>失败要区分原因，因为处置方式不同。一类是端点本身不合法，搜索根本不会开始，问题在输入端：目标可能超出限位，或者起始位形处于接触状态。另一类是搜索耗尽，问题在参数或场景：步长与障碍尺度不匹配、偏置不合适、上限太小，或者路径确实不存在。把两类失败返回同一个空值而不带原因，调用方只能靠猜。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  P["收到起点与终点"] --> EP{"两端是否合法"}
+  EP -- "否" --> F0["失败：端点非法"]
+  EP -- "是" --> D{"直连是否可行"}
+  D -- "是" --> F1["返回两个点"]
+  D -- "否" --> S["按种子重新播种"]
+  S --> L["两棵树进入主循环"]
+  L --> E{"扩展是否成功"}
+  E -- "否" --> SW["交换两棵树的角色"]
+  E -- "是" --> C{"贪心连接是否到达"}
+  C -- "否" --> SW
+  C -- "是" --> OK["沿父链回溯拼接路径"]
+  SW --> CAP{"轮数或节点数超限"}
+  CAP -- "否" --> L
+  CAP -- "是" --> F2["失败：搜索耗尽"]</pre></div>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为采样法没有完备性保证</td><td>不敢在高维空间使用</td><td>概率完备：路径存在时找到的概率趋近于一</td></tr><tr><td>2</td><td>把迭代上限当完成判据</td><td>一到上限就断言路径不存在</td><td>上限只是失败判据，不是存在性判据</td></tr><tr><td>3</td><td>只限制轮数不限制节点数</td><td>一轮贪心连接加上大量节点</td><td>轮数与节点总量是两个独立预算</td></tr><tr><td>4</td><td>两棵树都只朝随机点扩展</td><td>相遇依赖运气，节点数暴涨</td><td>需要少量轮次直接取对方树的根</td></tr><tr><td>5</td><td>只在构造器里播种一次</td><td>同一组查询在多次调用间漂移</td><td>随机状态会跨调用累积前进</td></tr><tr><td>6</td><td>用固定段数检查所有边</td><td>长边采样稀疏，跨过薄障碍</td><td>采样间距随边长增大，应按分辨率反推</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>采样规划把完备性弱化为概率完备，换来对维度与障碍表达的低要求。</li>
+<li>单向树靠最近邻区域偏置自然覆盖空间，扩展步长限制单条边的长度。</li>
+<li>双向树两棵交替生长，贪心连接一次可以走完整段自由直线。</li>
+<li>采样目标有两个来源：限位盒均匀采样负责探索，对方树的根负责相遇。</li>
+<li>迭代上限是失败判据，轮数上限与节点总量上限需要分开设置。</li>
+<li>每次规划按种子重新播种，保证同种子加同查询的结果可复现。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>完备性</td><td>概率完备</td><td>维度适应性好；代价是结果随机、耗时不定</td></tr><tr><td>树的方向</td><td>双向</td><td>相遇更快；代价是每轮多一次贪心连接</td></tr><tr><td>采样目标</td><td>均匀采样加少量偏置</td><td>探索与相遇兼顾；代价是偏置要按场景调整</td></tr><tr><td>上限设置</td><td>轮数与节点数分开</td><td>规模可控；代价是参数变多、需要一起调</td></tr><tr><td>随机源</td><td>每次规划重新播种</td><td>失败可重放；代价是调用方要显式管理种子</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出扩展公式与最近邻公式，说明步长对单条边长度与节点增长速度的影响。</li>
+<li>解释贪心连接为什么能在一次调用里添加多个节点，以及它在什么条件下会提前失败。</li>
+<li>说明概率完备与分辨率完备的区别，并各给一个适合的方法与场景。</li>
+<li>若同一个种子两次规划返回不同路径，最可能的原因是什么？给出两种排查方向。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>为一个存在窄通道的场景设计参数组合（步长、偏置、迭代上限、边分辨率），给出推演过程与失败判据。</li>
+<li>设计一套失败归因流程：从返回空值出发，区分端点非法、探索不足与路径确实不存在三类原因。</li>
+<li>设计节点预算策略：轮数上限、节点总量上限与树的容量预分配三者如何配合，写出各自的作用。</li>
+<li>若要求路径尽量短，需要在双向树的基础上增加哪些机制？给出改动清单与新增的代价。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>planning/rrt_connect.py</code></td><td>双向树、扩展与连接、后处理、统计字段</td></tr><tr><td><code>planning/planner.py</code></td><td>多轮换种子重试与位姿入口</td></tr><tr><td><code>planning/collision.py</code></td><td>位形与边的合法性查询</td></tr><tr><td><code>core/config.py</code></td><td>关节限位盒，采样与限位判据的共同边界</td></tr><tr><td><code>core/interfaces.py</code></td><td>规划协议的方法签名</td></tr></tbody></table></div></section><section class="dfile" id="file-3" data-file="03-路径后处理与位姿规划"><div class="dfile__head"><span class="dfile__idx">FILE 03</span><span class="dfile__name">03-路径后处理与位姿规划</span><span class="dfile__rule" aria-hidden="true"></span><span class="dfile__src">docs/36-机械臂运动学与控制/03-运动规划/03-路径后处理与位姿规划.md</span></div><div class="dfile__body"><h1 id="路径后处理与位姿规划">路径后处理与位姿规划</h1>
+<p>搜索返回的路径是一条折线：节点是扩展过程随手撒下的，方向在节点之间不断改变，间距也不均匀。把它直接交给位置控制，跟踪过程会反复减速加速，单周期参考跳变忽大忽小。规划与执行之间因此需要一层后处理，把路径整理成控制器能稳定跟踪的形状。另一头的问题是任务通常以末端位姿给出，需要先解出关节角才能规划，而逆解多解、对初值敏感。</p>
+<p>下面先说明折线为什么不能直接执行，再讲短路与加密各自保持的不变量，然后转向位姿规划的多种子策略，最后给出复核与重试的分工。</p>
+<h2 id="折线与疏密rrt-输出的两个问题">折线与疏密：RRT 输出的两个问题</h2>
+<p>第一个问题是方向。折线的每个节点都对应一次方向变化，控制器沿折线走时，每过一段就要把速度方向转过来。若把路径按等速或按时间律展开，拐点附近的速度轮廓会出现反复的加减速，实际执行时间被明显拉长。</p>
+<p>第二个问题是间距。扩展步长只限制单条边的上限，不保证下限：连接阶段可能一次加上很短的边，拼接处也可能出现很短的段；后处理阶段出现的候选长边又会远大于步长。控制器按关节空间插值执行时，段太短会浪费控制周期，段太长会让单周期的参考位移过大，速度前馈与插值的误差随之放大。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>问题</th><th>来源</th><th>直接执行的后果</th></tr></thead><tbody><tr><td>折线拐点多</td><td>每次扩展都会改变方向</td><td>速度方向反复突变，执行时间拉长</td></tr><tr><td>节点间距不均</td><td>步长只设上限，连接阶段可加很多点</td><td>单周期参考跳变忽大忽小</td></tr><tr><td>采样带来的冗余节点</td><td>树只保证连通性，不保证最少节点</td><td>同样的几何路径带更多拐点</td></tr></tbody></table>
+<p>后处理的两个操作分别针对这两点，它们都不改变路径的可行性，只改变节点的数量与分布。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart LR
+  A["搜索得到的折线路径"] --> B["短路：随机两点直连，删掉中间节点"]
+  B --> C["节点变少，拐点变平"]
+  C --> D["加密：每段切成不超过上限的小段"]
+  D --> E["间距均匀，可交给控制器跟踪"]</pre></div>
+<h2 id="短路随机两点直连并删掉中间节点">短路：随机两点直连并删掉中间节点</h2>
+<p>短路的思路很直接：在路径上随机取两个节点，试一次直连；如果这条边可用，就把它们之间的节点全部删掉。重复固定次数，路径只会变短、变平。</p>
+<p>它的不变量有三条。第一，端点保持不变，无论怎么删，起点与终点都是原来的两个节点。第二，路径长度不增，每次删点都用一个线段替代一段折线，而线段是两点之间的最短连接：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>L</mi><mo stretchy="false">(</mo><msup><mtext>path</mtext><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">)</mo><mo>≤</mo><mi>L</mi><mo stretchy="false">(</mo><mtext>path</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">L(\text{path}') \le L(\text{path})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0862em;vertical-align:-0.25em;"></span><span class="mord mathnormal">L</span><span class="mopen">(</span><span class="mord"><span class="mord text"><span class="mord">path</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8362em;"><span style="top:-3.1473em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">L</span><span class="mopen">(</span><span class="mord text"><span class="mord">path</span></span><span class="mclose">)</span></span></span></span></span>
+<p>第三，可行性不回退，只有通过边检查的直连才被接受。这三条让短路可以安全地反复执行，不需要额外的几何证明。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> _ </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(iters):</span></span>
+<span class="line"><span style="color:#24292E">    n </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> len</span><span style="color:#24292E">(path)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> n </span><span style="color:#D73A49">&#x3C;=</span><span style="color:#005CC5"> 2</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        break</span></span>
+<span class="line"><span style="color:#24292E">    i </span><span style="color:#D73A49">=</span><span style="color:#24292E"> rand_int(</span><span style="color:#005CC5">0</span><span style="color:#24292E">, n </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 2</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#24292E">    j </span><span style="color:#D73A49">=</span><span style="color:#24292E"> rand_int(i </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">, n </span><span style="color:#D73A49">-</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">)</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> j </span><span style="color:#D73A49">==</span><span style="color:#24292E"> i </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">:</span></span>
+<span class="line"><span style="color:#D73A49">        continue</span></span>
+<span class="line"><span style="color:#D73A49">    if</span><span style="color:#24292E"> edge_valid(path[i], path[j], steps_for(path[i], path[j])):</span></span>
+<span class="line"><span style="color:#24292E">        path </span><span style="color:#D73A49">=</span><span style="color:#24292E"> path[:i </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">] </span><span style="color:#D73A49">+</span><span style="color:#24292E"> path[j:]</span></span></code></pre>
+<p>为什么用随机尝试而不是求最短路径？后处理的目标是把折线整理成可执行的形状，不是求全局最优。求最短路径需要在自由空间里做搜索或做可见性图，代价远大于收益；随机尝试每次只需要一条边的检查，迭代固定次数后效果就基本饱和。</p>
+<p>短路引入的候选边可能跨越很长距离，因此边检查的分辨率要按固定值反推段数，而不是沿用固定段数。若这一步偷懒，短路越成功、长边越多，漏判薄障碍的风险反而越高。</p>
+<h2 id="加密把每段切成不超过上限的子段">加密：把每段切成不超过上限的子段</h2>
+<p>加密把路径的每一段都切成等长的子段，段长不超过给定上限：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>k</mi><mo>=</mo><mi>max</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mn>1</mn><mo separator="true">,</mo><mtext> </mtext><mrow><mo fence="true">⌈</mo><mfrac><mi>d</mi><msub><mi>s</mi><mi>max</mi><mo>⁡</mo></msub></mfrac><mo fence="true">⌉</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">k = \max\left(1,\ \left\lceil \frac{d}{s_{\max}} \right\rceil\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4em;vertical-align:-0.95em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">⌈</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">⌉</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span></span></span></span></span>
+<p>每段被分成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span> 份，端点原样保留。切分后的路径总长不变，节点数增加，节点间距被压到上限以内。</p>
+<p>这个上限服务的是下游跟踪器。关节空间跟踪按段插值时，单段的长度决定了插值跨度与速度前馈的量级；把上限固定下来，控制器收到的每一段都在同一个量级上，不必为个别长段做特殊处理。上限也不宜太小：节点越多，路径表越大，跟踪器的循环开销也越高。</p>
+<pre class="astro-code github-light" style="background-color:#fff;color:#24292e; overflow-x: auto;" tabindex="0" data-language="python"><code><span class="line"><span style="color:#24292E">out </span><span style="color:#D73A49">=</span><span style="color:#24292E"> [path[</span><span style="color:#005CC5">0</span><span style="color:#24292E">].copy()]</span></span>
+<span class="line"><span style="color:#D73A49">for</span><span style="color:#24292E"> a, b </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> zip</span><span style="color:#24292E">(path[:</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">], path[</span><span style="color:#005CC5">1</span><span style="color:#24292E">:]):</span></span>
+<span class="line"><span style="color:#24292E">    d </span><span style="color:#D73A49">=</span><span style="color:#24292E"> norm(b </span><span style="color:#D73A49">-</span><span style="color:#24292E"> a)</span></span>
+<span class="line"><span style="color:#24292E">    k </span><span style="color:#D73A49">=</span><span style="color:#005CC5"> max</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, ceil(d </span><span style="color:#D73A49">/</span><span style="color:#24292E"> max_step))</span></span>
+<span class="line"><span style="color:#D73A49">    for</span><span style="color:#24292E"> i </span><span style="color:#D73A49">in</span><span style="color:#005CC5"> range</span><span style="color:#24292E">(</span><span style="color:#005CC5">1</span><span style="color:#24292E">, k </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">):</span></span>
+<span class="line"><span style="color:#24292E">        out.append(a </span><span style="color:#D73A49">+</span><span style="color:#24292E"> (b </span><span style="color:#D73A49">-</span><span style="color:#24292E"> a) </span><span style="color:#D73A49">*</span><span style="color:#24292E"> (i </span><span style="color:#D73A49">/</span><span style="color:#24292E"> k))</span></span>
+<span class="line"><span style="color:#24292E">out[</span><span style="color:#005CC5">0</span><span style="color:#24292E">], out[</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">] </span><span style="color:#D73A49">=</span><span style="color:#24292E"> path[</span><span style="color:#005CC5">0</span><span style="color:#24292E">].copy(), path[</span><span style="color:#D73A49">-</span><span style="color:#005CC5">1</span><span style="color:#24292E">].copy()</span></span></code></pre>
+<p>参数要做兜底：上限不是有限正数时回落到默认值。这个兜底让调用方即使传了非法值，也不会出现除零或无限循环。</p>
+<p>端点在两处被重新覆盖，原因不同。浮点插值会让首尾节点与输入产生微小偏差，覆盖一次把偏差清零；上游的关节限位钳制会改动目标值，因此在整条流水线的出口再对齐一次调用方实际给出的起点与终点。端点可断言是后处理最重要的接口约定：调用方按精确相等检查两端，任何一处回填遗漏都会让断言失败。</p>
+<h2 id="后处理的顺序与代价">后处理的顺序与代价</h2>
+<p>两个操作的顺序会影响成本。短路在前的理由是：加密的成本与路径段数成正比，先把节点删到接近最少，再做加密，总工作量最小；反过来先加密会把节点数抬高，之后短路删掉的大多是刚插入的点，等于白做一遍。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>顺序</th><th>中间状态</th><th>代价</th></tr></thead><tbody><tr><td>先短路后加密</td><td>节点少、拐点平</td><td>短路的长边检查较贵，加密的段数少</td></tr><tr><td>先加密后短路</td><td>节点多、多数是刚插入的</td><td>加密白做，短路要在更长的列表上取随机点</td></tr></tbody></table>
+<p>后处理的边界也要说清：它只整理已经可行的路径，无法把不可行的路径变成可行。端点非法、搜索耗尽、路径必须穿过障碍，这三类问题都要在搜索阶段解决，后处理帮不上忙。它增加的边检查次数是防御性开销，用来保证整理后的路径仍然合法，而不是用来发现新路径。</p>
+<h2 id="位姿规划为什么需要多组逆解种子">位姿规划：为什么需要多组逆解种子</h2>
+<p>任务给出的通常是末端位姿，而规划在关节空间进行，因此中间要经过一次逆解。逆解是一个非线性方程组的求解过程，它的解可能有多组，收敛结果依赖初值：同一个目标位姿从不同的初始关节角出发，可能收敛到不同的解，也可能不收敛。</p>
+<p>种子因此有两个来源，各有分工。当前位形是最有价值的种子：从它出发的解与当前状态连续，规划出的路径短，执行时不需要大幅跳变。限位盒内的随机种子负责覆盖面：某些目标位姿存在多组解，当前位形附近的解可能落在限位边界之外、处于奇异附近、或者被障碍挡住去路，此时换一组种子可以落到另一条解分支上。</p>
+<p>为什么一个种子不够，可以分成三类原因。逆解本身可能不收敛；逆解收敛了但关节角不满足约束；关节角满足约束但没有可行路径到达它。三类原因的处置不同：前两类换种子，第三类换解分支之后还要重新规划。多组种子同时覆盖了这三类情况。</p>
+<p>种子的使用顺序也有讲究。把当前位形放在最前，先试代价最低、路径最短的解。第一枪交给逆解器内部的多次重启，用一次调用覆盖较宽的初值范围；之后的显式种子都做热启动精化，单次成本低，适合逐个试探。这样安排让常见情况一次命中，少见情况才付出多次求解的代价。</p>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">sequenceDiagram
+  autonumber
+  participant P as 位姿规划入口
+  participant K as 逆解器
+  participant C as 碰撞查询
+  participant J as 关节规划
+  P->>P: 组种子表：当前位形与随机种子
+  loop 逐个种子
+    P->>K: 求逆解
+    K-->>P: 候选关节角
+    P->>P: 钳制到限位内
+    P->>C: 位形是否合法
+    alt 位形非法
+      C-->>P: 下一个种子
+    else 位形合法
+      P->>P: 用正解复核末端位姿
+      P->>J: 关节空间规划
+      J-->>P: 路径或失败
+    end
+  end
+  P->>P: 全部失败则报告不可达</pre></div>
+<h2 id="为什么不直接信任逆解的成功标志">为什么不直接信任逆解的成功标志</h2>
+<p>逆解器通常返回一个布尔标志，表示这次求解是否达到它自己的收敛条件。这个标志的语义是“求解器认为收敛”，与调用方需要的“末端到达目标”不是同一件事。当只约束位置时，逆解处于欠约束状态：求解器可能把姿态误差也算进收敛条件，于是位置已经到达而标志为假；反过来，标志为真也可能对应一个数值上收敛、几何上仍有偏差的解。</p>
+<p>判据应当由调用方自己定义，做法是用正解复核：把候选关节角送回正运动学，比较末端位置与目标位置的误差；只有显式给出目标姿态时，才额外比较姿态误差。</p>
+<p>姿态误差用四元数的最小夹角：</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>e</mi><mtext>rot</mtext></msub><mo>=</mo><mn>2</mn><mi>arccos</mi><mo>⁡</mo><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mfrac><mrow><mo stretchy="false">∣</mo><msub><mi>q</mi><mi>a</mi></msub><mo>⋅</mo><msub><mi>q</mi><mi>b</mi></msub><mo stretchy="false">∣</mo></mrow><mrow><mo stretchy="false">∥</mo><msub><mi>q</mi><mi>a</mi></msub><mo stretchy="false">∥</mo><mtext> </mtext><mo stretchy="false">∥</mo><msub><mi>q</mi><mi>b</mi></msub><mo stretchy="false">∥</mo></mrow></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">e_{\text{rot}} = 2\arccos\!\left(\frac{\lvert q_a \cdot q_b \rvert}{\lVert q_a \rVert\,\lVert q_b \rVert}\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">rot</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4em;vertical-align:-0.95em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">arccos</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">∥</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">∥</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mopen">∥</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">∥</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">∣</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span></span></span></span></span>
+<p>取点积的绝对值，把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mi>q</mi></mrow><annotation encoding="application/x-tex">-q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.0359em;">q</span></span></span></span> 视为同一姿态，这是四元数双覆盖的直接结果；两个四元数范数接近零时直接判为不达标，避免除零。</p>
+<p>两个容差的量级要分开定。位置容差与执行精度同一量级，毫米级即可：再小会被数值误差淹没，再大会让路径终点偏离目标。姿态容差要明显小于任务对姿态的要求，弧度级的小量；只在显式给出姿态时才检查，因为只约束位置的调用本来就不关心末端朝向。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>判据</th><th>量级</th><th>依据</th></tr></thead><tbody><tr><td>位置误差上限</td><td>毫米级</td><td>与执行精度同量级，再小无意义</td></tr><tr><td>姿态误差上限</td><td>零点零五弧度级</td><td>明显小于任务姿态容差</td></tr><tr><td>姿态检查触发</td><td>仅在显式给出姿态时</td><td>只约束位置的调用不关心朝向</td></tr></tbody></table>
+<div class="diagram"><pre class="mermaid" data-diagram="mermaid">flowchart TD
+  Q["候选关节角"] --> FK["做一次正运动学"]
+  FK -- "求解失败" --> NO["判为未到达"]
+  FK --> PE{"位置误差是否在容差内"}
+  PE -- "否" --> NO
+  PE -- "是" --> HQ{"是否显式给出目标姿态"}
+  HQ -- "否" --> YES["判为已到达"]
+  HQ -- "是" --> RE{"姿态误差是否在容差内"}
+  RE -- "否" --> NO
+  RE -- "是" --> YES</pre></div>
+<h2 id="换种子重试与交付前的复核">换种子重试与交付前的复核</h2>
+<p>采样式搜索单次失败在窄通道里很常见，一次失败不代表路径不存在。规划入口因此做多轮重试，每轮换一个随机种子。由于随机源在每次搜索开始时重新播种，整条流水线（搜索加后处理）在给定种子下确定，重试序列本身也是确定的，失败可以重放，参数对比时只有被比较的变量在变。</p>
+<p>重试次数的收益递减：每多一次尝试，边际成功率下降，而失败时的等待时间按次数线性增长。上限是成本与成功率的折中，通常取个位数。次数定得再多也解决不了另一类失败：目标位形本身不可达，或者路径确实不存在。</p>
+<p>后处理完成之后还要逐段复核一遍。逻辑上这一步看起来多余，搜索建树时每条边都检查过，短路也只接受检查通过的直连；但后处理会引入新的边结构，实现一旦调整，就可能在两处检查的语义之间留下缝隙。复核的作用是防御性的：任何一段非法就换下一个种子重来，不把坏路径交给控制器。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>阶段</th><th>保持的不变量</th><th>检查方式</th></tr></thead><tbody><tr><td>搜索</td><td>每条树边合法</td><td>扩展时逐边检查</td></tr><tr><td>短路</td><td>端点不变、长度不增、边合法</td><td>每个候选直连检查一次</td></tr><tr><td>加密</td><td>端点严格相等、段长不超上限</td><td>出口处回填并断言</td></tr><tr><td>交付前</td><td>整条路径逐段合法</td><td>按分辨率逐段复检</td></tr></tbody></table>
+<h2 id="常见判断偏差">常见判断偏差</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#</th><th>判断偏差</th><th>表现</th><th>依据</th></tr></thead><tbody><tr><td>1</td><td>认为搜索路径可以直接执行</td><td>拐点多、间距不均，跟踪抖动</td><td>后处理负责整理形状</td></tr><tr><td>2</td><td>担心删点会移动端点</td><td>不敢在起终点附近短路</td><td>端点回填是短路的不变量</td></tr><tr><td>3</td><td>先加密再短路</td><td>加密工作大部分被删掉</td><td>顺序决定总工作量</td></tr><tr><td>4</td><td>长边沿用固定段数检查</td><td>短路越成功越容易漏判</td><td>候选边应固定分辨率离散</td></tr><tr><td>5</td><td>直接采用逆解的布尔标志</td><td>位置达标却被判为失败</td><td>标志的语义与调用方需求不同</td></tr><tr><td>6</td><td>只用随机种子求逆解</td><td>路径跳变大、成功率低</td><td>当前位形是最有价值的种子</td></tr><tr><td>7</td><td>认为重试次数越多越好</td><td>边际收益递减，失败等待变长</td><td>上限是成本与成功率的折中</td></tr></tbody></table>
+<h2 id="小结">小结</h2>
+<h3 id="核心概念">核心概念</h3>
+<ul>
+<li>搜索返回的折线有方向与间距两个问题，直接执行会让跟踪反复加减速。</li>
+<li>短路用随机直连删点，保持端点不变、长度不增、可行性不回退三条不变量。</li>
+<li>加密把每段切到不超过给定上限，端点严格相等，服务下游等步长跟踪。</li>
+<li>后处理只整理已可行的路径，无法弥补端点非法或搜索耗尽。</li>
+<li>位姿规划需要多组逆解种子：当前位形保证连续性，随机种子覆盖其它解分支。</li>
+<li>逆解的成功标志语义与调用方需求不同，应由正解复核位置与姿态。</li>
+</ul>
+<h3 id="设计权衡">设计权衡</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>权衡点</th><th>常见选择</th><th>收益与代价</th></tr></thead><tbody><tr><td>后处理目标</td><td>整理形状而不是求最优</td><td>成本低；代价是路径长度不是最短</td></tr><tr><td>短路方式</td><td>随机尝试固定次数</td><td>实现简单、效果饱和；代价是无最优性保证</td></tr><tr><td>加密上限</td><td>固定段长上限</td><td>下游跟踪量级统一；代价是节点数增加</td></tr><tr><td>种子来源</td><td>当前位形优先、随机补充</td><td>常见情况一次命中；代价是少见情况多次求解</td></tr><tr><td>位姿判据</td><td>正解复核代替求解器标志</td><td>判据与需求一致；代价是每个候选多一次正解</td></tr><tr><td>重试次数</td><td>个位数，换种子</td><td>覆盖率提升；代价是失败等待按次数增长</td></tr></tbody></table>
+<h2 id="练习">练习</h2>
+<h3 id="基础题">基础题</h3>
+<ol>
+<li>写出短路的三条不变量，并说明每一条分别由哪一步保证。</li>
+<li>一段长 0.30 rad 的路径段，加密上限取 0.05 rad，计算切分后的子段数与子段长度。</li>
+<li>说明为什么后处理无法把不可行的路径变成可行，给出两类它无法处理的问题。</li>
+<li>为什么只约束位置时不应当直接用逆解的成功标志？给出两种会误判的情形。</li>
+</ol>
+<h3 id="挑战题">挑战题</h3>
+<ol start="5">
+<li>为一个多解目标位姿设计种子表：给出种子来源、数量与顺序，并说明如何判断某一类失败该换种子还是换解分支。</li>
+<li>设计一份路径交付前的检查清单，覆盖端点相等、段长上限、逐段合法性、位置与姿态达标四类检查。</li>
+<li>短路迭代次数、加密上限与交付前复核三者存在成本耦合。给出一个把它们一起定的方法，并说明如何判断参数已经饱和。</li>
+<li>若下游控制器的单周期位移预算收紧，路径后处理的哪些参数需要改？给出改动顺序与对执行时间的影响。</li>
+</ol>
+<h2 id="附本页引用的路径">附：本页引用的路径</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>路径</th><th>用途</th></tr></thead><tbody><tr><td><code>planning/rrt_connect.py</code></td><td>短路、加密与路径长度统计</td></tr><tr><td><code>planning/planner.py</code></td><td>多轮换种子重试、位姿入口、正解复核与容差</td></tr><tr><td><code>planning/collision.py</code></td><td>边合法性查询与离散段数</td></tr><tr><td><code>control/motion.py</code></td><td>关节路径跟踪的段长上限消费方</td></tr><tr><td><code>core/interfaces.py</code></td><td>规划协议中位姿入口的方法签名</td></tr><tr><td><code>core/config.py</code></td><td>关节限位，目标钳制与种子采样的共同边界</td></tr></tbody></table></div></section><nav class="unitnav" aria-label="相邻单元"><a href="/tc63/docs/36-%E6%9C%BA%E6%A2%B0%E8%87%82%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%E6%8E%A7%E5%88%B6/02-%E7%AC%9B%E5%8D%A1%E5%B0%94%E8%BD%A8%E8%BF%B9/"><span class="k">← 上一篇</span><span class="t">笛卡尔轨迹</span><span class="d">机械臂运动学与控制 · 3 个文件</span></a><a class="next" href="/tc63/docs/36-%E6%9C%BA%E6%A2%B0%E8%87%82%E8%BF%90%E5%8A%A8%E5%AD%A6%E4%B8%8E%E6%8E%A7%E5%88%B6/04-%E4%BC%BA%E6%9C%8D%E4%B8%8E%E6%89%A7%E8%A1%8C/"><span class="k">下一篇 →</span><span class="t">伺服与执行</span><span class="d">机械臂运动学与控制 · 3 个文件</span></a></nav></article></div></div><div class="dsearch" data-search data-index="/tc63/docs/search-index.json" hidden><div class="dsearch__panel" role="dialog" aria-modal="true" aria-label="搜索文档" data-search-panel><div class="dsearch__bar"><span class="k" aria-hidden="true">Find</span><input class="dsearch__input" type="search" name="q" placeholder="输入关键词：标题、正文、代码都搜" autocomplete="off" spellcheck="false" aria-label="搜索关键词" data-search-input><span class="dsearch__esc" aria-hidden="true">ESC</span></div><div class="dsearch__hint"><span><b>↑ ↓</b> 选择</span><span><b>Enter</b> 打开</span><span><b>ESC</b> 关闭</span><span data-search-count aria-live="polite">共 588 个文件</span></div><ul class="dsearch__results" data-search-results></ul><div class="dsearch__foot"><span>索引来自 docs/ 目录，构建期生成</span><span data-search-state></span></div></div></div><div class="dlightbox" data-lightbox hidden><div class="dlightbox__tools"><button class="dlightbox__btn" type="button" data-lightbox-zoom aria-pressed="false">放大 ×1.8</button><button class="dlightbox__btn" type="button" data-lightbox-close>关闭 ESC</button></div><figure class="dlightbox__fig"><div class="dlightbox__media" data-lightbox-media></div><img alt="" data-lightbox-img><figcaption class="dlightbox__cap"><span class="k" aria-hidden="true">Fig</span><span data-lightbox-cap></span></figcaption></figure></div><script type="module" src="/tc63/_astro/DocsLayout.astro_astro_type_script_index_0_lang.CtGhWAn0.js"></script></div></main><footer class="foot"><div class="shell foot__in"><span class="mono">王宇翔 · 重庆大学 自动化 · 机器人控制 · 机械臂操作 · 强化学习 · AI 工具链</span><a href="https://github.com/TC635807" target="_blank" rel="me noopener">GitHub</a><a href="https://github.com/QianLi2027" target="_blank" rel="me noopener">GitHub · QianLi2027</a><span class="mono" style="margin-inline-start:auto">流体背景改编自 <a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation" target="_blank" rel="noopener">WebGL-Fluid-Simulation</a>（MIT）· 视觉语言参考 <a href="https://ak-ui.yyj.moe/" target="_blank" rel="noopener">ak-ui</a></span></div></footer><script type="module">if(!window.matchMedia(`(prefers-reduced-motion: reduce)`).matches&&`IntersectionObserver`in window){let e=Array.from(document.querySelectorAll(`.sec, .pj, .grid-3 > *, .metrics > *, .hero__meta > *`));e.forEach(e=>e.classList.add(`reveal-ready`));let t=new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&(e.target.classList.add(`reveal-in`),t.unobserve(e.target))})},{rootMargin:`0px 0px -8% 0px`,threshold:.04});e.forEach(e=>t.observe(e))}</script></body></html>
